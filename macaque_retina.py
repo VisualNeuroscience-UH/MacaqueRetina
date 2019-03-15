@@ -14,7 +14,7 @@ from tqdm import tqdm
 import cv2
 
 cwd = os.getcwd()
-work_path = 'C:\\Users\\vanni\\OneDrive - University of Helsinki\\Work\\Simulaatiot\\Retinamalli\\retina_stats'
+work_path = 'C:\\Users\\vanni\\Laskenta\\Git_Repos\\MacaqueRetina'
 os.chdir(work_path)
 
 
@@ -122,7 +122,8 @@ class GetLiteratureData:
 
 		# Go to correct folder
 		cwd2 = os.getcwd()
-		work_path2 = 'C:\\Users\\vanni\\OneDrive - University of Helsinki\\Work\\Simulaatiot\\Retinamalli\\Retina_GLM\\apricot'
+		# work_path2 = 'C:\\Users\\vanni\\OneDrive - University of Helsinki\\Work\\Simulaatiot\\Retinamalli\\Retina_GLM\\apricot'
+		work_path2 = os.path.join(work_path, 'apricot')
 		#Define filename
 		if gc_type=='parasol' and responsetype=='ON':
 			filename = 'Parasol_ON_spatial.mat'
@@ -484,8 +485,9 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize):
 		xy_aspect_ratio_pd_series.rename('xy_aspect_ratio')
 		stat_df['xy_aspect_ratio'] = xy_aspect_ratio_pd_series
 
-		distributions = ['semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio', 'orientation_center']
-		n_distributions = len(distributions)
+		rf_parameter_names = ['semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio', 'orientation_center']
+		self.rf_parameter_names = rf_parameter_names # For reference
+		n_distributions = len(rf_parameter_names)
 		shape = np.zeros([n_distributions-1]) # orientation_center has two shape parameters, below alpha and beta
 		loc = np.zeros([n_distributions]); scale = np.zeros([n_distributions])
 		ydata=np.zeros([len(all_viable_cells),n_distributions])
@@ -495,9 +497,9 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize):
 		# Create dict for statistical parameters
 		spatial_statistics_dict={}
 
-		# Model 'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio' distributions with a gamma function. 
-		for index, distribution in enumerate(distributions[:-1]):
-			# fit the distributions, get the PDF distribution using the parameters
+		# Model 'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio' rf_parameter_names with a gamma function. 
+		for index, distribution in enumerate(rf_parameter_names[:-1]):
+			# fit the rf_parameter_names, get the PDF distribution using the parameters
 			ydata[:,index]=stat_df[distribution]
 			shape[index], loc[index], scale[index] = stats.gamma.fit(ydata[:,index], loc=0)
 			x_model_fit[:,index] = np.linspace(stats.gamma.ppf(0.001, shape[index], loc=loc[index], scale=scale[index]),
@@ -509,12 +511,12 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize):
 
 		# Model orientation distribution with beta function.  
 		index += 1
-		ydata[:,index]=stat_df[distributions[-1]]
+		ydata[:,index]=stat_df[rf_parameter_names[-1]]
 		a_parameter, b_parameter, loc[index], scale[index] = stats.beta.fit(ydata[:,index], 0.6, 0.6, loc=0) #initial guess for a_parameter and b_parameter is 0.6
 		x_model_fit[:,index] = np.linspace(stats.beta.ppf(0.001, a_parameter, b_parameter, loc=loc[index], scale=scale[index]),
 						stats.beta.ppf(0.999,  a_parameter, b_parameter, loc=loc[index], scale=scale[index]), 100)
 		y_model_fit[:,index] = stats.beta.pdf(x=x_model_fit[:,index], a=a_parameter, b=b_parameter, loc=loc[index], scale=scale[index])
-		spatial_statistics_dict[distributions[-1]]={'shape':(a_parameter, b_parameter), 'loc':loc[index], 'scale':scale[index], 'distribution':'beta'}
+		spatial_statistics_dict[rf_parameter_names[-1]]={'shape':(a_parameter, b_parameter), 'loc':loc[index], 'scale':scale[index], 'distribution':'beta'}
 
 		# Quality control images
 		if visualize:
@@ -956,11 +958,15 @@ class Operator:
 		
 		# At this point the spatial receptive fieldS are constructed. The positions are in gc_eccentricity, gc_polar_angle, 
 		# and the rf parameters in gc_rf_models
-		TÄHÄN JÄIT: EKSENTRISYYSINDEXIT OVAT NYT OLEMASSA. JOS COVERAGE FACTOR PIDETÄÄN == 1, JA KUKIN DENDR ALUE NORMALISOIDAAN
-		SEN MUKAISESTI NIIN GC_DENDRITIC_DIAMETER KIRJALLISUUDESTA EI ILMEISESTI PIDÄ ENÄÄ PAIKKAANSA. MIKSI?
-		ovatko solutiheydet väärin vai ovatko diameter fitit väärin. Ehkä solutiheyksiin on eksynyt monia solutyyppejä.
-		samoin ehkä diameter fitteihin. Päädytäänkö vaan coverage faktoriin 1 ja käyttämään dendr diam kirjallisuudesta vain vertailuna?
-		
+		# TÄHÄN JÄIT: EKSENTRISYYSINDEXIT OVAT NYT OLEMASSA. JOS COVERAGE FACTOR PIDETÄÄN == 1, JA KUKIN DENDR ALUE NORMALISOIDAAN
+		# SEN MUKAISESTI NIIN GC_DENDRITIC_DIAMETER KIRJALLISUUDESTA EI ILMEISESTI PIDÄ ENÄÄ PAIKKAANSA. MIKSI?
+		# ovatko solutiheydet väärin vai ovatko diameter fitit väärin. Ehkä solutiheyksiin on eksynyt monia solutyyppejä.
+		# samoin ehkä diameter fitteihin. Päädytäänkö vaan coverage faktoriin 1 ja käyttämään dendr diam kirjallisuudesta vain vertailuna?
+
+		# laske xy aspect ratio ecc0 ja eccend, onko sama?
+		# xy aspect ratio arrayssa gc_rf_models on sama mutta semi_x/semi_y ei => lasku/ohjelmointivirhe skaalauksissa?
+
+		pdb.set_trace()
 		plt.show()
 		
 	def run_stimulus_sampling(sample_image_object, visualize=0):
@@ -995,7 +1001,7 @@ if __name__ == "__main__":
 
 	parasol_ON_object = GanglionCells(gc_type='parasol', responsetype='ON', eccentricity=[3,7], theta=[-30.0,30.0], model_density=1.0, randomize_position = 0.6)
 
-	Operator.run_retina_construction(parasol_ON_object, visualize=0)
+	Operator.run_retina_construction(parasol_ON_object, visualize=1)
 
 	# parasol_OFF_object = GanglionCells(gc_type='parasol', responsetype='OFF', eccentricity=[3,7], theta=[-30.0,30.0], model_density=1.0, randomize_position = 0.6)
 
