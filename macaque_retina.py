@@ -14,7 +14,7 @@ from tqdm import tqdm
 import cv2
 
 cwd = os.getcwd()
-work_path = 'C:\\Users\\vanni\\OneDrive - University of Helsinki\\Work\\Simulaatiot\\Retinamalli\\retina_stats'
+work_path = 'C:\\Users\\vanni\\Laskenta\\Git_Repos\\MacaqueRetina_Git'
 os.chdir(work_path)
 
 
@@ -122,7 +122,8 @@ class GetLiteratureData:
 
 		# Go to correct folder
 		cwd2 = os.getcwd()
-		work_path2 = 'C:\\Users\\vanni\\OneDrive - University of Helsinki\\Work\\Simulaatiot\\Retinamalli\\Retina_GLM\\apricot'
+		# work_path2 = 'C:\\Users\\vanni\\OneDrive - University of Helsinki\\Work\\Simulaatiot\\Retinamalli\\Retina_GLM\\apricot'
+		work_path2 = os.path.join(work_path, 'apricot')
 		#Define filename
 		if gc_type=='parasol' and responsetype=='ON':
 			filename = 'Parasol_ON_spatial.mat'
@@ -484,8 +485,9 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize):
 		xy_aspect_ratio_pd_series.rename('xy_aspect_ratio')
 		stat_df['xy_aspect_ratio'] = xy_aspect_ratio_pd_series
 
-		distributions = ['semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio', 'orientation_center']
-		n_distributions = len(distributions)
+		rf_parameter_names = ['semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio', 'orientation_center']
+		self.rf_parameter_names = rf_parameter_names # For reference
+		n_distributions = len(rf_parameter_names)
 		shape = np.zeros([n_distributions-1]) # orientation_center has two shape parameters, below alpha and beta
 		loc = np.zeros([n_distributions]); scale = np.zeros([n_distributions])
 		ydata=np.zeros([len(all_viable_cells),n_distributions])
@@ -495,9 +497,9 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize):
 		# Create dict for statistical parameters
 		spatial_statistics_dict={}
 
-		# Model 'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio' distributions with a gamma function. 
-		for index, distribution in enumerate(distributions[:-1]):
-			# fit the distributions, get the PDF distribution using the parameters
+		# Model 'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio' rf_parameter_names with a gamma function. 
+		for index, distribution in enumerate(rf_parameter_names[:-1]):
+			# fit the rf_parameter_names, get the PDF distribution using the parameters
 			ydata[:,index]=stat_df[distribution]
 			shape[index], loc[index], scale[index] = stats.gamma.fit(ydata[:,index], loc=0)
 			x_model_fit[:,index] = np.linspace(stats.gamma.ppf(0.001, shape[index], loc=loc[index], scale=scale[index]),
@@ -509,12 +511,12 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize):
 
 		# Model orientation distribution with beta function.  
 		index += 1
-		ydata[:,index]=stat_df[distributions[-1]]
+		ydata[:,index]=stat_df[rf_parameter_names[-1]]
 		a_parameter, b_parameter, loc[index], scale[index] = stats.beta.fit(ydata[:,index], 0.6, 0.6, loc=0) #initial guess for a_parameter and b_parameter is 0.6
 		x_model_fit[:,index] = np.linspace(stats.beta.ppf(0.001, a_parameter, b_parameter, loc=loc[index], scale=scale[index]),
 						stats.beta.ppf(0.999,  a_parameter, b_parameter, loc=loc[index], scale=scale[index]), 100)
 		y_model_fit[:,index] = stats.beta.pdf(x=x_model_fit[:,index], a=a_parameter, b=b_parameter, loc=loc[index], scale=scale[index])
-		spatial_statistics_dict[distributions[-1]]={'shape':(a_parameter, b_parameter), 'loc':loc[index], 'scale':scale[index], 'distribution':'beta'}
+		spatial_statistics_dict[rf_parameter_names[-1]]={'shape':(a_parameter, b_parameter), 'loc':loc[index], 'scale':scale[index], 'distribution':'beta'}
 
 		# Quality control images
 		if visualize:
@@ -588,6 +590,7 @@ class GanglionCells(Mathematics, ConstructReceptiveFields):
 	'''
 	Create ganglion cell object. Radii and theta in degrees. Use density to reduce N cells for faster processing.
 	The key parameters are set to object instance here, called later as self.parameter_name
+	All ganglion cell spatial parameters are saved to ganglion cell object dataframe gc_df
 	'''
 
 	def __init__(self, gc_type='parasol', responsetype='ON', eccentricity=[4,6], theta=[-5.0,5.0], model_density=1.0, randomize_position = 0.7):
@@ -638,6 +641,11 @@ class GanglionCells(Mathematics, ConstructReceptiveFields):
 		# If surround is fixed, the surround position, semi_x, semi_y (aspect_ratio) 
 		# and orientation are are the same as center params. This appears to give better results.
 		self.surround_fixed = 1 
+		
+		# Initialize pandas dataframe to hold the ganglion cells (one per row) and all their parameters in one place
+		columns = [	'positions_eccentricity', 'positions_polar_angle', 'eccentricity_group_index', 'semi_xc', 'semi_yc', 
+					'xy_aspect_ratio', 'amplitudes', 'sur_ratio', 'orientation_center']
+		self.gc_df = pd.DataFrame(columns=columns)
 		
 	def fit_2GC_density_data(self):
 		'''
@@ -736,27 +744,32 @@ class GanglionCells(Mathematics, ConstructReceptiveFields):
 			matrix_polar_angle[::2] = matrix_polar_angle[::2] + (angle/(2 * n_segments_arc)) # rotate half the inter-cell angle
 
 			# randomize for given proportion
-			matrix_polar_angle_randomized = matrix_polar_angle + theta_segment_angle * randomize_position * (np.random.rand(matrix_polar_angle.shape[0],matrix_polar_angle.shape[1]) -0.5)
-			matrix_eccentricity_randomized = matrix_eccentricity + radius_segment_length * randomize_position * (np.random.rand(matrix_eccentricity.shape[0],matrix_eccentricity.shape[1]) -0.5)
+			matrix_polar_angle_randomized = matrix_polar_angle + theta_segment_angle * randomize_position \
+				* (np.random.rand(matrix_polar_angle.shape[0],matrix_polar_angle.shape[1]) -0.5)
+			matrix_eccentricity_randomized = matrix_eccentricity + radius_segment_length * randomize_position \
+				* (np.random.rand(matrix_eccentricity.shape[0],matrix_eccentricity.shape[1]) -0.5)
 
-			matrix_polar_angle_randomized_all = np.append(matrix_polar_angle_randomized_all, matrix_polar_angle_randomized.flatten())
-			matrix_eccentricity_randomized_all = np.append(matrix_eccentricity_randomized_all, matrix_eccentricity_randomized.flatten())
+			matrix_polar_angle_randomized_all = np.append(	matrix_polar_angle_randomized_all, 
+															matrix_polar_angle_randomized.flatten())
+			matrix_eccentricity_randomized_all = np.append(	matrix_eccentricity_randomized_all, 
+															matrix_eccentricity_randomized.flatten())
 
 			assert true_n_cells == len(matrix_eccentricity_randomized.flatten()), "N cells dont match, check the code"			
 			gc_eccentricity_group_index = np.append(gc_eccentricity_group_index, np.ones(true_n_cells) * eccentricity_group_index)
 		
-		# Save cell positions to current ganglion cell object
-		self.gc_positions_eccentricity = matrix_eccentricity_randomized_all
-		self.gc_positions_polar_angle = matrix_polar_angle_randomized_all
-		self.gc_eccentricity_group_index = gc_eccentricity_group_index.astype(int) # Turn to integers, no need for floats
+		# Save cell position data to current ganglion cell object
+		self.gc_df['positions_eccentricity'] = matrix_eccentricity_randomized_all
+		self.gc_df['positions_polar_angle'] = matrix_polar_angle_randomized_all
+		self.gc_df['eccentricity_group_index'] = gc_eccentricity_group_index.astype(int)
+
 		
 		# Visualize 2D retina with quality control for density
 		# Pass the GC object to this guy, because the Visualize class is not inherited
 		if visualize:
-			self.show_gc_positions_and_density(matrix_eccentricity_randomized_all, matrix_polar_angle_randomized_all, gc_density_func_params)
-
+			self.show_gc_positions_and_density(	matrix_eccentricity_randomized_all, 
+												matrix_polar_angle_randomized_all, gc_density_func_params)
 		
-		return matrix_eccentricity_randomized_all, matrix_polar_angle_randomized_all
+		# The eccentricity, polar angle and eccentricity index are now saved to ganglion call object dataframe gc_df
 
 	def get_random_samples_from_known_distribution(self,shape,loc,scale,n_cells,distribution):
 		'''
@@ -777,7 +790,8 @@ class GanglionCells(Mathematics, ConstructReceptiveFields):
 		'''
 		
 		# Get eccentricity data for all model cells
-		gc_eccentricity = self.gc_positions_eccentricity
+		# gc_eccentricity = self.gc_positions_eccentricity
+		gc_eccentricity = self.gc_df['positions_eccentricity'].values
 
 		# Get rf diameter vs eccentricity
 		dendr_diam_model = self.dendr_diam_model # from __init__ method
@@ -841,6 +855,14 @@ class GanglionCells(Mathematics, ConstructReceptiveFields):
 
 		# Scale from micrometers to millimeters and return to numpy matrix
 		gc_rf_models[:,0],gc_rf_models[:,1] = semi_xc/1000, semi_yc/1000
+		
+		# Save to ganglion cell dataframe. Keep it explicit to avoid unknown complexity
+		self.gc_df['semi_xc'] = gc_rf_models[:,0]
+		self.gc_df['semi_yc'] = gc_rf_models[:,1]
+		self.gc_df['xy_aspect_ratio'] = gc_rf_models[:,2]
+		self.gc_df['amplitudes'] = gc_rf_models[:,3]
+		self.gc_df['sur_ratio'] = gc_rf_models[:,4]
+		self.gc_df['orientation_center'] = gc_rf_models[:,5]
 
 		if visualize:
 			# Quality control for diameter distribution. In micrometers.
@@ -852,12 +874,14 @@ class GanglionCells(Mathematics, ConstructReceptiveFields):
 				dataset_name='All data {0} fit'.format(dendr_diam_model))			
 
 			# gc_rf_models params: 'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio', 'orientation_center'
-			rho = self.gc_positions_eccentricity
-			phi = self.gc_positions_polar_angle
+			# rho = self.gc_positions_eccentricity
+			# phi = self.gc_positions_polar_angle
+			rho = self.gc_df['positions_eccentricity'].values
+			phi = self.gc_df['positions_polar_angle'].values
 			
 			self.show_gc_receptive_fields(rho, phi, gc_rf_models, surround_fixed=self.surround_fixed) 
 
-		return gc_rf_models
+		# All ganglion cell spatial parameters are now saved to ganglion cell object dataframe gc_df
 		
 		
 class SampleImage:
@@ -945,22 +969,26 @@ class Operator:
 		spatial_statistics_dict = ganglion_cell_object.fit_spatial_statistics(visualize=visualize)
 		
 		# Place ganglion cells to desired retina.
-		gc_eccentricity, gc_polar_angle= ganglion_cell_object.place_gc_units(gc_density_func_params, visualize=visualize)
+		ganglion_cell_object.place_gc_units(gc_density_func_params, visualize=visualize)
 
 		# Get fit parameters for dendritic field diameter with respect to eccentricity. Linear and quadratic fit. 
 		# Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
 		dendr_diam_vs_eccentricity_parameters_dict = ganglion_cell_object.fit_dendritic_diameter_vs_eccentricity(visualize=visualize)
 
 		# Construct receptive fields. Centers are saved in the object
-		gc_rf_models = ganglion_cell_object.place_spatial_receptive_fields(spatial_statistics_dict, dendr_diam_vs_eccentricity_parameters_dict, visualize)
+		ganglion_cell_object.place_spatial_receptive_fields(spatial_statistics_dict, dendr_diam_vs_eccentricity_parameters_dict, visualize)
 		
 		# At this point the spatial receptive fieldS are constructed. The positions are in gc_eccentricity, gc_polar_angle, 
 		# and the rf parameters in gc_rf_models
-		TÄHÄN JÄIT: EKSENTRISYYSINDEXIT OVAT NYT OLEMASSA. JOS COVERAGE FACTOR PIDETÄÄN == 1, JA KUKIN DENDR ALUE NORMALISOIDAAN
-		SEN MUKAISESTI NIIN GC_DENDRITIC_DIAMETER KIRJALLISUUDESTA EI ILMEISESTI PIDÄ ENÄÄ PAIKKAANSA. MIKSI?
-		ovatko solutiheydet väärin vai ovatko diameter fitit väärin. Ehkä solutiheyksiin on eksynyt monia solutyyppejä.
-		samoin ehkä diameter fitteihin. Päädytäänkö vaan coverage faktoriin 1 ja käyttämään dendr diam kirjallisuudesta vain vertailuna?
-		
+		# TÄHÄN JÄIT: EKSENTRISYYSINDEXIT OVAT NYT OLEMASSA. JOS COVERAGE FACTOR PIDETÄÄN == 1, JA KUKIN DENDR ALUE NORMALISOIDAAN
+		# SEN MUKAISESTI NIIN GC_DENDRITIC_DIAMETER KIRJALLISUUDESTA EI ILMEISESTI PIDÄ ENÄÄ PAIKKAANSA. MIKSI?
+		# ovatko solutiheydet väärin vai ovatko diameter fitit väärin. Ehkä solutiheyksiin on eksynyt monia solutyyppejä.
+		# samoin ehkä diameter fitteihin. Päädytäänkö vaan coverage faktoriin 1 ja käyttämään dendr diam kirjallisuudesta vain vertailuna?
+
+		# laske xy aspect ratio ecc0 ja eccend, onko sama?
+		# xy aspect ratio arrayssa gc_rf_models on sama mutta semi_x/semi_y ei => lasku/ohjelmointivirhe skaalauksissa?
+
+		pdb.set_trace()
 		plt.show()
 		
 	def run_stimulus_sampling(sample_image_object, visualize=0):
@@ -995,7 +1023,7 @@ if __name__ == "__main__":
 
 	parasol_ON_object = GanglionCells(gc_type='parasol', responsetype='ON', eccentricity=[3,7], theta=[-30.0,30.0], model_density=1.0, randomize_position = 0.6)
 
-	Operator.run_retina_construction(parasol_ON_object, visualize=0)
+	Operator.run_retina_construction(parasol_ON_object, visualize=1)
 
 	# parasol_OFF_object = GanglionCells(gc_type='parasol', responsetype='OFF', eccentricity=[3,7], theta=[-30.0,30.0], model_density=1.0, randomize_position = 0.6)
 
