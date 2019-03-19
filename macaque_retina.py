@@ -309,7 +309,7 @@ class Visualize:
 
 		fig, ax = plt.subplots(nrows=1, ncols=1)
 		ax.plot(dataset_x,dataset_y,'.')
-		# pdb.set_trace()
+
 		if dataset_name:
 			if len(polynomials)==2: #check if only two parameters, ie intercept and slope
 				intercept=polynomials[1]; slope=polynomials[0]
@@ -475,15 +475,15 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize):
 
 		all_viable_cells = np.delete(data_all_viable_cells, bad_cell_indices, 0)
 
-		stat_df = pd.DataFrame(data=all_viable_cells,columns=parameter_names)
+		chichilnisky_data_df = pd.DataFrame(data=all_viable_cells,columns=parameter_names)
 
 		# Save stats description to gc object
-		self.rf_datafit_description_series=stat_df.describe()
+		self.rf_datafit_description_series=chichilnisky_data_df.describe()
 
 		# Calculate xy_aspect_ratio
-		xy_aspect_ratio_pd_series = stat_df['semi_yc'] / stat_df['semi_xc']
+		xy_aspect_ratio_pd_series = chichilnisky_data_df['semi_yc'] / chichilnisky_data_df['semi_xc']
 		xy_aspect_ratio_pd_series.rename('xy_aspect_ratio')
-		stat_df['xy_aspect_ratio'] = xy_aspect_ratio_pd_series
+		chichilnisky_data_df['xy_aspect_ratio'] = xy_aspect_ratio_pd_series
 
 		rf_parameter_names = ['semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio', 'orientation_center']
 		self.rf_parameter_names = rf_parameter_names # For reference
@@ -500,7 +500,7 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize):
 		# Model 'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio' rf_parameter_names with a gamma function. 
 		for index, distribution in enumerate(rf_parameter_names[:-1]):
 			# fit the rf_parameter_names, get the PDF distribution using the parameters
-			ydata[:,index]=stat_df[distribution]
+			ydata[:,index]=chichilnisky_data_df[distribution]
 			shape[index], loc[index], scale[index] = stats.gamma.fit(ydata[:,index], loc=0)
 			x_model_fit[:,index] = np.linspace(stats.gamma.ppf(0.001, shape[index], loc=loc[index], scale=scale[index]),
 							stats.gamma.ppf(0.999,  shape[index], loc=loc[index], scale=scale[index]), 100)
@@ -511,7 +511,7 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize):
 
 		# Model orientation distribution with beta function.  
 		index += 1
-		ydata[:,index]=stat_df[rf_parameter_names[-1]]
+		ydata[:,index]=chichilnisky_data_df[rf_parameter_names[-1]]
 		a_parameter, b_parameter, loc[index], scale[index] = stats.beta.fit(ydata[:,index], 0.6, 0.6, loc=0) #initial guess for a_parameter and b_parameter is 0.6
 		x_model_fit[:,index] = np.linspace(stats.beta.ppf(0.001, a_parameter, b_parameter, loc=loc[index], scale=scale[index]),
 						stats.beta.ppf(0.999,  a_parameter, b_parameter, loc=loc[index], scale=scale[index]), 100)
@@ -521,7 +521,7 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize):
 		# Quality control images
 		if visualize:
 			self.show_spatial_statistics(ydata,spatial_statistics_dict, (x_model_fit, y_model_fit))
-			
+
 		# Return stats for RF creation
 		return spatial_statistics_dict
 
@@ -604,7 +604,8 @@ class GanglionCells(Mathematics, ConstructReceptiveFields):
 		proportion_of_parasol_gc_type = 0.1
 		proportion_of_midget_gc_type = 0.8
 		
-		# Proportion of ON and OFF response types, assuming ON rf diameter = 1.2 x OFF rf diamter, Chichilnisky_2002_JNeurosci
+		# Proportion of ON and OFF response type cells, assuming ON rf diameter = 1.2 x OFF rf diamter, and
+		# coverage factor =1; Chichilnisky_2002_JNeurosci
 		proportion_of_ON_response_type = 0.41
 		proportion_of_OFF_response_type = 0.59
 
@@ -672,10 +673,6 @@ class GanglionCells(Mathematics, ConstructReceptiveFields):
 		theta = self.theta
 		randomize_position = self.randomize_position
 
-		total_area_remove = self.sector2area(eccentricity_in_mm_total[0], np.ptp(theta))
-		total_area_full = self.sector2area(eccentricity_in_mm_total[1], np.ptp(theta))
-		self.total_surface_area = total_area_full - total_area_remove # Place total model area to gc object for further use
-
 		# Loop for reasonable delta ecc to get correct density in one hand and good cell distribution from the algo on the other
 		# Lets fit close to 0.1 mm intervals, which makes sense up to some 15 deg. Thereafter longer jumps would do fine.
 		fit_interval = 0.1 # mm
@@ -688,6 +685,7 @@ class GanglionCells(Mathematics, ConstructReceptiveFields):
 		gc_eccentricity_group_index = np.asarray([])
 
 		true_eccentricity_end = []
+		sector_surface_area_all = []
 		for eccentricity_group_index, current_step in enumerate(np.arange(int(n_steps))):
 
 			if true_eccentricity_end: # If the eccentricity has been adjusted below inside the loop
@@ -697,7 +695,7 @@ class GanglionCells(Mathematics, ConstructReceptiveFields):
 
 			# fetch center ecc in mm
 			center_ecc = np.mean(eccentricity_in_mm)
-
+			
 			# rotate theta to start from 0
 			theta_rotated = theta - np.min(theta)
 			angle = np.max(theta_rotated) # The angle is now == max theta
@@ -707,7 +705,8 @@ class GanglionCells(Mathematics, ConstructReceptiveFields):
 			sector_area_remove = self.sector2area(eccentricity_in_mm[0], angle)
 			sector_area_full = self.sector2area(eccentricity_in_mm[1], angle)
 			sector_surface_area = sector_area_full - sector_area_remove # in mm2
-
+			sector_surface_area_all.append(sector_surface_area) # collect sector area for each ecc step
+			
 			# N cells for given ecc
 			my_gaussian_fit = self.gauss_plus_baseline(center_ecc,*gc_density_func_params)
 			Ncells = sector_surface_area * my_gaussian_fit * self.gc_proportion
@@ -761,6 +760,7 @@ class GanglionCells(Mathematics, ConstructReceptiveFields):
 		self.gc_df['positions_eccentricity'] = matrix_eccentricity_randomized_all
 		self.gc_df['positions_polar_angle'] = matrix_polar_angle_randomized_all
 		self.gc_df['eccentricity_group_index'] = gc_eccentricity_group_index.astype(int)
+		self.sector_surface_area_all = np.asarray(sector_surface_area_all)
 
 		
 		# Visualize 2D retina with quality control for density
@@ -776,9 +776,9 @@ class GanglionCells(Mathematics, ConstructReceptiveFields):
 		Create random samples from estimated model distribution
 		'''
 		if distribution == 'gamma':
-			distribution_parameters = stats.gamma.rvs(a=shape, loc=loc, scale=scale, size=n_cells, random_state=1) # random_state is the seed
+			distribution_parameters = stats.gamma.rvs(a=shape, loc=loc, scale=scale, size=n_cells, random_state=None) # random_state is the seed
 		elif distribution == 'beta':
-			distribution_parameters = stats.beta.rvs(a=shape[0], b=shape[1], loc=loc, scale=scale, size=n_cells, random_state=1) # random_state is the seed
+			distribution_parameters = stats.beta.rvs(a=shape[0], b=shape[1], loc=loc, scale=scale, size=n_cells, random_state=None) # random_state is the seed
 		
 		return distribution_parameters
 
@@ -822,26 +822,31 @@ class GanglionCells(Mathematics, ConstructReceptiveFields):
 			scale = spatial_statistics_dict[key]['scale']
 			distribution = spatial_statistics_dict[key]['distribution']
 			gc_rf_models[:,index] = self.get_random_samples_from_known_distribution(shape,loc,scale,n_cells,distribution)
-
+			# For semi_yc/semi_xc ratio, noise increases at index 327
+		
 		# Quality control images
 		if visualize:
 			self.show_spatial_statistics(gc_rf_models, spatial_statistics_dict)
 		
 		# Calculate RF diameter scaling factor for all ganglion cells
 		# Area of RF = Scaling_factor * Random_factor * Area of ellipse(semi_xc,semi_yc), solve Scaling_factor.
-		scale_random_distribution=0.08 # Estimated by eye from Watanabe and Perry data. Normal distribution with scale_random_distribution 0.08 cover about 25% above and below the mean value
-		random_normal_distribution = 1 + np.random.normal(scale=scale_random_distribution, size=n_cells)
-		area_of_rf = self.circle_diameter2area(gc_diameters)
+		area_of_rf = self.circle_diameter2area(gc_diameters) # All cells
+		area_of_ellipse = self.ellipse2area(gc_rf_models[:,0], gc_rf_models[:,1]) # Units are pixels for the Chichilnisky data
 
 		'''
 		The area_of_rf contains area for all model units. Its sum must fill the whole area (coverage factor = 1).
+		We do it separately for each ecc sector, step by step, to keep coverage factor at 1 despite changing gc density with ecc
 		'''
-		scaling_for_coverage_1 = (self.total_surface_area *1e6 ) / np.sum(area_of_rf)   # in micrometers2
+		area_scaling_factors_coverage1 = np.zeros(area_of_ellipse.shape)
+		for index, surface_area in enumerate(self.sector_surface_area_all):
+			# scaling_for_coverage_1 = (surface_area *1e6 ) / np.sum(area_of_rf[self.gc_df['eccentricity_group_index']==index])   # in micrometers2
+			scaling_for_coverage_1 = (surface_area * 1e6) / \
+											np.sum(area_of_ellipse[self.gc_df['eccentricity_group_index']==index])  # in micrometers2
 
-		area_of_ellipse = self.ellipse2area(gc_rf_models[:,0], gc_rf_models[:,1]) # Units are pixels
-		area_scaling_factors = area_of_rf / area_of_ellipse 
-		area_scaling_factors_coverage1 = area_scaling_factors * scaling_for_coverage_1
-		
+			# area_scaling_factors = area_of_rf / np.mean(area_of_ellipse)
+			area_scaling_factors_coverage1[self.gc_df['eccentricity_group_index']==index] \
+				= scaling_for_coverage_1
+
 		# area' = scaling factor * area
 		# area_of_ellipse' = scaling_factor * area_of_ellipse
 		# pi*a'*b' = scaling_factor * pi*a*b
@@ -850,11 +855,16 @@ class GanglionCells(Mathematics, ConstructReceptiveFields):
 		# a'/a = sqrt(scaling_factor)
 		
 		# Apply scaling factors to semi_xc and semi_yc. Units are micrometers.
-		semi_xc = np.sqrt(area_scaling_factors_coverage1) * gc_rf_models[:,0] * random_normal_distribution
-		semi_yc = np.sqrt(area_scaling_factors_coverage1) * gc_rf_models[:,1] * random_normal_distribution
-
+		scale_random_distribution=0.08 # Estimated by eye from Watanabe and Perry data. Normal distribution with scale_random_distribution 0.08 cover about 25% above and below the mean value
+		random_normal_distribution1 = 1 + np.random.normal(scale=scale_random_distribution, size=n_cells)
+		semi_xc = np.sqrt(area_scaling_factors_coverage1) * gc_rf_models[:,0] * random_normal_distribution1
+		random_normal_distribution2 = 1 + np.random.normal(scale=scale_random_distribution, size=n_cells) # second randomization
+		semi_yc = np.sqrt(area_scaling_factors_coverage1) * gc_rf_models[:,1] * random_normal_distribution2
+		# semi_xc = np.sqrt(area_scaling_factors_coverage1) * gc_rf_models[:,0] 
+		# semi_yc = np.sqrt(area_scaling_factors_coverage1) * gc_rf_models[:,1] 
 		# Scale from micrometers to millimeters and return to numpy matrix
-		gc_rf_models[:,0],gc_rf_models[:,1] = semi_xc/1000, semi_yc/1000
+		gc_rf_models[:,0] = semi_xc/1000 
+		gc_rf_models[:,1] = semi_yc/1000
 		
 		# Save to ganglion cell dataframe. Keep it explicit to avoid unknown complexity
 		self.gc_df['semi_xc'] = gc_rf_models[:,0]
@@ -878,7 +888,7 @@ class GanglionCells(Mathematics, ConstructReceptiveFields):
 			# phi = self.gc_positions_polar_angle
 			rho = self.gc_df['positions_eccentricity'].values
 			phi = self.gc_df['positions_polar_angle'].values
-			
+
 			self.show_gc_receptive_fields(rho, phi, gc_rf_models, surround_fixed=self.surround_fixed) 
 
 		# All ganglion cell spatial parameters are now saved to ganglion cell object dataframe gc_df
@@ -984,11 +994,7 @@ class Operator:
 		# SEN MUKAISESTI NIIN GC_DENDRITIC_DIAMETER KIRJALLISUUDESTA EI ILMEISESTI PIDÄ ENÄÄ PAIKKAANSA. MIKSI?
 		# ovatko solutiheydet väärin vai ovatko diameter fitit väärin. Ehkä solutiheyksiin on eksynyt monia solutyyppejä.
 		# samoin ehkä diameter fitteihin. Päädytäänkö vaan coverage faktoriin 1 ja käyttämään dendr diam kirjallisuudesta vain vertailuna?
-
-		# laske xy aspect ratio ecc0 ja eccend, onko sama?
-		# xy aspect ratio arrayssa gc_rf_models on sama mutta semi_x/semi_y ei => lasku/ohjelmointivirhe skaalauksissa?
-
-		pdb.set_trace()
+		
 		plt.show()
 		
 	def run_stimulus_sampling(sample_image_object, visualize=0):
@@ -1021,7 +1027,7 @@ if __name__ == "__main__":
 
 	# Operator.run_retina_construction(ganglion_cell_object, visualize=1)
 
-	parasol_ON_object = GanglionCells(gc_type='parasol', responsetype='ON', eccentricity=[3,7], theta=[-30.0,30.0], model_density=1.0, randomize_position = 0.6)
+	parasol_ON_object = GanglionCells(gc_type='parasol', responsetype='ON', eccentricity=[0.5,30], theta=[-30.0,30.0], model_density=1.0, randomize_position = 0.6)
 
 	Operator.run_retina_construction(parasol_ON_object, visualize=1)
 
