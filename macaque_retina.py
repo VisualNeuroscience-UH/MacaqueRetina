@@ -990,17 +990,12 @@ class Operator:
 		
 		# At this point the spatial receptive fieldS are constructed. The positions are in gc_eccentricity, gc_polar_angle, 
 		# and the rf parameters in gc_rf_models
-		# TÄHÄN JÄIT: EKSENTRISYYSINDEXIT OVAT NYT OLEMASSA. JOS COVERAGE FACTOR PIDETÄÄN == 1, JA KUKIN DENDR ALUE NORMALISOIDAAN
-		# SEN MUKAISESTI NIIN GC_DENDRITIC_DIAMETER KIRJALLISUUDESTA EI ILMEISESTI PIDÄ ENÄÄ PAIKKAANSA. MIKSI?
-		# ovatko solutiheydet väärin vai ovatko diameter fitit väärin. Ehkä solutiheyksiin on eksynyt monia solutyyppejä.
-		# samoin ehkä diameter fitteihin. Päädytäänkö vaan coverage faktoriin 1 ja käyttämään dendr diam kirjallisuudesta vain vertailuna?
 		
 		plt.show()
 		
 	def run_stimulus_sampling(sample_image_object, visualize=0):
 
 		one_frame = sample_image_object.get_image()
-		# one_frame = np.logspace(-3, 0, num=1000)
 		one_frame_after_optics = sample_image_object.blur_image(one_frame)
 		cone_response = sample_image_object.aberrated_image2cone_response(one_frame_after_optics)
 		
@@ -1015,7 +1010,6 @@ class Operator:
 			axs[4].imshow(one_frame_after_optics, cmap='Greys')
 			axs[5].imshow(cone_response, cmap='Greys')
 			
-			# plt.xscale('log')
 			plt.show()
 	
 		
@@ -1049,18 +1043,16 @@ if __name__ == "__main__":
 	
 	
 # TODO:
-# 	TÄHÄN JÄIT: Jaa on ja off -tiheyksiin
-# cone2CG:
-	# # One photoreceptor type image convolution
-	
-	# # Temporal convolution missing.
-# Visual stimuli series/video to cone response
 
-#   -RF coverage is not right for midgets? -- QA estimate coverage factor? 
-#   -xy_aspcects_ratio show to some extent bimodal distribution. It should be convertable to all y_sigma > x_sigma, but attempt to do this failed. Fit quality decreased
-#	-consider implementing significant correlations between spatial parameters
-#   -model and apply time behaviour
-#   -construct LGN. Probably a filter rather than spiking neurons. The latter dont make sense because we are interested in cx, not sub-cx.s
+	# Visual stimuli 
+
+	#   -xy_aspcects_ratio show to some extent bimodal distribution. It should be convertable to all y_sigma > x_sigma, but attempt to do this failed. Fit quality decreased
+
+	#	-consider implementing significant correlations between spatial parameters
+
+	#   -model and apply time behaviour
+
+	#   -construct LGN. Probably a filter rather than spiking neurons. The latter dont make sense because we are interested in cx, not sub-cx.s
 
 os.chdir(cwd)
 
