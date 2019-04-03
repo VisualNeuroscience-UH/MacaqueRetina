@@ -6,6 +6,8 @@ import pdb
 import numpy as np
 import numpy.matlib as matlib
 from scipy import ndimage
+import colorednoise as cn
+
 import matplotlib.pyplot as plt
 import cv2
 from cv2 import VideoWriter, VideoWriter_fourcc
@@ -46,7 +48,7 @@ class VideoBaseClass:
 		options["pedestal"] = 0 # intensity pedestal
 		options["contrast"] = 1
 		
-		options["pattern"] = 'sine_grating' # Valid options sine_grating; square_grating; pink_noise; white_noise; natural_images; natural_video; phase_scrambled_video
+		options["pattern"] = 'sine_grating' # Valid options sine_grating; square_grating; colored_temporal_noise; white_noise; natural_images; natural_video; phase_scrambled_video
 
 		options["stimulus_form"] = 'circular_patch' # Valid options circular_patch, rectangular_patch, annulus
 		options["stimulus_position"] = (0.0,0.0) # Stimulus center position in degrees inside the video. (0,0) is the center.
@@ -69,7 +71,7 @@ class VideoBaseClass:
 		
 		# Get resolution 
 		options["pix_per_deg"] = options["max_spatial_frequency"] * 3 # min sampling at 1.5 x Nyquist frequency of the highest sf
-		options["display_width_in_deg"] = options["image_width"] / options["pix_per_deg"]
+		options["image_width_in_deg"] = options["image_width"] / options["pix_per_deg"]
 	
 		self.options=options
 	
@@ -123,7 +125,7 @@ class VideoBaseClass:
 		# Create sine wave
 		one_cycle = 2 * np.pi
 		cycles_per_degree = spatial_frequency
-		image_width_in_degrees = self.options["display_width_in_deg"]
+		image_width_in_degrees = self.options["image_width_in_deg"]
 		image_width = self.options["image_width"]
 		image_height = self.options["image_height"]
 		
@@ -181,25 +183,29 @@ class StimulusPattern:
 		threshold = 0 # Change this between [-1 1] if you want uneven grating. Default is 0
 		self.frames = (self.frames > threshold) * self.frames/self.frames * 2 - 1
 		
-	def white_noise(self, width, height, fps, duration, spatial_band_pass=None, temporal_band_pass=None):
-		pass
-		
-	def pink_noise(self, width, height, fps, duration, spatial_band_pass=None, temporal_band_pass=None):
-		# # import colorednoise as cn
-		# # beta = 1 # the exponent
-		# # samples = 2**18 # number of samples to generate
-		# # y = cn.powerlaw_psd_gaussian(beta, samples)
+	def white_noise(self):
 
-		# # # optionally plot the Power Spectral Density with Matplotlib
-		# # #from matplotlib import mlab
-		# # #from matplotlib import pylab as plt
-		# # #s, f = mlab.psd(y, NFFT=2**13)
-		# # #plt.loglog(f,s)
-		# # #plt.grid(True)
-		# # #plt.show()
-		pass
+		self.frames = np.random.normal(loc=0.0, scale=1.0, size=self.frames.shape)
+		
+	def colored_temporal_noise(self):
+	
+		beta = 1 # the exponent. 1 = pink noise, 2 = brown noise, 0 = white noise?
+		variance_limits = np.array([-3,3])
+		samples = self.frames.shape[2] # number of time samples to generate
+		frame_time_series_unit_variance = cn.powerlaw_psd_gaussian(beta, samples)
+		
+		# Cut variance to [-3,3]
+		frame_time_series_unit_variance_clipped = np.clip(frame_time_series_unit_variance, variance_limits.min(), variance_limits.max())
+		
+		# Scale to [0 1]
+		frame_time_series = (frame_time_series_unit_variance_clipped - variance_limits.min()) / variance_limits.ptp()
+		
+		# Cast time series to frames
+		assert len(frame_time_series) not in self.frames.shape[:-1], "Oops. Two different dimensions match the time series length."
+		self.frames = np.zeros(self.frames.shape) + frame_time_series
 		
 	def natural_images(self, full_path_to_folder, width, height, fps, duration, spatial_band_pass=None, temporal_band_pass=None, orientation=0):
+		# filtering: http://www.djmannion.net/psych_programming/vision/sf_filt/sf_filt.html
 		pass
 		
 	def phase_scrambled_images(self, full_path_to_folder, width, height, fps, duration, spatial_band_pass=None, temporal_band_pass=None, orientation=0):
@@ -226,19 +232,6 @@ class StimulusForm:
 
 	def annulus(self, position, size_inner, size_outer):
 		pass
-		
-	def e_table(self, hight):
-		'''For Khoa's driving's licence. This can easily become acuity table for our system. Just include the 
-		Snellen letters, and scale the size'''
-
-		sizes = np.array([0.1,0.2, 0.4, 0.6, 0.8, 0.9, 1.0])
-		scaling_size_to_angle = 5/60 # degree 1.0 size is 5/60 deg angle
-		# optotype_height = 0.068 # 1.0, in meters
-		# size = 0.1
-		sizes_in_deg = (1/sizes) * scaling_size_to_angle
-		sizes_in_rad = sizes_in_deg * np.pi/180
-		distance = 6.0
-		optotype_height = 2 * distance * np.tan(sizes_in_rad / 2) # in meters
 
 
 class ConstructStimuli(VideoBaseClass):
@@ -259,7 +252,7 @@ class ConstructStimuli(VideoBaseClass):
 		fps: frames per second
 		duration_seconds: stimulus duration
 		pattern: 
-			'sine_grating'; 'square_grating'; 'pink_noise'; 'white_noise'; 
+			'sine_grating'; 'square_grating'; 'colored_temporal_noise'; 'white_noise'; 
 			'natural_images'; 'phase_scrambled_images'; 'natural_video'; 'phase_scrambled_video'
 		stimulus_form: 'circular_patch'; 'rectangular_patch'; 'annulus'
 		stimulus_position: in degrees, (0,0) is the center.
@@ -272,7 +265,7 @@ class ConstructStimuli(VideoBaseClass):
 		temporal_frequency: in Hz
 		orientation: in degrees
 		
-		For white_noise and pink_noise, additional arguments are:
+		For white_noise and colored_temporal_noise, additional arguments are:
 		spatial_band_pass: (cycles per degree min, cycles per degree max)
 		temporal_band_pass: (Hz min, Hz max)
 		
@@ -334,5 +327,4 @@ if __name__ == "__main__":
 
 	my_video = ConstructStimuli()	# Instantiate
 	filename = 'test2'
-	my_video.main(filename, pattern='square_grating', duration_seconds=1, fps=30, spatial_frequency=2, 
-		temporal_frequency=2, pedestal =0, orientation=45) # Do the work.	Put here the needs in the keyword argumets
+	my_video.main(filename, pattern='colored_temporal_noise', duration_seconds=1, fps=30, pedestal =0) # Do the work.	Put here the needs in the keyword argumets
