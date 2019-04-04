@@ -2,11 +2,14 @@
 import os
 import sys
 import pdb
+import time
 
 import numpy as np
 import numpy.matlib as matlib
 from scipy import ndimage
 import colorednoise as cn
+import h5py
+from data_io_hdf5 import save_dict_to_hdf5, load_dict_from_hdf5, save_array_to_hdf5, load_array_from_hdf5
 
 import matplotlib.pyplot as plt
 import cv2
@@ -159,6 +162,7 @@ class VideoBaseClass:
 		marginal_width = np.floor(marginal_width).astype(np.int)
 		self.frames = large_frames[marginal_height:-marginal_height,marginal_width:-marginal_width,:]
 	
+	
 class StimulusPattern:
 	'''
 	Construct the stimulus images
@@ -223,10 +227,13 @@ class StimulusForm:
 	Mask the stimulus images
 	'''
 
-	def circular_patch(self, frames):
-		# , position, size
-		return frames
+	def circular_patch(self):
 
+		position = self.options["stimulus_position"]
+		size = self.options["stimulus_size"]
+		
+		pass
+		
 	def rectangular_patch(self, position, size):
 		pass
 
@@ -282,7 +289,7 @@ class ConstructStimuli(VideoBaseClass):
 		print("Setting the following attributes:\n")
 		for kw in kwargs:
 			print(kw, ":", kwargs[kw])
-			assert kw in self.options.keys(), "The keyword '{0}' was not recognized".format(kw)
+			assert kw in self.options.keys(), f"The keyword '{kw}' was not recognized"
 		self.options.update(kwargs)
 		
 		# Get basic video parameters
@@ -295,36 +302,57 @@ class ConstructStimuli(VideoBaseClass):
 		self.frames = np.ones((height, width, int(fps*duration_seconds)), dtype=np.uint8) * self.options["background"]
 		
 		# Call StimulusPattern class method to get patterns (numpy array)
-		eval('StimulusPattern.{0}(self)'.format(self.options["pattern"])) # Direct call to class.method() requires the self argument
+		# self.frames updated according to the pattern
+		eval(f'StimulusPattern.{self.options["pattern"]}(self)') # Direct call to class.method() requires the self argument
 
-		# TÄHÄN JÄIT: ROTATOI SINIGRATING, MASKAA, MUUT ÄRSYKKEET
-		# # Call StimulusForm class method to mask frames
-		# stimulus_form = self.options["stimulus_form
-		# frames = eval('StimulusForm.{0}(self, frames)'.format(stimulus_form)) # Direct call to class.method() requires the self argument
+		# Call StimulusForm class method to mask frames
+		# self.frames updated according to the form
+		eval(f'StimulusForm.{self.options["stimulus_form"]}(self)') # Direct call to class.method() requires the self argument
 		
 		self._scale_intensity()
 		
 		# Init openCV VideoWriter
 		fourcc = VideoWriter_fourcc(*self.options["codec"])
-		filename = './{0}.{1}'.format(filename, self.options["container"])	
-		video = VideoWriter(filename, fourcc, float(fps), (width, height), isColor=False) # path, codec, fps, size. Note, the isColor the flag is currently supported on Windows only
+		filename_out = './{0}.{1}'.format(filename, self.options["container"])	
+		video = VideoWriter(filename_out, fourcc, float(fps), (width, height), isColor=False) # path, codec, fps, size. Note, the isColor the flag is currently supported on Windows only
 
 		# Write frames to videofile frame-by-frame
 		for index in np.arange(self.frames.shape[2]):
 			video.write(self.frames[:,:,index])
 		
-		# for _ in range(int(fps*duration_seconds)):
-		
-			# # Test noise
-			# frame = np.random.randint(0, 256, 
-									  # (height, width), # (height, width, 3), # Color
-									  # dtype=np.uint8)
-
 		video.release()
-
 		
+		# # save video to npy file
+		# filename_out = f"./{filename}.npy"	
+
+		# np.save(filename_out, self.frames)
+		
+		# TÄHÄN JÄIT. EHKÄ HDF5 KUN TUO METADATA EI OIKEIN TYKKÄÄ NPY FORMAATISTA
+		# save options as metadata in the same npy format
+		filename_out = f"{filename}.hdf5"	
+		save_array_to_hdf5(self.frames, filename_out)
+		filename_out_options = f"{filename}_options.hdf5"	
+
+		save_dict_to_hdf5(self.options,filename_out_options)
+		# with h5py.File(filename_out, 'w') as hdf5_file_handle:
+			# dset = hdf5_file_handle.create_dataset("frames", data=self.frames)		
+		
+		# # time.sleep(1) 
+		t1=time.time()
+		data = load_array_from_hdf5(filename_out)
+		# with h5py.File(filename_out, 'r') as hdf5_file_handle:
+		   # data = hdf5_file_handle['frames'][...]
+		t2=time.time()
+		# print(data)
+		print(f"Time took to load: {t2-t1} seconds.")	
+		print(f'{np.all(data == self.frames)}')
+		print(f"\nDone. Image size is {self.options['image_width_in_deg']:0.2f} deg, \n{self.options['image_width']} x {self.options['image_height']} pixels")
+		options2 = load_dict_from_hdf5(filename_out_options)
+		print(f'self.options:\n{sorted(self.options.keys())}')
+		print(f'options:\n{sorted(options2.keys())}')
+
 if __name__ == "__main__":
 
 	my_video = ConstructStimuli()	# Instantiate
 	filename = 'test2'
-	my_video.main(filename, pattern='colored_temporal_noise', duration_seconds=1, fps=30, pedestal =0) # Do the work.	Put here the needs in the keyword argumets
+	my_video.main(filename, pattern='sine_grating', duration_seconds=1, fps=30, pedestal =0) # Do the work.	Put here the needs in the keyword argumets
