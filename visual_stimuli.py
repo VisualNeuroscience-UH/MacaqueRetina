@@ -53,9 +53,9 @@ class VideoBaseClass:
 		
 		options["pattern"] = 'sine_grating' # Valid options sine_grating; square_grating; colored_temporal_noise; white_noise; natural_images; natural_video; phase_scrambled_video
 
-		options["stimulus_form"] = 'circular_patch' # Valid options circular_patch, rectangular_patch, annulus
+		options["stimulus_form"] = 'circular' # Valid options circular, rectangular, annulus
 		options["stimulus_position"] = (0.0,0.0) # Stimulus center position in degrees inside the video. (0,0) is the center.
-		options["stimulus_size"] = 1.0 # In degrees. Radius for circle and annulus, half-width for rectangle.
+		options["stimulus_size"] = 1.0 # In degrees. Radius for circle and annulus, half-width for rectangle. 0 gives smallest distance from image borders, ie max radius
 		
 		# Init optional arguments
 		options["spatial_frequency"] = None
@@ -63,6 +63,8 @@ class VideoBaseClass:
 		options["spatial_band_pass"] = None
 		options["temporal_band_pass"] = None
 		options["orientation"] = 0.0 # No rotation or vertical
+		options["size_inner"] = None
+		options["size_outer"] = None
 		
 		# Limits, no need to go beyond these
 		options["min_spatial_frequency"] = 0.0625 # cycles per degree
@@ -158,11 +160,58 @@ class VideoBaseClass:
 		# Cut back to original image dimensions
 		marginal_height = (diameter - image_height) / 2
 		marginal_width = (diameter - image_width) / 2
-		marginal_height = np.floor(marginal_height).astype(np.int)
-		marginal_width = np.floor(marginal_width).astype(np.int)
+		marginal_height = np.round(marginal_height).astype(np.int)
+		marginal_width = np.round(marginal_width).astype(np.int)
 		self.frames = large_frames[marginal_height:-marginal_height,marginal_width:-marginal_width,:]
+		#remove rounding error
+		self.frames = self.frames[0:image_height,0:image_width,:]
+
+	def _write_frames_to_videofile(self, filename):
+		'''Write frames to videofile
+		'''
+		# Init openCV VideoWriter
+		fourcc = VideoWriter_fourcc(*self.options["codec"])
+		filename_out = './{0}.{1}'.format(filename, self.options["container"])	
+		video = VideoWriter(filename_out, fourcc, float(self.options["fps"]), 
+			(self.options["image_width"], self.options["image_height"]), isColor=False) # path, codec, fps, size. Note, the isColor the flag is currently supported on Windows only
+
+		# Write frames to videofile frame-by-frame
+		for index in np.arange(self.frames.shape[2]):
+			video.write(self.frames[:,:,index])
+		
+		video.release()
 	
+	def _prepare_form(self, stimulus_size):
 	
+		center_deg = self.options["stimulus_position"] # in degrees
+		radius_deg = stimulus_size # in degrees
+		height = self.options["image_height"] # in pixels
+		width = self.options["image_width"] # in pixels
+		pix_per_deg = self.options["pix_per_deg"]
+		
+		# Turn position in degrees to position in mask, shift 0,0 to center of image
+		center_pix = np.array([0,0])
+		center_pix[0] = int(width/2 + pix_per_deg * center_deg[0]) # NOTE Width goes to x-coordinate
+		center_pix[1] = int(height/2 + pix_per_deg * -center_deg[1]) # NOTE Height goes to y-coordinate. Inverted to get positive up
+
+		if radius_deg == 0: # use the smallest distance between the center and image walls
+			radius_pix = min(center_pix[0], center_pix[1], width - center_pix[0], height - center_pix[1])
+		else:
+			radius_pix = pix_per_deg * radius_deg
+
+		Y, X = np.ogrid[:height, :width]
+
+		return X, Y, center_pix, radius_pix
+	
+	def _prepare_circular_mask(self, stimulus_size):
+	
+		X, Y, center_pix, radius_pix = self._prepare_form(stimulus_size)
+		dist_from_center = np.sqrt((X - center_pix[0])**2 + (Y - center_pix[1])**2)
+
+		mask = dist_from_center <= radius_pix
+		return mask
+
+		
 class StimulusPattern:
 	'''
 	Construct the stimulus images
@@ -227,19 +276,45 @@ class StimulusForm:
 	Mask the stimulus images
 	'''
 
-	def circular_patch(self):
-
-		position = self.options["stimulus_position"]
-		size = self.options["stimulus_size"]
+	def circular(self):
 		
-		pass
+		mask = self._prepare_circular_mask(self.options["stimulus_size"])
+		# newaxis adds 3rd dim, multiplication broadcasts one 3rd dim to N 3rd dims in self.frames
+		self.frames = self.frames * mask[...,np.newaxis] 
+				
+	def rectangular(self):
+
+		X, Y, center_pix, radius_pix = self._prepare_form(self.options["stimulus_size"])
 		
-	def rectangular_patch(self, position, size):
-		pass
+		# Prepare rectangular distance map in pixels
+		x_distance_vector = np.abs(X - center_pix[0])
+		X_distance_matrix = np.matlib.repmat(x_distance_vector,Y.shape[0],1)
+		y_distance_vector = np.abs(Y - center_pix[1])
+		Y_distance_matrix = np.matlib.repmat(y_distance_vector,1, X.shape[1])
 
-	def annulus(self, position, size_inner, size_outer):
-		pass
+		# rectangular_dist_from_center = np.abs(X - center_pix[0]) + np.abs(Y - center_pix[1])
+		mask = np.logical_and((X_distance_matrix<=radius_pix),(Y_distance_matrix<=radius_pix))
+			
+		# newaxis adds 3rd dim, multiplication broadcasts one 3rd dim to N 3rd dims in self.frames
+		self.frames = self.frames * mask[...,np.newaxis] 
 
+	def annulus(self):
+	
+		size_inner = self.options["size_inner"]
+		size_outer = self.options["size_outer"]
+		if not size_inner:
+			print('Size_inner missing, setting to 1')
+			size_inner = 1
+		if not size_outer:
+			print('Size_outer missing, setting to 2')
+			size_outer = 2
+
+		mask_inner = self._prepare_circular_mask(size_inner)
+		mask_outer = self._prepare_circular_mask(size_outer)
+
+		mask = mask_outer ^ mask_inner
+		self.frames = self.frames * mask[...,np.newaxis] 
+			
 
 class ConstructStimuli(VideoBaseClass):
 	'''
@@ -261,7 +336,7 @@ class ConstructStimuli(VideoBaseClass):
 		pattern: 
 			'sine_grating'; 'square_grating'; 'colored_temporal_noise'; 'white_noise'; 
 			'natural_images'; 'phase_scrambled_images'; 'natural_video'; 'phase_scrambled_video'
-		stimulus_form: 'circular_patch'; 'rectangular_patch'; 'annulus'
+		stimulus_form: 'circular'; 'rectangular'; 'annulus'
 		stimulus_position: in degrees, (0,0) is the center.
 		stimulus_size: In degrees. Radius for circle and annulus, half-width for rectangle.
 		contrast: between 0 and 1
@@ -292,14 +367,10 @@ class ConstructStimuli(VideoBaseClass):
 			assert kw in self.options.keys(), f"The keyword '{kw}' was not recognized"
 		self.options.update(kwargs)
 		
-		# Get basic video parameters
-		width = self.options["image_width"]
-		height = self.options["image_height"]
-		fps = self.options["fps"]
-		duration_seconds = self.options["duration_seconds"]
-		
 		# Init 3-D frames numpy array. Number of frames = frames per second * duration in seconds
-		self.frames = np.ones((height, width, int(fps*duration_seconds)), dtype=np.uint8) * self.options["background"]
+		self.frames = np.ones((self.options["image_height"], self.options["image_width"], 
+								int(self.options["fps"]*self.options["duration_seconds"])), 
+								dtype=np.uint8) * self.options["background"]
 		
 		# Call StimulusPattern class method to get patterns (numpy array)
 		# self.frames updated according to the pattern
@@ -308,51 +379,23 @@ class ConstructStimuli(VideoBaseClass):
 		# Call StimulusForm class method to mask frames
 		# self.frames updated according to the form
 		eval(f'StimulusForm.{self.options["stimulus_form"]}(self)') # Direct call to class.method() requires the self argument
-		
+
 		self._scale_intensity()
 		
-		# Init openCV VideoWriter
-		fourcc = VideoWriter_fourcc(*self.options["codec"])
-		filename_out = './{0}.{1}'.format(filename, self.options["container"])	
-		video = VideoWriter(filename_out, fourcc, float(fps), (width, height), isColor=False) # path, codec, fps, size. Note, the isColor the flag is currently supported on Windows only
-
-		# Write frames to videofile frame-by-frame
-		for index in np.arange(self.frames.shape[2]):
-			video.write(self.frames[:,:,index])
+		self._write_frames_to_videofile(filename)
 		
-		video.release()
-		
-		# # save video to npy file
-		# filename_out = f"./{filename}.npy"	
-
-		# np.save(filename_out, self.frames)
-		
-		# TÄHÄN JÄIT. EHKÄ HDF5 KUN TUO METADATA EI OIKEIN TYKKÄÄ NPY FORMAATISTA
-		# save options as metadata in the same npy format
+		# save video to hdf5 file
 		filename_out = f"{filename}.hdf5"	
 		save_array_to_hdf5(self.frames, filename_out)
-		filename_out_options = f"{filename}_options.hdf5"	
 
+		# save options as metadata in the same format
+		filename_out_options = f"{filename}_options.hdf5"	
 		save_dict_to_hdf5(self.options,filename_out_options)
-		# with h5py.File(filename_out, 'w') as hdf5_file_handle:
-			# dset = hdf5_file_handle.create_dataset("frames", data=self.frames)		
 		
-		# # time.sleep(1) 
-		t1=time.time()
-		data = load_array_from_hdf5(filename_out)
-		# with h5py.File(filename_out, 'r') as hdf5_file_handle:
-		   # data = hdf5_file_handle['frames'][...]
-		t2=time.time()
-		# print(data)
-		print(f"Time took to load: {t2-t1} seconds.")	
-		print(f'{np.all(data == self.frames)}')
-		print(f"\nDone. Image size is {self.options['image_width_in_deg']:0.2f} deg, \n{self.options['image_width']} x {self.options['image_height']} pixels")
-		options2 = load_dict_from_hdf5(filename_out_options)
-		print(f'self.options:\n{sorted(self.options.keys())}')
-		print(f'options:\n{sorted(options2.keys())}')
 
 if __name__ == "__main__":
 
 	my_video = ConstructStimuli()	# Instantiate
 	filename = 'test2'
-	my_video.main(filename, pattern='sine_grating', duration_seconds=1, fps=30, pedestal =0) # Do the work.	Put here the needs in the keyword argumets
+	my_video.main(	filename, pattern='white_noise', stimulus_form='rectangular', duration_seconds=2, 
+					fps=30, pedestal =0, orientation=125, stimulus_position=(0,0), stimulus_size=4 ) # Do the work.	Put here the needs in the keyword argumets
