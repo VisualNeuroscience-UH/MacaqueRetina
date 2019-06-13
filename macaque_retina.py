@@ -12,6 +12,8 @@ from matplotlib.patches import Ellipse as ellipse
 from tqdm import tqdm
 import cv2
 from pathlib import Path
+import quantities as pq
+import elephant
 
 # work_path = 'C:\\Users\\vanni\\Laskenta\\Git_Repos\\MacaqueRetina_Git'
 # os.chdir(work_path)
@@ -588,8 +590,14 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize):
 				dataset_name='All data {0} fit'.format(dendr_diam_model))			
 
 		return dendr_diam_parameters
-		
-		
+
+	def fit_temporal_filter(self):
+		# Get traces of temporal behavior
+		# Define basis functions
+		# Fit traces
+		pass
+
+
 class GanglionCells(Mathematics, ConstructReceptiveFields):
 	'''
 	Create ganglion cell object. Radii and theta in degrees. Use density to reduce N cells for faster processing.
@@ -896,8 +904,37 @@ class GanglionCells(Mathematics, ConstructReceptiveFields):
 			self.show_gc_receptive_fields(rho, phi, gc_rf_models, surround_fixed=self.surround_fixed) 
 
 		# All ganglion cell spatial parameters are now saved to ganglion cell object dataframe gc_df
-		
-		
+
+	def create_temporal_filters(self):
+		# Take in the temporal filter stats
+		# Build a family of temporal filters, one for each GC
+		pass
+
+	def generate_gc_spike_trains(self):
+		pass
+
+class SingleGanglionCell:
+	"""
+	Computes the response of a single ganglion cell
+	"""
+
+	def __init__(self, spatial_properties, temporal_properties):
+		# Build the convolution matrix according to spatial & temporal properties
+		pass
+
+	def build_convolution_matrix(self):
+		pass
+
+	def generate_analog_response(self, visual_image):
+		# Create neo.AnalogSignal by convolving stimulus with the spatio-temporal filter
+		# Sampling rate = ?
+		pass
+
+	def generate_spike_train(self):
+		# Create spike train using elephant.spike_train_generation.inhomogeneous_poisson_process()
+		pass
+
+
 class SampleImage:
 	'''
 	This class gets one image at a time, and provides the cone response.
@@ -966,7 +1003,7 @@ class SampleImage:
 		return cone_response
 			
 	
-class Retina:
+class Operator:
 	'''
 	Operate the generation and running of retina here
 	'''
@@ -994,10 +1031,11 @@ class Retina:
 		
 		# At this point the spatial receptive fieldS are constructed. The positions are in gc_eccentricity, gc_polar_angle, 
 		# and the rf parameters in gc_rf_models
+
+		if Visualize:
+			plt.show()
 		
-		plt.show()
-		
-	def run_stimulus_sampling(sample_image_object, visualize=0):
+	def run_stimulus_sampling(sample_image_object, visualize=False):
 
 		one_frame = sample_image_object.get_image()
 		one_frame_after_optics = sample_image_object.blur_image(one_frame)
@@ -1019,7 +1057,7 @@ class Retina:
 		
 if __name__ == "__main__":
 
-	print (retina_data_path / 'kissa.txt')
+	elephant.spike_train_generation.inhomogeneous_poisson_process()
 
 	# # Define eccentricity and theta in degrees. Model_density is the relative density compared to true macaque values.
 	# ganglion_cell_object = GanglionCells(gc_type='parasol', responsetype='ON', eccentricity=[3,7], theta=[-30.0,30.0], density=1.0, randomize_position = 0.6)
@@ -1042,9 +1080,9 @@ if __name__ == "__main__":
 
 	# Operator.run_retina_construction(midget_OFF_object, visualize=0)
 	
-	# sample_image_object = SampleImage()
+	#sample_image_object = SampleImage()
 	
-	# Operator.run_stimulus_sampling(sample_image_object, visualize=1)
+	#Operator.run_stimulus_sampling(sample_image_object, visualize=1)
 	
 	
 # TODO:
