@@ -2,7 +2,6 @@
 import os
 import sys
 import pdb
-
 import numpy as np
 import scipy.optimize as opt
 import scipy.io as sio
@@ -12,10 +11,13 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse as ellipse
 from tqdm import tqdm
 import cv2
+from pathlib import Path
 
-cwd = os.getcwd()
-work_path = 'C:\\Users\\vanni\\Laskenta\\Git_Repos\\MacaqueRetina_Git'
-os.chdir(work_path)
+# work_path = 'C:\\Users\\vanni\\Laskenta\\Git_Repos\\MacaqueRetina_Git'
+# os.chdir(work_path)
+script_path = Path(__file__).parent
+retina_data_path = script_path / 'apricot'
+digitized_figures_path = script_path
 
 
 class Mathematics:
@@ -113,7 +115,7 @@ class GetLiteratureData:
 		Read re-digitized old literature data from mat files
 		'''
 
-		gc_density = sio.loadmat('Perry_1984_Neurosci_GCdensity_c.mat',variable_names=['Xdata','Ydata'])
+		gc_density = sio.loadmat(digitized_figures_path / 'Perry_1984_Neurosci_GCdensity_c.mat',variable_names=['Xdata','Ydata'])
 		cell_eccentricity = np.squeeze(gc_density['Xdata'])
 		cell_density = np.squeeze(gc_density['Ydata']) * 1e3 # Cells are in thousands, thus the 1e3
 		return cell_eccentricity, cell_density
@@ -121,9 +123,10 @@ class GetLiteratureData:
 	def read_retina_glm_data(self, gc_type, responsetype):
 
 		# Go to correct folder
-		cwd2 = os.getcwd()
-		# work_path2 = 'C:\\Users\\vanni\\OneDrive - University of Helsinki\\Work\\Simulaatiot\\Retinamalli\\Retina_GLM\\apricot'
-		work_path2 = os.path.join(work_path, 'apricot')
+		#cwd2 = os.getcwd()
+		# retina_data_path = 'C:\\Users\\vanni\\OneDrive - University of Helsinki\\Work\\Simulaatiot\\Retinamalli\\Retina_GLM\\apricot'
+		# retina_data_path = os.path.join(work_path, 'apricot')
+
 		#Define filename
 		if gc_type=='parasol' and responsetype=='ON':
 			filename = 'Parasol_ON_spatial.mat'
@@ -144,7 +147,8 @@ class GetLiteratureData:
 			sys.exit()
 
 		#Read data
-		filepath=os.path.join(work_path2,filename)
+		#filepath=os.path.join(retina_data_path,filename)
+		filepath = retina_data_path / filename
 		gc_spatial_data = sio.loadmat(filepath,variable_names=['c','stafit'])
 		gc_spatial_data_array=gc_spatial_data['c']
 		initial_center_values = gc_spatial_data['stafit']
@@ -156,11 +160,11 @@ class GetLiteratureData:
 		Read re-digitized old literature data from mat files
 		'''
 		if self.gc_type=='parasol':
-			dendr_diam1 = sio.loadmat('Perry_1984_Neurosci_ParasolDendrDiam_c.mat',variable_names=['Xdata','Ydata'])
-			dendr_diam2 = sio.loadmat('Watanabe_1989_JCompNeurol_GCDendrDiam_parasol_c.mat',variable_names=['Xdata','Ydata'])
+			dendr_diam1 = sio.loadmat(digitized_figures_path / 'Perry_1984_Neurosci_ParasolDendrDiam_c.mat',variable_names=['Xdata','Ydata'])
+			dendr_diam2 = sio.loadmat(digitized_figures_path / 'Watanabe_1989_JCompNeurol_GCDendrDiam_parasol_c.mat',variable_names=['Xdata','Ydata'])
 		elif self.gc_type=='midget':
-			dendr_diam1 = sio.loadmat('Perry_1984_Neurosci_MidgetDendrDiam_c.mat',variable_names=['Xdata','Ydata'])
-			dendr_diam2 = sio.loadmat('Watanabe_1989_JCompNeurol_GCDendrDiam_midget_c.mat',variable_names=['Xdata','Ydata'])
+			dendr_diam1 = sio.loadmat(digitized_figures_path / 'Perry_1984_Neurosci_MidgetDendrDiam_c.mat',variable_names=['Xdata','Ydata'])
+			dendr_diam2 = sio.loadmat(digitized_figures_path / 'Watanabe_1989_JCompNeurol_GCDendrDiam_midget_c.mat',variable_names=['Xdata','Ydata'])
 
 		return dendr_diam1, dendr_diam2
 
@@ -962,7 +966,7 @@ class SampleImage:
 		return cone_response
 			
 	
-class Operator:
+class Retina:
 	'''
 	Operate the generation and running of retina here
 	'''
@@ -1015,15 +1019,16 @@ class Operator:
 		
 if __name__ == "__main__":
 
-	
+	print (retina_data_path / 'kissa.txt')
+
 	# # Define eccentricity and theta in degrees. Model_density is the relative density compared to true macaque values.
 	# ganglion_cell_object = GanglionCells(gc_type='parasol', responsetype='ON', eccentricity=[3,7], theta=[-30.0,30.0], density=1.0, randomize_position = 0.6)
 
 	# Operator.run_retina_construction(ganglion_cell_object, visualize=1)
 
-	parasol_ON_object = GanglionCells(gc_type='parasol', responsetype='ON', eccentricity=[0.5,30], theta=[-30.0,30.0], model_density=1.0, randomize_position = 0.6)
+	# parasol_ON_object = GanglionCells(gc_type='parasol', responsetype='ON', eccentricity=[0.5,30], theta=[-30.0,30.0], model_density=1.0, randomize_position = 0.6)
 
-	Operator.run_retina_construction(parasol_ON_object, visualize=1)
+	# Retina.run_retina_construction(parasol_ON_object, visualize=1)
 
 	# parasol_OFF_object = GanglionCells(gc_type='parasol', responsetype='OFF', eccentricity=[3,7], theta=[-30.0,30.0], model_density=1.0, randomize_position = 0.6)
 
@@ -1054,7 +1059,6 @@ if __name__ == "__main__":
 
 	#   -construct LGN. Probably a filter rather than spiking neurons. The latter dont make sense because we are interested in cx, not sub-cx.s
 
-os.chdir(cwd)
 
 '''
 This is code for building macaque retinal filters corresponding to midget and parasol cells' responses.

@@ -15,11 +15,6 @@ import matplotlib.pyplot as plt
 import cv2
 from cv2 import VideoWriter, VideoWriter_fourcc
 
-cwd = os.getcwd()
-work_path = 'C:\\Users\\vanni\\Laskenta\\Git_Repos\\MacaqueRetina_Git'
-os.chdir(work_path)
-
-
 
 '''
 This module creates the visual stimuli. Stimuli include patches of sinusoidal gratings at different orientations
@@ -316,12 +311,12 @@ class StimulusForm:
 		self.frames = self.frames * mask[...,np.newaxis] 
 			
 
-class ConstructStimuli(VideoBaseClass):
+class ConstructStimulus(VideoBaseClass):
 	'''
 	Create stimulus video and save
 	'''
 
-	def main(self, filename, **kwargs):
+	def __init__(self, filename, **kwargs):
 		'''
 		Format: my_video_object.main(filename, keyword1=value1, keyword2=value2,...)
 		
@@ -359,7 +354,9 @@ class ConstructStimuli(VideoBaseClass):
 		------------------------
 		Output: stimulus video file
 		'''
-		
+
+		super(ConstructStimulus, self).__init__()
+
 		# Set input arguments to video-object, updates the defaults from VideoBaseClass
 		print("Setting the following attributes:\n")
 		for kw in kwargs:
@@ -394,8 +391,12 @@ class ConstructStimuli(VideoBaseClass):
 		
 
 if __name__ == "__main__":
+	from pathlib import Path
+	print(Path(__file__).parent)
 
-	my_video = ConstructStimuli()	# Instantiate
-	filename = 'test2'
-	my_video.main(	filename, pattern='white_noise', stimulus_form='rectangular', duration_seconds=2, 
-					fps=30, pedestal =0, orientation=125, stimulus_position=(0,0), stimulus_size=4 ) # Do the work.	Put here the needs in the keyword argumets
+	#filename = 'test3'
+	#my_video = ConstructStimulus(filename, pattern='white_noise', stimulus_form='rectangular', duration_seconds=2,
+	#							 fps=30, pedestal =0, orientation=0, stimulus_position=(0,0), stimulus_size=4)	# Instantiate
+
+	#my_video.main(	filename, pattern='white_noise', stimulus_form='rectangular', duration_seconds=2,
+	#				fps=30, pedestal =0, orientation=0, stimulus_position=(0,0), stimulus_size=4 ) # Do the work.	Put here the needs in the keyword argumets
