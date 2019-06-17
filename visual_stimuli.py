@@ -38,7 +38,7 @@ class VideoBaseClass:
 		options = {}
 		options["image_width"] = 1280 # Image width in pixels
 		options["image_height"] = 720 # Image height in pixels
-		options["container"] = 'avi'
+		options["container"] = 'mp4'
 		options["codec"] = 'MP42'
 		options["fps"] = 64.0 # Frames per second
 		options["duration_seconds"] = 1.0 # seconds
@@ -72,9 +72,19 @@ class VideoBaseClass:
 		# Get resolution 
 		options["pix_per_deg"] = options["max_spatial_frequency"] * 3 # min sampling at 1.5 x Nyquist frequency of the highest sf
 		options["image_width_in_deg"] = options["image_width"] / options["pix_per_deg"]
-	
+
 		self.options=options
-	
+
+	def get_xrange_deg(self):
+		stimulus_center_x = self.options['stimulus_position'][0]
+		stimulus_width_deg = self.options['image_width'] / self.options['pix_per_deg']
+		return [stimulus_center_x - (stimulus_width_deg/2), stimulus_center_x + (stimulus_width_deg/2)]
+
+	def get_yrange_deg(self):
+		stimulus_center_y = self.options['stimulus_position'][1]
+		stimulus_height_deg = self.options['image_width'] / self.options['pix_per_deg']
+		return [stimulus_center_y - (stimulus_height_deg / 2), stimulus_center_y + (stimulus_height_deg / 2)]
+
 	def _scale_intensity(self):
 	
 		'''Scale intensity to 8-bit grey scale. Calculating peak-to-peak here allows different 
@@ -98,7 +108,10 @@ class VideoBaseClass:
 		
 		# Shift to pedestal
 		self.frames = self.frames + pedestal
-		
+
+		# Round result to avoid unnecessary errors
+		self.frames = np.round(self.frames, 1)
+
 		# Check that the values are between 0 and 255 to get correct conversion to uint8
 		assert np.all(0 <= self.frames.flatten()) and np.all(self.frames.flatten() <= 255), "Cannot safely convert to uint8. Check intensity/dynamic range."
 		# Return
@@ -316,7 +329,7 @@ class ConstructStimulus(VideoBaseClass):
 	Create stimulus video and save
 	'''
 
-	def __init__(self, filename, **kwargs):
+	def __init__(self, **kwargs):
 		'''
 		Format: my_video_object.main(filename, keyword1=value1, keyword2=value2,...)
 		
@@ -378,7 +391,8 @@ class ConstructStimulus(VideoBaseClass):
 		eval(f'StimulusForm.{self.options["stimulus_form"]}(self)') # Direct call to class.method() requires the self argument
 
 		self._scale_intensity()
-		
+
+	def save_to_file(self, filename):
 		self._write_frames_to_videofile(filename)
 		
 		# save video to hdf5 file
@@ -388,7 +402,7 @@ class ConstructStimulus(VideoBaseClass):
 		# save options as metadata in the same format
 		filename_out_options = f"{filename}_options.hdf5"	
 		save_dict_to_hdf5(self.options,filename_out_options)
-		
+
 
 if __name__ == "__main__":
 	from pathlib import Path

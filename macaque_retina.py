@@ -14,6 +14,9 @@ import cv2
 from pathlib import Path
 import quantities as pq
 import elephant
+import neo
+import seaborn as sns
+import visual_stimuli as vs
 
 # work_path = 'C:\\Users\\vanni\\Laskenta\\Git_Repos\\MacaqueRetina_Git'
 # os.chdir(work_path)
@@ -170,6 +173,9 @@ class GetLiteratureData:
 
 		return dendr_diam1, dendr_diam2
 
+	def get_sampling_rate(self):
+		# Sampling rate 120 Hz in the "apricot" dataset (courtesy of Chichilnisky lab)
+		return 120 * pq.Hz
 
 class Visualize:
 	'''
@@ -905,35 +911,105 @@ class GanglionCells(Mathematics, ConstructReceptiveFields):
 
 		# All ganglion cell spatial parameters are now saved to ganglion cell object dataframe gc_df
 
+	def build(self, visualize=False):
+		"""
+		Builds the receptive field mosaic
+		:return:
+		"""
+		# Run GC density fit to data, get func_params. Data from Perry_1984_Neurosci
+		gc_density_func_params = self.fit_2GC_density_data()
+
+		# Collect spatial statistics for receptive fields
+		spatial_statistics_dict = self.fit_spatial_statistics(visualize=visualize)
+
+		# Place ganglion cells to desired retina.
+		self.place_gc_units(gc_density_func_params, visualize=visualize)
+
+		# Get fit parameters for dendritic field diameter with respect to eccentricity. Linear and quadratic fit.
+		# Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
+		dendr_diam_vs_eccentricity_parameters_dict = self.fit_dendritic_diameter_vs_eccentricity(
+			visualize=visualize)
+
+		# Construct receptive fields. Centers are saved in the object
+		self.place_spatial_receptive_fields(spatial_statistics_dict,
+															dendr_diam_vs_eccentricity_parameters_dict, visualize)
+
+		# At this point the spatial receptive fieldS are constructed. The positions are in gc_eccentricity, gc_polar_angle,
+		# and the rf parameters in gc_rf_models
+
+		if Visualize is True:
+			plt.show()
+
+
 	def create_temporal_filters(self):
 		# Take in the temporal filter stats
 		# Build a family of temporal filters, one for each GC
 		pass
 
 	def generate_gc_spike_trains(self):
+		# Parallelize for faster computation :)
 		pass
 
-class SingleGanglionCell:
-	"""
-	Computes the response of a single ganglion cell
-	"""
+	def show_fitted_rf(self, gc_index, um_per_pixel=10, n_pixels=30):
+		# TODO - label axes
+		gc = self.gc_df.iloc[gc_index]
+		#print(gc)
+		mm_per_pixel = um_per_pixel / 1000
+		image_halfwidth_mm = (n_pixels/2) * mm_per_pixel
+		x_position_indices = np.linspace(gc.positions_eccentricity - image_halfwidth_mm,
+									   gc.positions_eccentricity + image_halfwidth_mm, n_pixels)
+		y_position_indices = np.linspace(gc.positions_polar_angle - image_halfwidth_mm,
+									   gc.positions_polar_angle + image_halfwidth_mm, n_pixels)
 
-	def __init__(self, spatial_properties, temporal_properties):
+		x_grid, y_grid = np.meshgrid(x_position_indices, y_position_indices)
+		amplitudec = 1
+		offset = 0
+
+		fitted_data = self.DoG2D_fixed_surround((x_grid, y_grid), amplitudec, gc.positions_eccentricity, gc.positions_polar_angle,
+					  			                 gc.semi_xc, gc.semi_yc, gc.orientation_center, gc.amplitudes, gc.sur_ratio, offset)
+
+		sns.heatmap(np.reshape(fitted_data, (n_pixels, n_pixels)))
+		plt.show()
+
+	def build_convolution_matrix(self, gc_index, stimulus_center, stimulus_width_px, stimulus_height_px):
+		gc = self.gc_df.iloc[gc_index]
+		n_pixels = 100
+		x_position_indices = np.linspace(gc.positions_eccentricity - image_halfwidth_mm,
+										 gc.positions_eccentricity + image_halfwidth_mm, n_pixels)
+		y_position_indices = np.linspace(gc.positions_polar_angle - image_halfwidth_mm,
+										 gc.positions_polar_angle + image_halfwidth_mm, n_pixels)
+		fitted_data = self.DoG2D_fixed_surround((x_grid, y_grid), amplitudec, gc.positions_eccentricity, gc.positions_polar_angle,
+					  			                 gc.semi_xc, gc.semi_yc, gc.orientation_center, gc.amplitudes, gc.sur_ratio, offset)
+
+		x_grid, y_grid = np.meshgrid(x_position_indices, y_position_indices)
+
 		# Build the convolution matrix according to spatial & temporal properties
-		pass
-
-	def build_convolution_matrix(self):
+		# Linearize the spatial filter
+		# Multiply spat x temporal = (S x 1) x (1 x T) = S x T matrix
 		pass
 
 	def generate_analog_response(self, visual_image):
+		## Compute filtered response to stimulus
 		# Create neo.AnalogSignal by convolving stimulus with the spatio-temporal filter
-		# Sampling rate = ?
+		# => point process conditional intensity
+
+		# Need to take care of:
+		#  - time in filter data vs stimulus fps
+		#  - spatial filter size vs stimulus size
+		# For each time point t in common_time:
+		#   Convolved_data = Stim(t)^T (1xS) x
+		#
+		# data_sampling_rate = self.get_sampling_rate()
+		# conv_data_signal = neo.AnalogSignal(convolved_data, units='1', sampling_rate = data_sampling_rate)
+
+		## Compute interpolated h current (??)
 		pass
 
 	def generate_spike_train(self):
+		## Static nonlinearity & spiking
 		# Create spike train using elephant.spike_train_generation.inhomogeneous_poisson_process()
+		# ...but need to take post-spike filter into account!!
 		pass
-
 
 class SampleImage:
 	'''
@@ -941,17 +1017,17 @@ class SampleImage:
 	After instantiation, the RGC group can get one frame at a time, and the system will give an impulse response.
 	'''
 			
-	def __init__(self, mircometers_per_pixel=10, image_resolution=(100,100), temporal_resolution=1):
+	def __init__(self, micrometers_per_pixel=10, image_resolution=(100, 100), temporal_resolution=1):
 		'''
 		Instantiate new stimulus.
 		'''
-		self.millimeters_per_pixel = mircometers_per_pixel / 1000 # Turn to millimeters
+		self.millimeters_per_pixel = micrometers_per_pixel / 1000 # Turn to millimeters
 		self.temporal_resolution = temporal_resolution
 		self.optical_aberration = 2/60 # unit is degree
 		self.deg_per_mm = 5
 		
 	def get_image(self, image_file_name='testi.jpg'):
-				
+
 		# Load stimulus 
 		image = cv2.imread(image_file_name,0) # The 0-flag calls for grayscale. Comes in as uint8 type
 
@@ -985,8 +1061,8 @@ class SampleImage:
 
 		# Compressing nonlinearity. Parameters are manually scaled to give dynamic cone ouput. 
 		# Equation, data from Baylor_1987_JPhysiol
-		rm=25 # pA
-		k=2.77e-4 # at 500 nm
+		rm = 25 # pA
+		k = 2.77e-4 # at 500 nm
 		cone_sensitivity_min = 5e2
 		cone_sensitivity_max = 1e4
 		
@@ -1002,39 +1078,23 @@ class SampleImage:
 
 		return cone_response
 			
-	
+class VisualImageArray(vs.ConstructStimulus):
+
+	def __init__(self, image_center, **kwargs):
+		"""
+		The visual stimulus, simple optics and cone responses
+
+		:param image_center: x+yj, x for eccentricity and y for elevation (both in mm)
+		:param kwargs:
+		"""
+		super(VisualImageArray, self).__init__(**kwargs)
+		self.image_center = image_center
+
 class Operator:
 	'''
 	Operate the generation and running of retina here
 	'''
 
-	def run_retina_construction(ganglion_cell_object, visualize=False): # class method
-		'''
-		Operate the construction process here
-		'''
-
-		# Run GC density fit to data, get func_params. Data from Perry_1984_Neurosci
-		gc_density_func_params = ganglion_cell_object.fit_2GC_density_data()
-
-		# Collect spatial statistics for receptive fields
-		spatial_statistics_dict = ganglion_cell_object.fit_spatial_statistics(visualize=visualize)
-		
-		# Place ganglion cells to desired retina.
-		ganglion_cell_object.place_gc_units(gc_density_func_params, visualize=visualize)
-
-		# Get fit parameters for dendritic field diameter with respect to eccentricity. Linear and quadratic fit. 
-		# Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
-		dendr_diam_vs_eccentricity_parameters_dict = ganglion_cell_object.fit_dendritic_diameter_vs_eccentricity(visualize=visualize)
-
-		# Construct receptive fields. Centers are saved in the object
-		ganglion_cell_object.place_spatial_receptive_fields(spatial_statistics_dict, dendr_diam_vs_eccentricity_parameters_dict, visualize)
-		
-		# At this point the spatial receptive fieldS are constructed. The positions are in gc_eccentricity, gc_polar_angle, 
-		# and the rf parameters in gc_rf_models
-
-		if Visualize:
-			plt.show()
-		
 	def run_stimulus_sampling(sample_image_object, visualize=False):
 
 		one_frame = sample_image_object.get_image()
@@ -1057,7 +1117,13 @@ class Operator:
 		
 if __name__ == "__main__":
 
-	elephant.spike_train_generation.inhomogeneous_poisson_process()
+	parasol_ON_object = GanglionCells(gc_type='parasol', responsetype='ON', eccentricity=[4, 6],
+										 theta=[-30.0, 30.0], model_density=1.0, randomize_position=0.6)
+	parasol_ON_object.build(visualize=False)
+	parasol_ON_object.show_fitted_rf(220)
+
+	#VisualImageArray(pattern='white_noise', stimulus_form='rectangular', duration_seconds=2,
+	#							 fps=30, pedestal =0, orientation=0, stimulus_position=(0,0), stimulus_size=4)
 
 	# # Define eccentricity and theta in degrees. Model_density is the relative density compared to true macaque values.
 	# ganglion_cell_object = GanglionCells(gc_type='parasol', responsetype='ON', eccentricity=[3,7], theta=[-30.0,30.0], density=1.0, randomize_position = 0.6)
