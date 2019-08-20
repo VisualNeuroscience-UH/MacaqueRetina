@@ -135,8 +135,8 @@ class GetLiteratureData:
 		#Define filename
 		if gc_type=='parasol' and responsetype=='ON':
 			filename = 'Parasol_ON_spatial.mat'
-			bad_data_indices=[15, 67, 71, 86, 89]   # Manually selected for Chichilnisky apricot data
-			# bad_data_indices=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,0] # Manually selected for Chichilnisky apricot data
+			#bad_data_indices=[15, 67, 71, 86, 89]   # Manually selected for Chichilnisky apricot data
+			bad_data_indices = []  # For debugging
 		elif gc_type=='parasol' and responsetype=='OFF':
 			filename = 'Parasol_OFF_spatial.mat'
 			bad_data_indices=[6, 31, 73]
@@ -535,7 +535,8 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize):
 			self.show_spatial_statistics(ydata,spatial_statistics_dict, (x_model_fit, y_model_fit))
 
 		# Return stats for RF creation
-		return spatial_statistics_dict
+		#return spatial_statistics_dict
+		return chichilnisky_data_df
 
 	def fit_dendritic_diameter_vs_eccentricity(self, visualize=False):
 		'''
@@ -1119,8 +1120,11 @@ if __name__ == "__main__":
 
 	parasol_ON_object = GanglionCells(gc_type='parasol', responsetype='ON', eccentricity=[4, 6],
 										 theta=[-30.0, 30.0], model_density=1.0, randomize_position=0.6)
-	parasol_ON_object.build(visualize=False)
-	parasol_ON_object.show_fitted_rf(220)
+	#parasol_ON_object.fit_dendritic_diameter_vs_eccentricity()
+	#plt.show()
+	chichilnisky_fits = parasol_ON_object.fit_spatial_statistics(visualize=False)
+
+
 
 	#VisualImageArray(pattern='white_noise', stimulus_form='rectangular', duration_seconds=2,
 	#							 fps=30, pedestal =0, orientation=0, stimulus_position=(0,0), stimulus_size=4)
