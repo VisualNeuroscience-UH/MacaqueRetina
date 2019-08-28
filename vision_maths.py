@@ -105,6 +105,41 @@ class Mathematics:
 
         return model_fit.ravel()
 
+    def DoG2D_fixed_double_surround(self, xy_tuple, midpoint_x, midpoint_y, sd_major, sd_minor, orientation_major, amplitudes):
+        """
+        DoG model with the angle of orientation and center positions identical and diameter of the surround
+        twice that of the center. This is the model used in the data paper.
+        """
+        sur_ratio = 2
+        offset = 0
+        amplitudec = 1
+
+        (x_fit, y_fit) = xy_tuple
+        acen = (np.cos(orientation_major) ** 2) / (2 * sd_major ** 2) + (np.sin(orientation_major) ** 2) / (
+                    2 * sd_minor ** 2)
+        bcen = -(np.sin(2 * orientation_major)) / (4 * sd_major ** 2) + (np.sin(2 * orientation_major)) / (
+                    4 * sd_minor ** 2)
+        ccen = (np.sin(orientation_major) ** 2) / (2 * sd_major ** 2) + (np.cos(orientation_major) ** 2) / (
+                    2 * sd_minor ** 2)
+
+        asur = (np.cos(orientation_major) ** 2) / (2 * sur_ratio * sd_major ** 2) + (
+                    np.sin(orientation_major) ** 2) / (2 * sur_ratio * sd_minor ** 2)
+        bsur = -(np.sin(2 * orientation_major)) / (4 * sur_ratio * sd_major ** 2) + (np.sin(2 * orientation_major)) / (
+                    4 * sur_ratio * sd_minor ** 2)
+        csur = (np.sin(orientation_major) ** 2) / (2 * sur_ratio * sd_major ** 2) + (
+                    np.cos(orientation_major) ** 2) / (2 * sur_ratio * sd_minor ** 2)
+
+        ## Difference of gaussians
+        model_fit = offset + \
+                    amplitudec * np.exp(
+            - (acen * ((x_fit - midpoint_x) ** 2) + 2 * bcen * (x_fit - midpoint_x) * (y_fit - midpoint_y) + ccen * ((y_fit - midpoint_y) ** 2))) - \
+                    amplitudes * np.exp(
+            - (asur * ((x_fit - midpoint_x) ** 2) + 2 * bsur * (x_fit - midpoint_x) * (y_fit - midpoint_y) + csur * ((y_fit - midpoint_y) ** 2)))
+
+        return model_fit.ravel()
+
+
+
     def sector2area(self, radius, angle):  # Calculate sector area. Angle in deg, radius in mm
         pi = np.pi
         assert angle < 360, "Angle not possible, should be <360"

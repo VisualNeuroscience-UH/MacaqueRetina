@@ -1,6 +1,14 @@
-import os
+# This script fits spike-triggered average (STA) data from retinal ganglion cells (RGC) to functions expressed as
+# the difference of two 2-dimensional elliptical Gaussians (DoG, Difference of Gaussians).
+#
+# The derived parameters are used to create artificial RGC mosaics and receptive fields (RFs).
+#
+# Data courtesy of The Chichilnisky Lab <http://med.stanford.edu/chichilnisky.html>
+# Data paper: Field GD et al. (2010). Nature 467(7316):673-7.
+# Only low resolution spatial RF maps are used here.
+
+
 import sys
-import pdb
 import numpy as np
 import scipy.optimize as opt
 import scipy.io as sio
@@ -9,18 +17,14 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse as ellipse
 from tqdm import tqdm
-import cv2
 from pathlib import Path
-import quantities as pq
-import elephant
-import neo
-import seaborn as sns
 from visualize import Visualize
 from vision_maths import Mathematics
 
 script_path = Path(__file__).parent
 retina_data_path = script_path / 'apricot'
 digitized_figures_path = script_path
+
 
 class GetLiteratureData:
     '''
@@ -48,8 +52,8 @@ class GetLiteratureData:
         # Define filename
         if gc_type == 'parasol' and responsetype == 'ON':
             filename = 'Parasol_ON_spatial.mat'
-            # bad_data_indices=[15, 67, 71, 86, 89]   # Manually selected for Chichilnisky apricot data
-            bad_data_indices = []  # For debugging
+            bad_data_indices=[15, 67, 71, 86, 89]   # Manually selected for Chichilnisky apricot data
+            #bad_data_indices = []  # For debugging
         elif gc_type == 'parasol' and responsetype == 'OFF':
             filename = 'Parasol_OFF_spatial.mat'
             bad_data_indices = [6, 31, 73]
@@ -70,6 +74,10 @@ class GetLiteratureData:
         gc_spatial_data = sio.loadmat(filepath, variable_names=['c', 'stafit'])
         gc_spatial_data_array = gc_spatial_data['c']
         initial_center_values = gc_spatial_data['stafit']
+
+        n_cells = len(gc_spatial_data_array[0,0,:])
+        n_bad = len(bad_data_indices)
+        print("Read %d cells from datafile and then removed %d bad cells (handpicked)" % (n_cells, n_bad))
 
         return gc_spatial_data_array, initial_center_values, bad_data_indices
 
@@ -96,7 +104,7 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize, Mathematics):
     Methods for deriving spatial receptive field parameters from the apricot dataset (Field_2010)
     """
 
-    def fit_dog_to_sta_data(self, gc_type, response_type, visualize=False, surround_fixed=0):
+    def fit_dog_to_sta_data(self, gc_type, response_type, visualize=False, surround_fixed=False, save=None):
         '''
         Fits a function consisting of the difference of two 2-dimensional elliptical Gaussian functions to
         retinal spike triggered average (STA) data.
@@ -238,8 +246,12 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize, Mathematics):
 
                 plt.show()
 
-        # Calculate descriptive stats for params
-        return parameter_names, data_all_viable_cells, bad_data_indices
+            if save is not None:
+                assert type(save) == str, "Use the parameter save to specify the output filename"
+                fits_df = pd.DataFrame(data_all_viable_cells, columns=parameter_names)
+                fits_df.to_csv(save)
+
+            return parameter_names, data_all_viable_cells, bad_data_indices
 
     def fit_spatial_statistics(self, visualize=False):
         """
@@ -377,5 +389,5 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize, Mathematics):
 
 if __name__ == '__main__':
     x = ConstructReceptiveFields()
-    parameter_names, data_all_viable_cells, bad_data_indices = x.fit_dog_to_sta_data('parasol', 'ON')
-    pass
+    parameter_names, data_all_viable_cells, bad_data_indices = \
+        x.fit_dog_to_sta_data('parasol', 'ON', save='results_temp/parasol_ON_surfix.csv', surround_fixed=True)
