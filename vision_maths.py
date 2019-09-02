@@ -1,20 +1,5 @@
-import os
-import sys
-import pdb
 import numpy as np
-import scipy.optimize as opt
-import scipy.io as sio
-import scipy.stats as stats
-import pandas as pd
-import matplotlib.pyplot as plt
-from matplotlib.patches import Ellipse as ellipse
-from tqdm import tqdm
-import cv2
-from pathlib import Path
-import quantities as pq
-import elephant
-import neo
-import seaborn as sns
+
 
 class Mathematics:
     '''
@@ -76,6 +61,8 @@ class Mathematics:
 
         return model_fit.ravel()
 
+
+    # TODO - Replace with call to previous fn
     def DoG2D_fixed_surround(self, xy_tuple, amplitudec, xoc, yoc, semi_xc, semi_yc, orientation_center, amplitudes,
                              sur_ratio, offset):
         '''
@@ -105,7 +92,8 @@ class Mathematics:
 
         return model_fit.ravel()
 
-    def DoG2D_fixed_double_surround(self, xy_tuple, midpoint_x, midpoint_y, sd_major, sd_minor, orientation_major, amplitudes):
+    # TODO - Replace with call to previous fn
+    def DoG2D_fixed_double_surround(self, xy_tuple, xoc, yoc, semi_xc, semi_yc, orientation_center, amplitudes):
         """
         DoG model with the angle of orientation and center positions identical and diameter of the surround
         twice that of the center. This is the model used in the data paper.
@@ -115,26 +103,26 @@ class Mathematics:
         amplitudec = 1
 
         (x_fit, y_fit) = xy_tuple
-        acen = (np.cos(orientation_major) ** 2) / (2 * sd_major ** 2) + (np.sin(orientation_major) ** 2) / (
-                    2 * sd_minor ** 2)
-        bcen = -(np.sin(2 * orientation_major)) / (4 * sd_major ** 2) + (np.sin(2 * orientation_major)) / (
-                    4 * sd_minor ** 2)
-        ccen = (np.sin(orientation_major) ** 2) / (2 * sd_major ** 2) + (np.cos(orientation_major) ** 2) / (
-                    2 * sd_minor ** 2)
+        acen = (np.cos(orientation_center) ** 2) / (2 * semi_xc ** 2) + (np.sin(orientation_center) ** 2) / (
+                2 * semi_yc ** 2)
+        bcen = -(np.sin(2 * orientation_center)) / (4 * semi_xc ** 2) + (np.sin(2 * orientation_center)) / (
+                4 * semi_yc ** 2)
+        ccen = (np.sin(orientation_center) ** 2) / (2 * semi_xc ** 2) + (np.cos(orientation_center) ** 2) / (
+                2 * semi_yc ** 2)
 
-        asur = (np.cos(orientation_major) ** 2) / (2 * sur_ratio * sd_major ** 2) + (
-                    np.sin(orientation_major) ** 2) / (2 * sur_ratio * sd_minor ** 2)
-        bsur = -(np.sin(2 * orientation_major)) / (4 * sur_ratio * sd_major ** 2) + (np.sin(2 * orientation_major)) / (
-                    4 * sur_ratio * sd_minor ** 2)
-        csur = (np.sin(orientation_major) ** 2) / (2 * sur_ratio * sd_major ** 2) + (
-                    np.cos(orientation_major) ** 2) / (2 * sur_ratio * sd_minor ** 2)
+        asur = (np.cos(orientation_center) ** 2) / (2 * sur_ratio * semi_xc ** 2) + (
+                np.sin(orientation_center) ** 2) / (2 * sur_ratio * semi_yc ** 2)
+        bsur = -(np.sin(2 * orientation_center)) / (4 * sur_ratio * semi_xc ** 2) + (np.sin(2 * orientation_center)) / (
+                4 * sur_ratio * semi_yc ** 2)
+        csur = (np.sin(orientation_center) ** 2) / (2 * sur_ratio * semi_xc ** 2) + (
+                np.cos(orientation_center) ** 2) / (2 * sur_ratio * semi_yc ** 2)
 
         ## Difference of gaussians
         model_fit = offset + \
                     amplitudec * np.exp(
-            - (acen * ((x_fit - midpoint_x) ** 2) + 2 * bcen * (x_fit - midpoint_x) * (y_fit - midpoint_y) + ccen * ((y_fit - midpoint_y) ** 2))) - \
+            - (acen * ((x_fit - xoc) ** 2) + 2 * bcen * (x_fit - xoc) * (y_fit - yoc) + ccen * ((y_fit - yoc) ** 2))) - \
                     amplitudes * np.exp(
-            - (asur * ((x_fit - midpoint_x) ** 2) + 2 * bsur * (x_fit - midpoint_x) * (y_fit - midpoint_y) + csur * ((y_fit - midpoint_y) ** 2)))
+            - (asur * ((x_fit - xoc) ** 2) + 2 * bsur * (x_fit - xoc) * (y_fit - yoc) + csur * ((y_fit - yoc) ** 2)))
 
         return model_fit.ravel()
 

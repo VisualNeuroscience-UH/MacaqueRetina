@@ -15,7 +15,7 @@ import scipy.io as sio
 import scipy.stats as stats
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.patches import Ellipse as ellipse
+from matplotlib.patches import Ellipse
 from tqdm import tqdm
 from pathlib import Path
 from visualize import Visualize
@@ -104,14 +104,20 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize, Mathematics):
     Methods for deriving spatial receptive field parameters from the apricot dataset (Field_2010)
     """
 
-    def fit_dog_to_sta_data(self, gc_type, response_type, visualize=False, surround_fixed=False, save=None):
-        '''
+    def fit_dog_to_sta_data(self, gc_type, response_type, visualize=False, surround_model=0, save=None, semi_x_always_major=False):
+        """
         Fits a function consisting of the difference of two 2-dimensional elliptical Gaussian functions to
         retinal spike triggered average (STA) data.
         The visualize parameter will show each DoG fit for search for bad cell fits and data.
-        '''
-        # gc_type = self.gc_type
-        # response_type = self.response_type
+
+        :param gc_type: parasol/midget
+        :param response_type: ON/OFF
+        :param visualize: boolean, whether to visualize all fits
+        :param surround_model: 0=fit center and surround separately, 1=surround midpoint same as center midpoint, 2=same as 1 but surround ratio fixed at 2 and no offset
+        :param save: string, relative path to a csv file for saving
+        :param semi_x_always_major: boolean, whether to rotate Gaussians so that semi_x is always the semimajor/longer axis
+        :return:
+        """
 
         gc_spatial_data_array, initial_center_values, bad_data_indices = self.read_retina_glm_data(gc_type,
                                                                                                    response_type)
@@ -127,16 +133,25 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize, Mathematics):
         x_grid, y_grid = np.meshgrid(x_position_indices, y_position_indices)
 
         all_viable_cells = np.setdiff1d(np.arange(n_cells), bad_data_indices)
-        # Empty numpy matrix to collect fitted RFs
-        if surround_fixed:
+
+        # Create an empty matrix to collect fitted RFs
+        # parameter_names = ['amplitudec', 'xoc', 'yoc', 'semi_xc', 'semi_yc', 'orientation_center', 'amplitudes',
+        #                    'xos', 'yos', 'semi_xs', 'semi_ys', 'orientation_surround', 'offset']
+        # data_all_viable_cells = np.zeros(np.array([n_cells, len(parameter_names)]))
+
+        if surround_model == 1:
             parameter_names = ['amplitudec', 'xoc', 'yoc', 'semi_xc', 'semi_yc', 'orientation_center', 'amplitudes',
                                'sur_ratio', 'offset']
             data_all_viable_cells = np.zeros(np.array([n_cells, len(parameter_names)]))
             surround_status = 'fixed'
-        # if surround_fixed: # delta_semi_y
-        # parameter_names = ['amplitudec', 'xoc', 'yoc', 'semi_xc', 'delta_semi_y', 'orientation_center', 'amplitudes', 'sur_ratio', 'offset']
-        # data_all_viable_cells = np.zeros(np.array([n_cells,len(parameter_names)]))
-        # surround_status = 'fixed'
+
+        elif surround_model == 2:
+            # Same parameter names as in "fixed surround" but amplitudec, sur_ratio or offset will not be fitted
+            parameter_names = ['amplitudec', 'xoc', 'yoc', 'semi_xc', 'semi_yc', 'orientation_center', 'amplitudes',
+                               'sur_ratio', 'offset']
+            data_all_viable_cells = np.zeros(np.array([n_cells, len(parameter_names)]))
+            surround_status = 'fixed_double'
+
         else:
             parameter_names = ['amplitudec', 'xoc', 'yoc', 'semi_xc', 'semi_yc', 'orientation_center', 'amplitudes',
                                'xos', 'yos', 'semi_xs',
@@ -146,7 +161,6 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize, Mathematics):
             surround_status = 'independent'
 
         print(('Fitting DoG model, surround is {0}'.format(surround_status)))
-
         for cell_index in tqdm(all_viable_cells):
             # pbar(cell_index/n_cells)
             data_array = gc_spatial_data_array[:, :, cell_index]
@@ -162,7 +176,7 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize, Mathematics):
                 data_array = data_array * -1
 
             # Set initial guess for fitting
-            if surround_fixed:
+            if surround_model == 1:
                 # Build initial guess for (amplitudec, xoc, yoc, semi_xc, semi_yc, orientation_center, amplitudes, sur_ratio, offset)
                 p0 = np.array([1, 7, 7, 3, 3,
                                center_rotation_angle, 0.1, 3, 0])
@@ -176,6 +190,16 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize, Mathematics):
             # center_rotation_angle, 0.1, 3, 0])
             # boundaries=(np.array([.999, -np.inf, -np.inf, 0, 0, 0, 0, 1, -np.inf]),
             # np.array([1, np.inf, np.inf, np.inf, np.inf, 2*np.pi, 1, np.inf, np.inf]))
+
+            elif surround_model == 2:
+                # Initial guess for
+                # xoc, yoc, semi_xc, semi_yc, orientation_center, amplitudes
+                p0 = np.array([7, 7, 1, 1, 0, 0.1])
+                boundaries = (
+                    np.array([-np.inf, -np.inf, -np.inf, -np.inf, 0,      -np.inf]),
+                    np.array([np.inf,   np.inf,  np.inf,  np.inf, 2*np.pi, np.inf])
+                )
+
             else:
                 # Build initial guess for (amplitudec, xoc, yoc, semi_xc, semi_yc, orientation_center, amplitudes, xos, yos, semi_xs, semi_ys, orientation_surround, offset)
                 p0 = np.array([1, 7, 7, 3, 3,
@@ -187,10 +211,20 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize, Mathematics):
                           np.inf]))
 
             try:
-                if surround_fixed:
+                if surround_model == 1:
                     popt, pcov = opt.curve_fit(self.DoG2D_fixed_surround, (x_grid, y_grid), data_array.ravel(), p0=p0,
                                                bounds=boundaries)
                     data_all_viable_cells[cell_index, :] = popt
+
+                elif surround_model == 2:
+                    popt, pcov = opt.curve_fit(self.DoG2D_fixed_double_surround, (x_grid, y_grid), data_array.ravel(), p0=p0,
+                                               bounds=boundaries)
+                    data_all_viable_cells[cell_index, 1:7] = popt
+                    data_all_viable_cells[:, 0] = 1.0  # amplitudec
+                    data_all_viable_cells[:, 7] = 2.0  # sur_ratio
+                    data_all_viable_cells[:, 8] = 0.0  # offset
+
+
                 else:
                     popt, pcov = opt.curve_fit(self.DoG2D_independent_surround, (x_grid, y_grid), data_array.ravel(),
                                                p0=p0, bounds=boundaries)
@@ -201,9 +235,37 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize, Mathematics):
                 bad_data_indices.append(cell_index)
                 continue
 
+            # Set rotation angle between 0 and pi
+            data_all_viable_cells[cell_index, 5] = data_all_viable_cells[cell_index, 5] % np.pi
+
+            # Rotate fit so that semi_x is always the semimajor axis (longer radius)
+            if semi_x_always_major is True:
+                if data_all_viable_cells[cell_index, 3] < data_all_viable_cells[cell_index, 4]:
+                    sd_x = data_all_viable_cells[cell_index, 3]
+                    sd_y = data_all_viable_cells[cell_index, 4]
+                    rotation = data_all_viable_cells[cell_index, 5]
+
+                    data_all_viable_cells[cell_index, 3] = sd_y
+                    data_all_viable_cells[cell_index, 4] = sd_x
+                    data_all_viable_cells[cell_index, 5] = (rotation + np.pi/2) % np.pi
+
+                # Rotate also the surround if it is defined separately
+                if surround_model == 0:
+                    if data_all_viable_cells[cell_index, 9] < data_all_viable_cells[cell_index, 10]:
+                        sd_x_sur = data_all_viable_cells[cell_index, 9]
+                        sd_y_sur = data_all_viable_cells[cell_index, 10]
+                        rotation = data_all_viable_cells[cell_index, 11]
+
+                        data_all_viable_cells[cell_index, 9] = sd_y_sur
+                        data_all_viable_cells[cell_index, 10] = sd_x_sur
+                        data_all_viable_cells[cell_index, 11] = (rotation + np.pi / 2) % np.pi
+
             if visualize:
                 # Visualize fits with data
-                data_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
+                #data_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
+
+                popt = data_all_viable_cells[cell_index, :]
+
                 fig, (ax1, ax2) = plt.subplots(figsize=(8, 3), ncols=2)
                 plt.suptitle(
                     'celltype={0}, responsetype={1}, cell N:o {2}'.format(gc_type, response_type, str(cell_index)),
@@ -214,10 +276,12 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize, Mathematics):
 
                 # # Ellipses for DoG2D_fixed_surround
 
-                if self.surround_fixed:
-                    e1 = ellipse((popt[np.array([1, 2])]), popt[3], popt[4], -popt[5] * 180 / np.pi, edgecolor='w',
+                if surround_model == 1:
+                    data_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
+                    # matplotlib.patches.Ellipse(xy, width, height, angle=0, **kwargs)
+                    e1 = Ellipse((popt[np.array([1, 2])]), popt[3], popt[4], -popt[5] * 180 / np.pi, edgecolor='w',
                                  linewidth=2, fill=False)
-                    e2 = ellipse((popt[np.array([1, 2])]), popt[7] * popt[3], popt[7] * popt[4], -popt[5] * 180 / np.pi,
+                    e2 = Ellipse((popt[np.array([1, 2])]), popt[7] * popt[3], popt[7] * popt[4], -popt[5] * 180 / np.pi,
                                  edgecolor='w', linewidth=2, fill=False, linestyle='--')
                     print(popt[0], popt[np.array([1, 2])], popt[3], popt[4], -popt[5] * 180 / np.pi)
                     print(popt[6], 'sur_ratio=', popt[7], 'offset=', popt[8])
@@ -227,10 +291,20 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize, Mathematics):
                 # e2=ellipse((popt[np.array([1,2])]),popt[7]*popt[3],popt[7]*(popt[3]+popt[4]),-popt[5]*180/np.pi,edgecolor='w', linewidth=2, fill=False, linestyle='--')
                 # print popt[0], popt[np.array([1,2])],'semi_xc=',popt[3], 'delta_semi_y=', popt[4],-popt[5]*180/np.pi
                 # print popt[6], 'sur_ratio=', popt[7], 'offset=', popt[8]
-                else:
-                    e1 = ellipse((popt[np.array([1, 2])]), popt[3], popt[4], -popt[5] * 180 / np.pi, edgecolor='w',
+                elif surround_model == 2:
+                    data_fitted = self.DoG2D_fixed_double_surround((x_grid, y_grid), *popt[1:7])
+                    e1 = Ellipse((popt[np.array([1, 2])]), popt[3], popt[4], -popt[5] * 180 / np.pi, edgecolor='w',
                                  linewidth=2, fill=False)
-                    e2 = ellipse((popt[np.array([7, 8])]), popt[9], popt[10], -popt[11] * 180 / np.pi, edgecolor='w',
+                    e2 = Ellipse((popt[np.array([1, 2])]), popt[7] * popt[3], popt[7] * popt[4], -popt[5] * 180 / np.pi,
+                                 edgecolor='w', linewidth=2, fill=False, linestyle='--')
+                    print(popt[0], popt[np.array([1, 2])], popt[3], popt[4], -popt[5] * 180 / np.pi)
+                    print(popt[6], 'sur_ratio=', popt[7], 'offset=', popt[8])
+
+                else:
+                    data_fitted = self.DoG2D_independent_surround((x_grid, y_grid), *popt)
+                    e1 = Ellipse((popt[np.array([1, 2])]), popt[3], popt[4], -popt[5] * 180 / np.pi, edgecolor='w',
+                                 linewidth=2, fill=False)
+                    e2 = Ellipse((popt[np.array([7, 8])]), popt[9], popt[10], -popt[11] * 180 / np.pi, edgecolor='w',
                                  linewidth=2, fill=False, linestyle='--')
                     print(popt[0], popt[np.array([1, 2])], popt[3], popt[4], -popt[5] * 180 / np.pi)
                     print(popt[6], popt[np.array([7, 8])], popt[9], popt[10], -popt[11] * 180 / np.pi)
@@ -245,13 +319,14 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize, Mathematics):
                 fig.colorbar(sur, ax=ax2)
 
                 plt.show()
+            # FOR loop ends here
 
-            if save is not None:
-                assert type(save) == str, "Use the parameter save to specify the output filename"
-                fits_df = pd.DataFrame(data_all_viable_cells, columns=parameter_names)
-                fits_df.to_csv(save)
+        if save is not None:
+            assert type(save) == str, "Use the parameter save to specify the output filename"
+            fits_df = pd.DataFrame(data_all_viable_cells, columns=parameter_names)
+            fits_df.to_csv(save)
 
-            return parameter_names, data_all_viable_cells, bad_data_indices
+        return parameter_names, data_all_viable_cells, bad_data_indices
 
     def fit_spatial_statistics(self, visualize=False):
         """
@@ -259,9 +334,9 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize, Mathematics):
         """
 
         # 2D DoG fit to Chichilnisky retina spike triggered average data. The visualize parameter will
-        # show each DoG fit for search for bad cell fits and data.
+        # show each DoG fit in order to search for bad cell fits and data.
         parameter_names, data_all_viable_cells, bad_cell_indices = \
-            self.fit_dog_to_sta_data(visualize=False, surround_fixed=self.surround_fixed)
+            self.fit_dog_to_sta_data(visualize=False, surround_model=self.surround_fixed)
 
         all_viable_cells = np.delete(data_all_viable_cells, bad_cell_indices, 0)
 
@@ -389,5 +464,5 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize, Mathematics):
 
 if __name__ == '__main__':
     x = ConstructReceptiveFields()
-    parameter_names, data_all_viable_cells, bad_data_indices = \
-        x.fit_dog_to_sta_data('parasol', 'ON', save='results_temp/parasol_ON_surfix.csv', surround_fixed=True)
+    x.fit_dog_to_sta_data('parasol', 'OFF', surround_model=0, visualize=True,
+                          semi_x_always_major=True, save='results_temp/midget_OFF_surfix.csv')

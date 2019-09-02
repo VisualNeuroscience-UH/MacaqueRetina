@@ -17,9 +17,7 @@ import neo
 import seaborn as sns
 import visual_stimuli as vs
 from visualize import Visualize
-
-
-
+from vision_maths import Mathematics
 
 
 class GanglionCells(Mathematics, Visualize):
