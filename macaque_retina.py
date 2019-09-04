@@ -7,7 +7,7 @@ import scipy.io as sio
 import scipy.stats as stats
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.patches import Ellipse as ellipse
+from matplotlib.patches import Ellipse, Circle
 from tqdm import tqdm
 import cv2
 from pathlib import Path
@@ -19,12 +19,16 @@ import visual_stimuli as vs
 from visualize import Visualize
 from vision_maths import Mathematics
 
+plt.rcParams['image.cmap'] = 'gray'
 
 class GanglionCells(Mathematics, Visualize):
     '''
     Create the ganglion cell mosaic.
     All spatial parameters are saved to the dataframe *gc_df*
     '''
+
+    script_path = Path(__file__).parent
+    digitized_figures_path = script_path
 
     def __init__(self, gc_type, response_type, ecc_limits, sector_limits, model_density=1.0, randomize_position=0.7):
         '''
@@ -114,7 +118,7 @@ class GanglionCells(Mathematics, Visualize):
         """
         Place ganglion cell center positions to retina
 
-        :param gc_density_func_params: TODO - remove this
+        :param gc_density_func_params:
         :param visualize: True/False (default False)
 
         :returns matrix_eccentricity_randomized_all, matrix_orientation_surround_randomized_all
@@ -161,7 +165,7 @@ class GanglionCells(Mathematics, Visualize):
             sector_surface_area_all.append(sector_surface_area)  # collect sector area for each ecc step
 
             # N cells for given ecc
-            # TODO - gc_density_func_params need not be parameters!!
+            # TODO - gc_density_func_params should not be arguments to the method
             my_gaussian_fit = self.gauss_plus_baseline(center_ecc, *gc_density_func_params)
             Ncells = sector_surface_area * my_gaussian_fit * self.gc_proportion
 
@@ -227,6 +231,170 @@ class GanglionCells(Mathematics, Visualize):
         if visualize:
             self.show_gc_positions_and_density(matrix_eccentricity_randomized_all,
                                                matrix_polar_angle_randomized_all, gc_density_func_params)
+
+    def read_dendritic_fields_vs_eccentricity_data(self):
+        '''
+        Read re-digitized old literature data from mat files
+        '''
+        digitized_figures_path = GanglionCells.digitized_figures_path
+
+        if self.gc_type == 'parasol':
+            dendr_diam1 = sio.loadmat(digitized_figures_path / 'Perry_1984_Neurosci_ParasolDendrDiam_c.mat',
+                                      variable_names=['Xdata', 'Ydata'])
+            dendr_diam2 = sio.loadmat(digitized_figures_path / 'Watanabe_1989_JCompNeurol_GCDendrDiam_parasol_c.mat',
+                                      variable_names=['Xdata', 'Ydata'])
+        elif self.gc_type == 'midget':
+            dendr_diam1 = sio.loadmat(digitized_figures_path / 'Perry_1984_Neurosci_MidgetDendrDiam_c.mat',
+                                      variable_names=['Xdata', 'Ydata'])
+            dendr_diam2 = sio.loadmat(digitized_figures_path / 'Watanabe_1989_JCompNeurol_GCDendrDiam_midget_c.mat',
+                                      variable_names=['Xdata', 'Ydata'])
+
+        return dendr_diam1, dendr_diam2
+
+    def fit_dendritic_diameter_vs_eccentricity(self, visualize=False):
+        """
+        Dendritic field diameter with respect to eccentricity. Linear and quadratic fit.
+        Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
+        """
+
+        # Read dendritic field data and return linear fit with scipy.stats.linregress
+        dendr_diam_parameters = {}
+
+        dendr_diam1, dendr_diam2 = self.read_dendritic_fields_vs_eccentricity_data()
+
+        # Parasol fit
+        gc_type = self.gc_type
+
+        # Quality control. Datasets separately for visualization
+        data_set_1_x = np.squeeze(dendr_diam1['Xdata'])
+        data_set_1_y = np.squeeze(dendr_diam1['Ydata'])
+        data_set_2_x = np.squeeze(dendr_diam2['Xdata'])
+        data_set_2_y = np.squeeze(dendr_diam2['Ydata'])
+
+        # Both datasets together
+        data_all_x = np.concatenate((data_set_1_x, data_set_2_x))
+        data_all_y = np.concatenate((data_set_1_y, data_set_2_y))
+
+        # Limit eccentricities for central visual field studies to get better approximation at about 5 eg ecc (1mm)
+        data_all_x_index = data_all_x <= self.visual_field_fit_limit
+        data_all_x = data_all_x[data_all_x_index]
+        data_all_y = data_all_y[data_all_x_index]  # Don't forget to truncate values, too
+
+        # Sort to ascending order
+        data_all_x_index = np.argsort(data_all_x)
+        data_all_x = data_all_x[data_all_x_index]
+        data_all_y = data_all_y[data_all_x_index]
+
+        # Get rf diameter vs eccentricity
+        dendr_diam_model = self.dendr_diam_model  # 'linear' # 'quadratic' # cubic
+        dict_key = '{0}_{1}'.format(self.gc_type, dendr_diam_model)
+
+        if dendr_diam_model == 'linear':
+            polynomial_order = 1
+            polynomials = np.polyfit(data_all_x, data_all_y, polynomial_order)
+            dendr_diam_parameters[dict_key] = {'intercept': polynomials[1], 'slope': polynomials[0]}
+        elif dendr_diam_model == 'quadratic':
+            polynomial_order = 2
+            polynomials = np.polyfit(data_all_x, data_all_y, polynomial_order)
+            dendr_diam_parameters[dict_key] = {'intercept': polynomials[2], 'slope': polynomials[1],
+                                               'square': polynomials[0]}
+        elif dendr_diam_model == 'cubic':
+            polynomial_order = 3
+            polynomials = np.polyfit(data_all_x, data_all_y, polynomial_order)
+            dendr_diam_parameters[dict_key] = {'intercept': polynomials[3], 'slope': polynomials[2],
+                                               'square': polynomials[1], 'cube': polynomials[0]}
+
+        if visualize:
+            # self.show_dendritic_diameter_vs_eccentricity(gc_type, data_all_x, data_all_y,
+            # dataset_name='All data cubic fit', intercept=polynomials[3], slope=polynomials[2], square=polynomials[1], cube=polynomials[0])
+            self.show_dendritic_diameter_vs_eccentricity(self.gc_type, data_all_x, data_all_y, polynomials,
+                                                         dataset_name='All data {0} fit'.format(dendr_diam_model))
+
+        return dendr_diam_parameters
+
+    def read_gc_density_data(self):
+        '''
+        Read re-digitized old literature data from mat files
+        '''
+        digitized_figures_path = GanglionCells.digitized_figures_path
+
+        gc_density = sio.loadmat(digitized_figures_path / 'Perry_1984_Neurosci_GCdensity_c.mat',
+                                 variable_names=['Xdata', 'Ydata'])
+        cell_eccentricity = np.squeeze(gc_density['Xdata'])
+        cell_density = np.squeeze(gc_density['Ydata']) * 1e3  # Cells are in thousands, thus the 1e3
+        return cell_eccentricity, cell_density
+
+    def fit_spatial_statistics(self, fitdata, visualize=False):
+        """
+        Collect spatial statistics from Chichilnisky receptive field data
+        """
+
+        # 2D DoG fit to Chichilnisky retina spike triggered average data. The visualize parameter will
+        # show each DoG fit in order to search for bad cell fits and data.
+        # parameter_names, data_all_viable_cells, bad_cell_indices = \
+        #     self.fit_dog_to_sta_data(visualize=False, surround_model=self.surround_fixed)
+        parameter_names, data_all_viable_cells, bad_cell_indices = fitdata
+
+
+        all_viable_cells = np.delete(data_all_viable_cells, bad_cell_indices, 0)
+
+        chichilnisky_data_df = pd.DataFrame(data=all_viable_cells, columns=parameter_names)
+
+        # Save stats description to gc object
+        self.rf_datafit_description_series = chichilnisky_data_df.describe()
+
+        # Calculate xy_aspect_ratio
+        xy_aspect_ratio_pd_series = chichilnisky_data_df['semi_yc'] / chichilnisky_data_df['semi_xc']
+        xy_aspect_ratio_pd_series.rename('xy_aspect_ratio')
+        chichilnisky_data_df['xy_aspect_ratio'] = xy_aspect_ratio_pd_series
+
+        rf_parameter_names = ['semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes', 'sur_ratio', 'orientation_center']
+        self.rf_parameter_names = rf_parameter_names  # For reference
+        n_distributions = len(rf_parameter_names)
+        shape = np.zeros([n_distributions - 1])  # orientation_center has two shape parameters, below alpha and beta
+        loc = np.zeros([n_distributions])
+        scale = np.zeros([n_distributions])
+        ydata = np.zeros([len(all_viable_cells), n_distributions])
+        x_model_fit = np.zeros([100, n_distributions])
+        y_model_fit = np.zeros([100, n_distributions])
+
+        # Create dict for statistical parameters
+        spatial_statistics_dict = {}
+
+        # Model 'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio' rf_parameter_names with a gamma function.
+        for index, distribution in enumerate(rf_parameter_names[:-1]):
+            # fit the rf_parameter_names, get the PDF distribution using the parameters
+            ydata[:, index] = chichilnisky_data_df[distribution]
+            shape[index], loc[index], scale[index] = stats.gamma.fit(ydata[:, index], loc=0)
+            x_model_fit[:, index] = np.linspace(
+                stats.gamma.ppf(0.001, shape[index], loc=loc[index], scale=scale[index]),
+                stats.gamma.ppf(0.999, shape[index], loc=loc[index], scale=scale[index]), 100)
+            y_model_fit[:, index] = stats.gamma.pdf(x=x_model_fit[:, index], a=shape[index], loc=loc[index],
+                                                    scale=scale[index])
+
+            # Collect parameters
+            spatial_statistics_dict[distribution] = {'shape': shape[index], 'loc': loc[index], 'scale': scale[index],
+                                                     'distribution': 'gamma'}
+
+        # Model orientation distribution with beta function.
+        index += 1
+        ydata[:, index] = chichilnisky_data_df[rf_parameter_names[-1]]
+        a_parameter, b_parameter, loc[index], scale[index] = stats.beta.fit(ydata[:, index], 0.6, 0.6,
+                                                                            loc=0)  # initial guess for a_parameter and b_parameter is 0.6
+        x_model_fit[:, index] = np.linspace(
+            stats.beta.ppf(0.001, a_parameter, b_parameter, loc=loc[index], scale=scale[index]),
+            stats.beta.ppf(0.999, a_parameter, b_parameter, loc=loc[index], scale=scale[index]), 100)
+        y_model_fit[:, index] = stats.beta.pdf(x=x_model_fit[:, index], a=a_parameter, b=b_parameter, loc=loc[index],
+                                               scale=scale[index])
+        spatial_statistics_dict[rf_parameter_names[-1]] = {'shape': (a_parameter, b_parameter), 'loc': loc[index],
+                                                           'scale': scale[index], 'distribution': 'beta'}
+
+        # Quality control images
+        if visualize:
+            self.show_spatial_statistics(ydata, spatial_statistics_dict, (x_model_fit, y_model_fit))
+
+        # Return stats for RF creation
+        return spatial_statistics_dict
 
     def get_random_samples_from_known_distribution(self, shape, loc, scale, n_cells, distribution):
         """
@@ -386,7 +554,7 @@ class GanglionCells(Mathematics, Visualize):
 
         self.show_gc_receptive_fields(rho, phi, gc_rf_models, surround_fixed=self.surround_fixed)
 
-    def build(self, visualize=False):  # TODO - Make this independent of ConstructReceptiveField
+    def build(self, fitdata, visualize=False):
         """
         Builds the receptive field mosaic
         :return:
@@ -400,7 +568,7 @@ class GanglionCells(Mathematics, Visualize):
 
         # -- Second, endow cells with spatial receptive fields
         # Collect spatial statistics for receptive fields
-        spatial_statistics_dict = self.fit_spatial_statistics(visualize=visualize)
+        spatial_statistics_dict = self.fit_spatial_statistics(fitdata, visualize=visualize)
 
         # Get fit parameters for dendritic field diameter with respect to eccentricity. Linear and quadratic fit.
         # Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
@@ -416,6 +584,16 @@ class GanglionCells(Mathematics, Visualize):
 
         if Visualize is True:
             plt.show()
+
+    def save_mosaic(self, filepath, deg=False):
+        if deg is True:
+            pass  # Implement here unit conversion to degrees
+        else:
+            print('Saving model mosaic to %s' % filepath)
+            self.gc_df.to_csv(filepath)
+
+    def load_mosaic(self, filepath):  # TODO
+        raise NotImplementedError
 
     def show_fitted_rf(self, cell_index, um_per_pixel=10, n_pixels=30):
         """
@@ -462,46 +640,253 @@ class GanglionCells(Mathematics, Visualize):
         self.stimulus_video = stimulus_video
 
         if visualize is True:
-            fig, axes = plt.subplots(1, 2)
+            self.visualize_stimulus_and_grid(frame_number)
 
-            plt.subplot(121)
-            plt.title('In pixel space')
-            # Use "origin" to set visualization bottom-up rather than matrix-style top-down
-            plt.imshow(stimulus_video.frames[:, :, frame_number], origin='lower')
-            plt.xlabel('Horizontal coordinate (px)')
-            plt.ylabel('Vertical coordinate (px)')
+    # TODO - make visual space/pixel space correspondence perfect
+    def visualize_stimulus_and_grid(self, frame_number=0, marked_cells=[]):
+        fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
 
-            plt.subplot(122)
-            plt.title('In visual space')
-            from matplotlib.patches import Circle
-            plt.imshow(stimulus_video.frames[:, :, frame_number], origin='lower')
+        z = 8
+        w = 3
 
-            the_gc = self.gc_df.loc[5]
-            print(the_gc)
+        plt.subplot(121)
+        plt.title('In pixel space')
+        plt.imshow(self.stimulus_video.frames[:, :, frame_number], vmin=0, vmax=255)
+        plt.xlabel('Horizontal coordinate (px)')
+        plt.ylabel('Vertical coordinate (px)')
+
+        z_px, w_px = self.vspace_to_pixspace(z, w)
+        plt.scatter(z_px, w_px, c='blue')
+        plt.scatter(60, 60, c='red')
+
+        plt.subplot(122)
+        plt.title('In visual space')
+
+        # Change image coordinates to visual space coordinates
+        vspace_extents = self.stimulus_video.get_extents_deg()
+        plt.imshow(self.stimulus_video.frames[:, :, frame_number], extent=vspace_extents, vmin=0, vmax=255)
+
+        # Plot all the ganglion cell RFs on top of the image
+        ax = plt.gca()
+        for i in range(len(self.gc_df)):
+            the_gc = self.gc_df.loc[i]
+            # print(the_gc)
             x, y = self.pol2cart(the_gc.positions_eccentricity, the_gc.positions_polar_angle)
-            circ = Circle((x, y), 30)
-            ax = plt.gca()
+            x = self.deg_per_mm * x
+            y = self.deg_per_mm * y
+            semi_x = self.deg_per_mm * the_gc.semi_xc
+            semi_y = self.deg_per_mm * the_gc.semi_yc
+
+            ellipse_fill = 'None'
+            if i in marked_cells:
+                ellipse_fill = 'blue'
+
+            orientation_deg = the_gc.orientation_center * (180/np.pi)
+            circ = Ellipse((x, y), width=2 * semi_x, height=2 * semi_y,
+                           angle=orientation_deg, edgecolor='red', facecolor=ellipse_fill)
             ax.add_patch(circ)
-            plt.xlabel('XXX Eccentricity (deg)')
-            plt.ylabel('XXX Elevation (deg)')
 
 
+        plt.scatter(z, w, c="blue")
+        plt.xlabel('Eccentricity (deg)')
+        plt.ylabel('Elevation (deg)')
 
-    def create_spatiotemporal_kernel(self, cell_index):
+        # plt.colorbar()
+        plt.show(block=False)
+
+    def vspace_to_pixspace(self, x, y):
+        video_width_px = self.stimulus_video.video_width
+        video_height_px = self.stimulus_video.video_height
+        pix_per_deg = self.stimulus_video.pix_per_deg
+
+        # 1) Set the video center in visual coordinates as origin
+        # 2) Scale to pixel space. Mirror+scale in y axis due to y-coordinate running top-to-bottom in pixel space
+        # 3) Move the origin to video center in pixel coordinates
+        x_new = pix_per_deg * (x - self.stimulus_video.video_center_vspace.real) + (video_width_px / 2)
+        y_new = -pix_per_deg * (y - self.stimulus_video.video_center_vspace.imag) + (video_height_px / 2)
+
+        return x_new, y_new
+
+    def pixspace_to_vspace(self, x, y):
+
+        video_width_px = self.stimulus_video.video_width
+        video_height_px = self.stimulus_video.video_height
+        pix_per_deg = self.stimulus_video.pix_per_deg
+
+        x_new = (1/pix_per_deg) * (x - (video_width_px / 2)) + self.stimulus_video.video_center_vspace.real
+        y_new = (-1/pix_per_deg) * (y - (video_height_px / 2)) + self.stimulus_video.video_center_vspace.imag
+
+        return x_new, y_new
+
+    def visualize_rgc_view(self, cell_index, show_block=False):  # TODO - add global mosaic view as first plot
+        frame_number = 0
+        total_frames = len(self.stimulus_video.frames[0,0,:])
+
+        the_gc = self.gc_df.iloc[cell_index]
+        center_x, center_y = self.pol2cart(the_gc.positions_eccentricity, the_gc.positions_polar_angle)
+        orientation_deg = the_gc.orientation_center * (180/np.pi)
+        # Transform to degrees
+        center_x = self.deg_per_mm * center_x
+        center_y = self.deg_per_mm * center_y
+        semi_x = self.deg_per_mm * the_gc.semi_xc
+        semi_y = self.deg_per_mm * the_gc.semi_yc
+
+
+        plt.subplots(2,2, figsize=(12,12))
+        plt.suptitle("Cell index %d, video frame %d (of %d)" % (cell_index, frame_number, total_frames))
+
+        plt.subplot(221)
+        plt.title('RGC center 1SD ellipse wrt stimulus frame')
+        plt.xlabel('Eccentricity (deg)')
+        plt.ylabel('Elevation (deg)')
+
+        ax = plt.gca()
+        # 1) Show pixels limited to "3SD view" & overlay 1SD center RF on top of that
+        pixspace_topleft, pixspace_bottomright = self.get_crop_extents(cell_index)
+
+        # With this choice of vspace_extents, the position of the 1SD ellipse will be slightly shifted
+        #vspace_extents = [vspace_ext_left, vspace_ext_right, vspace_ext_bottom, vspace_ext_top]
+
+        vspace_topleft = self.pixspace_to_vspace(pixspace_topleft[0], pixspace_topleft[1])
+        vspace_bottomright = self.pixspace_to_vspace(pixspace_bottomright[0], pixspace_bottomright[1])
+        vspace_extents = [vspace_topleft[0], vspace_bottomright[0],
+                          vspace_bottomright[1], vspace_topleft[1]]
+
+        cropped_video = self.stimulus_video.frames[pixspace_topleft[0]:pixspace_bottomright[0] + 1,
+                        pixspace_topleft[1]:pixspace_bottomright[1] + 1, :]
+        plt.imshow(cropped_video[:,:, frame_number],
+                   extent=vspace_extents, vmin=0, vmax=255)
+
+        circ = Ellipse((center_x, center_y), width=2 * semi_x, height=2 * semi_y,
+                       angle=orientation_deg, edgecolor='red', facecolor="None")
+        ax.add_patch(circ)
+
+        # 2) Show spatial kernel created for the stimulus resolution
+        plt.subplot(222)
+        plt.title("Spatial filter in stimulus resolution")
+        ax = plt.gca()
+        spatial_kernel = self.create_spatial_kernel(cell_index)
+        plt.imshow(spatial_kernel)
+
+        # 3) "Keyhole view"
+        plt.subplot(223)
+        plt.title("Stimulus x spatial filter (elementwise)")
+        keyhole_view = np.multiply(cropped_video[:,:,frame_number], spatial_kernel)
+        plt.imshow(keyhole_view)
+
+        # 4) Integrated signal over frames
+
+        plt.show(block=show_block)
+
+    def get_crop_extents(self, cell_index, view_sd=5):  # TODO - cleanup this method
+        the_gc = self.gc_df.iloc[cell_index]
+        center_x, center_y = self.pol2cart(the_gc.positions_eccentricity, the_gc.positions_polar_angle)
+        # Transform to degrees
+        center_x = self.deg_per_mm * center_x
+        center_y = self.deg_per_mm * center_y
+
+        # Make a box with sidelength 2*view_sd*SD of the semimajor radius
+        semimajor_radius = max(the_gc.semi_xc, the_gc.semi_yc) * self.deg_per_mm
+        vspace_ext_left = center_x - semimajor_radius * view_sd
+        vspace_ext_right = center_x + semimajor_radius * view_sd
+        vspace_ext_bottom = center_y - semimajor_radius * view_sd
+        vspace_ext_top = center_y + semimajor_radius * view_sd
+
+        # Find the coordinates of the corresponding box in pixel space
+        pixspace_topleft = self.vspace_to_pixspace(vspace_ext_left, vspace_ext_top)
+        pixspace_bottomright = self.vspace_to_pixspace(vspace_ext_right, vspace_ext_bottom)
+        pixspace_topleft = tuple([int(t) for t in pixspace_topleft])  # Round down
+        pixspace_bottomright = tuple([int(t + 1) for t in pixspace_bottomright])  # Round up
+
+        kernel_width = pixspace_bottomright[0] - pixspace_topleft[0] + 1
+        kernel_height = pixspace_bottomright[1] - pixspace_topleft[1] + 1  # y-indexing runs top-to-bottom
+
+        kernel_sidelen = max(kernel_height, kernel_width)
+        pixspace_bottomright = (pixspace_topleft[0] + kernel_sidelen, pixspace_topleft[1] + kernel_sidelen)
+
+        return pixspace_topleft, pixspace_bottomright
+
+    def get_cropped_video(self, cell_index, reshape=False):
+        pixspace_topleft, pixspace_bottomright = self.get_crop_extents(cell_index)
+        crop_sidelen = pixspace_bottomright[0] - pixspace_topleft[0] + 1
+        total_frames = len(self.stimulus_video.frames[0,0,:])
+
+        cropped_video = self.stimulus_video.frames[pixspace_topleft[0]:pixspace_bottomright[0] + 1,
+                        pixspace_topleft[1]:pixspace_bottomright[1] + 1, :]
+
+        if reshape:
+            cropped_video = np.reshape(cropped_video, (crop_sidelen**2, total_frames))
+
+        return cropped_video
+
+
+    def create_spatial_kernel(self, cell_index):
         """
-        Creates the spatiotemporal kernel for one cell
+        Creates the spatial kernel for one cell, respecting stimulus resolution
 
         :param cell_index: int
         :return:
         """
-        pass
+        the_gc = self.gc_df.iloc[cell_index]
+        pixspace_topleft, pixspace_bottomright = self.get_crop_extents(cell_index)
+
+        # Make the kernel the same size as the cropped stimulus video
+        kernel_width = pixspace_bottomright[0] - pixspace_topleft[0] + 1
+        kernel_height = pixspace_bottomright[1] - pixspace_topleft[1] + 1  # y-indexing runs top-to-bottom
+
+        print("Cell index %d: kernel width x height %d x %d" % (cell_index, kernel_width, kernel_height))
+
+        if kernel_width != kernel_height:
+            print("Warning! Spatial filter width is different from height. The resulting filter is likely to be faulty.")
+
+        # Get visual field coordinates for the cropped stimulus
+        crop_xmin_deg, crop_ymin_deg = self.pixspace_to_vspace(pixspace_topleft[0], pixspace_bottomright[1])
+        crop_xmax_deg, crop_ymax_deg = self.pixspace_to_vspace(pixspace_bottomright[0], pixspace_topleft[1])
+
+        x_grid, y_grid = np.meshgrid(np.linspace(crop_xmin_deg, crop_xmax_deg, kernel_width),
+                                     np.linspace(crop_ymin_deg, crop_ymax_deg, kernel_height))
+
+        amplitudec = 1
+        offset = 0
+        gc_x, gc_y = self.pol2cart(the_gc.positions_eccentricity, the_gc.positions_polar_angle)
+        gc_x = self.deg_per_mm * gc_x
+        gc_y = self.deg_per_mm * gc_y
+        semi_x = self.deg_per_mm * the_gc.semi_xc
+        semi_y = self.deg_per_mm * the_gc.semi_yc
+        ori = the_gc.orientation_center
+
+        spatial_kernel = self.DoG2D_fixed_surround((x_grid, y_grid), amplitudec, gc_x, gc_y,
+                                                semi_x, semi_y, ori, the_gc.amplitudes,
+                                                the_gc.sur_ratio, offset)
+        spatial_kernel = np.reshape(spatial_kernel[:,], (kernel_width, kernel_height))
+
+        # spatial_kernel = np.array([self.DoG2D_fixed_surround((x_grid, y_grid), *fitted_spatial_params)]).T
+        return spatial_kernel
+
+    def create_spatiotemporal_kernel(self, cell_index, visualize=False):
+        spatial_kernel = self.create_spatial_kernel(cell_index)
+        spatial_kernel_sidelen = np.shape(spatial_kernel)[0]  # assuming square kernel
+        spatial_kernel = [np.reshape(spatial_kernel, spatial_kernel_sidelen**2)]
+        time_kernel = np.array([[0, 0.12, 0.12, 0.25, 0.25, 0.5, 0.5, 1, 1, 0]])
+        spatiotemporal_kernel = spatial_kernel * time_kernel.T
+
+        if visualize:
+            plt.imshow(spatiotemporal_kernel)
+            plt.xlabel('Space')
+            plt.xlabel('Time (frames)')
+            plt.show()
+
+        return spatiotemporal_kernel
 
     def feed_stimulus(self, cell_index):
-        # Position RGC in pixel grid defined by the stimulus
-        # Crop the video to match RF of the cell
-        # Create spatiotemporal kernel
 
-        pass
+        # Create spatiotemporal kernel
+        spatiotemporal_filter = self.create_spatiotemporal_kernel(cell_index)
+        print("Created spatiotemporal kernel!")
+
+        # Get video cropped to cell's receptive field
+        cropped_video = self.get_cropped_video(cell_index, reshape=True)
+
 
 
 # Obsolete - pre-OCNC code!
@@ -660,19 +1045,53 @@ class Operator:
 # 		super(VisualImageArray, self).__init__(**kwargs)
 # 		self.image_center = image_center
 
+def load_dog_fits(csv_file_path):
+
+    # All entries 0.0 => handpicked bad cell, all entries NaN => fitting failed
+    dog_fits = pd.read_csv(csv_file_path, header=0, index_col=0).fillna(0.0)
+    data_all_viable_cells = np.array(dog_fits)
+    # Pick the rows where all the columns are zeros -> "bad data indices"
+    bad_data_indices = np.where((dog_fits == 0.0).all(axis=1) )[0].tolist()
+    param_names = dog_fits.columns.tolist()
+    print('Loaded data for %d cells of which %d were bad' % (len(data_all_viable_cells), len(bad_data_indices)))
+
+    return param_names, data_all_viable_cells, bad_data_indices
+
+
 
 if __name__ == "__main__":
+    # You can fit data at runtime
+    # import apricot_fitter
+    #
+    # x = apricot_fitter.ConstructReceptiveFields()
+    # fitdata = x.fit_dog_to_sta_data('midget', 'OFF', surround_model=1,
+    #                       semi_x_always_major=True)
+
+    # ...or load premade fits
+    fitdata2 = load_dog_fits('results_temp/midget_OFF_surfix.csv')
+
+
     mosaic = GanglionCells(gc_type='parasol', response_type='ON', ecc_limits=[4, 6],
-                                      sector_limits=[-5.0, 5.0], model_density=1.0, randomize_position=0.6)
-    mosaic.build(visualize=True)
+                                      sector_limits=[-10.0, 10.0], model_density=1.0, randomize_position=0.6)
+    mosaic.build(fitdata2, visualize=False)
+    # Or you can load a previously built mosaic
+    #
     # mosaic.visualize_mosaic()
 
-    # a = vs.ConstructStimulus(video_center_pc=34.4 + 22.1j, pattern='sine_grating', temporal_frequency=10,
-    #                          spatial_frequency=0.1,
-    #                          duration_seconds=3, fps=120, orientation=0, image_width=320, image_height=240,
-    #                          pix_per_deg=30, stimulus_size=2.0)
+    a = vs.ConstructStimulus(video_center_vspace=5 + 0j, pattern='sine_grating', temporal_frequency=1,
+                             spatial_frequency=0.5,
+                             duration_seconds=3, fps=120, orientation=45, image_width=320, image_height=240,
+                             pix_per_deg=10, stimulus_size=5.0)
 
-    # mosaic.load_stimulus(a, visualize=True)
+    mosaic.load_stimulus(a)
+    # mosaic.visualize_stimulus_and_grid(marked_cells=[2])
+    # mosaic.visualize_rgc_view(2, show_block=True)
+
+    for i in range(20):
+        # mosaic.visualize_rgc_view(i, show_block=True)
+        mosaic.feed_stimulus(i)
+        # mosaic.create_spatiotemporal_kernel(i, visualize=True)
+
     plt.show()
 
 # Targeting something like this:
@@ -682,11 +1101,11 @@ if __name__ == "__main__":
 
 # Todo (Henri's)
 
+# - Is orientation CW or CCW in DOG fncs?
 # - Eccentricity and polar angle used sometimes as if they are the same thing
-# - Separate non-novel part/quality control fitting to another file (roughly, the "ConstructReceptiveFields" class)
 # - "center" has double meaning: RF center or center/surround => change RF center to midpoint
 # - semi_x and semi_y problematic: which one is major? does it describe 1SD ellipse? => change to sd_major/minor
-# - orientation => orientation_major
+# - orientation => orientation_ccw
 
 
 # chichilnisky_fits = parasol_ON_object.fit_spatial_statistics(visualize=False)

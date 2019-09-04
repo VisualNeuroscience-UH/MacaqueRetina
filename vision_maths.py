@@ -27,7 +27,7 @@ class Mathematics:
         else:
             theta = phi
 
-        x = radius * np.cos(theta)  # assuming degrees
+        x = radius * np.cos(theta)  # radians fed here
         y = radius * np.sin(theta)
         return (x, y)
 

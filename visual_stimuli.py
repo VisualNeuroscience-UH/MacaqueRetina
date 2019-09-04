@@ -16,6 +16,8 @@ import cv2
 from cv2 import VideoWriter, VideoWriter_fourcc
 import skimage
 
+plt.rcParams['image.cmap'] = 'gray'
+
 '''
 This module creates the visual stimuli. Stimuli include patches of sinusoidal gratings at different orientations
 and spatial frequencies. The duration can be defined in seconds and size (radius), and center location (x,y) 
@@ -80,15 +82,15 @@ class VideoBaseClass:
 
         self.options = options
 
-    def get_xrange_deg(self):
-        stimulus_center_x = self.options['stimulus_position'][0]
-        stimulus_width_deg = self.options['image_width'] / self.options['pix_per_deg']
-        return [stimulus_center_x - (stimulus_width_deg / 2), stimulus_center_x + (stimulus_width_deg / 2)]
-
-    def get_yrange_deg(self):
-        stimulus_center_y = self.options['stimulus_position'][1]
-        stimulus_height_deg = self.options['image_width'] / self.options['pix_per_deg']
-        return [stimulus_center_y - (stimulus_height_deg / 2), stimulus_center_y + (stimulus_height_deg / 2)]
+    # def get_xrange_deg(self):
+    #     stimulus_center_x = self.options['stimulus_position'][0]
+    #     stimulus_width_deg = self.options['image_width'] / self.options['pix_per_deg']
+    #     return [stimulus_center_x - (stimulus_width_deg / 2), stimulus_center_x + (stimulus_width_deg / 2)]
+    #
+    # def get_yrange_deg(self):
+    #     stimulus_center_y = self.options['stimulus_position'][1]
+    #     stimulus_height_deg = self.options['image_width'] / self.options['pix_per_deg']
+    #     return [stimulus_center_y - (stimulus_height_deg / 2), stimulus_center_y + (stimulus_height_deg / 2)]
 
     def _scale_intensity(self):
 
@@ -342,7 +344,7 @@ class ConstructStimulus(VideoBaseClass):
     Create stimulus video and save
     '''
 
-    def __init__(self, video_center_pc=0 + 0j, **kwargs):
+    def __init__(self, video_center_vspace=0 + 0j, **kwargs):
         '''
         Format: my_video_object.main(filename, keyword1=value1, keyword2=value2,...)
 
@@ -417,18 +419,29 @@ class ConstructStimulus(VideoBaseClass):
         self.video_width_deg = self.video_width / self.pix_per_deg
         self.video_height_deg = self.video_height / self.pix_per_deg
 
-        self.video_center_pc = video_center_pc
+        self.video_center_vspace = video_center_vspace
 
-        self.video_xmin_deg = video_center_pc.real - self.video_width_deg / 2
-        self.video_xmax_deg = video_center_pc.real + self.video_width_deg / 2
-        self.video_ymin_deg = video_center_pc.imag - self.video_height_deg / 2
-        self.video_ymax_deg = video_center_pc.imag + self.video_height_deg / 2
+        # self.video_xmin_deg = video_center_vspace.real - self.video_width_deg / 2
+        # self.video_xmax_deg = video_center_vspace.real + self.video_width_deg / 2
+        # self.video_ymin_deg = video_center_vspace.imag - self.video_height_deg / 2
+        # self.video_ymax_deg = video_center_vspace.imag + self.video_height_deg / 2
 
-    def visual_space_to_pix(self, x, y):
-        z = complex(x, y)
-        w = (z - self.video_center_pc) * self.pix_per_deg
+    # def visual_space_to_pix(self, x, y):
+    #     z = complex(x, y)
+    #     w = (z - self.video_center_pc) * self.pix_per_deg
+    #
+    #     return w
 
-        return w
+    def get_extents_deg(self):
+
+        video_xmin_deg = self.video_center_vspace.real - self.video_width_deg / 2
+        video_xmax_deg = self.video_center_vspace.real + self.video_width_deg / 2
+        video_ymin_deg = self.video_center_vspace.imag - self.video_height_deg / 2
+        video_ymax_deg = self.video_center_vspace.imag + self.video_height_deg / 2
+        # left, right, bottom, top
+        a = [video_xmin_deg, video_xmax_deg, video_ymin_deg, video_ymax_deg]
+
+        return a
 
     def get_2d_video(self):
         stim_video_2d = np.reshape(self.video, (self.video_n_frames,

@@ -31,17 +31,6 @@ class GetLiteratureData:
     Read data from external mat files. Data-specific definitions are isolated here.
     '''
 
-    def read_gc_density_data(self):
-        '''
-        Read re-digitized old literature data from mat files
-        '''
-
-        gc_density = sio.loadmat(digitized_figures_path / 'Perry_1984_Neurosci_GCdensity_c.mat',
-                                 variable_names=['Xdata', 'Ydata'])
-        cell_eccentricity = np.squeeze(gc_density['Xdata'])
-        cell_density = np.squeeze(gc_density['Ydata']) * 1e3  # Cells are in thousands, thus the 1e3
-        return cell_eccentricity, cell_density
-
     def read_retina_glm_data(self, gc_type, responsetype):
 
         # Go to correct folder
@@ -80,23 +69,6 @@ class GetLiteratureData:
         print("Read %d cells from datafile and then removed %d bad cells (handpicked)" % (n_cells, n_bad))
 
         return gc_spatial_data_array, initial_center_values, bad_data_indices
-
-    def read_dendritic_fields_vs_eccentricity_data(self):
-        '''
-        Read re-digitized old literature data from mat files
-        '''
-        if self.gc_type == 'parasol':
-            dendr_diam1 = sio.loadmat(digitized_figures_path / 'Perry_1984_Neurosci_ParasolDendrDiam_c.mat',
-                                      variable_names=['Xdata', 'Ydata'])
-            dendr_diam2 = sio.loadmat(digitized_figures_path / 'Watanabe_1989_JCompNeurol_GCDendrDiam_parasol_c.mat',
-                                      variable_names=['Xdata', 'Ydata'])
-        elif self.gc_type == 'midget':
-            dendr_diam1 = sio.loadmat(digitized_figures_path / 'Perry_1984_Neurosci_MidgetDendrDiam_c.mat',
-                                      variable_names=['Xdata', 'Ydata'])
-            dendr_diam2 = sio.loadmat(digitized_figures_path / 'Watanabe_1989_JCompNeurol_GCDendrDiam_midget_c.mat',
-                                      variable_names=['Xdata', 'Ydata'])
-
-        return dendr_diam1, dendr_diam2
 
 
 class ConstructReceptiveFields(GetLiteratureData, Visualize, Mathematics):
@@ -328,141 +300,15 @@ class ConstructReceptiveFields(GetLiteratureData, Visualize, Mathematics):
 
         return parameter_names, data_all_viable_cells, bad_data_indices
 
-    def fit_spatial_statistics(self, visualize=False):
-        """
-        Collect spatial statistics from Chichilnisky receptive field data
-        """
-
-        # 2D DoG fit to Chichilnisky retina spike triggered average data. The visualize parameter will
-        # show each DoG fit in order to search for bad cell fits and data.
-        parameter_names, data_all_viable_cells, bad_cell_indices = \
-            self.fit_dog_to_sta_data(visualize=False, surround_model=self.surround_fixed)
-
-        all_viable_cells = np.delete(data_all_viable_cells, bad_cell_indices, 0)
-
-        chichilnisky_data_df = pd.DataFrame(data=all_viable_cells, columns=parameter_names)
-
-        # Save stats description to gc object
-        self.rf_datafit_description_series = chichilnisky_data_df.describe()
-
-        # Calculate xy_aspect_ratio
-        xy_aspect_ratio_pd_series = chichilnisky_data_df['semi_yc'] / chichilnisky_data_df['semi_xc']
-        xy_aspect_ratio_pd_series.rename('xy_aspect_ratio')
-        chichilnisky_data_df['xy_aspect_ratio'] = xy_aspect_ratio_pd_series
-
-        rf_parameter_names = ['semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes', 'sur_ratio', 'orientation_center']
-        self.rf_parameter_names = rf_parameter_names  # For reference
-        n_distributions = len(rf_parameter_names)
-        shape = np.zeros([n_distributions - 1])  # orientation_center has two shape parameters, below alpha and beta
-        loc = np.zeros([n_distributions]);
-        scale = np.zeros([n_distributions])
-        ydata = np.zeros([len(all_viable_cells), n_distributions])
-        x_model_fit = np.zeros([100, n_distributions])
-        y_model_fit = np.zeros([100, n_distributions])
-
-        # Create dict for statistical parameters
-        spatial_statistics_dict = {}
-
-        # Model 'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio' rf_parameter_names with a gamma function.
-        for index, distribution in enumerate(rf_parameter_names[:-1]):
-            # fit the rf_parameter_names, get the PDF distribution using the parameters
-            ydata[:, index] = chichilnisky_data_df[distribution]
-            shape[index], loc[index], scale[index] = stats.gamma.fit(ydata[:, index], loc=0)
-            x_model_fit[:, index] = np.linspace(
-                stats.gamma.ppf(0.001, shape[index], loc=loc[index], scale=scale[index]),
-                stats.gamma.ppf(0.999, shape[index], loc=loc[index], scale=scale[index]), 100)
-            y_model_fit[:, index] = stats.gamma.pdf(x=x_model_fit[:, index], a=shape[index], loc=loc[index],
-                                                    scale=scale[index])
-
-            # Collect parameters
-            spatial_statistics_dict[distribution] = {'shape': shape[index], 'loc': loc[index], 'scale': scale[index],
-                                                     'distribution': 'gamma'}
-
-        # Model orientation distribution with beta function.
-        index += 1
-        ydata[:, index] = chichilnisky_data_df[rf_parameter_names[-1]]
-        a_parameter, b_parameter, loc[index], scale[index] = stats.beta.fit(ydata[:, index], 0.6, 0.6,
-                                                                            loc=0)  # initial guess for a_parameter and b_parameter is 0.6
-        x_model_fit[:, index] = np.linspace(
-            stats.beta.ppf(0.001, a_parameter, b_parameter, loc=loc[index], scale=scale[index]),
-            stats.beta.ppf(0.999, a_parameter, b_parameter, loc=loc[index], scale=scale[index]), 100)
-        y_model_fit[:, index] = stats.beta.pdf(x=x_model_fit[:, index], a=a_parameter, b=b_parameter, loc=loc[index],
-                                               scale=scale[index])
-        spatial_statistics_dict[rf_parameter_names[-1]] = {'shape': (a_parameter, b_parameter), 'loc': loc[index],
-                                                           'scale': scale[index], 'distribution': 'beta'}
-
-        # Quality control images
-        if visualize:
-            self.show_spatial_statistics(ydata, spatial_statistics_dict, (x_model_fit, y_model_fit))
-
-        # Return stats for RF creation
-        return spatial_statistics_dict
-
-    # return chichilnisky_data_df  -- chewing gum fix for a demo
-
-    def fit_dendritic_diameter_vs_eccentricity(self, visualize=False):
-        """
-        Dendritic field diameter with respect to eccentricity. Linear and quadratic fit.
-        Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
-        """
-
-        # Read dendritic field data and return linear fit with scipy.stats.linregress
-        dendr_diam_parameters = {}
-
-        dendr_diam1, dendr_diam2 = self.read_dendritic_fields_vs_eccentricity_data()
-
-        # Parasol fit
-        gc_type = self.gc_type
-
-        # Quality control. Datasets separately for visualization
-        data_set_1_x = np.squeeze(dendr_diam1['Xdata'])
-        data_set_1_y = np.squeeze(dendr_diam1['Ydata'])
-        data_set_2_x = np.squeeze(dendr_diam2['Xdata'])
-        data_set_2_y = np.squeeze(dendr_diam2['Ydata'])
-
-        # Both datasets together
-        data_all_x = np.concatenate((data_set_1_x, data_set_2_x))
-        data_all_y = np.concatenate((data_set_1_y, data_set_2_y))
-
-        # Limit eccentricities for central visual field studies to get better approximation at about 5 eg ecc (1mm)
-        data_all_x_index = data_all_x <= self.visual_field_fit_limit
-        data_all_x = data_all_x[data_all_x_index]
-        data_all_y = data_all_y[data_all_x_index]  # Don't forget to truncate values, too
-
-        # Sort to ascending order
-        data_all_x_index = np.argsort(data_all_x)
-        data_all_x = data_all_x[data_all_x_index]
-        data_all_y = data_all_y[data_all_x_index]
-
-        # Get rf diameter vs eccentricity
-        dendr_diam_model = self.dendr_diam_model  # 'linear' # 'quadratic' # cubic
-        dict_key = '{0}_{1}'.format(self.gc_type, dendr_diam_model)
-
-        if dendr_diam_model == 'linear':
-            polynomial_order = 1
-            polynomials = np.polyfit(data_all_x, data_all_y, polynomial_order)
-            dendr_diam_parameters[dict_key] = {'intercept': polynomials[1], 'slope': polynomials[0]}
-        elif dendr_diam_model == 'quadratic':
-            polynomial_order = 2
-            polynomials = np.polyfit(data_all_x, data_all_y, polynomial_order)
-            dendr_diam_parameters[dict_key] = {'intercept': polynomials[2], 'slope': polynomials[1],
-                                               'square': polynomials[0]}
-        elif dendr_diam_model == 'cubic':
-            polynomial_order = 3
-            polynomials = np.polyfit(data_all_x, data_all_y, polynomial_order)
-            dendr_diam_parameters[dict_key] = {'intercept': polynomials[3], 'slope': polynomials[2],
-                                               'square': polynomials[1], 'cube': polynomials[0]}
-
-        if visualize:
-            # self.show_dendritic_diameter_vs_eccentricity(gc_type, data_all_x, data_all_y,
-            # dataset_name='All data cubic fit', intercept=polynomials[3], slope=polynomials[2], square=polynomials[1], cube=polynomials[0])
-            self.show_dendritic_diameter_vs_eccentricity(self.gc_type, data_all_x, data_all_y, polynomials,
-                                                         dataset_name='All data {0} fit'.format(dendr_diam_model))
-
-        return dendr_diam_parameters
-
 
 if __name__ == '__main__':
     x = ConstructReceptiveFields()
-    x.fit_dog_to_sta_data('parasol', 'OFF', surround_model=0, visualize=True,
-                          semi_x_always_major=True, save='results_temp/midget_OFF_surfix.csv')
+    x.fit_dog_to_sta_data('parasol', 'ON', surround_model=1, visualize=False,
+                          semi_x_always_major=True, save='results_temp/parasol_ON_surfix.csv')
+    x.fit_dog_to_sta_data('parasol', 'OFF', surround_model=1, visualize=False,
+                      semi_x_always_major=True, save='results_temp/parasol_OFF_surfix.csv')
+    x.fit_dog_to_sta_data('midget', 'ON', surround_model=1, visualize=False,
+                      semi_x_always_major=True, save='results_temp/midget_ON_surfix.csv')
+    x.fit_dog_to_sta_data('midget', 'OFF', surround_model=1, visualize=False,
+                      semi_x_always_major=True, save='results_temp/midget_OFF_surfix.csv')
+
