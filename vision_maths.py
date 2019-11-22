@@ -152,12 +152,14 @@ class Mathematics:
         return area_of_ellipse
 
     def cosinebump(self, j, t):
-        a = 2.5  # Hand-tuned
+        a = 3.0  # Hand-tuned
         c = 0.01  # Hand-tuned
         phi_j = j * np.pi/2  # Spacing as in Pillow et al. 2008 Nature
 
         # First, scale time to logtime
         t_logtime = a*np.log(t + c) - phi_j
+
+        # Then create the bump
         if -np.pi <= t_logtime <= np.pi:
             return (np.cos(t_logtime) + 1) / 2
         else:

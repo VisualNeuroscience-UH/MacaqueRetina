@@ -100,7 +100,7 @@ class GanglionCells(Mathematics, Visualize):
         self.stimulus_video = None
 
         # Get tonic drive and filter sum statistics
-        x = apricot.FitsToRetinaData(self.gc_type, self.response_type)
+        x = apricot.FitsToApricotData(self.gc_type, self.response_type)
         self.tonicdrive_mean, self.tonicdrive_sd = x.get_tonicdrive_stats()
         self.filtersum_mean, self.filtersum_sd = x.get_filterintegral_stats()
 
@@ -932,7 +932,7 @@ class GanglionCells(Mathematics, Visualize):
 
         # Temporal kernel
         # dummy: time_kernel = np.array([[0, 0.12, 0.12, 0.25, 0.25, 0.5, 0.5, 1, 1, 0]])
-        time_kernel = apricot.FitsToRetinaData(self.gc_type, self.response_type).get_mean_temporal_filter()
+        time_kernel = apricot.FitsToApricotData(self.gc_type, self.response_type).get_mean_temporal_filter()
         time_kernel = np.flip(time_kernel)
 
         # Combine

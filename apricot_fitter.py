@@ -13,6 +13,7 @@ import numpy as np
 import scipy.optimize as opt
 import scipy.io as sio
 from scipy.stats import norm
+from scipy.optimize import curve_fit
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
@@ -26,33 +27,35 @@ retina_data_path = script_path / 'apricot'
 digitized_figures_path = script_path
 
 
-class ExperimentalRetinaData:
+class ApricotData:
     '''
-    Read data from external mat files. Data-specific definitions are isolated here.
+    Read data from external mat files.
     '''
 
     def __init__(self, gc_type, response_type):
+        gc_type = gc_type.lower()
+        response_type = response_type.lower()
         self.gc_type = gc_type
         self.response_type = response_type
 
         # Define filename
-        if gc_type == 'parasol' and response_type == 'ON':
+        if gc_type == 'parasol' and response_type == 'on':
             self.spatial_filename = 'Parasol_ON_spatial.mat'
             self.bad_data_indices=[15, 67, 71, 86, 89]   # Manually selected for Chichilnisky apricot (spatial) data
             #bad_data_indices = []  # For debugging
             self.filename_nonspatial = 'mosaicGLM_apricot_ONParasol-1-mat.mat'
 
-        elif gc_type == 'parasol' and response_type == 'OFF':
+        elif gc_type == 'parasol' and response_type == 'off':
             self.spatial_filename = 'Parasol_OFF_spatial.mat'
             self.bad_data_indices = [6, 31, 73]
             self.filename_nonspatial = 'mosaicGLM_apricot_OFFParasol-1-mat.mat'
 
-        elif gc_type == 'midget' and response_type == 'ON':
+        elif gc_type == 'midget' and response_type == 'on':
             self.spatial_filename = 'Midget_ON_spatial.mat'
             self.bad_data_indices = [6, 13, 19, 23, 26, 28, 55, 74, 93, 99, 160, 162, 203, 220]
             self.filename_nonspatial = 'mosaicGLM_apricot_ONMidget-1-mat.mat'
 
-        elif gc_type == 'midget' and response_type == 'OFF':
+        elif gc_type == 'midget' and response_type == 'off':
             self.spatial_filename = 'Midget_OFF_spatial.mat'
             self.bad_data_indices = [4, 5, 13, 23, 39, 43, 50, 52, 55, 58, 71, 72, 86, 88, 94, 100, 104, 119, 137,
                                 154, 155, 169, 179, 194, 196, 224, 230, 234, 235, 239, 244, 250, 259, 278]
@@ -138,7 +141,7 @@ class ExperimentalRetinaData:
         return describe_df
 
 
-class FitsToRetinaData(ExperimentalRetinaData, Visualize, Mathematics):
+class FitsToApricotData(ApricotData, Visualize, Mathematics):
     """
     Methods for deriving spatial receptive field parameters from the apricot dataset (Field_2010)
     """
@@ -154,13 +157,23 @@ class FitsToRetinaData(ExperimentalRetinaData, Visualize, Mathematics):
         spatial_fits_df = pd.DataFrame(data_all_viable_cells, columns=parameter_names)
         # spatial_fits_df.to_csv('spatial_fits.csv')
 
-        return spatial_fits_df
         # Create temporal fits
+        temporal_fits = self.fit_cosine_bumps_to_sta_data()
+
+        # Create postspike fits
+
+        # Finally, get non-fitted parameters (tonicdrive, filter integral)
+
+        # Save or not
+        pass
+
+    def save_fits(self):
+        raise NotImplementedError
 
     def load_fits(self, fits_csv):
         raise NotImplementedError
 
-    def fit_dog_to_sta_data(self, visualize=False, surround_model=0, save=None, semi_x_always_major=False):
+    def fit_dog_to_sta_data(self, visualize=False, surround_model=1, save=None, semi_x_always_major=False):
         """
         Fits a function consisting of the difference of two 2-dimensional elliptical Gaussian functions to
         retinal spike triggered average (STA) data.
@@ -173,8 +186,7 @@ class FitsToRetinaData(ExperimentalRetinaData, Visualize, Mathematics):
         :return:
         """
 
-        gc_spatial_data_array, initial_center_values, bad_data_indices = self.read_retina_spatial_data(self.gc_type,
-                                                                                                       self.response_type)
+        gc_spatial_data_array, initial_center_values, bad_data_indices = self.read_retina_spatial_data()
 
         n_cells = int(gc_spatial_data_array.shape[2])
         pixel_array_shape_y = gc_spatial_data_array.shape[0]  # Check indices: x horizontal, y vertical
@@ -383,6 +395,13 @@ class FitsToRetinaData(ExperimentalRetinaData, Visualize, Mathematics):
         return parameter_names, data_all_viable_cells, bad_data_indices
 
     def get_tonicdrive_stats(self, remove_bad_data_indices=True, visualize=False):
+        """
+        Fits a normal distribution to "tonic drive" values
+
+        :param remove_bad_data_indices: True/False (default True)
+        :param visualize: True/False (default False)
+        :return: mean and SD of the fitted normal distribution
+        """
         tonicdrive = self.read_tonicdrive()
 
         if remove_bad_data_indices:
@@ -403,6 +422,13 @@ class FitsToRetinaData(ExperimentalRetinaData, Visualize, Mathematics):
         return mean, sd
 
     def get_filterintegral_stats(self, remove_bad_data_indices=True, visualize=False):
+        """
+        Fits a normal distribution to the sums/integrals of spatiotemporal kernels
+
+        :param remove_bad_data_indices: True/False (default True)
+        :param visualize: True/False (default False)
+        :return: mean and SD of the fitted normal distribution
+        """
         filterintegrals = self.compute_filter_integrals()
 
         if remove_bad_data_indices:
@@ -422,8 +448,7 @@ class FitsToRetinaData(ExperimentalRetinaData, Visualize, Mathematics):
 
         return mean, sd
 
-
-    def get_mean_temporal_filter(self, remove_bad_data_indices=True, visualize=False):
+    def get_mean_temporal_filter(self, remove_bad_data_indices=True, flip_negs=True, visualize=False):
 
         temporal_filters = self.read_temporal_filter()
         len_temporal_filter = len(temporal_filters[0,:])
@@ -437,10 +462,11 @@ class FitsToRetinaData(ExperimentalRetinaData, Visualize, Mathematics):
 
         # Some temporal filters first have a negative deflection, which we probably don't want
         for i in range(self.n_cells):
-            if temporal_filters[i,1] < 0:
+            if temporal_filters[i,1] < 0 and flip_negs is True:
                 temporal_filters[i,:] = temporal_filters[i,:] * (-1)
+                print('%d' % i)
 
-        if self.response_type == 'OFF':
+        if self.response_type == 'off':
             temporal_filters = (-1)*temporal_filters
 
         mean_filter = np.mean(temporal_filters[good_indices, :], axis=0)
@@ -455,7 +481,35 @@ class FitsToRetinaData(ExperimentalRetinaData, Visualize, Mathematics):
             plt.xlabel('Time (1/fps)')
             plt.show()
 
-        return np.array([mean_filter])
+        else:
+            return np.array([mean_filter])
+
+    def get_mean_postspike_filter(self, remove_bad_data_indices=True, visualize=False):
+
+        postspike_filters = self.read_postspike_filter()
+        len_postspike_filter = len(postspike_filters[0,:])
+
+        if remove_bad_data_indices:
+            good_indices = np.setdiff1d(range(self.n_cells), self.bad_data_indices)
+            for i in self.bad_data_indices:
+                postspike_filters[i,:] = np.zeros(len_postspike_filter)
+        else:
+            good_indices = range(self.n_cells)
+
+        mean_filter = np.mean(postspike_filters[good_indices, :], axis=0)
+
+        if visualize:
+            for i in good_indices:
+                plt.plot(range(len_postspike_filter), postspike_filters[i,:], c='grey', alpha=0.2)
+                plt.plot(range(len_postspike_filter), mean_filter, c='black')
+
+            plt.title(self.gc_type + ' ' + self.response_type)
+            plt.xlabel('Time (1/fps)')
+            plt.show()
+
+        else:
+            return mean_filter
+
 
     def temporal_filter_func(self, t, f0, f1, f2, f3, f4, f5, f6, f7, f8, f9):
 
@@ -485,58 +539,39 @@ class FitsToRetinaData(ExperimentalRetinaData, Visualize, Mathematics):
             if temporal_filters[i,1] < 0:
                 temporal_filters[i,:] = temporal_filters[i,:] * (-1)
 
-        if self.response_type == 'OFF':
+        if self.response_type == 'off':
             temporal_filters = (-1)*temporal_filters
         # Is this reasonable?
 
-        from scipy.optimize import curve_fit
-        fit_values = np.zeros((len_temporal_filter, N_bas))
-        for i in range(len_temporal_filter):
-            popt, pcov = curve_fit(self.temporal_filter_func, range(15), temporal_filters[i,:])
+        fit_values = np.zeros((self.n_cells, N_bas))
+        # TODO - Make fitting work; currently creates weird negative deflection in the beginning
+        for i in range(self.n_cells):
+            popt, pcov = curve_fit(self.temporal_filter_func, range(15), temporal_filters[i,:], bounds=(-5,5))
             fit_values[i,:] = popt
 
         if visualize:
             xs = np.linspace(0, 15, 100)
-            for i in range(len_temporal_filter):
+            for i in range(self.n_cells):
                 plt.title('%s %s / cell index %d' % (self.response_type, self.gc_type, i))
                 plt.plot(range(15), temporal_filters[i,:], '.')
                 plt.plot(xs, self.temporal_filter_func(xs, *fit_values[i]), '-')
                 plt.show(block=True)
 
-
-    def get_mean_postspike_filter(self, remove_bad_data_indices=True, visualize=False):
-
-        postspike_filters = self.read_postspike_filter()
-        len_postspike_filter = len(postspike_filters[0,:])
-
-        if remove_bad_data_indices:
-            good_indices = np.setdiff1d(range(self.n_cells), self.bad_data_indices)
-            for i in self.bad_data_indices:
-                postspike_filters[i,:] = np.zeros(len_postspike_filter)
         else:
-            good_indices = range(self.n_cells)
+            return fit_values
 
-        mean_filter = np.mean(postspike_filters[good_indices, :], axis=0)
-
-        if visualize:
-
-            for i in good_indices:
-                plt.plot(range(len_postspike_filter), postspike_filters[i,:], c='grey', alpha=0.2)
-                plt.plot(range(len_postspike_filter), mean_filter, c='black')
-
-            plt.title(self.gc_type + ' ' + self.response_type)
-            plt.xlabel('Time (1/fps)')
-            plt.show()
-
-        return mean_filter
 
 
 if __name__ == '__main__':
-    gc_types = ['parasol', 'midget']
-    response_types = ['ON', 'OFF']
-    gcs, rts = np.meshgrid(gc_types, response_types)
+    x = FitsToApricotData('parasol', 'on')
+    x.fit_cosine_bumps_to_sta_data(visualize=True)
+    # x.create()
 
-    FitsToRetinaData('midget', 'ON').fit_cosine_bumps_to_sta_data(visualize=True)
+    # gc_types = ['parasol', 'midget']
+    # response_types = ['ON', 'OFF']
+    # gcs, rts = np.meshgrid(gc_types, response_types)
+    #
+    # FitsToRetinaData('midget', 'ON').fit_cosine_bumps_to_sta_data(visualize=True)
 
     # for gc_type, response_type in zip(gcs.flatten(), rts.flatten()):
     #     x = ConstructReceptiveFields(gc_type, response_type)
