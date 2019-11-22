@@ -1,23 +1,24 @@
-import os
 import sys
-import pdb
 import numpy as np
 import scipy.optimize as opt
 import scipy.io as sio
 import scipy.stats as stats
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.patches import Ellipse, Circle
-from tqdm import tqdm
+from matplotlib.patches import Ellipse
 import cv2
 from pathlib import Path
-import quantities as pq
-import elephant
-import neo
-import seaborn as sns
+#import seaborn as sns
 import visual_stimuli as vs
 from visualize import Visualize
 from vision_maths import Mathematics
+from scipy.signal import fftconvolve
+from scipy.interpolate import interp1d
+from scipy.stats import norm
+from mpl_toolkits import mplot3d
+import brian2 as b2
+from brian2.units import *
+import apricot_fitter as apricot
 
 plt.rcParams['image.cmap'] = 'gray'
 
@@ -92,11 +93,16 @@ class GanglionCells(Mathematics, Visualize):
 
         # Initialize pandas dataframe to hold the ganglion cells (one per row) and all their parameters in one place
         columns = ['positions_eccentricity', 'positions_polar_angle', 'eccentricity_group_index', 'semi_xc', 'semi_yc',
-                   'xy_aspect_ratio', 'amplitudes', 'sur_ratio', 'orientation_center']
+                   'xy_aspect_ratio', 'amplitudes', 'sur_ratio', 'orientation_center', 'tonicdrive', 'filtersum']
         self.gc_df = pd.DataFrame(columns=columns)
 
         # Set stimulus stuff
         self.stimulus_video = None
+
+        # Get tonic drive and filter sum statistics
+        x = apricot.FitsToRetinaData(self.gc_type, self.response_type)
+        self.tonicdrive_mean, self.tonicdrive_sd = x.get_tonicdrive_stats()
+        self.filtersum_mean, self.filtersum_sd = x.get_filterintegral_stats()
 
     def fit_gc_density_data(self):
         """
@@ -582,6 +588,13 @@ class GanglionCells(Mathematics, Visualize):
         # At this point the spatial receptive fields are constructed.
         # The positions are in gc_eccentricity, gc_polar_angle, and the rf parameters in gc_rf_models
 
+        n_rgc = len(self.gc_df)
+        print("Built RGC mosaic with %d cells" % n_rgc)
+
+        # Finally, get temporal statistics
+        self.gc_df['tonicdrive'] = norm.rvs(size=n_rgc, loc=self.tonicdrive_mean, scale=self.tonicdrive_sd)
+        self.gc_df['filtersum'] = norm.rvs(size=n_rgc, loc=self.filtersum_mean, scale=self.filtersum_sd)
+
         if Visualize is True:
             plt.show()
 
@@ -635,9 +648,10 @@ class GanglionCells(Mathematics, Visualize):
         :param frame_number: int, which frame of stimulus to show (default 0 = first frame)
         :return:
         """
-        # Check that video has values scaled between 0...255 etc.
-
         self.stimulus_video = stimulus_video
+
+        # Scale stimulus pixel values from 0-255 to [-0.5, 0.5]
+        self.stimulus_video.frames = (stimulus_video.frames / 255) - 0.5
 
         if visualize is True:
             self.visualize_stimulus_and_grid(frame_number)
@@ -718,7 +732,7 @@ class GanglionCells(Mathematics, Visualize):
 
         return x_new, y_new
 
-    def visualize_rgc_view(self, cell_index, show_block=False):  # TODO - add global mosaic view as first plot
+    def visualize_rgc_view(self, cell_index, show_block=False):
         frame_number = 0
         total_frames = len(self.stimulus_video.frames[0,0,:])
 
@@ -732,10 +746,43 @@ class GanglionCells(Mathematics, Visualize):
         semi_y = self.deg_per_mm * the_gc.semi_yc
 
 
-        plt.subplots(2,2, figsize=(12,12))
+        plt.subplots(5,1, figsize=(4,16))
         plt.suptitle("Cell index %d, video frame %d (of %d)" % (cell_index, frame_number, total_frames))
 
-        plt.subplot(221)
+        plt.subplot(511)
+        plt.title('RGC grid')
+        # Change image coordinates to visual space coordinates
+        vspace_extents = self.stimulus_video.get_extents_deg()
+        plt.imshow(self.stimulus_video.frames[:, :, frame_number], extent=vspace_extents, vmin=-0.5, vmax=0.5)
+
+        # Plot all the ganglion cell RFs on top of the image
+        ax = plt.gca()
+        for i in range(len(self.gc_df)):
+            the_gc = self.gc_df.loc[i]
+            # print(the_gc)
+            x, y = self.pol2cart(the_gc.positions_eccentricity, the_gc.positions_polar_angle)
+            x = self.deg_per_mm * x
+            y = self.deg_per_mm * y
+            semi_x = self.deg_per_mm * the_gc.semi_xc
+            semi_y = self.deg_per_mm * the_gc.semi_yc
+
+            orientation_deg = the_gc.orientation_center * (180/np.pi)
+            circ = Ellipse((x, y), width=2 * semi_x, height=2 * semi_y,
+                           angle=orientation_deg, edgecolor='red', facecolor="None")
+            ax.add_patch(circ)
+
+        special_gc = self.gc_df.loc[cell_index]
+        x0, y0 = self.pol2cart(special_gc.positions_eccentricity, special_gc.positions_polar_angle)
+        x0 = self.deg_per_mm * x0
+        y0 = self.deg_per_mm * y0
+
+        plt.axhline(y0)
+        plt.axvline(x0)
+
+        plt.xlabel('Eccentricity (deg)')
+        plt.ylabel('Elevation (deg)')
+
+        plt.subplot(512)
         plt.title('RGC center 1SD ellipse wrt stimulus frame')
         plt.xlabel('Eccentricity (deg)')
         plt.ylabel('Elevation (deg)')
@@ -755,26 +802,40 @@ class GanglionCells(Mathematics, Visualize):
         cropped_video = self.stimulus_video.frames[pixspace_topleft[0]:pixspace_bottomright[0] + 1,
                         pixspace_topleft[1]:pixspace_bottomright[1] + 1, :]
         plt.imshow(cropped_video[:,:, frame_number],
-                   extent=vspace_extents, vmin=0, vmax=255)
+                   extent=vspace_extents, vmin=-0.5, vmax=0.5)
 
         circ = Ellipse((center_x, center_y), width=2 * semi_x, height=2 * semi_y,
                        angle=orientation_deg, edgecolor='red', facecolor="None")
         ax.add_patch(circ)
 
+        # Compute filter stuff here
+        spatiotemporal_kernel = self.create_spatiotemporal_kernel(cell_index)
+        sidelen_kernel = int(np.sqrt(len(spatiotemporal_kernel[0,:])))
+        center_pixel = sidelen_kernel//2
+        st_kernel_reshape = np.reshape(spatiotemporal_kernel, (15, sidelen_kernel, sidelen_kernel))
+        temporal_filter = st_kernel_reshape[:, center_pixel, center_pixel]
+        t_slice = np.argmax(temporal_filter)
+
         # 2) Show spatial kernel created for the stimulus resolution
-        plt.subplot(222)
-        plt.title("Spatial filter in stimulus resolution")
+        plt.subplot(513)
         ax = plt.gca()
-        spatial_kernel = self.create_spatial_kernel(cell_index)
-        plt.imshow(spatial_kernel)
+        # spatial_kernel = self.create_spatial_kernel(cell_index)
+        # t_slice = 2
+        spatial_kernel = np.reshape(spatiotemporal_kernel[t_slice,:], (sidelen_kernel, sidelen_kernel))
+        plt.imshow(spatial_kernel, cmap='bwr') #, vmin=-0.5, vmax=0.5)
+        plt.title("Spatial filter at t=%d" % t_slice)
 
-        # 3) "Keyhole view"
-        plt.subplot(223)
-        plt.title("Stimulus x spatial filter (elementwise)")
+        # 3) Temporal filter
+        plt.subplot(514)
+        plt.plot(range(15), temporal_filter)
+        plt.title('Temporal filter at x=center pixel')
+
+        # 4) Keyhole view
+        plt.subplot(515)
+        plt.title("Stimulus x spatial filter")
         keyhole_view = np.multiply(cropped_video[:,:,frame_number], spatial_kernel)
-        plt.imshow(keyhole_view)
+        plt.imshow(keyhole_view, cmap='bwr', vmin=-0.5, vmax=0.5)
 
-        # 4) Integrated signal over frames
 
         plt.show(block=show_block)
 
@@ -864,30 +925,123 @@ class GanglionCells(Mathematics, Visualize):
         return spatial_kernel
 
     def create_spatiotemporal_kernel(self, cell_index, visualize=False):
+        # Spatial kernel
         spatial_kernel = self.create_spatial_kernel(cell_index)
         spatial_kernel_sidelen = np.shape(spatial_kernel)[0]  # assuming square kernel
         spatial_kernel = [np.reshape(spatial_kernel, spatial_kernel_sidelen**2)]
-        time_kernel = np.array([[0, 0.12, 0.12, 0.25, 0.25, 0.5, 0.5, 1, 1, 0]])
+
+        # Temporal kernel
+        # dummy: time_kernel = np.array([[0, 0.12, 0.12, 0.25, 0.25, 0.5, 0.5, 1, 1, 0]])
+        time_kernel = apricot.FitsToRetinaData(self.gc_type, self.response_type).get_mean_temporal_filter()
+        time_kernel = np.flip(time_kernel)
+
+        # Combine
         spatiotemporal_kernel = spatial_kernel * time_kernel.T
+
+        # Scale so that filter has a "reasonable" integral
+        raw_kernel_sum = np.sum(spatiotemporal_kernel)
+        fitted_kernel_sum = self.gc_df.loc[cell_index].filtersum
+        print('Raw filter sum: %.3f, data filter sum: %.3f' % (raw_kernel_sum, fitted_kernel_sum))
+        spatiotemporal_kernel = (fitted_kernel_sum/raw_kernel_sum) * spatiotemporal_kernel
 
         if visualize:
             plt.imshow(spatiotemporal_kernel)
             plt.xlabel('Space')
             plt.xlabel('Time (frames)')
+
             plt.show()
 
         return spatiotemporal_kernel
 
-    def feed_stimulus(self, cell_index):
+    def feed_stimulus_thru_filter(self, cell_index):
 
         # Create spatiotemporal kernel
         spatiotemporal_filter = self.create_spatiotemporal_kernel(cell_index)
-        print("Created spatiotemporal kernel!")
 
         # Get video cropped to cell's receptive field
         cropped_video = self.get_cropped_video(cell_index, reshape=True)
 
+        # Scale cropped video to correct units
+        # cropped_video = (cropped_video/255) - 0.5
 
+        # Transpose the filter to match with stimulus dimensions
+        spatiotemporal_filter = spatiotemporal_filter.T
+        assert np.shape(spatiotemporal_filter)[0] == np.shape(cropped_video)[0], "Filter and cropped video dimensions" \
+                                                                                 "do not match! Probably a bug in the code?"
+
+        # Run the convolution
+        filtered_stimulus = fftconvolve(cropped_video, spatiotemporal_filter, mode='valid')
+
+        return filtered_stimulus[0,:]  # With 'valid' convolution only only 1 row should be left
+
+
+    def simple_spiking(self, cell_index):
+        filtered_stimulus = self.feed_stimulus_thru_filter(cell_index) * Hz
+        dt = 1/self.stimulus_video.fps * second
+        generator_signal = b2.TimedArray(filtered_stimulus, dt)
+
+        poisson_spiker = b2.PoissonGroup(1, rates=generator_signal)
+        spike_monitor = b2.SpikeMonitor(poisson_spiker)
+
+        b2.run()
+
+        return spike_monitor
+
+    def pillow_spiking(self, cell_index, with_postspike=False, nonlinearity=np.exp):
+
+        # Sim settings
+        RefreshRate = 120
+        DTsim = 0.01
+        nbinsPerEval = 100  # corresponds to 0.01*100 / 120 sec = 1/120 sec
+
+        # Run stimulus thru the spatiotemporal filter
+        convolved_stimulus = self.feed_stimulus_thru_filter(cell_index) + self.gc_df.loc[cell_index].tonicdrive
+        slen = len(convolved_stimulus)
+        Vmem_func = interp1d(range(slen), convolved_stimulus, 'linear')
+        rlen = int((slen-1) / DTsim)
+        Vmem = Vmem_func(np.arange(0, slen-1, DTsim))
+
+        # Get postspike filter h
+        # ip_postspike_filter_func = self.interpolate_postspike_filter(video_fps=120, cellnum=cell_index, ip_kind='linear')
+        # postspike_rlen = int((ParasolMosaic.tsteps_postspike_filter-1) / DTsim)
+        # ip_postspike_filter = ip_postspike_filter_func(np.arange(0, ParasolMosaic.tsteps_postspike_filter-1, DTsim))
+
+        # Actual spiking loop
+        jbin = 0
+        n_spikes = 0
+        rprev = 0
+        tspnext = np.random.exponential()
+        tsp = []
+
+        while jbin < rlen:
+            iinxt = np.arange(jbin, min(jbin+nbinsPerEval, rlen), 1)
+            rrnxt = nonlinearity(Vmem[iinxt])*DTsim/RefreshRate
+            rrcum = np.cumsum(rrnxt)+rprev
+
+            if(tspnext >= rrcum[-1]):  # No spike
+                jbin = iinxt[-1] + 1
+                rprev = rrcum[-1]
+
+            else:  # Spike!
+                ispk = jbin + np.min(np.where(rrcum >= tspnext))
+                n_spikes += 1
+                tsp.append(ispk*DTsim)
+
+                # Inject postspike current
+                if with_postspike is True:
+                    pass
+                    # mxi = np.min([rlen, ispk+postspike_rlen])
+                    # ii_postspike = np.arange(ispk+1, mxi, 1)
+                    # Vmem[ii_postspike] = Vmem[ii_postspike] + ip_postspike_filter[0:mxi - ispk -1]
+
+                # Draw next spike time etc
+                tspnext = np.random.exponential()
+                rprev = 0
+                jbin = ispk + 1
+
+        mean_fr = n_spikes / (slen/RefreshRate)
+        print('Ganglion cell %d generated %d spikes (mean rate %.3f Hz)' % (cell_index, n_spikes, mean_fr))
+        return tsp, Vmem, mean_fr
 
 # Obsolete - pre-OCNC code!
 # def build_convolution_matrix(self, gc_index, stimulus_center, stimulus_width_px, stimulus_height_px):
@@ -940,96 +1094,7 @@ class GanglionCells(Mathematics, Visualize):
 # 	pass
 
 
-class SampleImage:
-    '''
-    This class gets one image at a time, and provides the cone response.
-    After instantiation, the RGC group can get one frame at a time, and the system will give an impulse response.
-    '''
 
-    def __init__(self, micrometers_per_pixel=10, image_resolution=(100, 100), temporal_resolution=1):
-        '''
-        Instantiate new stimulus.
-        '''
-        self.millimeters_per_pixel = micrometers_per_pixel / 1000  # Turn to millimeters
-        self.temporal_resolution = temporal_resolution
-        self.optical_aberration = 2 / 60  # unit is degree
-        self.deg_per_mm = 5
-
-    def get_image(self, image_file_name='testi.jpg'):
-
-        # Load stimulus
-        image = cv2.imread(image_file_name, 0)  # The 0-flag calls for grayscale. Comes in as uint8 type
-
-        # Normalize image intensity to 0-1, if RGB value
-        if np.ptp(image) > 1:
-            scaled_image = np.float32(image / 255)
-        else:
-            scaled_image = np.float32(image)  # 16 bit to save space and memory
-
-        return scaled_image
-
-    def blur_image(self, image):
-        '''
-        Gaussian smoothing from Navarro 1993: 2 arcmin FWHM under 20deg eccentricity.
-        '''
-
-        # Turn the optical aberration of 2 arcmin FWHM to Gaussian function sigma
-        sigma_in_degrees = self.optical_aberration / (2 * np.sqrt(2 * np.log(2)))
-
-        # Turn Gaussian function with defined sigma in degrees to pixel space
-        sigma_in_mm = sigma_in_degrees / self.deg_per_mm
-        sigma_in_pixels = sigma_in_mm / self.millimeters_per_pixel  # This is small, 0.28 pixels for 10 microm/pixel resolution
-
-        # Turn
-        kernel_size = (5, 5)  # Dimensions of the smoothing kernel in pixels, centered in the pixel to be smoothed
-        image_after_optics = cv2.GaussianBlur(image, kernel_size, sigmaX=sigma_in_pixels)  # sigmaY = sigmaX
-
-        return image_after_optics
-
-    def aberrated_image2cone_response(self, image):
-
-        # Compressing nonlinearity. Parameters are manually scaled to give dynamic cone ouput.
-        # Equation, data from Baylor_1987_JPhysiol
-        rm = 25  # pA
-        k = 2.77e-4  # at 500 nm
-        cone_sensitivity_min = 5e2
-        cone_sensitivity_max = 1e4
-
-        # Range
-        response_range = np.ptp([cone_sensitivity_min, cone_sensitivity_max])
-
-        # Scale
-        image_at_response_scale = image * response_range  # Image should be between 0 and 1
-        cone_input = image_at_response_scale + cone_sensitivity_min
-
-        # Cone nonlinearity
-        cone_response = rm * (1 - np.exp(-k * cone_input))
-
-        return cone_response
-
-
-class Operator:
-    '''
-    Operate the generation and running of retina here
-    '''
-
-    def run_stimulus_sampling(sample_image_object, visualize=False):
-        one_frame = sample_image_object.get_image()
-        one_frame_after_optics = sample_image_object.blur_image(one_frame)
-        cone_response = sample_image_object.aberrated_image2cone_response(one_frame_after_optics)
-
-        if visualize:
-            fig, ax = plt.subplots(nrows=2, ncols=3)
-            axs = ax.ravel()
-            axs[0].hist(one_frame.flatten(), 20)
-            axs[1].hist(one_frame_after_optics.flatten(), 20)
-            axs[2].hist(cone_response.flatten(), 20)
-
-            axs[3].imshow(one_frame, cmap='Greys')
-            axs[4].imshow(one_frame_after_optics, cmap='Greys')
-            axs[5].imshow(cone_response, cmap='Greys')
-
-            plt.show()
 
 
 # Obsolete: pre-OCNC code
@@ -1068,44 +1133,75 @@ if __name__ == "__main__":
     #                       semi_x_always_major=True)
 
     # ...or load premade fits
-    fitdata2 = load_dog_fits('results_temp/midget_OFF_surfix.csv')
+    fitdata2 = load_dog_fits('results_temp/parasol_OFF_surfix.csv')
 
 
-    mosaic = GanglionCells(gc_type='parasol', response_type='ON', ecc_limits=[4, 6],
+    mosaic = GanglionCells(gc_type='parasol', response_type='OFF', ecc_limits=[4, 6],
                                       sector_limits=[-10.0, 10.0], model_density=1.0, randomize_position=0.6)
     mosaic.build(fitdata2, visualize=False)
     # Or you can load a previously built mosaic
     #
     # mosaic.visualize_mosaic()
 
-    a = vs.ConstructStimulus(video_center_vspace=5 + 0j, pattern='sine_grating', temporal_frequency=1,
+    a = vs.ConstructStimulus(video_center_vspace=5 + 0j, pattern='sine_grating', temporal_frequency=2,
                              spatial_frequency=0.5,
-                             duration_seconds=3, fps=120, orientation=45, image_width=320, image_height=240,
-                             pix_per_deg=10, stimulus_size=5.0)
+                             duration_seconds=5, fps=120, orientation=45, image_width=90, image_height=90,
+                             pix_per_deg=30, stimulus_size=0, contrast=0.7)
 
     mosaic.load_stimulus(a)
+
+    #
     # mosaic.visualize_stimulus_and_grid(marked_cells=[2])
-    # mosaic.visualize_rgc_view(2, show_block=True)
+    # mosaic.visualize_rgc_view(100, show_block=True)
 
-    for i in range(20):
-        # mosaic.visualize_rgc_view(i, show_block=True)
-        mosaic.feed_stimulus(i)
-        # mosaic.create_spatiotemporal_kernel(i, visualize=True)
+    # all_spikes = []
+    for i in range(10):
+    #     # mosaic.create_spatiotemporal_kernel(i, visualize=True)
+    #     # mosaic.simple_spiking(i)
+        mosaic.visualize_rgc_view(i, show_block=True)
+    #     #
+    #     # filtered_stuff = mosaic.feed_stimulus_thru_filter(i)
+    #     # n = len(filtered_stuff)
+    #     # plt.plot(range(n), filtered_stuff)
+    #     #
+    #     tsp, Vmem, meanfr = mosaic.pillow_spiking(0)
+    #     all_spikes.append(np.array(tsp) * (1/120))
+    #
+    # plt.eventplot(all_spikes)
+    # plt.show()
 
-    plt.show()
-
-# Targeting something like this:
-# a = vs.ConstructStimulus(...)
-# mosaic.load_stimulus(a)
-# mosaic.run_single_cell_trials(5, 63, with_postspike=False)
+    # Test experiment
+    # contrasts = np.arange(0.1, 1.0, 0.1)
+    # spatial_freqs = [1, 2, 4, 6, 12, 24]
+    # results_table = np.zeros((len(contrasts), len(spatial_freqs)))
+    # cont_grid, spatfreq_grid = np.meshgrid(contrasts, spatial_freqs)
+    # response_threshold = 10
+    # cell_ix = 0
+    #
+    # for j, spatfreq in enumerate(spatial_freqs):
+    #     for i, contrast in enumerate(contrasts):
+    #         a = vs.ConstructStimulus(video_center_vspace=5 + 0j, pattern='sine_grating', temporal_frequency=6,
+    #                                  spatial_frequency=spatfreq,
+    #                                  duration_seconds=5, fps=120, orientation=45, image_width=320, image_height=240,
+    #                                  pix_per_deg=30, stimulus_size=5.0, contrast=contrast)
+    #
+    #         mosaic.load_stimulus(a)
+    #         tsp, Vmem, meanfr = mosaic.pillow_spiking(cell_ix)
+    #         results_table[i,j] = meanfr
+    #
+    # np.savetxt("results_temp/parasol_spat_tuning.csv", results_table, delimiter=',')
 
 # Todo (Henri's)
+# - RGC view: orientation is different in every friggin plot.... >.<
+# - Normalize kernel energy => still sometimes cells with very high firing rates...
+# - Saving/loading generated mosaic
+# - Check scale of filter values in data
+# - Fit temporal kernel
+# - Fit postspike currents
 
-# - Is orientation CW or CCW in DOG fncs?
 # - Eccentricity and polar angle used sometimes as if they are the same thing
-# - "center" has double meaning: RF center or center/surround => change RF center to midpoint
-# - semi_x and semi_y problematic: which one is major? does it describe 1SD ellipse? => change to sd_major/minor
-# - orientation => orientation_ccw
+# - "center" has double meaning: RF center or center/surround
+# - semi_x and semi_y... write somewhere that semi_x = horizontal, semi_y = vertical and orientation rotates ccw
 
 
 # chichilnisky_fits = parasol_ON_object.fit_spatial_statistics(visualize=False)

@@ -460,6 +460,98 @@ class ConstructStimulus(VideoBaseClass):
         save_dict_to_hdf5(self.options, filename_out_options)
 
 
+class SampleImage:
+    '''
+    This class gets one image at a time, and provides the cone response.
+    After instantiation, the RGC group can get one frame at a time, and the system will give an impulse response.
+    '''
+
+    def __init__(self, micrometers_per_pixel=10, image_resolution=(100, 100), temporal_resolution=1):
+        '''
+        Instantiate new stimulus.
+        '''
+        self.millimeters_per_pixel = micrometers_per_pixel / 1000  # Turn to millimeters
+        self.temporal_resolution = temporal_resolution
+        self.optical_aberration = 2 / 60  # unit is degree
+        self.deg_per_mm = 5
+
+    def get_image(self, image_file_name='testi.jpg'):
+
+        # Load stimulus
+        image = cv2.imread(image_file_name, 0)  # The 0-flag calls for grayscale. Comes in as uint8 type
+
+        # Normalize image intensity to 0-1, if RGB value
+        if np.ptp(image) > 1:
+            scaled_image = np.float32(image / 255)
+        else:
+            scaled_image = np.float32(image)  # 16 bit to save space and memory
+
+        return scaled_image
+
+    def blur_image(self, image):
+        '''
+        Gaussian smoothing from Navarro 1993: 2 arcmin FWHM under 20deg eccentricity.
+        '''
+
+        # Turn the optical aberration of 2 arcmin FWHM to Gaussian function sigma
+        sigma_in_degrees = self.optical_aberration / (2 * np.sqrt(2 * np.log(2)))
+
+        # Turn Gaussian function with defined sigma in degrees to pixel space
+        sigma_in_mm = sigma_in_degrees / self.deg_per_mm
+        sigma_in_pixels = sigma_in_mm / self.millimeters_per_pixel  # This is small, 0.28 pixels for 10 microm/pixel resolution
+
+        # Turn
+        kernel_size = (5, 5)  # Dimensions of the smoothing kernel in pixels, centered in the pixel to be smoothed
+        image_after_optics = cv2.GaussianBlur(image, kernel_size, sigmaX=sigma_in_pixels)  # sigmaY = sigmaX
+
+        return image_after_optics
+
+    def aberrated_image2cone_response(self, image):
+
+        # Compressing nonlinearity. Parameters are manually scaled to give dynamic cone ouput.
+        # Equation, data from Baylor_1987_JPhysiol
+        rm = 25  # pA
+        k = 2.77e-4  # at 500 nm
+        cone_sensitivity_min = 5e2
+        cone_sensitivity_max = 1e4
+
+        # Range
+        response_range = np.ptp([cone_sensitivity_min, cone_sensitivity_max])
+
+        # Scale
+        image_at_response_scale = image * response_range  # Image should be between 0 and 1
+        cone_input = image_at_response_scale + cone_sensitivity_min
+
+        # Cone nonlinearity
+        cone_response = rm * (1 - np.exp(-k * cone_input))
+
+        return cone_response
+
+
+class Operator:
+    '''
+    Operate the generation and running of retina here
+    '''
+
+    def run_stimulus_sampling(sample_image_object, visualize=False):
+        one_frame = sample_image_object.get_image()
+        one_frame_after_optics = sample_image_object.blur_image(one_frame)
+        cone_response = sample_image_object.aberrated_image2cone_response(one_frame_after_optics)
+
+        if visualize:
+            fig, ax = plt.subplots(nrows=2, ncols=3)
+            axs = ax.ravel()
+            axs[0].hist(one_frame.flatten(), 20)
+            axs[1].hist(one_frame_after_optics.flatten(), 20)
+            axs[2].hist(cone_response.flatten(), 20)
+
+            axs[3].imshow(one_frame, cmap='Greys')
+            axs[4].imshow(one_frame_after_optics, cmap='Greys')
+            axs[5].imshow(cone_response, cmap='Greys')
+
+            plt.show()
+
+
 if __name__ == "__main__":
     pass
 # filename = 'test3'
