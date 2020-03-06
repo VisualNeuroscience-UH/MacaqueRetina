@@ -226,6 +226,10 @@ class FitsToApricotData(ApricotData, Visualize, Mathematics):
 
             surround_status = 'independent'
 
+        # Create error array
+        error_all_viable_cells = np.zeros((n_cells, 1))
+
+        # GO THROUGH ALL CELLS
         print(('Fitting DoG model, surround is {0}'.format(surround_status)))
         for cell_index in tqdm(all_viable_cells):
             # pbar(cell_index/n_cells)
@@ -326,9 +330,28 @@ class FitsToApricotData(ApricotData, Visualize, Mathematics):
                         data_all_viable_cells[cell_index, 10] = sd_x_sur
                         data_all_viable_cells[cell_index, 11] = (rotation + np.pi / 2) % np.pi
 
+            # Compute fitting error
+            if surround_model == 1:
+                data_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
+            elif surround_model == 2:
+                data_fitted = self.DoG2D_fixed_double_surround((x_grid, y_grid), *popt[1:7])
+            else:
+                data_fitted = self.DoG2D_independent_surround((x_grid, y_grid), *popt)
+
+            data_fitted = data_fitted.reshape(pixel_array_shape_y, pixel_array_shape_x)
+            fit_deviations = data_fitted - data_array
+            data_mean = np.mean(data_array)
+            # Normalized mean square error used here
+            # Defn per https://se.mathworks.com/help/ident/ref/goodnessoffit.html without 1 - ...
+            # 0 = perfect fit, infty = bad fit
+            fit_error = np.sqrt(np.sum(fit_deviations**2)/(np.sum((data_mean - data_array)**2)))
+            error_all_viable_cells[cell_index, 0] = fit_error
+
+            # Visualize fits with data
             if visualize:
-                # Visualize fits with data
                 #data_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
+                imshow_cmap = 'bwr'
+                ellipse_edgecolor = 'black'
 
                 popt = data_all_viable_cells[cell_index, :]
 
@@ -336,7 +359,7 @@ class FitsToApricotData(ApricotData, Visualize, Mathematics):
                 plt.suptitle(
                     'celltype={0}, responsetype={1}, cell N:o {2}'.format(self.gc_type, self.response_type, str(cell_index)),
                     fontsize=10)
-                cen = ax1.imshow(data_array, vmin=-0.1, vmax=0.4, cmap=plt.cm.gray, origin='bottom',
+                cen = ax1.imshow(data_array, vmin=-0.1, vmax=0.4, cmap=imshow_cmap, origin='bottom',
                                  extent=(x_grid.min(), x_grid.max(), y_grid.min(), y_grid.max()))
                 fig.colorbar(cen, ax=ax1)
 
@@ -345,10 +368,10 @@ class FitsToApricotData(ApricotData, Visualize, Mathematics):
                 if surround_model == 1:
                     data_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
                     # matplotlib.patches.Ellipse(xy, width, height, angle=0, **kwargs)
-                    e1 = Ellipse((popt[np.array([1, 2])]), popt[3], popt[4], -popt[5] * 180 / np.pi, edgecolor='w',
+                    e1 = Ellipse((popt[np.array([1, 2])]), popt[3], popt[4], -popt[5] * 180 / np.pi, edgecolor=ellipse_edgecolor,
                                  linewidth=2, fill=False)
                     e2 = Ellipse((popt[np.array([1, 2])]), popt[7] * popt[3], popt[7] * popt[4], -popt[5] * 180 / np.pi,
-                                 edgecolor='w', linewidth=2, fill=False, linestyle='--')
+                                 edgecolor=ellipse_edgecolor, linewidth=2, fill=False, linestyle='--')
                     print(popt[0], popt[np.array([1, 2])], popt[3], popt[4], -popt[5] * 180 / np.pi)
                     print(popt[6], 'sur_ratio=', popt[7], 'offset=', popt[8])
                 # if surround_fixed: # delta_semi_y
@@ -368,9 +391,9 @@ class FitsToApricotData(ApricotData, Visualize, Mathematics):
 
                 else:
                     data_fitted = self.DoG2D_independent_surround((x_grid, y_grid), *popt)
-                    e1 = Ellipse((popt[np.array([1, 2])]), popt[3], popt[4], -popt[5] * 180 / np.pi, edgecolor='w',
+                    e1 = Ellipse((popt[np.array([1, 2])]), popt[3], popt[4], -popt[5] * 180 / np.pi, edgecolor=ellipse_edgecolor,
                                  linewidth=2, fill=False)
-                    e2 = Ellipse((popt[np.array([7, 8])]), popt[9], popt[10], -popt[11] * 180 / np.pi, edgecolor='w',
+                    e2 = Ellipse((popt[np.array([7, 8])]), popt[9], popt[10], -popt[11] * 180 / np.pi, edgecolor=ellipse_edgecolor,
                                  linewidth=2, fill=False, linestyle='--')
                     print(popt[0], popt[np.array([1, 2])], popt[3], popt[4], -popt[5] * 180 / np.pi)
                     print(popt[6], popt[np.array([7, 8])], popt[9], popt[10], -popt[11] * 180 / np.pi)
@@ -381,7 +404,7 @@ class FitsToApricotData(ApricotData, Visualize, Mathematics):
                 ax1.add_artist(e2)
 
                 sur = ax2.imshow(data_fitted.reshape(pixel_array_shape_y, pixel_array_shape_x), vmin=-0.1, vmax=0.4,
-                                 cmap=plt.cm.gray, origin='bottom')
+                                 cmap=imshow_cmap, origin='bottom')
                 fig.colorbar(sur, ax=ax2)
 
                 plt.show()
@@ -390,7 +413,12 @@ class FitsToApricotData(ApricotData, Visualize, Mathematics):
         if save is not None:
             assert type(save) == str, "Use the parameter save to specify the output filename"
             fits_df = pd.DataFrame(data_all_viable_cells, columns=parameter_names)
-            fits_df.to_csv(save)
+            error_df = pd.DataFrame(error_all_viable_cells, columns=['nmse'])
+            good_indices = np.ones(len(data_all_viable_cells))
+            for i in self.bad_data_indices:
+                good_indices[i] = 0
+            good_indices_df = pd.DataFrame(good_indices, columns=['good_filter_data'])
+            pd.concat([fits_df, error_df, good_indices_df], axis=1).to_csv(save)
 
         return parameter_names, data_all_viable_cells, bad_data_indices
 
@@ -560,11 +588,16 @@ class FitsToApricotData(ApricotData, Visualize, Mathematics):
         else:
             return fit_values
 
-
-
 if __name__ == '__main__':
-    x = FitsToApricotData('parasol', 'on')
-    x.fit_cosine_bumps_to_sta_data(visualize=True)
+    pon = FitsToApricotData('parasol', 'on')
+    pon.fit_dog_to_sta_data(semi_x_always_major=True, save='spatialfits_parasol_on.csv')
+    poff = FitsToApricotData('parasol', 'off')
+    poff.fit_dog_to_sta_data(semi_x_always_major=True, save='spatialfits_parasol_off.csv')
+
+    mon = FitsToApricotData('midget', 'on')
+    mon.fit_dog_to_sta_data(semi_x_always_major=True, save='spatialfits_midget_on.csv')
+    moff = FitsToApricotData('midget', 'off')
+    moff.fit_dog_to_sta_data(semi_x_always_major=True, save='spatialfits_midget_off.csv')
     # x.create()
 
     # gc_types = ['parasol', 'midget']
