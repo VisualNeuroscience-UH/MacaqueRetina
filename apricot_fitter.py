@@ -330,6 +330,13 @@ class FitsToApricotData(ApricotData, Visualize, Mathematics):
                         data_all_viable_cells[cell_index, 10] = sd_x_sur
                         data_all_viable_cells[cell_index, 11] = (rotation + np.pi / 2) % np.pi
 
+            # Set rotation angle between -pi/2 and pi/2 (otherwise hist bimodal)
+            rotation = data_all_viable_cells[cell_index, 5]
+            if rotation > np.pi/2:
+                data_all_viable_cells[cell_index, 5] = rotation - np.pi
+            else:
+                data_all_viable_cells[cell_index, 5] = rotation
+
             # Compute fitting error
             if surround_model == 1:
                 data_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
@@ -589,6 +596,7 @@ class FitsToApricotData(ApricotData, Visualize, Mathematics):
             return fit_values
 
 if __name__ == '__main__':
+    # Save fits to files
     pon = FitsToApricotData('parasol', 'on')
     pon.fit_dog_to_sta_data(semi_x_always_major=True, save='spatialfits_parasol_on.csv')
     poff = FitsToApricotData('parasol', 'off')
@@ -598,7 +606,10 @@ if __name__ == '__main__':
     mon.fit_dog_to_sta_data(semi_x_always_major=True, save='spatialfits_midget_on.csv')
     moff = FitsToApricotData('midget', 'off')
     moff.fit_dog_to_sta_data(semi_x_always_major=True, save='spatialfits_midget_off.csv')
-    # x.create()
+
+    # Test on ON parasols
+    # pon = FitsToApricotData('parasol', 'on')
+    # pon.fit_dog_to_sta_data(semi_x_always_major=True, visualize=True)
 
     # gc_types = ['parasol', 'midget']
     # response_types = ['ON', 'OFF']
