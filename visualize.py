@@ -190,4 +190,4 @@ class Visualize:
                                                                                    square, cube),
                     xycoords='axes fraction', xy=(.5, .15), ha="left", color='k')
 
-        plt.title('Dendrite diam wrt ecc for {0} type, {1} dataset'.format(gc_type, dataset_name))
+        plt.title('DF diam wrt ecc for {0} type, {1} dataset'.format(gc_type, dataset_name))

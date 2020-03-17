@@ -22,7 +22,7 @@ import apricot_fitter as apricot
 
 plt.rcParams['image.cmap'] = 'gray'
 
-class GanglionCells(Mathematics, Visualize):
+class MosaicConstructor(Mathematics, Visualize):
     '''
     Create the ganglion cell mosaic.
     All spatial parameters are saved to the dataframe *gc_df*
@@ -242,7 +242,7 @@ class GanglionCells(Mathematics, Visualize):
         '''
         Read re-digitized old literature data from mat files
         '''
-        digitized_figures_path = GanglionCells.digitized_figures_path
+        digitized_figures_path = MosaicConstructor.digitized_figures_path
 
         if self.gc_type == 'parasol':
             dendr_diam1 = sio.loadmat(digitized_figures_path / 'Perry_1984_Neurosci_ParasolDendrDiam_c.mat',
@@ -281,7 +281,7 @@ class GanglionCells(Mathematics, Visualize):
         data_all_x = np.concatenate((data_set_1_x, data_set_2_x))
         data_all_y = np.concatenate((data_set_1_y, data_set_2_y))
 
-        # Limit eccentricities for central visual field studies to get better approximation at about 5 eg ecc (1mm)
+        # Limit eccentricities for central visual field studies to get better approximation at about 5 deg ecc (1mm)
         data_all_x_index = data_all_x <= self.visual_field_fit_limit
         data_all_x = data_all_x[data_all_x_index]
         data_all_y = data_all_y[data_all_x_index]  # Don't forget to truncate values, too
@@ -315,6 +315,7 @@ class GanglionCells(Mathematics, Visualize):
             # dataset_name='All data cubic fit', intercept=polynomials[3], slope=polynomials[2], square=polynomials[1], cube=polynomials[0])
             self.show_dendritic_diameter_vs_eccentricity(self.gc_type, data_all_x, data_all_y, polynomials,
                                                          dataset_name='All data {0} fit'.format(dendr_diam_model))
+            plt.show()
 
         return dendr_diam_parameters
 
@@ -322,7 +323,7 @@ class GanglionCells(Mathematics, Visualize):
         '''
         Read re-digitized old literature data from mat files
         '''
-        digitized_figures_path = GanglionCells.digitized_figures_path
+        digitized_figures_path = MosaicConstructor.digitized_figures_path
 
         gc_density = sio.loadmat(digitized_figures_path / 'Perry_1984_Neurosci_GCdensity_c.mat',
                                  variable_names=['Xdata', 'Ydata'])
@@ -605,8 +606,121 @@ class GanglionCells(Mathematics, Visualize):
             print('Saving model mosaic to %s' % filepath)
             self.gc_df.to_csv(filepath)
 
-    def load_mosaic(self, filepath):  # TODO
-        raise NotImplementedError
+
+class FunctionalMosaic(Mathematics):
+
+    def __init__(self, gc_dataframe):
+        """
+
+        :param gc_dataframe: Ganglion cell parameters; positions are retinal coordinates; positions_eccentricity in mm, positions_polar_angle in degrees
+        """
+
+        self.deg_per_mm = 5
+        self.stim_vmin = -0.5
+        self.stim_vmax = 0.5
+
+        # Convert retinal positions (ecc, pol angle) to visual space positions in deg (azimuth, elev)
+        vspace_pos = np.array([self.pol2cart(gc.positions_eccentricity, gc.positions_polar_angle)
+                               for index, gc in gc_dataframe.iterrows()])
+        vspace_pos = vspace_pos * self.deg_per_mm
+        vspace_coords = pd.DataFrame({'x_deg': vspace_pos[:,0], 'y_deg': vspace_pos[:,1]})
+
+        self.gc_df = pd.concat([gc_dataframe, vspace_coords], axis=1)
+
+        # Convert RF center radii to degrees as well
+        self.gc_df.semi_xc = self.gc_df.semi_xc * self.deg_per_mm
+        self.gc_df.semi_yc = self.gc_df.semi_yc * self.deg_per_mm
+
+        # Drop retinal positions from the df (so that they are not used by accident)
+        self.gc_df = self.gc_df.drop(['positions_eccentricity', 'positions_polar_angle'], axis=1)
+
+    def show_test_image(self, image_extents=[3.5, 6.5, -1.5, 1.5]):
+        """
+        Shows the mosaic overlayed on top of the test image.
+
+        :param image_extents: image extents in visual space; given as [bottom, top, left, right] degrees
+        :return:
+        """
+        image = cv2.imread('test_image.jpg', 0)
+        plt.imshow(image, extent=image_extents, vmin=0, vmax=255)
+        plt.title('Test image')
+        plt.xlabel('X (deg)')
+        plt.ylabel('Y (deg)')
+        ax = plt.gca()
+
+        for index, gc in self.gc_df.iterrows():
+            circ = Ellipse((gc.x_deg, gc.y_deg), width=2 * gc.semi_xc, height=2 * gc.semi_yc,
+                           angle=gc.orientation_center * (180 / np.pi), edgecolor='white', facecolor='None')
+            ax.add_patch(circ)
+
+
+    def vspace_to_pixspace(self, x, y):
+        """
+        Converts visual space coordinates (in degrees; x=eccentricity, y=elevation) to pixel space coordinates.
+        In pixel space, coordinates (q,r) correspond to matrix locations, ie. (0,0) is top-left.
+
+        :param x: azimuth
+        :param y: elevation
+        :return:
+        """
+        video_width_px = self.stimulus_video.video_width
+        video_height_px = self.stimulus_video.video_height
+        pix_per_deg = self.stimulus_video.pix_per_deg
+
+        # 1) Set the video center in visual coordinates as origin
+        # 2) Scale to pixel space. Mirror+scale in y axis due to y-coordinate running top-to-bottom in pixel space
+        # 3) Move the origin to video center in pixel coordinates
+        q = pix_per_deg * (x - self.stimulus_video.video_center_vspace.real) + (video_width_px / 2)
+        r = -pix_per_deg * (y - self.stimulus_video.video_center_vspace.imag) + (video_height_px / 2)
+
+        return q, r
+
+    def load_stimulus(self, stimulus_video, visualize=False, frame_number=0):
+        """
+        Loads stimulus video & endows RGCs with stimulus space coordinates
+
+        :param stimulus_video: VideoBaseClass, visual stimulus to project to the ganglion cell mosaic
+        :param visualize: True/False, show 1 frame of stimulus in pixel and visual coordinate systems (default False)
+        :param frame_number: int, which frame of stimulus to show (default 0 = first frame)
+        :return:
+        """
+        self.stimulus_video = stimulus_video
+        stimulus_center = stimulus_video.video_center_vspace
+        pix_per_deg = stimulus_video.pix_per_deg
+
+        # Scale stimulus pixel values from 0-255 to [-0.5, 0.5]
+        assert np.min(stimulus_video.frames) >= 0 and np.max(stimulus_video.frames) <= 255, \
+            "Stimulus values must be between 0 and 255"
+        self.stimulus_video.frames = (stimulus_video.frames / 255) - 0.5
+
+        # Endow RGCs with pixel coordinates
+        pixspace_pos = np.array([self.vspace_to_pixspace(gc.x_deg, gc.y_deg)
+                               for index, gc in self.gc_df.iterrows()])
+        pixspace_coords = pd.DataFrame({'q_pix': pixspace_pos[:, 0], 'r_pix': pixspace_pos[:, 1]})
+
+        self.gc_df_pixspace = pd.concat([self.gc_df, pixspace_coords], axis=1)
+
+        # Scale RF axes to pixel space
+        self.gc_df_pixspace.semi_xc = self.gc_df.semi_xc * pix_per_deg
+        self.gc_df_pixspace.semi_yc = self.gc_df.semi_yc * pix_per_deg
+
+        # Drop RGCs whose center is not inside the stimulus
+        xmin, xmax, ymin, ymax = self.stimulus_video.get_extents_deg()
+        for index, gc in self.gc_df_pixspace.iterrows():
+            if (gc.x_deg < xmin) | (gc.x_deg > xmax) | (gc.y_deg < ymin) | (gc.y_deg > ymax):
+                self.gc_df.iloc[index] = 0.0  # all columns set as zero
+
+        if visualize is True:
+            #self.visualize_stimulus_and_grid(frame_number)
+            plt.imshow(self.stimulus_video.frames[:,:,frame_number])
+            ax = plt.gca()
+
+            for index, gc in self.gc_df_pixspace.iterrows():
+                circ = Ellipse((gc.q_pix, gc.r_pix), width=2 * gc.semi_xc, height=2 * gc.semi_yc,
+                               angle=gc.orientation_center * (180/np.pi), edgecolor='white', facecolor='None')
+                ax.add_patch(circ)
+
+
 
     def show_fitted_rf(self, cell_index, um_per_pixel=10, n_pixels=30):
         """
@@ -636,28 +750,15 @@ class GanglionCells(Mathematics, Visualize):
                                                 gc.semi_xc, gc.semi_yc, gc.orientation_center, gc.amplitudes,
                                                 gc.sur_ratio, offset)
 
-        sns.heatmap(np.reshape(fitted_data, (n_pixels, n_pixels)))
+        plt.imshow(np.reshape(fitted_data, (n_pixels, n_pixels)))
         plt.show()
-
-    def load_stimulus(self, stimulus_video, visualize=False, frame_number=0):
-        """
-        Loads stimulus video/frames
-
-        :param stimulus_video: VideoBaseClass, visual stimulus to project to the ganglion cell mosaic
-        :param visualize: True/False, show 1 frame of stimulus in pixel and visual coordinate systems (default False)
-        :param frame_number: int, which frame of stimulus to show (default 0 = first frame)
-        :return:
-        """
-        self.stimulus_video = stimulus_video
-
-        # Scale stimulus pixel values from 0-255 to [-0.5, 0.5]
-        self.stimulus_video.frames = (stimulus_video.frames / 255) - 0.5
-
-        if visualize is True:
-            self.visualize_stimulus_and_grid(frame_number)
 
     # TODO - make visual space/pixel space correspondence perfect
     def visualize_stimulus_and_grid(self, frame_number=0, marked_cells=[]):
+
+        stim_vmin = -0.5
+        stim_vmax = 0.5
+
         fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
 
         z = 8
@@ -665,7 +766,7 @@ class GanglionCells(Mathematics, Visualize):
 
         plt.subplot(121)
         plt.title('In pixel space')
-        plt.imshow(self.stimulus_video.frames[:, :, frame_number], vmin=0, vmax=255)
+        plt.imshow(self.stimulus_video.frames[:, :, frame_number], vmin=stim_vmin, vmax=stim_vmax)
         plt.xlabel('Horizontal coordinate (px)')
         plt.ylabel('Vertical coordinate (px)')
 
@@ -678,7 +779,7 @@ class GanglionCells(Mathematics, Visualize):
 
         # Change image coordinates to visual space coordinates
         vspace_extents = self.stimulus_video.get_extents_deg()
-        plt.imshow(self.stimulus_video.frames[:, :, frame_number], extent=vspace_extents, vmin=0, vmax=255)
+        plt.imshow(self.stimulus_video.frames[:, :, frame_number], extent=vspace_extents, vmin=stim_vmin, vmax=stim_vmax)
 
         # Plot all the ganglion cell RFs on top of the image
         ax = plt.gca()
@@ -708,18 +809,7 @@ class GanglionCells(Mathematics, Visualize):
         # plt.colorbar()
         plt.show(block=False)
 
-    def vspace_to_pixspace(self, x, y):
-        video_width_px = self.stimulus_video.video_width
-        video_height_px = self.stimulus_video.video_height
-        pix_per_deg = self.stimulus_video.pix_per_deg
 
-        # 1) Set the video center in visual coordinates as origin
-        # 2) Scale to pixel space. Mirror+scale in y axis due to y-coordinate running top-to-bottom in pixel space
-        # 3) Move the origin to video center in pixel coordinates
-        x_new = pix_per_deg * (x - self.stimulus_video.video_center_vspace.real) + (video_width_px / 2)
-        y_new = -pix_per_deg * (y - self.stimulus_video.video_center_vspace.imag) + (video_height_px / 2)
-
-        return x_new, y_new
 
     def pixspace_to_vspace(self, x, y):
 
@@ -880,7 +970,6 @@ class GanglionCells(Mathematics, Visualize):
 
         return cropped_video
 
-
     def create_spatial_kernel(self, cell_index):
         """
         Creates the spatial kernel for one cell, respecting stimulus resolution
@@ -974,7 +1063,6 @@ class GanglionCells(Mathematics, Visualize):
 
         return filtered_stimulus[0,:]  # With 'valid' convolution only only 1 row should be left
 
-
     def simple_spiking(self, cell_index):
         filtered_stimulus = self.feed_stimulus_thru_filter(cell_index) * Hz
         dt = 1/self.stimulus_video.fps * second
@@ -1043,72 +1131,6 @@ class GanglionCells(Mathematics, Visualize):
         print('Ganglion cell %d generated %d spikes (mean rate %.3f Hz)' % (cell_index, n_spikes, mean_fr))
         return tsp, Vmem, mean_fr
 
-# Obsolete - pre-OCNC code!
-# def build_convolution_matrix(self, gc_index, stimulus_center, stimulus_width_px, stimulus_height_px):
-# 	gc = self.gc_df.iloc[gc_index]
-# 	n_pixels = 100
-# 	x_position_indices = np.linspace(gc.positions_eccentricity - image_halfwidth_mm,
-# 									 gc.positions_eccentricity + image_halfwidth_mm, n_pixels)
-# 	y_position_indices = np.linspace(gc.positions_polar_angle - image_halfwidth_mm,
-# 									 gc.positions_polar_angle + image_halfwidth_mm, n_pixels)
-# 	fitted_data = self.DoG2D_fixed_surround((x_grid, y_grid), amplitudec, gc.positions_eccentricity, gc.positions_polar_angle,
-# 				  			                 gc.semi_xc, gc.semi_yc, gc.orientation_center, gc.amplitudes, gc.sur_ratio, offset)
-#
-# 	x_grid, y_grid = np.meshgrid(x_position_indices, y_position_indices)
-#
-# 	# Build the convolution matrix according to spatial & temporal properties
-# 	# Linearize the spatial filter
-# 	# Multiply spat x temporal = (S x 1) x (1 x T) = S x T matrix
-# 	pass
-#
-# def generate_analog_response(self, visual_image):
-# 	## Compute filtered response to stimulus
-# 	# Create neo.AnalogSignal by convolving stimulus with the spatio-temporal filter
-# 	# => point process conditional intensity
-#
-# 	# Need to take care of:
-# 	#  - time in filter data vs stimulus fps
-# 	#  - spatial filter size vs stimulus size
-# 	# For each time point t in common_time:
-# 	#   Convolved_data = Stim(t)^T (1xS) x
-# 	#
-# 	# data_sampling_rate = self.get_sampling_rate()
-# 	# conv_data_signal = neo.AnalogSignal(convolved_data, units='1', sampling_rate = data_sampling_rate)
-#
-# 	## Compute interpolated h current (??)
-# 	pass
-#
-# def generate_spike_train(self):
-# 	## Static nonlinearity & spiking
-# 	# Create spike train using elephant.spike_train_generation.inhomogeneous_poisson_process()
-# 	# ...but need to take post-spike filter into account!!
-# 	pass
-#
-# def create_temporal_filters(self):
-# 	# Take in the temporal filter stats
-# 	# Build a family of temporal filters, one for each GC
-# 	pass
-#
-# def generate_gc_spike_trains(self):
-# 	# Parallelize for faster computation :)
-# 	pass
-
-
-
-
-
-# Obsolete: pre-OCNC code
-# class VisualImageArray(vs.ConstructStimulus):
-#
-# 	def __init__(self, image_center, **kwargs):
-# 		"""
-# 		The visual stimulus, simple optics and cone responses
-#
-# 		:param image_center: x+yj, x for eccentricity and y for elevation (both in mm)
-# 		:param kwargs:
-# 		"""
-# 		super(VisualImageArray, self).__init__(**kwargs)
-# 		self.image_center = image_center
 
 def load_dog_fits(csv_file_path):
 
@@ -1125,6 +1147,15 @@ def load_dog_fits(csv_file_path):
 
 
 if __name__ == "__main__":
+    mosaic = MosaicConstructor(gc_type='parasol', response_type='OFF', ecc_limits=[4, 10],
+                               sector_limits=[-10.0, 10.0], model_density=1.0, randomize_position=0.6)
+    #mosaic.fit_dendritic_diameter_vs_eccentricity(visualize=True)
+    fitdata2 = load_dog_fits('results_temp/parasol_OFF_surfix.csv')
+    mosaic.build(fitdata2, visualize=True)
+    # gc_density_func_params = mosaic.fit_gc_density_data()
+    # mosaic.place_gc_units(gc_density_func_params, visualize=True)
+    # plt.show()
+
     # You can fit data at runtime
     # import apricot_fitter
     #
@@ -1133,32 +1164,32 @@ if __name__ == "__main__":
     #                       semi_x_always_major=True)
 
     # ...or load premade fits
-    fitdata2 = load_dog_fits('results_temp/parasol_OFF_surfix.csv')
-
-
-    mosaic = GanglionCells(gc_type='parasol', response_type='OFF', ecc_limits=[4, 6],
-                                      sector_limits=[-10.0, 10.0], model_density=1.0, randomize_position=0.6)
-    mosaic.build(fitdata2, visualize=False)
-    # Or you can load a previously built mosaic
+    # fitdata2 = load_dog_fits('results_temp/parasol_OFF_surfix.csv')
     #
-    # mosaic.visualize_mosaic()
-
-    a = vs.ConstructStimulus(video_center_vspace=5 + 0j, pattern='sine_grating', temporal_frequency=2,
-                             spatial_frequency=0.5,
-                             duration_seconds=5, fps=120, orientation=45, image_width=90, image_height=90,
-                             pix_per_deg=30, stimulus_size=0, contrast=0.7)
-
-    mosaic.load_stimulus(a)
+    #
+    # mosaic = GanglionCells(gc_type='parasol', response_type='OFF', ecc_limits=[4, 6],
+    #                                   sector_limits=[-10.0, 10.0], model_density=1.0, randomize_position=0.6)
+    # mosaic.build(fitdata2, visualize=False)
+    # # Or you can load a previously built mosaic
+    # #
+    # # mosaic.visualize_mosaic()
+    #
+    # a = vs.ConstructStimulus(video_center_vspace=5 + 0j, pattern='sine_grating', temporal_frequency=2,
+    #                          spatial_frequency=0.5,
+    #                          duration_seconds=5, fps=120, orientation=45, image_width=90, image_height=90,
+    #                          pix_per_deg=30, stimulus_size=0, contrast=0.7)
+    #
+    # mosaic.load_stimulus(a)
 
     #
     # mosaic.visualize_stimulus_and_grid(marked_cells=[2])
     # mosaic.visualize_rgc_view(100, show_block=True)
 
     # all_spikes = []
-    for i in range(10):
+    # for i in range(10):
     #     # mosaic.create_spatiotemporal_kernel(i, visualize=True)
     #     # mosaic.simple_spiking(i)
-        mosaic.visualize_rgc_view(i, show_block=True)
+    #     mosaic.visualize_rgc_view(i, show_block=True)
     #     #
     #     # filtered_stuff = mosaic.feed_stimulus_thru_filter(i)
     #     # n = len(filtered_stuff)

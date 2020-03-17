@@ -115,6 +115,33 @@ class ApricotData:
 
         return filter_integrals
 
+    def compute_pos_filter_integrals(self):
+        time_rk1 = self.read_temporal_filter()
+        space_rk1 = self.read_space_rk1()
+
+        filter_integrals = np.zeros(self.n_cells)
+        for i in range(self.n_cells):
+            spatiotemp_filter = np.array([space_rk1[i]]) * np.array([time_rk1[i]]).T
+            zeromatrix = np.zeros(np.shape(spatiotemp_filter))
+            spatiotemp_filter_nonneg = np.maximum(spatiotemp_filter, zeromatrix)
+            filter_integrals[i] = np.sum(spatiotemp_filter_nonneg)
+
+        return filter_integrals
+
+    def compute_neg_filter_integrals(self):
+        time_rk1 = self.read_temporal_filter()
+        space_rk1 = self.read_space_rk1()
+
+        filter_integrals = np.zeros(self.n_cells)
+        for i in range(self.n_cells):
+            spatiotemp_filter = np.array([space_rk1[i]]) * np.array([time_rk1[i]]).T
+            filter_integrals[i] = np.sum(spatiotemp_filter)
+            zeromatrix = np.zeros(np.shape(spatiotemp_filter))
+            spatiotemp_filter_nonpos = np.minimum(spatiotemp_filter, zeromatrix)
+            filter_integrals[i] = np.sum(spatiotemp_filter_nonpos)
+
+        return filter_integrals
+
     def describe(self, visualize=False):
         describedata = dict()
         describedata['tonicdrive'] = self.read_tonicdrive()
@@ -483,6 +510,7 @@ class FitsToApricotData(ApricotData, Visualize, Mathematics):
 
         return mean, sd
 
+    # TODO - move to ApricotData
     def get_mean_temporal_filter(self, remove_bad_data_indices=True, flip_negs=True, visualize=False):
 
         temporal_filters = self.read_temporal_filter()
@@ -519,6 +547,7 @@ class FitsToApricotData(ApricotData, Visualize, Mathematics):
         else:
             return np.array([mean_filter])
 
+    # TODO - move to ApricotData
     def get_mean_postspike_filter(self, remove_bad_data_indices=True, visualize=False):
 
         postspike_filters = self.read_postspike_filter()
@@ -544,7 +573,6 @@ class FitsToApricotData(ApricotData, Visualize, Mathematics):
 
         else:
             return mean_filter
-
 
     def temporal_filter_func(self, t, f0, f1, f2, f3, f4, f5, f6, f7, f8, f9):
 
@@ -596,20 +624,29 @@ class FitsToApricotData(ApricotData, Visualize, Mathematics):
             return fit_values
 
 if __name__ == '__main__':
-    # Save fits to files
-    pon = FitsToApricotData('parasol', 'on')
-    pon.fit_dog_to_sta_data(semi_x_always_major=True, save='spatialfits_parasol_on.csv')
-    poff = FitsToApricotData('parasol', 'off')
-    poff.fit_dog_to_sta_data(semi_x_always_major=True, save='spatialfits_parasol_off.csv')
+    ### Save spatial fits to files
+    # pon = FitsToApricotData('parasol', 'on')
+    # pon.fit_dog_to_sta_data(semi_x_always_major=True, save='spatialfits_parasol_on.csv')
+    # poff = FitsToApricotData('parasol', 'off')
+    # poff.fit_dog_to_sta_data(semi_x_always_major=True, save='spatialfits_parasol_off.csv')
+    #
+    # mon = FitsToApricotData('midget', 'on')
+    # mon.fit_dog_to_sta_data(semi_x_always_major=True, save='spatialfits_midget_on.csv')
+    # moff = FitsToApricotData('midget', 'off')
+    # moff.fit_dog_to_sta_data(semi_x_always_major=True, save='spatialfits_midget_off.csv')
 
-    mon = FitsToApricotData('midget', 'on')
-    mon.fit_dog_to_sta_data(semi_x_always_major=True, save='spatialfits_midget_on.csv')
-    moff = FitsToApricotData('midget', 'off')
-    moff.fit_dog_to_sta_data(semi_x_always_major=True, save='spatialfits_midget_off.csv')
-
-    # Test on ON parasols
+    ### Test on ON parasols
     # pon = FitsToApricotData('parasol', 'on')
     # pon.fit_dog_to_sta_data(semi_x_always_major=True, visualize=True)
+
+
+    ### Check temporal filters
+    x = FitsToApricotData('midget', 'off')
+    a = x.compute_pos_filter_integrals()
+    b = x.compute_neg_filter_integrals()
+    c = x.compute_filter_integrals()
+    df = pd.DataFrame({'integral_pos': a, 'integral_neg': b, 'integral_sum': c})
+    df.to_csv('midget_off_integrals.csv')
 
     # gc_types = ['parasol', 'midget']
     # response_types = ['ON', 'OFF']
