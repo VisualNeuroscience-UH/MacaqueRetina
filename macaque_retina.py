@@ -12,7 +12,7 @@ from pathlib import Path
 import visual_stimuli as vs
 from visualize import Visualize
 from vision_maths import Mathematics
-from scipy.signal import fftconvolve
+from scipy.signal import fftconvolve, convolve
 from scipy.interpolate import interp1d
 from scipy.stats import norm
 from mpl_toolkits import mplot3d
@@ -20,7 +20,8 @@ import brian2 as b2
 from brian2.units import *
 import apricot_fitter as apricot
 
-plt.rcParams['image.cmap'] = 'gray'
+# plt.rcParams['image.cmap'] = 'gray'
+
 
 class MosaicConstructor(Mathematics, Visualize):
     '''
@@ -100,7 +101,7 @@ class MosaicConstructor(Mathematics, Visualize):
         self.stimulus_video = None
 
         # Get tonic drive and filter sum statistics
-        x = apricot.FitsToApricotData(self.gc_type, self.response_type)
+        x = apricot.ApricotFits(self.gc_type, self.response_type)
         self.tonicdrive_mean, self.tonicdrive_sd = x.get_tonicdrive_stats()
         self.filtersum_mean, self.filtersum_sd = x.get_filterintegral_stats()
 
@@ -609,15 +610,25 @@ class MosaicConstructor(Mathematics, Visualize):
 
 class FunctionalMosaic(Mathematics):
 
-    def __init__(self, gc_dataframe):
+    def __init__(self, gc_dataframe, gc_type, response_type):
         """
 
         :param gc_dataframe: Ganglion cell parameters; positions are retinal coordinates; positions_eccentricity in mm, positions_polar_angle in degrees
         """
+        self.gc_type = gc_type
+        self.response_type = response_type
 
         self.deg_per_mm = 5
         self.stim_vmin = -0.5
         self.stim_vmax = 0.5
+
+        self.cmap_stim = 'gray'
+        self.cmap_spatial_filter = 'bwr'
+        self.vmin_spatial_filter = -0.5
+        self.vmax_spatial_filter = 0.5
+
+        self.temporal_filter_fps = 120
+        self.temporal_filter_timesteps = 15
 
         # Convert retinal positions (ecc, pol angle) to visual space positions in deg (azimuth, elev)
         vspace_pos = np.array([self.pol2cart(gc.positions_eccentricity, gc.positions_polar_angle)
@@ -653,8 +664,7 @@ class FunctionalMosaic(Mathematics):
                            angle=gc.orientation_center * (180 / np.pi), edgecolor='white', facecolor='None')
             ax.add_patch(circ)
 
-
-    def vspace_to_pixspace(self, x, y):
+    def _vspace_to_pixspace(self, x, y):
         """
         Converts visual space coordinates (in degrees; x=eccentricity, y=elevation) to pixel space coordinates.
         In pixel space, coordinates (q,r) correspond to matrix locations, ie. (0,0) is top-left.
@@ -684,25 +694,32 @@ class FunctionalMosaic(Mathematics):
         :param frame_number: int, which frame of stimulus to show (default 0 = first frame)
         :return:
         """
+
+        # Get parameters from the stimulus object
         self.stimulus_video = stimulus_video
         stimulus_center = stimulus_video.video_center_vspace
-        pix_per_deg = stimulus_video.pix_per_deg
+        self.pix_per_deg = stimulus_video.pix_per_deg  # angular resolution (eg. van Hateren 1 arcmin/pix => 60 pix/deg)
 
         # Scale stimulus pixel values from 0-255 to [-0.5, 0.5]
         assert np.min(stimulus_video.frames) >= 0 and np.max(stimulus_video.frames) <= 255, \
             "Stimulus values must be between 0 and 255"
         self.stimulus_video.frames = (stimulus_video.frames / 255) - 0.5
 
-        # Endow RGCs with pixel coordinates
-        pixspace_pos = np.array([self.vspace_to_pixspace(gc.x_deg, gc.y_deg)
+        # Endow RGCs with pixel coordinates.
+        # NB! Here we make a new dataframe where everything is in pixels
+        pixspace_pos = np.array([self._vspace_to_pixspace(gc.x_deg, gc.y_deg)
                                for index, gc in self.gc_df.iterrows()])
         pixspace_coords = pd.DataFrame({'q_pix': pixspace_pos[:, 0], 'r_pix': pixspace_pos[:, 1]})
 
         self.gc_df_pixspace = pd.concat([self.gc_df, pixspace_coords], axis=1)
 
         # Scale RF axes to pixel space
-        self.gc_df_pixspace.semi_xc = self.gc_df.semi_xc * pix_per_deg
-        self.gc_df_pixspace.semi_yc = self.gc_df.semi_yc * pix_per_deg
+        self.gc_df_pixspace.semi_xc = self.gc_df.semi_xc * self.pix_per_deg
+        self.gc_df_pixspace.semi_yc = self.gc_df.semi_yc * self.pix_per_deg
+
+        # Define spatial filter sidelength (based on angular resolution and widest semimajor axis)
+        # Sidelength always odd number
+        self.spatial_filter_sidelen = 2 * 3 * int(max(max(self.gc_df_pixspace.semi_xc), max(self.gc_df_pixspace.semi_yc))) + 1
 
         # Drop RGCs whose center is not inside the stimulus
         xmin, xmax, ymin, ymax = self.stimulus_video.get_extents_deg()
@@ -711,359 +728,383 @@ class FunctionalMosaic(Mathematics):
                 self.gc_df.iloc[index] = 0.0  # all columns set as zero
 
         if visualize is True:
-            #self.visualize_stimulus_and_grid(frame_number)
-            plt.imshow(self.stimulus_video.frames[:,:,frame_number])
+            plt.imshow(self.stimulus_video.frames[:, :, frame_number])
             ax = plt.gca()
 
             for index, gc in self.gc_df_pixspace.iterrows():
+                # When in pixel coordinates, positive value in Ellipse angle is clockwise. Thus minus here.
                 circ = Ellipse((gc.q_pix, gc.r_pix), width=2 * gc.semi_xc, height=2 * gc.semi_yc,
-                               angle=gc.orientation_center * (180/np.pi), edgecolor='white', facecolor='None')
+                               angle=gc.orientation_center * (-180/np.pi), edgecolor='white', facecolor='None')
                 ax.add_patch(circ)
 
+    def _get_crop_pixels(self, cell_index):
+        gc = self.gc_df_pixspace.iloc[cell_index]
+        q_center = int(gc.q_pix)
+        r_center = int(gc.r_pix)
 
+        side_halflen = (self.spatial_filter_sidelen-1) // 2  # crops have width = height
 
-    def show_fitted_rf(self, cell_index, um_per_pixel=10, n_pixels=30):
+        qmin = q_center - side_halflen
+        qmax = q_center + side_halflen
+        rmin = r_center - side_halflen
+        rmax = r_center + side_halflen
+
+        return qmin, qmax, rmin, rmax
+
+    def _create_spatial_filter(self, cell_index):
         """
-        Plots the spatial RF
+        Creates the spatial component of the spatiotemporal filter
 
         :param cell_index: int
-        :param um_per_pixel: int, how many micrometers does one pixel cover (default 10)
-        :param n_pixels: int, number of pixels per side
         :return:
         """
-        # TODO - label axes
-        gc = self.gc_df.iloc[cell_index]
-        # print(gc)
-        mm_per_pixel = um_per_pixel / 1000
-        image_halfwidth_mm = (n_pixels / 2) * mm_per_pixel
-        x_position_indices = np.linspace(gc.positions_eccentricity - image_halfwidth_mm,
-                                         gc.positions_eccentricity + image_halfwidth_mm, n_pixels)
-        y_position_indices = np.linspace(gc.positions_polar_angle - image_halfwidth_mm,
-                                         gc.positions_polar_angle + image_halfwidth_mm, n_pixels)
 
-        x_grid, y_grid = np.meshgrid(x_position_indices, y_position_indices)
-        amplitudec = 1
-        offset = 0
+        amplitudec = 1.0
+        offset = 0.0
+        s = self.spatial_filter_sidelen
 
-        fitted_data = self.DoG2D_fixed_surround((x_grid, y_grid), amplitudec, gc.positions_eccentricity,
-                                                gc.positions_polar_angle,
+        gc = self.gc_df_pixspace.iloc[cell_index]
+        qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
+
+        x_grid, y_grid = np.meshgrid(np.arange(qmin, qmax+1, 1),
+                                     np.arange(rmin, rmax+1, 1))
+
+        spatial_kernel = self.DoG2D_fixed_surround((x_grid, y_grid), amplitudec, gc.q_pix, gc.r_pix,
                                                 gc.semi_xc, gc.semi_yc, gc.orientation_center, gc.amplitudes,
                                                 gc.sur_ratio, offset)
+        spatial_kernel = np.reshape(spatial_kernel, (s,s))
 
-        plt.imshow(np.reshape(fitted_data, (n_pixels, n_pixels)))
-        plt.show()
+        # TODO - Scale to match data filter power
 
-    # TODO - make visual space/pixel space correspondence perfect
-    def visualize_stimulus_and_grid(self, frame_number=0, marked_cells=[]):
+        return spatial_kernel
 
-        stim_vmin = -0.5
-        stim_vmax = 0.5
+    def _create_temporal_filter(self, cell_index):
+        """
+        Creates the temporal component of the spatiotemporal filter
 
-        fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
+        :param cell_index: int
+        :return:
+        """
+        # TODO: get temporal filter from CSV
+        temporal_filter = apricot.ApricotFits(self.gc_type, self.response_type).get_mean_temporal_filter()
+        temporal_filter = np.flip(temporal_filter)
 
-        z = 8
-        w = 3
+        # If temporal filter can have some other fps than 120, then it needs scaling to conform to data
 
-        plt.subplot(121)
-        plt.title('In pixel space')
-        plt.imshow(self.stimulus_video.frames[:, :, frame_number], vmin=stim_vmin, vmax=stim_vmax)
-        plt.xlabel('Horizontal coordinate (px)')
-        plt.ylabel('Vertical coordinate (px)')
+        return temporal_filter
 
-        z_px, w_px = self.vspace_to_pixspace(z, w)
-        plt.scatter(z_px, w_px, c='blue')
-        plt.scatter(60, 60, c='red')
+    def show_gc_view(self, cell_index, frame_number=0):
+        """
+        Plots the stimulus frame cropped to RGC surroundings, spatial kernel and
+        elementwise multiplication of the two
 
-        plt.subplot(122)
-        plt.title('In visual space')
+        :param cell_index: int
+        :param frame_number: int
+        :return:
+        """
+        gc = self.gc_df_pixspace.iloc[cell_index]
+        qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
 
-        # Change image coordinates to visual space coordinates
-        vspace_extents = self.stimulus_video.get_extents_deg()
-        plt.imshow(self.stimulus_video.frames[:, :, frame_number], extent=vspace_extents, vmin=stim_vmin, vmax=stim_vmax)
-
-        # Plot all the ganglion cell RFs on top of the image
+        # 1) Show stimulus frame cropped to RGC surroundings & overlay 1SD center RF on top of that
+        plt.subplot(131)
+        plt.title('Cropped stimulus')
+        plt.imshow(self.stimulus_video.frames[:, :, frame_number], cmap=self.cmap_stim)
+        plt.xlim([qmin, qmax])
+        plt.ylim([rmax, rmin])
         ax = plt.gca()
-        for i in range(len(self.gc_df)):
-            the_gc = self.gc_df.loc[i]
-            # print(the_gc)
-            x, y = self.pol2cart(the_gc.positions_eccentricity, the_gc.positions_polar_angle)
-            x = self.deg_per_mm * x
-            y = self.deg_per_mm * y
-            semi_x = self.deg_per_mm * the_gc.semi_xc
-            semi_y = self.deg_per_mm * the_gc.semi_yc
 
-            ellipse_fill = 'None'
-            if i in marked_cells:
-                ellipse_fill = 'blue'
-
-            orientation_deg = the_gc.orientation_center * (180/np.pi)
-            circ = Ellipse((x, y), width=2 * semi_x, height=2 * semi_y,
-                           angle=orientation_deg, edgecolor='red', facecolor=ellipse_fill)
-            ax.add_patch(circ)
-
-
-        plt.scatter(z, w, c="blue")
-        plt.xlabel('Eccentricity (deg)')
-        plt.ylabel('Elevation (deg)')
-
-        # plt.colorbar()
-        plt.show(block=False)
-
-
-
-    def pixspace_to_vspace(self, x, y):
-
-        video_width_px = self.stimulus_video.video_width
-        video_height_px = self.stimulus_video.video_height
-        pix_per_deg = self.stimulus_video.pix_per_deg
-
-        x_new = (1/pix_per_deg) * (x - (video_width_px / 2)) + self.stimulus_video.video_center_vspace.real
-        y_new = (-1/pix_per_deg) * (y - (video_height_px / 2)) + self.stimulus_video.video_center_vspace.imag
-
-        return x_new, y_new
-
-    def visualize_rgc_view(self, cell_index, show_block=False):
-        frame_number = 0
-        total_frames = len(self.stimulus_video.frames[0,0,:])
-
-        the_gc = self.gc_df.iloc[cell_index]
-        center_x, center_y = self.pol2cart(the_gc.positions_eccentricity, the_gc.positions_polar_angle)
-        orientation_deg = the_gc.orientation_center * (180/np.pi)
-        # Transform to degrees
-        center_x = self.deg_per_mm * center_x
-        center_y = self.deg_per_mm * center_y
-        semi_x = self.deg_per_mm * the_gc.semi_xc
-        semi_y = self.deg_per_mm * the_gc.semi_yc
-
-
-        plt.subplots(5,1, figsize=(4,16))
-        plt.suptitle("Cell index %d, video frame %d (of %d)" % (cell_index, frame_number, total_frames))
-
-        plt.subplot(511)
-        plt.title('RGC grid')
-        # Change image coordinates to visual space coordinates
-        vspace_extents = self.stimulus_video.get_extents_deg()
-        plt.imshow(self.stimulus_video.frames[:, :, frame_number], extent=vspace_extents, vmin=-0.5, vmax=0.5)
-
-        # Plot all the ganglion cell RFs on top of the image
-        ax = plt.gca()
-        for i in range(len(self.gc_df)):
-            the_gc = self.gc_df.loc[i]
-            # print(the_gc)
-            x, y = self.pol2cart(the_gc.positions_eccentricity, the_gc.positions_polar_angle)
-            x = self.deg_per_mm * x
-            y = self.deg_per_mm * y
-            semi_x = self.deg_per_mm * the_gc.semi_xc
-            semi_y = self.deg_per_mm * the_gc.semi_yc
-
-            orientation_deg = the_gc.orientation_center * (180/np.pi)
-            circ = Ellipse((x, y), width=2 * semi_x, height=2 * semi_y,
-                           angle=orientation_deg, edgecolor='red', facecolor="None")
-            ax.add_patch(circ)
-
-        special_gc = self.gc_df.loc[cell_index]
-        x0, y0 = self.pol2cart(special_gc.positions_eccentricity, special_gc.positions_polar_angle)
-        x0 = self.deg_per_mm * x0
-        y0 = self.deg_per_mm * y0
-
-        plt.axhline(y0)
-        plt.axvline(x0)
-
-        plt.xlabel('Eccentricity (deg)')
-        plt.ylabel('Elevation (deg)')
-
-        plt.subplot(512)
-        plt.title('RGC center 1SD ellipse wrt stimulus frame')
-        plt.xlabel('Eccentricity (deg)')
-        plt.ylabel('Elevation (deg)')
-
-        ax = plt.gca()
-        # 1) Show pixels limited to "3SD view" & overlay 1SD center RF on top of that
-        pixspace_topleft, pixspace_bottomright = self.get_crop_extents(cell_index)
-
-        # With this choice of vspace_extents, the position of the 1SD ellipse will be slightly shifted
-        #vspace_extents = [vspace_ext_left, vspace_ext_right, vspace_ext_bottom, vspace_ext_top]
-
-        vspace_topleft = self.pixspace_to_vspace(pixspace_topleft[0], pixspace_topleft[1])
-        vspace_bottomright = self.pixspace_to_vspace(pixspace_bottomright[0], pixspace_bottomright[1])
-        vspace_extents = [vspace_topleft[0], vspace_bottomright[0],
-                          vspace_bottomright[1], vspace_topleft[1]]
-
-        cropped_video = self.stimulus_video.frames[pixspace_topleft[0]:pixspace_bottomright[0] + 1,
-                        pixspace_topleft[1]:pixspace_bottomright[1] + 1, :]
-        plt.imshow(cropped_video[:,:, frame_number],
-                   extent=vspace_extents, vmin=-0.5, vmax=0.5)
-
-        circ = Ellipse((center_x, center_y), width=2 * semi_x, height=2 * semi_y,
-                       angle=orientation_deg, edgecolor='red', facecolor="None")
+        # When in pixel coordinates, positive value in Ellipse angle is clockwise. Thus minus here.
+        circ = Ellipse((gc.q_pix, gc.r_pix), width=2 * gc.semi_xc, height=2 * gc.semi_yc,
+                       angle=gc.orientation_center * (-180 / np.pi), edgecolor='white', facecolor='None')
         ax.add_patch(circ)
 
-        # Compute filter stuff here
-        spatiotemporal_kernel = self.create_spatiotemporal_kernel(cell_index)
-        sidelen_kernel = int(np.sqrt(len(spatiotemporal_kernel[0,:])))
-        center_pixel = sidelen_kernel//2
-        st_kernel_reshape = np.reshape(spatiotemporal_kernel, (15, sidelen_kernel, sidelen_kernel))
-        temporal_filter = st_kernel_reshape[:, center_pixel, center_pixel]
-        t_slice = np.argmax(temporal_filter)
-
         # 2) Show spatial kernel created for the stimulus resolution
-        plt.subplot(513)
-        ax = plt.gca()
-        # spatial_kernel = self.create_spatial_kernel(cell_index)
-        # t_slice = 2
-        spatial_kernel = np.reshape(spatiotemporal_kernel[t_slice,:], (sidelen_kernel, sidelen_kernel))
-        plt.imshow(spatial_kernel, cmap='bwr') #, vmin=-0.5, vmax=0.5)
-        plt.title("Spatial filter at t=%d" % t_slice)
+        plt.subplot(132)
+        plt.title('Spatial filter')
+        spatial_kernel = self._create_spatial_filter(cell_index)
+        plt.imshow(spatial_kernel, cmap=self.cmap_spatial_filter, vmin=self.vmin_spatial_filter, vmax=self.vmax_spatial_filter)
 
-        # 3) Temporal filter
-        plt.subplot(514)
-        plt.plot(range(15), temporal_filter)
-        plt.title('Temporal filter at x=center pixel')
+        # 3) Stimulus pixels multiplied elementwise with spatial filter ("keyhole view")
+        plt.subplot(133)
+        plt.title('Keyhole')
 
-        # 4) Keyhole view
-        plt.subplot(515)
-        plt.title("Stimulus x spatial filter")
-        keyhole_view = np.multiply(cropped_video[:,:,frame_number], spatial_kernel)
+        # Pad the stimulus with zeros in case RGC is at the border
+        the_frame = self.stimulus_video.frames[:, :, frame_number]
+        padlen = (self.spatial_filter_sidelen - 1) // 2
+        padded_frame = np.pad(the_frame, ((padlen, padlen),(padlen, padlen)),
+                              mode='constant', constant_values=0)
+        padded_frame_crop = padded_frame[padlen+rmin:padlen+rmax+1, padlen+qmin:padlen+qmax+1]
+
+        # Then multiply elementwise
+        keyhole_view = np.multiply(padded_frame_crop, spatial_kernel)
         plt.imshow(keyhole_view, cmap='bwr', vmin=-0.5, vmax=0.5)
 
 
-        plt.show(block=show_block)
+    # def pad_stimulus_crop(self, cell_index):
+    #     gc = self.gc_df_pixspace.iloc[cell_index]
+    #     qmin, qmax, rmin, rmax = self.get_crop_pixels(cell_index)
+    #     stimulus_shape = np.shape(self.stimulus_video.frames)
+    #     image_qmax = stimulus_shape[1]
+    #     image_rmax = stimulus_shape[0]
+    #
+    #     stimulus_crop = self.stimulus_video.frames[rmin:rmax + 1, qmin:qmax + 1, 0]
+    #
+    #     if qmin < 0:  # left padding
+    #         np.pad(stimulus_crop, ())
+    #         pass
+    #     if qmax > image_qmax:  # right padding
+    #         pass
+    #     if rmin < 0:  # top padding
+    #         pass
+    #     if rmax > image_rmax:  # bottom padding
+    #         pass
 
-    def get_crop_extents(self, cell_index, view_sd=5):  # TODO - cleanup this method
-        the_gc = self.gc_df.iloc[cell_index]
-        center_x, center_y = self.pol2cart(the_gc.positions_eccentricity, the_gc.positions_polar_angle)
-        # Transform to degrees
-        center_x = self.deg_per_mm * center_x
-        center_y = self.deg_per_mm * center_y
+    # def pixspace_to_vspace(self, x, y):
+    #
+    #     video_width_px = self.stimulus_video.video_width
+    #     video_height_px = self.stimulus_video.video_height
+    #     pix_per_deg = self.stimulus_video.pix_per_deg
+    #
+    #     x_new = (1/pix_per_deg) * (x - (video_width_px / 2)) + self.stimulus_video.video_center_vspace.real
+    #     y_new = (-1/pix_per_deg) * (y - (video_height_px / 2)) + self.stimulus_video.video_center_vspace.imag
+    #
+    #     return x_new, y_new
 
-        # Make a box with sidelength 2*view_sd*SD of the semimajor radius
-        semimajor_radius = max(the_gc.semi_xc, the_gc.semi_yc) * self.deg_per_mm
-        vspace_ext_left = center_x - semimajor_radius * view_sd
-        vspace_ext_right = center_x + semimajor_radius * view_sd
-        vspace_ext_bottom = center_y - semimajor_radius * view_sd
-        vspace_ext_top = center_y + semimajor_radius * view_sd
+    # def old_get_crop_extents(self, cell_index, view_sd=5):  # TODO - cleanup this method
+    #     the_gc = self.gc_df.iloc[cell_index]
+    #     center_x, center_y = self.pol2cart(the_gc.positions_eccentricity, the_gc.positions_polar_angle)
+    #     # Transform to degrees
+    #     center_x = self.deg_per_mm * center_x
+    #     center_y = self.deg_per_mm * center_y
+    #
+    #     # Make a box with sidelength 2*view_sd*SD of the semimajor radius
+    #     semimajor_radius = max(the_gc.semi_xc, the_gc.semi_yc) * self.deg_per_mm
+    #     vspace_ext_left = center_x - semimajor_radius * view_sd
+    #     vspace_ext_right = center_x + semimajor_radius * view_sd
+    #     vspace_ext_bottom = center_y - semimajor_radius * view_sd
+    #     vspace_ext_top = center_y + semimajor_radius * view_sd
+    #
+    #     # Find the coordinates of the corresponding box in pixel space
+    #     pixspace_topleft = self.vspace_to_pixspace(vspace_ext_left, vspace_ext_top)
+    #     pixspace_bottomright = self.vspace_to_pixspace(vspace_ext_right, vspace_ext_bottom)
+    #     pixspace_topleft = tuple([int(t) for t in pixspace_topleft])  # Round down
+    #     pixspace_bottomright = tuple([int(t + 1) for t in pixspace_bottomright])  # Round up
+    #
+    #     kernel_width = pixspace_bottomright[0] - pixspace_topleft[0] + 1
+    #     kernel_height = pixspace_bottomright[1] - pixspace_topleft[1] + 1  # y-indexing runs top-to-bottom
+    #
+    #     kernel_sidelen = max(kernel_height, kernel_width)
+    #     pixspace_bottomright = (pixspace_topleft[0] + kernel_sidelen, pixspace_topleft[1] + kernel_sidelen)
+    #
+    #     return pixspace_topleft, pixspace_bottomright
+    #
+    # def old_get_cropped_video(self, cell_index, reshape=False):
+    #     pixspace_topleft, pixspace_bottomright = self.get_crop_extents(cell_index)
+    #     crop_sidelen = pixspace_bottomright[0] - pixspace_topleft[0] + 1
+    #     total_frames = len(self.stimulus_video.frames[0,0,:])
+    #
+    #     cropped_video = self.stimulus_video.frames[pixspace_topleft[0]:pixspace_bottomright[0] + 1,
+    #                     pixspace_topleft[1]:pixspace_bottomright[1] + 1, :]
+    #
+    #     if reshape:
+    #         cropped_video = np.reshape(cropped_video, (crop_sidelen**2, total_frames))
+    #
+    #     return cropped_video
 
-        # Find the coordinates of the corresponding box in pixel space
-        pixspace_topleft = self.vspace_to_pixspace(vspace_ext_left, vspace_ext_top)
-        pixspace_bottomright = self.vspace_to_pixspace(vspace_ext_right, vspace_ext_bottom)
-        pixspace_topleft = tuple([int(t) for t in pixspace_topleft])  # Round down
-        pixspace_bottomright = tuple([int(t + 1) for t in pixspace_bottomright])  # Round up
+    # def old_create_spatial_kernel(self, cell_index):
+    #     """
+    #     Creates the spatial kernel for one cell, respecting stimulus resolution
+    #
+    #     :param cell_index: int
+    #     :return:
+    #     """
+    #     the_gc = self.gc_df.iloc[cell_index]
+    #     pixspace_topleft, pixspace_bottomright = self.get_crop_extents(cell_index)
+    #
+    #     # Make the kernel the same size as the cropped stimulus video
+    #     kernel_width = pixspace_bottomright[0] - pixspace_topleft[0] + 1
+    #     kernel_height = pixspace_bottomright[1] - pixspace_topleft[1] + 1  # y-indexing runs top-to-bottom
+    #
+    #     print("Cell index %d: kernel width x height %d x %d" % (cell_index, kernel_width, kernel_height))
+    #
+    #     if kernel_width != kernel_height:
+    #         print("Warning! Spatial filter width is different from height. The resulting filter is likely to be faulty.")
+    #
+    #     # Get visual field coordinates for the cropped stimulus
+    #     crop_xmin_deg, crop_ymin_deg = self.pixspace_to_vspace(pixspace_topleft[0], pixspace_bottomright[1])
+    #     crop_xmax_deg, crop_ymax_deg = self.pixspace_to_vspace(pixspace_bottomright[0], pixspace_topleft[1])
+    #
+    #     x_grid, y_grid = np.meshgrid(np.linspace(crop_xmin_deg, crop_xmax_deg, kernel_width),
+    #                                  np.linspace(crop_ymin_deg, crop_ymax_deg, kernel_height))
+    #
+    #     amplitudec = 1
+    #     offset = 0
+    #     gc_x, gc_y = self.pol2cart(the_gc.positions_eccentricity, the_gc.positions_polar_angle)
+    #     gc_x = self.deg_per_mm * gc_x
+    #     gc_y = self.deg_per_mm * gc_y
+    #     semi_x = self.deg_per_mm * the_gc.semi_xc
+    #     semi_y = self.deg_per_mm * the_gc.semi_yc
+    #     ori = the_gc.orientation_center
+    #
+    #     spatial_kernel = self.DoG2D_fixed_surround((x_grid, y_grid), amplitudec, gc_x, gc_y,
+    #                                             semi_x, semi_y, ori, the_gc.amplitudes,
+    #                                             the_gc.sur_ratio, offset)
+    #     spatial_kernel = np.reshape(spatial_kernel[:,], (kernel_width, kernel_height))
+    #
+    #     # spatial_kernel = np.array([self.DoG2D_fixed_surround((x_grid, y_grid), *fitted_spatial_params)]).T
+    #     return spatial_kernel
 
-        kernel_width = pixspace_bottomright[0] - pixspace_topleft[0] + 1
-        kernel_height = pixspace_bottomright[1] - pixspace_topleft[1] + 1  # y-indexing runs top-to-bottom
+    # def old_create_spatiotemporal_kernel(self, cell_index, visualize=False):
+    #     # Spatial kernel
+    #     spatial_kernel = self._create_spatial_filter(cell_index)
+    #     spatial_kernel_sidelen = np.shape(spatial_kernel)[0]  # assuming square kernel
+    #     spatial_kernel = [np.reshape(spatial_kernel, spatial_kernel_sidelen**2)]
+    #
+    #     # Temporal kernel
+    #     # dummy: time_kernel = np.array([[0, 0.12, 0.12, 0.25, 0.25, 0.5, 0.5, 1, 1, 0]])
+    #     time_kernel = apricot.ApricotFits(self.gc_type, self.response_type).get_mean_temporal_filter()
+    #     time_kernel = np.flip(time_kernel)
+    #
+    #     # Combine
+    #     spatiotemporal_kernel = spatial_kernel * time_kernel.T
+    #
+    #     # Scale so that filter has a "reasonable" integral
+    #     raw_kernel_sum = np.sum(spatiotemporal_kernel)
+    #     fitted_kernel_sum = self.gc_df.loc[cell_index].filtersum
+    #     print('Raw filter sum: %.3f, data filter sum: %.3f' % (raw_kernel_sum, fitted_kernel_sum))
+    #     spatiotemporal_kernel = (fitted_kernel_sum/raw_kernel_sum) * spatiotemporal_kernel
+    #
+    #     if visualize:
+    #         plt.imshow(spatiotemporal_kernel)
+    #         plt.xlabel('Space')
+    #         plt.xlabel('Time (frames)')
+    #
+    #         plt.show()
+    #
+    #     return spatiotemporal_kernel
 
-        kernel_sidelen = max(kernel_height, kernel_width)
-        pixspace_bottomright = (pixspace_topleft[0] + kernel_sidelen, pixspace_topleft[1] + kernel_sidelen)
+    # def old_feed_stimulus_thru_filter(self, cell_index):
+    #
+    #     # Create spatiotemporal kernel
+    #     spatiotemporal_filter = self.create_spatiotemporal_kernel(cell_index)
+    #
+    #     # Get video cropped to cell's receptive field
+    #     cropped_video = self.get_cropped_video(cell_index, reshape=True)
+    #
+    #     # Scale cropped video to correct units
+    #     # cropped_video = (cropped_video/255) - 0.5
+    #
+    #     # Transpose the filter to match with stimulus dimensions
+    #     spatiotemporal_filter = spatiotemporal_filter.T
+    #     assert np.shape(spatiotemporal_filter)[0] == np.shape(cropped_video)[0], "Filter and cropped video dimensions" \
+    #                                                                              "do not match! Probably a bug in the code?"
+    #
+    #     # Run the convolution
+    #     # NB! fftconvolve automatically pads with zeros
+    #     filtered_stimulus = fftconvolve(cropped_video, spatiotemporal_filter, mode='valid')
+    #
+    #     return filtered_stimulus[0,:]  # With 'valid' convolution only only 1 row should be left
 
-        return pixspace_topleft, pixspace_bottomright
-
-    def get_cropped_video(self, cell_index, reshape=False):
-        pixspace_topleft, pixspace_bottomright = self.get_crop_extents(cell_index)
-        crop_sidelen = pixspace_bottomright[0] - pixspace_topleft[0] + 1
-        total_frames = len(self.stimulus_video.frames[0,0,:])
-
-        cropped_video = self.stimulus_video.frames[pixspace_topleft[0]:pixspace_bottomright[0] + 1,
-                        pixspace_topleft[1]:pixspace_bottomright[1] + 1, :]
-
-        if reshape:
-            cropped_video = np.reshape(cropped_video, (crop_sidelen**2, total_frames))
-
-        return cropped_video
-
-    def create_spatial_kernel(self, cell_index):
+    def create_spatiotemporal_filter(self, cell_index, visualize=False):
         """
-        Creates the spatial kernel for one cell, respecting stimulus resolution
+        Returns the outer product of the spatial and temporal filters
 
         :param cell_index: int
+        :param visualize: bool
         :return:
         """
-        the_gc = self.gc_df.iloc[cell_index]
-        pixspace_topleft, pixspace_bottomright = self.get_crop_extents(cell_index)
 
-        # Make the kernel the same size as the cropped stimulus video
-        kernel_width = pixspace_bottomright[0] - pixspace_topleft[0] + 1
-        kernel_height = pixspace_bottomright[1] - pixspace_topleft[1] + 1  # y-indexing runs top-to-bottom
+        spatial_filter = self._create_spatial_filter(cell_index)
+        s = self.spatial_filter_sidelen
+        spatial_filter_1d = np.array([np.reshape(spatial_filter, s**2)]).T
+        # TODO - Check that reshape doesn't mix dimensions
+        temporal_filter = self._create_temporal_filter(cell_index)
 
-        print("Cell index %d: kernel width x height %d x %d" % (cell_index, kernel_width, kernel_height))
+        spatiotemporal_filter = spatial_filter_1d * temporal_filter  # (Nx1) * (1xT) = NxT
 
-        if kernel_width != kernel_height:
-            print("Warning! Spatial filter width is different from height. The resulting filter is likely to be faulty.")
+        if visualize is True:
+            plt.subplots(1, 3, figsize=(16, 4))
+            plt.suptitle(self.gc_type + ' ' + self.response_type + ' / cell ix ' + str(cell_index))
+            plt.subplot(131)
+            # plt.imshow(np.reshape(space_rk1[cell_ix, :], (13, 13)), cmap='bwr', vmin=-0.5, vmax=0.5)
+            plt.imshow(spatial_filter, cmap=self.cmap_spatial_filter,
+                       vmin=self.vmin_spatial_filter, vmax=self.vmax_spatial_filter)
+            plt.colorbar()
 
-        # Get visual field coordinates for the cropped stimulus
-        crop_xmin_deg, crop_ymin_deg = self.pixspace_to_vspace(pixspace_topleft[0], pixspace_bottomright[1])
-        crop_xmax_deg, crop_ymax_deg = self.pixspace_to_vspace(pixspace_bottomright[0], pixspace_topleft[1])
+            plt.subplot(132)
+            # plt.plot(range(15), temp_rk1[cell_ix, :])
+            plt.plot(range(15), np.flip(temporal_filter[0,:]))
+            plt.ylim([-2.5, 2.5])
 
-        x_grid, y_grid = np.meshgrid(np.linspace(crop_xmin_deg, crop_xmax_deg, kernel_width),
-                                     np.linspace(crop_ymin_deg, crop_ymax_deg, kernel_height))
+            plt.subplot(133)
+            # rawfilter = fullfilter[i]
+            # plt.imshow(np.reshape(rawfilter, (13 ** 2, 15)), aspect='auto', cmap='bwr', vmin=-1, vmax=1)
+            plt.imshow(np.flip(spatiotemporal_filter, axis=1), aspect='auto', cmap='bwr', vmin=-1, vmax=1)
+            plt.colorbar()
 
-        amplitudec = 1
-        offset = 0
-        gc_x, gc_y = self.pol2cart(the_gc.positions_eccentricity, the_gc.positions_polar_angle)
-        gc_x = self.deg_per_mm * gc_x
-        gc_y = self.deg_per_mm * gc_y
-        semi_x = self.deg_per_mm * the_gc.semi_xc
-        semi_y = self.deg_per_mm * the_gc.semi_yc
-        ori = the_gc.orientation_center
+            plt.tight_layout()
 
-        spatial_kernel = self.DoG2D_fixed_surround((x_grid, y_grid), amplitudec, gc_x, gc_y,
-                                                semi_x, semi_y, ori, the_gc.amplitudes,
-                                                the_gc.sur_ratio, offset)
-        spatial_kernel = np.reshape(spatial_kernel[:,], (kernel_width, kernel_height))
+        return spatiotemporal_filter
 
-        # spatial_kernel = np.array([self.DoG2D_fixed_surround((x_grid, y_grid), *fitted_spatial_params)]).T
-        return spatial_kernel
+    def get_cropped_video(self, cell_index, reshape=False):
+        """
+        Crops the video to RGC surroundings
 
-    def create_spatiotemporal_kernel(self, cell_index, visualize=False):
-        # Spatial kernel
-        spatial_kernel = self.create_spatial_kernel(cell_index)
-        spatial_kernel_sidelen = np.shape(spatial_kernel)[0]  # assuming square kernel
-        spatial_kernel = [np.reshape(spatial_kernel, spatial_kernel_sidelen**2)]
+        :param cell_index: int
+        :param reshape:
+        :return:
+        """
+        # Pad the stimulus with zeros in case RGC is at the border
+        # the_frame = self.stimulus_video.frames[:, :, frame_number]
+        # padlen = (self.spatial_filter_sidelen - 1) // 2
+        # padded_frame = np.pad(the_frame, ((padlen, padlen),(padlen, padlen)),
+        #                       mode='constant', constant_values=0)
+        # padded_frame_crop = padded_frame[padlen+rmin:padlen+rmax+1, padlen+qmin:padlen+qmax+1]
+        # TODO - Handle RGCs that are near the border
+        # TODO - Check that reshape doesn't mix dimensions
+        qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
+        stimulus_cropped = self.stimulus_video.frames[rmin:rmax+1, qmin:qmax+1, :]
 
-        # Temporal kernel
-        # dummy: time_kernel = np.array([[0, 0.12, 0.12, 0.25, 0.25, 0.5, 0.5, 1, 1, 0]])
-        time_kernel = apricot.FitsToApricotData(self.gc_type, self.response_type).get_mean_temporal_filter()
-        time_kernel = np.flip(time_kernel)
+        if reshape is True:
+            s = self.spatial_filter_sidelen
+            n_frames = np.shape(self.stimulus_video.frames)[2]
 
-        # Combine
-        spatiotemporal_kernel = spatial_kernel * time_kernel.T
+            stimulus_cropped = np.reshape(stimulus_cropped, (s**2, n_frames))
 
-        # Scale so that filter has a "reasonable" integral
-        raw_kernel_sum = np.sum(spatiotemporal_kernel)
-        fitted_kernel_sum = self.gc_df.loc[cell_index].filtersum
-        print('Raw filter sum: %.3f, data filter sum: %.3f' % (raw_kernel_sum, fitted_kernel_sum))
-        spatiotemporal_kernel = (fitted_kernel_sum/raw_kernel_sum) * spatiotemporal_kernel
+        return stimulus_cropped
 
-        if visualize:
-            plt.imshow(spatiotemporal_kernel)
-            plt.xlabel('Space')
-            plt.xlabel('Time (frames)')
+    def convolve_stimulus(self, cell_index, visualize=False):
+        """
+        Convolves the stimulus with the stimulus filter
 
-            plt.show()
+        :param cell_index: int
+        :return: array of length (stimulus timesteps)
+        """
+        # Get spatiotemporal filter
+        spatiotemporal_filter = self.create_spatiotemporal_filter(cell_index)
 
-        return spatiotemporal_kernel
+        # Get cropped stimulus
+        stimulus_cropped = self.get_cropped_video(cell_index, reshape=True)
 
-    def feed_stimulus_thru_filter(self, cell_index):
+        # Run convolution
+        generator_potential = convolve(stimulus_cropped, spatiotemporal_filter, mode='valid')
+        generator_potential = generator_potential[0, :]
 
-        # Create spatiotemporal kernel
-        spatiotemporal_filter = self.create_spatiotemporal_kernel(cell_index)
+        # Add some padding to the beginning so that stimulus time and generator potential time match
+        generator_potential = np.pad(generator_potential, (self.temporal_filter_timesteps-1, 0),
+                                     mode='constant', constant_values=0)
 
-        # Get video cropped to cell's receptive field
-        cropped_video = self.get_cropped_video(cell_index, reshape=True)
+        if visualize is True:
+            # t = np.array(range(len(generator_potential))) / self.temporal_filter_fps
+            # TODO - Fix this
+            plt.plot(range(len(generator_potential)), generator_potential)
 
-        # Scale cropped video to correct units
-        # cropped_video = (cropped_video/255) - 0.5
+        # Return the 1-dimensional generator potential
+        return generator_potential
 
-        # Transpose the filter to match with stimulus dimensions
-        spatiotemporal_filter = spatiotemporal_filter.T
-        assert np.shape(spatiotemporal_filter)[0] == np.shape(cropped_video)[0], "Filter and cropped video dimensions" \
-                                                                                 "do not match! Probably a bug in the code?"
 
-        # Run the convolution
-        filtered_stimulus = fftconvolve(cropped_video, spatiotemporal_filter, mode='valid')
 
-        return filtered_stimulus[0,:]  # With 'valid' convolution only only 1 row should be left
-
-    def simple_spiking(self, cell_index):
+    def old_simple_spiking(self, cell_index):
         filtered_stimulus = self.feed_stimulus_thru_filter(cell_index) * Hz
         dt = 1/self.stimulus_video.fps * second
         generator_signal = b2.TimedArray(filtered_stimulus, dt)
@@ -1075,7 +1116,7 @@ class FunctionalMosaic(Mathematics):
 
         return spike_monitor
 
-    def pillow_spiking(self, cell_index, with_postspike=False, nonlinearity=np.exp):
+    def old_pillow_spiking(self, cell_index, with_postspike=False, nonlinearity=np.exp):
 
         # Sim settings
         RefreshRate = 120

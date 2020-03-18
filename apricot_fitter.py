@@ -168,7 +168,7 @@ class ApricotData:
         return describe_df
 
 
-class FitsToApricotData(ApricotData, Visualize, Mathematics):
+class ApricotFits(ApricotData, Visualize, Mathematics):
     """
     Methods for deriving spatial receptive field parameters from the apricot dataset (Field_2010)
     """
@@ -641,7 +641,7 @@ if __name__ == '__main__':
 
 
     ### Check temporal filters
-    x = FitsToApricotData('midget', 'off')
+    x = ApricotFits('midget', 'off')
     a = x.compute_pos_filter_integrals()
     b = x.compute_neg_filter_integrals()
     c = x.compute_filter_integrals()

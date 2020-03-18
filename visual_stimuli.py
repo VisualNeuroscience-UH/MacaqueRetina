@@ -421,17 +421,6 @@ class ConstructStimulus(VideoBaseClass):
 
         self.video_center_vspace = video_center_vspace
 
-        # self.video_xmin_deg = video_center_vspace.real - self.video_width_deg / 2
-        # self.video_xmax_deg = video_center_vspace.real + self.video_width_deg / 2
-        # self.video_ymin_deg = video_center_vspace.imag - self.video_height_deg / 2
-        # self.video_ymax_deg = video_center_vspace.imag + self.video_height_deg / 2
-
-    # def visual_space_to_pix(self, x, y):
-    #     z = complex(x, y)
-    #     w = (z - self.video_center_pc) * self.pix_per_deg
-    #
-    #     return w
-
     def get_extents_deg(self):
 
         video_xmin_deg = self.video_center_vspace.real - self.video_width_deg / 2
@@ -458,6 +447,9 @@ class ConstructStimulus(VideoBaseClass):
         # save options as metadata in the same format
         filename_out_options = f"{filename}_options.hdf5"
         save_dict_to_hdf5(self.options, filename_out_options)
+
+    def set_test_image(self):
+        raise NotImplementedError
 
 
 class SampleImage:
