@@ -104,7 +104,7 @@ class ApricotData:
         space_rk1 = np.array([self.data[cellnum][0][0][0][0][0][3][0][0][2] for cellnum in range(self.n_cells)])
         return np.reshape(space_rk1, (self.n_cells, 13**2))  # Spatial data 13x13 in the apricot dataset
 
-    def compute_filter_integrals(self):
+    def compute_filter_integrals(self):  # TODO - obsolete?
         time_rk1 = self.read_temporal_filter()
         space_rk1 = self.read_space_rk1()
 
@@ -112,6 +112,16 @@ class ApricotData:
         for i in range(self.n_cells):
             spatiotemp_filter = np.array([space_rk1[i]]) * np.array([time_rk1[i]]).T
             filter_integrals[i] = np.sum(spatiotemp_filter)
+
+        return filter_integrals
+
+    def compute_spatialfilter_integrals(self):
+        space_rk1 = self.read_space_rk1()
+
+        filter_integrals = np.zeros(self.n_cells)
+        for i in range(self.n_cells):
+            abs_spatial_filter = np.abs(np.array([space_rk1[i]]))
+            filter_integrals[i] = np.sum(abs_spatial_filter)
 
         return filter_integrals
 
@@ -510,6 +520,26 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
 
         return mean, sd
 
+    def get_spatialfilter_integral_stats(self, remove_bad_data_indices=True, visualize=False):
+        filterintegrals = self.compute_spatialfilter_integrals()
+
+        if remove_bad_data_indices:
+            good_indices = np.setdiff1d(range(self.n_cells), self.bad_data_indices)
+            filterintegrals = filterintegrals[good_indices]
+
+        mean, sd = norm.fit(filterintegrals)
+
+        if visualize:
+            x_min, x_max = norm.ppf([0.001, 0.999], loc=mean, scale=sd)
+            xs = np.linspace(x_min, x_max, 100)
+            plt.plot(xs, norm.pdf(xs, loc=mean, scale=sd))
+            plt.hist(filterintegrals, density=True)
+            plt.title(self.gc_type + ' ' + self.response_type)
+            plt.xlabel('Spatial filter integral (a.u.)')
+            plt.show()
+
+        return mean, sd
+
     # TODO - move to ApricotData
     def get_mean_temporal_filter(self, remove_bad_data_indices=True, flip_negs=True, visualize=False):
 
@@ -641,12 +671,17 @@ if __name__ == '__main__':
 
 
     ### Check temporal filters
+    # x = ApricotFits('midget', 'off')
+    # a = x.compute_pos_filter_integrals()
+    # b = x.compute_neg_filter_integrals()
+    # c = x.compute_filter_integrals()
+    # df = pd.DataFrame({'integral_pos': a, 'integral_neg': b, 'integral_sum': c})
+    # df.to_csv('midget_off_integrals.csv')
+
     x = ApricotFits('midget', 'off')
-    a = x.compute_pos_filter_integrals()
-    b = x.compute_neg_filter_integrals()
-    c = x.compute_filter_integrals()
-    df = pd.DataFrame({'integral_pos': a, 'integral_neg': b, 'integral_sum': c})
-    df.to_csv('midget_off_integrals.csv')
+    x.get_spatialfilter_integral_stats(visualize=True)
+    plt.show()
+
 
     # gc_types = ['parasol', 'midget']
     # response_types = ['ON', 'OFF']

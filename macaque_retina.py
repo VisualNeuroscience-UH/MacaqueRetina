@@ -100,10 +100,15 @@ class MosaicConstructor(Mathematics, Visualize):
         # Set stimulus stuff
         self.stimulus_video = None
 
-        # Get tonic drive and filter sum statistics
+        # Get tonic drive and "spatial filter sum" statistics
         x = apricot.ApricotFits(self.gc_type, self.response_type)
         self.tonicdrive_mean, self.tonicdrive_sd = x.get_tonicdrive_stats()
-        self.filtersum_mean, self.filtersum_sd = x.get_filterintegral_stats()
+        # self.filtersum_mean, self.filtersum_sd = x.get_filterintegral_stats()
+        self.filtersum_mean, self.filtersum_sd = x.get_spatialfilter_integral_stats()
+
+        # Get the mean temporal filters
+        self.mean_temporal_filter = x.get_mean_temporal_filter()
+        self.mean_postspike_filter = x.get_mean_postspike_filter()
 
     def fit_gc_density_data(self):
         """
@@ -589,23 +594,26 @@ class MosaicConstructor(Mathematics, Visualize):
 
         # At this point the spatial receptive fields are constructed.
         # The positions are in gc_eccentricity, gc_polar_angle, and the rf parameters in gc_rf_models
-
         n_rgc = len(self.gc_df)
-        print("Built RGC mosaic with %d cells" % n_rgc)
 
-        # Finally, get temporal statistics
+        # Finally, get non-spatial parameters
         self.gc_df['tonicdrive'] = norm.rvs(size=n_rgc, loc=self.tonicdrive_mean, scale=self.tonicdrive_sd)
         self.gc_df['filtersum'] = norm.rvs(size=n_rgc, loc=self.filtersum_mean, scale=self.filtersum_sd)
+
+        # Here we just replicate the mean temporal filters to all rows
+        temporal_df = pd.DataFrame({'temporal_filter': [self.mean_temporal_filter.flatten()] * n_rgc})
+        postspike_df = pd.DataFrame({'postspike_filter': [self.mean_postspike_filter.flatten()] * n_rgc})
+
+        self.gc_df = pd.concat([self.gc_df, temporal_df, postspike_df], axis=1)
+
+        print("Built RGC mosaic with %d cells" % n_rgc)
 
         if Visualize is True:
             plt.show()
 
-    def save_mosaic(self, filepath, deg=False):
-        if deg is True:
-            pass  # Implement here unit conversion to degrees
-        else:
-            print('Saving model mosaic to %s' % filepath)
-            self.gc_df.to_csv(filepath)
+    def save_mosaic(self, filepath):
+        print('Saving model mosaic to %s' % filepath)
+        self.gc_df.to_csv(filepath)
 
 
 class FunctionalMosaic(Mathematics):
@@ -644,6 +652,7 @@ class FunctionalMosaic(Mathematics):
 
         # Drop retinal positions from the df (so that they are not used by accident)
         self.gc_df = self.gc_df.drop(['positions_eccentricity', 'positions_polar_angle'], axis=1)
+
 
     def show_test_image(self, image_extents=[3.5, 6.5, -1.5, 1.5]):
         """
@@ -696,7 +705,8 @@ class FunctionalMosaic(Mathematics):
         """
 
         # Get parameters from the stimulus object
-        self.stimulus_video = stimulus_video
+        from copy import deepcopy
+        self.stimulus_video = deepcopy(stimulus_video)  # TODO - No copying plz
         stimulus_center = stimulus_video.video_center_vspace
         self.pix_per_deg = stimulus_video.pix_per_deg  # angular resolution (eg. van Hateren 1 arcmin/pix => 60 pix/deg)
 
@@ -721,6 +731,11 @@ class FunctionalMosaic(Mathematics):
         # Sidelength always odd number
         self.spatial_filter_sidelen = 2 * 3 * int(max(max(self.gc_df_pixspace.semi_xc), max(self.gc_df_pixspace.semi_yc))) + 1
 
+        # Scale vmin_, vmax_spatial_filter based on filter sidelen
+        v_spatial_filter_scaling = (13**2) / (self.spatial_filter_sidelen**2)  # 13**2 being the original dimensions
+        self.vmin_spatial_filter = v_spatial_filter_scaling * self.vmin_spatial_filter
+        self.vmax_spatial_filter = v_spatial_filter_scaling * self.vmax_spatial_filter
+
         # Drop RGCs whose center is not inside the stimulus
         xmin, xmax, ymin, ymax = self.stimulus_video.get_extents_deg()
         for index, gc in self.gc_df_pixspace.iterrows():
@@ -738,6 +753,12 @@ class FunctionalMosaic(Mathematics):
                 ax.add_patch(circ)
 
     def _get_crop_pixels(self, cell_index):
+        """
+        Get pixel coordinates for stimulus crop that is the same size as the spatial filter
+
+        :param cell_index: int
+        :return:
+        """
         gc = self.gc_df_pixspace.iloc[cell_index]
         q_center = int(gc.q_pix)
         r_center = int(gc.r_pix)
@@ -774,9 +795,13 @@ class FunctionalMosaic(Mathematics):
                                                 gc.sur_ratio, offset)
         spatial_kernel = np.reshape(spatial_kernel, (s,s))
 
-        # TODO - Scale to match data filter power
+        # Scale to match data filter power
+        # (simulated spatial filter has more pixels => convolution will have higher value, if not corrected)
+        data_filtersum = self.gc_df.iloc[cell_index].filtersum
+        scaling_factor = data_filtersum / np.sum(np.abs(spatial_kernel))
+        scaled_spatial_kernel = scaling_factor * spatial_kernel
 
-        return spatial_kernel
+        return scaled_spatial_kernel
 
     def _create_temporal_filter(self, cell_index):
         """
@@ -785,13 +810,22 @@ class FunctionalMosaic(Mathematics):
         :param cell_index: int
         :return:
         """
-        # TODO: get temporal filter from CSV
-        temporal_filter = apricot.ApricotFits(self.gc_type, self.response_type).get_mean_temporal_filter()
-        temporal_filter = np.flip(temporal_filter)
+        # temporal_filter = apricot.ApricotFits(self.gc_type, self.response_type).get_mean_temporal_filter()
+        # temporal_filter = np.flip(temporal_filter)
+        temporal_filter = np.fromstring(self.gc_df.iloc[cell_index].temporal_filter[1:-1], sep=' ')
+        temporal_filter = np.array([np.flip(temporal_filter)])
 
-        # If temporal filter can have some other fps than 120, then it needs scaling to conform to data
+        # If stimulus can have some other fps than 120, then it needs scaling here
 
         return temporal_filter
+
+    def _create_postspike_filter(self, cell_index):
+        postspike_filter = np.fromstring(self.gc_df.iloc[cell_index].postspike_filter[1:-1], sep=' ')
+        postspike_filter = np.array([np.flip(postspike_filter)])
+
+        # If stimulus can have some other fps than 120, then it needs scaling here
+
+        return postspike_filter
 
     def show_gc_view(self, cell_index, frame_number=0):
         """
@@ -1026,20 +1060,17 @@ class FunctionalMosaic(Mathematics):
             plt.subplots(1, 3, figsize=(16, 4))
             plt.suptitle(self.gc_type + ' ' + self.response_type + ' / cell ix ' + str(cell_index))
             plt.subplot(131)
-            # plt.imshow(np.reshape(space_rk1[cell_ix, :], (13, 13)), cmap='bwr', vmin=-0.5, vmax=0.5)
             plt.imshow(spatial_filter, cmap=self.cmap_spatial_filter,
                        vmin=self.vmin_spatial_filter, vmax=self.vmax_spatial_filter)
             plt.colorbar()
 
             plt.subplot(132)
-            # plt.plot(range(15), temp_rk1[cell_ix, :])
-            plt.plot(range(15), np.flip(temporal_filter[0,:]))
-            plt.ylim([-2.5, 2.5])
+            plt.plot(range(self.temporal_filter_timesteps), np.flip(temporal_filter[0,:]))
+            plt.ylim([-2.5, 2.5])  # limits need to change if fps is changing
 
             plt.subplot(133)
-            # rawfilter = fullfilter[i]
-            # plt.imshow(np.reshape(rawfilter, (13 ** 2, 15)), aspect='auto', cmap='bwr', vmin=-1, vmax=1)
-            plt.imshow(np.flip(spatiotemporal_filter, axis=1), aspect='auto', cmap='bwr', vmin=-1, vmax=1)
+            plt.imshow(np.flip(spatiotemporal_filter, axis=1), aspect='auto', cmap='bwr',
+                       vmin=2*self.vmin_spatial_filter, vmax=2*self.vmax_spatial_filter)
             plt.colorbar()
 
             plt.tight_layout()
@@ -1091,32 +1122,78 @@ class FunctionalMosaic(Mathematics):
         generator_potential = generator_potential[0, :]
 
         # Add some padding to the beginning so that stimulus time and generator potential time match
+        # (First time steps of stimulus are not convolved)
         generator_potential = np.pad(generator_potential, (self.temporal_filter_timesteps-1, 0),
                                      mode='constant', constant_values=0)
 
         if visualize is True:
-            # t = np.array(range(len(generator_potential))) / self.temporal_filter_fps
-            # TODO - Fix this
-            plt.plot(range(len(generator_potential)), generator_potential)
+            tvec = np.arange(0, len(generator_potential), 1) * (1/self.temporal_filter_fps)
+            plt.subplots(2, 1, sharex=True)
+            plt.subplot(211)
+            plt.plot(tvec, generator_potential)
+            plt.xlabel('Time (s)')
+            plt.ylabel('Generator potential (a.u.)')
+
+            plt.subplot(212)
+            tonic_drive = self.gc_df.iloc[cell_index].tonicdrive
+            plt.plot(tvec, np.exp(generator_potential + tonic_drive))
+            plt.xlabel('Time (s)')
+            plt.ylabel('Instantaneous spike rate (a.u.)')
 
         # Return the 1-dimensional generator potential
         return generator_potential
 
+    def run_single_cell(self, cell_index, n_trials=1, postspike_filter=False, visualize=False, return_monitor=False):
+        """
+        Runs the LNP pipeline for a single ganglion cell (spiking by Brian2)
 
+        :param cell_index: int
+        :param n_trials: int
+        :param postspike_filter: bool
+        :return:
+        """
+        if postspike_filter is True:
+            raise NotImplementedError
+        else:
+            generator_potential = self.convolve_stimulus(cell_index)
+            tonic_drive = self.gc_df.iloc[cell_index].tonicdrive
+            exp_generator_potential = np.array([np.exp(generator_potential + tonic_drive)])
+            dt = (1 / self.stimulus_video.fps) * second
+            inst_rates = b2.TimedArray(np.tile(exp_generator_potential.T, (1, n_trials)) * Hz, dt)
 
-    def old_simple_spiking(self, cell_index):
-        filtered_stimulus = self.feed_stimulus_thru_filter(cell_index) * Hz
-        dt = 1/self.stimulus_video.fps * second
-        generator_signal = b2.TimedArray(filtered_stimulus, dt)
+            poisson_group = b2.PoissonGroup(n_trials, rates='inst_rates(t, i)')
+            spike_monitor = b2.SpikeMonitor(poisson_group)
+            net = b2.Network(poisson_group, spike_monitor)
 
-        poisson_spiker = b2.PoissonGroup(1, rates=generator_signal)
-        spike_monitor = b2.SpikeMonitor(poisson_spiker)
+            duration = len(generator_potential) * dt
+            net.run(duration)
 
-        b2.run()
+            spiketrains = np.array(list(spike_monitor.spike_trains().values()))
 
-        return spike_monitor
+        if visualize is True:
+            plt.subplots(2,1,sharex=True)
+            plt.subplot(211)
+            plt.eventplot(spiketrains)
+            plt.xlim([0, duration/second])
+            plt.xlabel('Time (s)')
 
-    def old_pillow_spiking(self, cell_index, with_postspike=False, nonlinearity=np.exp):
+            plt.subplot(212)
+            # Plot the generator and the average firing rate
+            tvec = np.arange(0, len(generator_potential), 1) * dt
+            plt.plot(tvec, exp_generator_potential.flatten(), label='Generator')
+            plt.xlim([0, duration / second])
+
+            # TODO - average firing rate here (should follow generator)
+            # n_bins = int((duration/second)*100)
+            # a = np.histogram(spiketrains, n_bins) / n_trials
+            # plt.plot(range(len(a)), a)
+
+        if return_monitor is True:
+            return spike_monitor
+        else:
+            return spiketrains
+
+    def jpillow_spiking(self, cell_index, postspike_filter=False, nonlinearity=np.exp):
 
         # Sim settings
         RefreshRate = 120
@@ -1157,7 +1234,7 @@ class FunctionalMosaic(Mathematics):
                 tsp.append(ispk*DTsim)
 
                 # Inject postspike current
-                if with_postspike is True:
+                if postspike_filter is True:
                     pass
                     # mxi = np.min([rlen, ispk+postspike_rlen])
                     # ii_postspike = np.arange(ispk+1, mxi, 1)
