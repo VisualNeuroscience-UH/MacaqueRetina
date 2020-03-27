@@ -331,16 +331,18 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
 
         good_indices = np.setdiff1d(np.arange(self.n_cells), self.bad_data_indices)
         parameter_names = ['n', 'p1', 'p2', 'tau1', 'tau2']
-        bounds = ([0, 0, 0, 0.1, 3],
-                  [np.inf, 10, 10, 3, 6])
+        # bounds = ([0, 0, 0, 0.1, 3],
+        #           [np.inf, 10, 10, 3, 6])  # bounds when time points are 0...14
+        bounds = ([0, 0, 0, 0.1, 3*8.5],
+                  [np.inf, 10, 10, 3*8.5, 6*20])  # bounds when time points are in milliseconds
 
         fitted_parameters = np.zeros((self.n_cells, len(parameter_names)))
         error_array = np.zeros(self.n_cells)
         max_error = -0.1
 
-        # xdata = np.arange(15) * (1/120) * 1000  # time points in milliseconds
-        xdata = np.arange(15)
-        xdata_finer = np.linspace(0, 15-1, 100)
+        xdata = np.arange(15) * (1/120) * 1000  # time points in milliseconds
+        # xdata = np.arange(15)
+        xdata_finer = np.linspace(0, max(xdata), 100)
 
         for cell_ix in tqdm(good_indices):
             ydata = temporal_filters[cell_ix, :]
@@ -363,8 +365,7 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
 
         parameters_df = pd.DataFrame(fitted_parameters, columns=parameter_names)
         error_df = pd.DataFrame(error_array, columns=['mse'])
-        return pd.concat([parameters_df,error_df], axis=1)
-
+        return pd.concat([parameters_df, error_df], axis=1)
 
 
     def fit_dog_to_sta_data(self, visualize=False, surround_model=1, save=None, semi_x_always_major=True):
@@ -722,6 +723,6 @@ if __name__ == '__main__':
     # pon = ApricotFits('midget', 'on')
     # pon.fit_dog_to_sta_data(semi_x_always_major=True, surround_model=1, visualize=False)
 
-    pon = ApricotFits('midget', 'on')
-    a = pon.fit_temporal_filters(visualize=True)
+    pon = ApricotFits('parasol', 'on')
+    a = pon.fit_temporal_filters(visualize=False)
     pass
