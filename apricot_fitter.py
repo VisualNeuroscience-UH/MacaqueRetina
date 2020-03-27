@@ -38,32 +38,40 @@ class ApricotData:
         self.gc_type = gc_type
         self.response_type = response_type
 
-        # Define filename
+        # Define filenames
+        # Spatial data are read from a separate mat file that have been derived from the originals.
+        # Non-spatial data are read from the original data files.
         if gc_type == 'parasol' and response_type == 'on':
             self.spatial_filename = 'Parasol_ON_spatial.mat'
-            self.bad_data_indices=[15, 67, 71, 86, 89]   # Manually selected for Chichilnisky apricot (spatial) data
+            # self.bad_data_indices=[15, 67, 71, 86, 89]   # Simo's; Manually selected for Chichilnisky apricot (spatial) data
+            self.bad_data_indices = [15, 71, 86, 89]
             #bad_data_indices = []  # For debugging
             self.filename_nonspatial = 'mosaicGLM_apricot_ONParasol-1-mat.mat'
 
         elif gc_type == 'parasol' and response_type == 'off':
             self.spatial_filename = 'Parasol_OFF_spatial.mat'
-            self.bad_data_indices = [6, 31, 73]
+            # self.bad_data_indices = [6, 31, 73]  # Simo's
+            self.bad_data_indices = [6, 31, 40, 76]
+
             self.filename_nonspatial = 'mosaicGLM_apricot_OFFParasol-1-mat.mat'
 
         elif gc_type == 'midget' and response_type == 'on':
             self.spatial_filename = 'Midget_ON_spatial.mat'
-            self.bad_data_indices = [6, 13, 19, 23, 26, 28, 55, 74, 93, 99, 160, 162, 203, 220]
+            # self.bad_data_indices = [6, 13, 19, 23, 26, 28, 55, 74, 93, 99, 160, 162, 203, 220]  # Simo's
+            self.bad_data_indices = [13]
             self.filename_nonspatial = 'mosaicGLM_apricot_ONMidget-1-mat.mat'
 
         elif gc_type == 'midget' and response_type == 'off':
             self.spatial_filename = 'Midget_OFF_spatial.mat'
-            self.bad_data_indices = [4, 5, 13, 23, 39, 43, 50, 52, 55, 58, 71, 72, 86, 88, 94, 100, 104, 119, 137,
-                                154, 155, 169, 179, 194, 196, 224, 230, 234, 235, 239, 244, 250, 259, 278]
+            # self.bad_data_indices = [4, 5, 13, 23, 39, 43, 50, 52, 55, 58, 71, 72, 86, 88, 94, 100, 104, 119, 137,
+            #                     154, 155, 169, 179, 194, 196, 224, 230, 234, 235, 239, 244, 250, 259, 278]  # Simo's
+            self.bad_data_indices = [39, 43, 50, 56, 109, 129, 137]
             self.filename_nonspatial = 'mosaicGLM_apricot_OFFMidget-1-mat.mat'
 
         else:
             print('Unknown cell type or response type, aborting')
             sys.exit()
+
 
         filepath = retina_data_path / self.filename_nonspatial
         raw_data = sio.loadmat(filepath)  # , squeeze_me=True)
@@ -79,6 +87,7 @@ class ApricotData:
 
         n_spatial_cells = len(gc_spatial_data_array[0,0,:])
         n_bad = len(self.bad_data_indices)
+        print('\n[%s %s]' % (self.gc_type, self.response_type))
         print("Read %d cells from datafile and then removed %d bad cells (handpicked)" % (n_spatial_cells, n_bad))
 
         return gc_spatial_data_array, initial_center_values, self.bad_data_indices
@@ -95,25 +104,21 @@ class ApricotData:
         postspike_filter = np.array([self.data[cellnum][0][0][0][0][0][2][0][0][0] for cellnum in range(self.n_cells)])
         return postspike_filter[:,:,0]
 
-    def read_temporal_filter(self):
+    def read_temporal_filter(self, flip_negs=False):
 
         time_rk1 = np.array([self.data[cellnum][0][0][0][0][0][3][0][0][3] for cellnum in range(self.n_cells)])
-        return time_rk1[:,:,0]
+        temporal_filters = time_rk1[:,:,0]
+
+        # Flip temporal filters so that first deflection is always positive
+        for i in range(self.n_cells):
+            if temporal_filters[i, 1] < 0 and flip_negs is True:
+                temporal_filters[i, :] = temporal_filters[i, :] * (-1)
+
+        return temporal_filters
 
     def read_space_rk1(self):
         space_rk1 = np.array([self.data[cellnum][0][0][0][0][0][3][0][0][2] for cellnum in range(self.n_cells)])
         return np.reshape(space_rk1, (self.n_cells, 13**2))  # Spatial data 13x13 in the apricot dataset
-
-    def compute_filter_integrals(self):  # TODO - obsolete?
-        time_rk1 = self.read_temporal_filter()
-        space_rk1 = self.read_space_rk1()
-
-        filter_integrals = np.zeros(self.n_cells)
-        for i in range(self.n_cells):
-            spatiotemp_filter = np.array([space_rk1[i]]) * np.array([time_rk1[i]]).T
-            filter_integrals[i] = np.sum(spatiotemp_filter)
-
-        return filter_integrals
 
     def compute_spatialfilter_integrals(self):
         space_rk1 = self.read_space_rk1()
@@ -125,57 +130,177 @@ class ApricotData:
 
         return filter_integrals
 
-    def compute_pos_filter_integrals(self):
-        time_rk1 = self.read_temporal_filter()
-        space_rk1 = self.read_space_rk1()
+    def get_tonicdrive_stats(self, remove_bad_data_indices=True, visualize=False):
+        """
+        Fits a normal distribution to "tonic drive" values
 
-        filter_integrals = np.zeros(self.n_cells)
-        for i in range(self.n_cells):
-            spatiotemp_filter = np.array([space_rk1[i]]) * np.array([time_rk1[i]]).T
-            zeromatrix = np.zeros(np.shape(spatiotemp_filter))
-            spatiotemp_filter_nonneg = np.maximum(spatiotemp_filter, zeromatrix)
-            filter_integrals[i] = np.sum(spatiotemp_filter_nonneg)
+        :param remove_bad_data_indices: True/False (default True)
+        :param visualize: True/False (default False)
+        :return: mean and SD of the fitted normal distribution
+        """
+        tonicdrive = self.read_tonicdrive()
 
-        return filter_integrals
+        if remove_bad_data_indices:
+            good_indices = np.setdiff1d(range(self.n_cells), self.bad_data_indices)
+            tonicdrive = tonicdrive[good_indices]
 
-    def compute_neg_filter_integrals(self):
-        time_rk1 = self.read_temporal_filter()
-        space_rk1 = self.read_space_rk1()
-
-        filter_integrals = np.zeros(self.n_cells)
-        for i in range(self.n_cells):
-            spatiotemp_filter = np.array([space_rk1[i]]) * np.array([time_rk1[i]]).T
-            filter_integrals[i] = np.sum(spatiotemp_filter)
-            zeromatrix = np.zeros(np.shape(spatiotemp_filter))
-            spatiotemp_filter_nonpos = np.minimum(spatiotemp_filter, zeromatrix)
-            filter_integrals[i] = np.sum(spatiotemp_filter_nonpos)
-
-        return filter_integrals
-
-    def describe(self, visualize=False):
-        describedata = dict()
-        describedata['tonicdrive'] = self.read_tonicdrive()
-
-        gc_spatial_data_array, sta_fits, bad_data_indices = self.read_retina_spatial_data()
-        describedata['bad_data'] = [i in bad_data_indices for i in range(self.n_cells)]
-        describedata['center_x'] = [float(sta_fits[0,i][0]) for i in range(self.n_cells)]
-        describedata['center_y'] = [float(sta_fits[0,i][1]) for i in range(self.n_cells)]
-        describedata['center_sd_x'] = [float(sta_fits[0,i][2]) for i in range(self.n_cells)]
-        describedata['center_sd_y'] = [float(sta_fits[0,i][3]) for i in range(self.n_cells)]
-        describedata['orientation'] = [float(sta_fits[0,i][4]) for i in range(self.n_cells)]
-
-        describe_df = pd.DataFrame.from_dict(describedata)
-
-        describe_df['center_rf_area'] = np.pi * describe_df.center_sd_x * describe_df.center_sd_y
-        describe_df['filter_integral'] = self.compute_filter_integrals()
+        mean, sd = norm.fit(tonicdrive)
 
         if visualize:
-            import seaborn as sns
-            sns.heatmap(describe_df.corr(), cmap='viridis')
+            x_min, x_max = norm.ppf([0.001, 0.999], loc=mean, scale=sd)
+            xs = np.linspace(x_min, x_max, 100)
+            plt.plot(xs, norm.pdf(xs, loc=mean, scale=sd))
+            plt.hist(tonicdrive, density=True)
             plt.title(self.gc_type + ' ' + self.response_type)
+            plt.xlabel('Tonic drive (a.u.)')
             plt.show()
 
-        return describe_df
+        return mean, sd
+
+    def get_spatialfilter_integral_stats(self, remove_bad_data_indices=True, visualize=False):
+        filterintegrals = self.compute_spatialfilter_integrals()
+
+        if remove_bad_data_indices:
+            good_indices = np.setdiff1d(range(self.n_cells), self.bad_data_indices)
+            filterintegrals = filterintegrals[good_indices]
+
+        mean, sd = norm.fit(filterintegrals)
+
+        if visualize:
+            x_min, x_max = norm.ppf([0.001, 0.999], loc=mean, scale=sd)
+            xs = np.linspace(x_min, x_max, 100)
+            plt.plot(xs, norm.pdf(xs, loc=mean, scale=sd))
+            plt.hist(filterintegrals, density=True)
+            plt.title(self.gc_type + ' ' + self.response_type)
+            plt.xlabel('Spatial filter integral (a.u.)')
+            plt.show()
+
+        return mean, sd
+
+    def get_mean_temporal_filter(self, remove_bad_data_indices=True, flip_negs=True, visualize=False):
+
+        temporal_filters = self.read_temporal_filter()
+        len_temporal_filter = len(temporal_filters[0,:])
+
+        if remove_bad_data_indices:
+            good_indices = np.setdiff1d(range(self.n_cells), self.bad_data_indices)
+            for i in self.bad_data_indices:
+                temporal_filters[i,:] = np.zeros(len_temporal_filter)
+        else:
+            good_indices = range(self.n_cells)
+
+        # Some temporal filters first have a negative deflection, which we probably don't want
+        for i in range(self.n_cells):
+            if temporal_filters[i,1] < 0 and flip_negs is True:
+                temporal_filters[i,:] = temporal_filters[i,:] * (-1)
+                # print('%d' % i)
+
+        if self.response_type == 'off':
+            temporal_filters = (-1)*temporal_filters
+
+        mean_filter = np.mean(temporal_filters[good_indices, :], axis=0)
+
+        if visualize:
+            for i in good_indices:
+                plt.plot(range(len_temporal_filter), temporal_filters[i,:], c='grey', alpha=0.2)
+                plt.plot(range(len_temporal_filter), mean_filter, c='black')
+
+            plt.axhline(0, linestyle='--', c='black')
+            plt.title(self.gc_type + ' ' + self.response_type)
+            plt.xlabel('Time (1/fps)')
+            plt.show()
+
+        else:
+            return np.array([mean_filter])
+
+    def get_mean_postspike_filter(self, remove_bad_data_indices=True, visualize=False):
+
+        postspike_filters = self.read_postspike_filter()
+        len_postspike_filter = len(postspike_filters[0,:])
+
+        if remove_bad_data_indices:
+            good_indices = np.setdiff1d(range(self.n_cells), self.bad_data_indices)
+            for i in self.bad_data_indices:
+                postspike_filters[i,:] = np.zeros(len_postspike_filter)
+        else:
+            good_indices = range(self.n_cells)
+
+        mean_filter = np.mean(postspike_filters[good_indices, :], axis=0)
+
+        if visualize:
+            for i in good_indices:
+                plt.plot(range(len_postspike_filter), postspike_filters[i,:], c='grey', alpha=0.2)
+                plt.plot(range(len_postspike_filter), mean_filter, c='black')
+
+            plt.title(self.gc_type + ' ' + self.response_type)
+            plt.xlabel('Time (1/fps)')
+            plt.show()
+
+        else:
+            return mean_filter
+
+    # def compute_filter_integrals(self):  # Obsolete
+    #     time_rk1 = self.read_temporal_filter()
+    #     space_rk1 = self.read_space_rk1()
+    #
+    #     filter_integrals = np.zeros(self.n_cells)
+    #     for i in range(self.n_cells):
+    #         spatiotemp_filter = np.array([space_rk1[i]]) * np.array([time_rk1[i]]).T
+    #         filter_integrals[i] = np.sum(spatiotemp_filter)
+    #
+    #     return filter_integrals
+
+    # def compute_pos_filter_integrals(self): # Obsolete
+    #     time_rk1 = self.read_temporal_filter()
+    #     space_rk1 = self.read_space_rk1()
+    #
+    #     filter_integrals = np.zeros(self.n_cells)
+    #     for i in range(self.n_cells):
+    #         spatiotemp_filter = np.array([space_rk1[i]]) * np.array([time_rk1[i]]).T
+    #         zeromatrix = np.zeros(np.shape(spatiotemp_filter))
+    #         spatiotemp_filter_nonneg = np.maximum(spatiotemp_filter, zeromatrix)
+    #         filter_integrals[i] = np.sum(spatiotemp_filter_nonneg)
+    #
+    #     return filter_integrals
+
+    # def compute_neg_filter_integrals(self): # Obsolete
+    #     time_rk1 = self.read_temporal_filter()
+    #     space_rk1 = self.read_space_rk1()
+    #
+    #     filter_integrals = np.zeros(self.n_cells)
+    #     for i in range(self.n_cells):
+    #         spatiotemp_filter = np.array([space_rk1[i]]) * np.array([time_rk1[i]]).T
+    #         filter_integrals[i] = np.sum(spatiotemp_filter)
+    #         zeromatrix = np.zeros(np.shape(spatiotemp_filter))
+    #         spatiotemp_filter_nonpos = np.minimum(spatiotemp_filter, zeromatrix)
+    #         filter_integrals[i] = np.sum(spatiotemp_filter_nonpos)
+    #
+    #     return filter_integrals
+
+    # def describe(self, visualize=False):
+    #     describedata = dict()
+    #     describedata['tonicdrive'] = self.read_tonicdrive()
+    #
+    #     gc_spatial_data_array, sta_fits, bad_data_indices = self.read_retina_spatial_data()
+    #     describedata['bad_data'] = [i in bad_data_indices for i in range(self.n_cells)]
+    #     describedata['center_x'] = [float(sta_fits[0,i][0]) for i in range(self.n_cells)]
+    #     describedata['center_y'] = [float(sta_fits[0,i][1]) for i in range(self.n_cells)]
+    #     describedata['center_sd_x'] = [float(sta_fits[0,i][2]) for i in range(self.n_cells)]
+    #     describedata['center_sd_y'] = [float(sta_fits[0,i][3]) for i in range(self.n_cells)]
+    #     describedata['orientation'] = [float(sta_fits[0,i][4]) for i in range(self.n_cells)]
+    #
+    #     describe_df = pd.DataFrame.from_dict(describedata)
+    #
+    #     describe_df['center_rf_area'] = np.pi * describe_df.center_sd_x * describe_df.center_sd_y
+    #     describe_df['filter_integral'] = self.compute_filter_integrals()
+    #
+    #     if visualize:
+    #         import seaborn as sns
+    #         sns.heatmap(describe_df.corr(), cmap='viridis')
+    #         plt.title(self.gc_type + ' ' + self.response_type)
+    #         plt.show()
+    #
+    #     return describe_df
 
 
 class ApricotFits(ApricotData, Visualize, Mathematics):
@@ -187,30 +312,62 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
 
         super().__init__(gc_type, response_type)
 
-    def create(self):
-
-        # Create spatial fits
-        parameter_names, data_all_viable_cells, bad_data_indices = self.fit_dog_to_sta_data(semi_x_always_major=True)
-        spatial_fits_df = pd.DataFrame(data_all_viable_cells, columns=parameter_names)
-        # spatial_fits_df.to_csv('spatial_fits.csv')
-
-        # Create temporal fits
-        temporal_fits = self.fit_cosine_bumps_to_sta_data()
-
-        # Create postspike fits
-
-        # Finally, get non-fitted parameters (tonicdrive, filter integral)
-
-        # Save or not
-        pass
-
     def save_fits(self):
         raise NotImplementedError
 
     def load_fits(self, fits_csv):
         raise NotImplementedError
 
-    def fit_dog_to_sta_data(self, visualize=False, surround_model=1, save=None, semi_x_always_major=False):
+    def fit_temporal_filters(self, visualize=False):
+        """
+        Fits each temporal filter to a function consisting of the difference of two
+        cascades of lowpass filters. This follows Chichilnisky&Kalmar 2002 JNeurosci.
+
+        :param visualize:
+        :return:
+        """
+        # shape (n_cells, 15); 15 time points @ 120 fps
+        temporal_filters = self.read_temporal_filter(flip_negs=True)
+
+        good_indices = np.setdiff1d(np.arange(self.n_cells), self.bad_data_indices)
+        parameter_names = ['n', 'p1', 'p2', 'tau1', 'tau2']
+        bounds = ([0, 0, 0, 0.1, 3],
+                  [np.inf, 10, 10, 3, 6])
+
+        fitted_parameters = np.zeros((self.n_cells, len(parameter_names)))
+        error_array = np.zeros(self.n_cells)
+        max_error = -0.1
+
+        # xdata = np.arange(15) * (1/120) * 1000  # time points in milliseconds
+        xdata = np.arange(15)
+        xdata_finer = np.linspace(0, 15-1, 100)
+
+        for cell_ix in tqdm(good_indices):
+            ydata = temporal_filters[cell_ix, :]
+
+            try:
+                popt, pcov = curve_fit(self.diff_of_lowpass_filters, xdata, ydata, bounds=bounds)
+                fitted_parameters[cell_ix, :] = popt
+                error_array[cell_ix] = (1/15)*np.sum((ydata - self.diff_of_lowpass_filters(xdata, *popt))**2)
+            except:
+                print('Fitting for cell index %d failed' % cell_ix)
+                fitted_parameters[cell_ix, :] = np.nan
+                error_array[cell_ix] = max_error
+                continue
+
+            if visualize:
+                plt.scatter(xdata, ydata)
+                plt.plot(xdata_finer, self.diff_of_lowpass_filters(xdata_finer, *popt))
+                plt.title('%s %s, cell ix %d' % (self.gc_type, self.response_type, cell_ix))
+                plt.show()
+
+        parameters_df = pd.DataFrame(fitted_parameters, columns=parameter_names)
+        error_df = pd.DataFrame(error_array, columns=['mse'])
+        return pd.concat([parameters_df,error_df], axis=1)
+
+
+
+    def fit_dog_to_sta_data(self, visualize=False, surround_model=1, save=None, semi_x_always_major=True):
         """
         Fits a function consisting of the difference of two 2-dimensional elliptical Gaussian functions to
         retinal spike triggered average (STA) data.
@@ -278,19 +435,21 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
             if center_rotation_angle < 0:  # For negative angles, turn positive
                 center_rotation_angle = center_rotation_angle + 2 * np.pi
 
-            # Invert data arrays with negative sign for fitting and display. Fitting assumes that center peak is above mean
+            # Invert data arrays with negative sign for fitting and display.
+            # Fitting assumes that center peak is above mean.
             if data_array.ravel()[np.argmax(np.abs(data_array))] < 0:
                 data_array = data_array * -1
 
             # Set initial guess for fitting
             if surround_model == 1:
-                # Build initial guess for (amplitudec, xoc, yoc, semi_xc, semi_yc, orientation_center, amplitudes, sur_ratio, offset)
+                # Build initial guess for (amplitudec, xoc, yoc, semi_xc, semi_yc, orientation_center,
+                #                          amplitudes, sur_ratio, offset)
                 p0 = np.array([1, 7, 7, 3, 3,
                                center_rotation_angle, 0.1, 3, 0])
                 # boundaries=(np.array([.999, -np.inf, -np.inf, 0, 0, -2*np.pi, 0, 1, -np.inf]),
                 # np.array([1, np.inf, np.inf, np.inf, np.inf, 2*np.pi, 1, np.inf, np.inf]))
-                boundaries = (np.array([.999, -np.inf, -np.inf, 0, 0, 0, 0, 1, -np.inf]),
-                              np.array([1, np.inf, np.inf, np.inf, np.inf, 2 * np.pi, 1, np.inf, np.inf]))
+                boundaries = (np.array([.999, -np.inf, -np.inf, 0, 0, 0, 0, 1, 0]),
+                              np.array([1, np.inf, np.inf, np.inf, np.inf, 2 * np.pi, 1, np.inf, 0.001]))
             # if surround_fixed: # delta_semi_y
             # # Build initial guess for (amplitudec, xoc, yoc, semi_xc, delta_semi_y, orientation_center, amplitudes, sur_ratio, offset)
             # p0 = np.array([1, 7, 7, 3, 0,
@@ -389,6 +548,8 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
             # Defn per https://se.mathworks.com/help/ident/ref/goodnessoffit.html without 1 - ...
             # 0 = perfect fit, infty = bad fit
             fit_error = np.sqrt(np.sum(fit_deviations**2)/(np.sum((data_mean - data_array)**2)))
+            # if fit_error > 1.0:
+            #     print('Warning! NMSE fit error over 1.0 for cell index %d.' % cell_index)
             error_all_viable_cells[cell_index, 0] = fit_error
 
             # Visualize fits with data
@@ -457,260 +618,110 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
         if save is not None:
             assert type(save) == str, "Use the parameter save to specify the output filename"
             fits_df = pd.DataFrame(data_all_viable_cells, columns=parameter_names)
+            aspect_ratios_df = pd.DataFrame(fits_df.semi_xc/fits_df.semi_yc, columns=['aspect_ratio']).fillna(0.0)
             error_df = pd.DataFrame(error_all_viable_cells, columns=['nmse'])
             good_indices = np.ones(len(data_all_viable_cells))
             for i in self.bad_data_indices:
                 good_indices[i] = 0
             good_indices_df = pd.DataFrame(good_indices, columns=['good_filter_data'])
-            pd.concat([fits_df, error_df, good_indices_df], axis=1).to_csv(save)
+            pd.concat([fits_df, aspect_ratios_df, error_df, good_indices_df], axis=1).to_csv(save)
 
         return parameter_names, data_all_viable_cells, bad_data_indices
 
-    def get_tonicdrive_stats(self, remove_bad_data_indices=True, visualize=False):
-        """
-        Fits a normal distribution to "tonic drive" values
 
-        :param remove_bad_data_indices: True/False (default True)
-        :param visualize: True/False (default False)
-        :return: mean and SD of the fitted normal distribution
-        """
-        tonicdrive = self.read_tonicdrive()
 
-        if remove_bad_data_indices:
-            good_indices = np.setdiff1d(range(self.n_cells), self.bad_data_indices)
-            tonicdrive = tonicdrive[good_indices]
+    # def get_filterintegral_stats(self, remove_bad_data_indices=True, visualize=False):
+    #     """
+    #     Fits a normal distribution to the sums/integrals of spatiotemporal kernels
+    #
+    #     :param remove_bad_data_indices: True/False (default True)
+    #     :param visualize: True/False (default False)
+    #     :return: mean and SD of the fitted normal distribution
+    #     """
+    #     filterintegrals = self.compute_filter_integrals()
+    #
+    #     if remove_bad_data_indices:
+    #         good_indices = np.setdiff1d(range(self.n_cells), self.bad_data_indices)
+    #         filterintegrals = filterintegrals[good_indices]
+    #
+    #     mean, sd = norm.fit(filterintegrals)
+    #
+    #     if visualize:
+    #         x_min, x_max = norm.ppf([0.001, 0.999], loc=mean, scale=sd)
+    #         xs = np.linspace(x_min, x_max, 100)
+    #         plt.plot(xs, norm.pdf(xs, loc=mean, scale=sd))
+    #         plt.hist(filterintegrals, density=True)
+    #         plt.title(self.gc_type + ' ' + self.response_type)
+    #         plt.xlabel('Filter integral (a.u.)')
+    #         plt.show()
+    #
+    #     return mean, sd
 
-        mean, sd = norm.fit(tonicdrive)
-
-        if visualize:
-            x_min, x_max = norm.ppf([0.001, 0.999], loc=mean, scale=sd)
-            xs = np.linspace(x_min, x_max, 100)
-            plt.plot(xs, norm.pdf(xs, loc=mean, scale=sd))
-            plt.hist(tonicdrive, density=True)
-            plt.title(self.gc_type + ' ' + self.response_type)
-            plt.xlabel('Tonic drive (a.u.)')
-            plt.show()
-
-        return mean, sd
-
-    def get_filterintegral_stats(self, remove_bad_data_indices=True, visualize=False):
-        """
-        Fits a normal distribution to the sums/integrals of spatiotemporal kernels
-
-        :param remove_bad_data_indices: True/False (default True)
-        :param visualize: True/False (default False)
-        :return: mean and SD of the fitted normal distribution
-        """
-        filterintegrals = self.compute_filter_integrals()
-
-        if remove_bad_data_indices:
-            good_indices = np.setdiff1d(range(self.n_cells), self.bad_data_indices)
-            filterintegrals = filterintegrals[good_indices]
-
-        mean, sd = norm.fit(filterintegrals)
-
-        if visualize:
-            x_min, x_max = norm.ppf([0.001, 0.999], loc=mean, scale=sd)
-            xs = np.linspace(x_min, x_max, 100)
-            plt.plot(xs, norm.pdf(xs, loc=mean, scale=sd))
-            plt.hist(filterintegrals, density=True)
-            plt.title(self.gc_type + ' ' + self.response_type)
-            plt.xlabel('Filter integral (a.u.)')
-            plt.show()
-
-        return mean, sd
-
-    def get_spatialfilter_integral_stats(self, remove_bad_data_indices=True, visualize=False):
-        filterintegrals = self.compute_spatialfilter_integrals()
-
-        if remove_bad_data_indices:
-            good_indices = np.setdiff1d(range(self.n_cells), self.bad_data_indices)
-            filterintegrals = filterintegrals[good_indices]
-
-        mean, sd = norm.fit(filterintegrals)
-
-        if visualize:
-            x_min, x_max = norm.ppf([0.001, 0.999], loc=mean, scale=sd)
-            xs = np.linspace(x_min, x_max, 100)
-            plt.plot(xs, norm.pdf(xs, loc=mean, scale=sd))
-            plt.hist(filterintegrals, density=True)
-            plt.title(self.gc_type + ' ' + self.response_type)
-            plt.xlabel('Spatial filter integral (a.u.)')
-            plt.show()
-
-        return mean, sd
-
-    # TODO - move to ApricotData
-    def get_mean_temporal_filter(self, remove_bad_data_indices=True, flip_negs=True, visualize=False):
-
-        temporal_filters = self.read_temporal_filter()
-        len_temporal_filter = len(temporal_filters[0,:])
-
-        if remove_bad_data_indices:
-            good_indices = np.setdiff1d(range(self.n_cells), self.bad_data_indices)
-            for i in self.bad_data_indices:
-                temporal_filters[i,:] = np.zeros(len_temporal_filter)
-        else:
-            good_indices = range(self.n_cells)
-
-        # Some temporal filters first have a negative deflection, which we probably don't want
-        for i in range(self.n_cells):
-            if temporal_filters[i,1] < 0 and flip_negs is True:
-                temporal_filters[i,:] = temporal_filters[i,:] * (-1)
-                print('%d' % i)
-
-        if self.response_type == 'off':
-            temporal_filters = (-1)*temporal_filters
-
-        mean_filter = np.mean(temporal_filters[good_indices, :], axis=0)
-
-        if visualize:
-            for i in good_indices:
-                plt.plot(range(len_temporal_filter), temporal_filters[i,:], c='grey', alpha=0.2)
-                plt.plot(range(len_temporal_filter), mean_filter, c='black')
-
-            plt.axhline(0, linestyle='--', c='black')
-            plt.title(self.gc_type + ' ' + self.response_type)
-            plt.xlabel('Time (1/fps)')
-            plt.show()
-
-        else:
-            return np.array([mean_filter])
-
-    # TODO - move to ApricotData
-    def get_mean_postspike_filter(self, remove_bad_data_indices=True, visualize=False):
-
-        postspike_filters = self.read_postspike_filter()
-        len_postspike_filter = len(postspike_filters[0,:])
-
-        if remove_bad_data_indices:
-            good_indices = np.setdiff1d(range(self.n_cells), self.bad_data_indices)
-            for i in self.bad_data_indices:
-                postspike_filters[i,:] = np.zeros(len_postspike_filter)
-        else:
-            good_indices = range(self.n_cells)
-
-        mean_filter = np.mean(postspike_filters[good_indices, :], axis=0)
-
-        if visualize:
-            for i in good_indices:
-                plt.plot(range(len_postspike_filter), postspike_filters[i,:], c='grey', alpha=0.2)
-                plt.plot(range(len_postspike_filter), mean_filter, c='black')
-
-            plt.title(self.gc_type + ' ' + self.response_type)
-            plt.xlabel('Time (1/fps)')
-            plt.show()
-
-        else:
-            return mean_filter
-
-    def temporal_filter_func(self, t, f0, f1, f2, f3, f4, f5, f6, f7, f8, f9):
-
-        bas = self.cosinebump
-        funclambda = lambda s: f0 * bas(0, s) + f1 * bas(1, s) + f2 * bas(2, s) + f3 * bas(3, s) + \
-                               f4 * bas(4,s) + f5 * bas(5, s) + f6 * bas(6, s) + f7 * bas(7, s) + \
-                               f8 * bas(8, s) + f9 * bas(9, s)
-
-        yvals = [funclambda(s) for s in t]
-        return yvals
-
-    def fit_cosine_bumps_to_sta_data(self, remove_bad_data_indices=True, visualize=False):
-        N_bas = 10
-
-        temporal_filters = self.read_temporal_filter()
-        len_temporal_filter = len(temporal_filters[0,:])
-
-        if remove_bad_data_indices:
-            good_indices = np.setdiff1d(range(self.n_cells), self.bad_data_indices)
-            for i in self.bad_data_indices:
-                temporal_filters[i,:] = np.zeros(len_temporal_filter)
-        else:
-            good_indices = range(self.n_cells)
-
-        # Some temporal filters first have a negative deflection, which we probably don't want
-        for i in range(self.n_cells):
-            if temporal_filters[i,1] < 0:
-                temporal_filters[i,:] = temporal_filters[i,:] * (-1)
-
-        if self.response_type == 'off':
-            temporal_filters = (-1)*temporal_filters
-        # Is this reasonable?
-
-        fit_values = np.zeros((self.n_cells, N_bas))
-        # TODO - Make fitting work; currently creates weird negative deflection in the beginning
-        for i in range(self.n_cells):
-            popt, pcov = curve_fit(self.temporal_filter_func, range(15), temporal_filters[i,:], bounds=(-5,5))
-            fit_values[i,:] = popt
-
-        if visualize:
-            xs = np.linspace(0, 15, 100)
-            for i in range(self.n_cells):
-                plt.title('%s %s / cell index %d' % (self.response_type, self.gc_type, i))
-                plt.plot(range(15), temporal_filters[i,:], '.')
-                plt.plot(xs, self.temporal_filter_func(xs, *fit_values[i]), '-')
-                plt.show(block=True)
-
-        else:
-            return fit_values
+    # def temporal_filter_func(self, t, f0, f1, f2, f3, f4, f5, f6, f7, f8, f9):
+    #
+    #     bas = self.cosinebump
+    #     funclambda = lambda s: f0 * bas(0, s) + f1 * bas(1, s) + f2 * bas(2, s) + f3 * bas(3, s) + \
+    #                            f4 * bas(4,s) + f5 * bas(5, s) + f6 * bas(6, s) + f7 * bas(7, s) + \
+    #                            f8 * bas(8, s) + f9 * bas(9, s)
+    #
+    #     yvals = [funclambda(s) for s in t]
+    #     return yvals
+    #
+    # def fit_cosine_bumps_to_sta_data(self, remove_bad_data_indices=True, visualize=False):
+    #     N_bas = 10
+    #
+    #     temporal_filters = self.read_temporal_filter()
+    #     len_temporal_filter = len(temporal_filters[0,:])
+    #
+    #     if remove_bad_data_indices:
+    #         good_indices = np.setdiff1d(range(self.n_cells), self.bad_data_indices)
+    #         for i in self.bad_data_indices:
+    #             temporal_filters[i,:] = np.zeros(len_temporal_filter)
+    #     else:
+    #         good_indices = range(self.n_cells)
+    #
+    #     # Some temporal filters first have a negative deflection, which we probably don't want
+    #     for i in range(self.n_cells):
+    #         if temporal_filters[i,1] < 0:
+    #             temporal_filters[i,:] = temporal_filters[i,:] * (-1)
+    #
+    #     if self.response_type == 'off':
+    #         temporal_filters = (-1)*temporal_filters
+    #     # Is this reasonable?
+    #
+    #     fit_values = np.zeros((self.n_cells, N_bas))
+    #
+    #     for i in range(self.n_cells):
+    #         popt, pcov = curve_fit(self.temporal_filter_func, range(15), temporal_filters[i,:], bounds=(-5,5))
+    #         fit_values[i,:] = popt
+    #
+    #     if visualize:
+    #         xs = np.linspace(0, 15, 100)
+    #         for i in range(self.n_cells):
+    #             plt.title('%s %s / cell index %d' % (self.response_type, self.gc_type, i))
+    #             plt.plot(range(15), temporal_filters[i,:], '.')
+    #             plt.plot(xs, self.temporal_filter_func(xs, *fit_values[i]), '-')
+    #             plt.show(block=True)
+    #
+    #     else:
+    #         return fit_values
 
 if __name__ == '__main__':
     ### Save spatial fits to files
-    # pon = FitsToApricotData('parasol', 'on')
+    # pon = ApricotFits('parasol', 'on')
     # pon.fit_dog_to_sta_data(semi_x_always_major=True, save='spatialfits_parasol_on.csv')
-    # poff = FitsToApricotData('parasol', 'off')
+    # poff = ApricotFits('parasol', 'off')
     # poff.fit_dog_to_sta_data(semi_x_always_major=True, save='spatialfits_parasol_off.csv')
     #
-    # mon = FitsToApricotData('midget', 'on')
+    # mon = ApricotFits('midget', 'on')
     # mon.fit_dog_to_sta_data(semi_x_always_major=True, save='spatialfits_midget_on.csv')
-    # moff = FitsToApricotData('midget', 'off')
+    # moff = ApricotFits('midget', 'off')
     # moff.fit_dog_to_sta_data(semi_x_always_major=True, save='spatialfits_midget_off.csv')
 
     ### Test on ON parasols
-    # pon = FitsToApricotData('parasol', 'on')
-    # pon.fit_dog_to_sta_data(semi_x_always_major=True, visualize=True)
+    # pon = ApricotFits('midget', 'on')
+    # pon.fit_dog_to_sta_data(semi_x_always_major=True, surround_model=1, visualize=False)
 
-
-    ### Check temporal filters
-    # x = ApricotFits('midget', 'off')
-    # a = x.compute_pos_filter_integrals()
-    # b = x.compute_neg_filter_integrals()
-    # c = x.compute_filter_integrals()
-    # df = pd.DataFrame({'integral_pos': a, 'integral_neg': b, 'integral_sum': c})
-    # df.to_csv('midget_off_integrals.csv')
-
-    x = ApricotFits('midget', 'off')
-    x.get_spatialfilter_integral_stats(visualize=True)
-    plt.show()
-
-
-    # gc_types = ['parasol', 'midget']
-    # response_types = ['ON', 'OFF']
-    # gcs, rts = np.meshgrid(gc_types, response_types)
-    #
-    # FitsToRetinaData('midget', 'ON').fit_cosine_bumps_to_sta_data(visualize=True)
-
-    # for gc_type, response_type in zip(gcs.flatten(), rts.flatten()):
-    #     x = ConstructReceptiveFields(gc_type, response_type)
-    #     save_filename = gc_type + '_' + response_type + '_surfix.csv'
-    #     x.fit_dog_to_sta_data(surround_model=1, visualize=False,
-    #                           semi_x_always_major=True, save=save_filename)
-
-    # ConstructReceptiveFields('parasol', 'ON').get_tonicdrive_stats(visualize=True)
-    # ConstructReceptiveFields('midget', 'OFF').get_mean_temporal_filter(visualize=True)
-    # ConstructReceptiveFields('midget', 'ON').get_mean_postspike_filter(visualize=True)
-    # GetLiteratureData('midget', 'ON').describe(visualize=True)
-
-
-    # x = ConstructReceptiveFields('parasol', 'ON')
-    # x.fit_dog_to_sta_data(surround_model=1, visualize=False,
-    #                       semi_x_always_major=True, save='results_temp/parasol_ON_surfix.csv')
-    # x = ConstructReceptiveFields('parasol', 'OFF')
-    # x.fit_dog_to_sta_data(surround_model=1, visualize=False,
-    #                   semi_x_always_major=True, save='results_temp/parasol_OFF_surfix.csv')
-    # x = ConstructReceptiveFields('midget', 'ON')
-    # x.fit_dog_to_sta_data(surround_model=1, visualize=False,
-    #                   semi_x_always_major=True, save='results_temp/midget_ON_surfix.csv')
-    # x = ConstructReceptiveFields('midget', 'OFF')
-    # x.fit_dog_to_sta_data(surround_model=1, visualize=False,
-    #                   semi_x_always_major=True, save='results_temp/midget_OFF_surfix.csv')
-
+    pon = ApricotFits('midget', 'on')
+    a = pon.fit_temporal_filters(visualize=True)
+    pass

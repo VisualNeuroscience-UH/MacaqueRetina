@@ -62,12 +62,13 @@ class Mathematics:
         return model_fit.ravel()
 
 
-    # TODO - Replace with call to previous fn
+
     def DoG2D_fixed_surround(self, xy_tuple, amplitudec, xoc, yoc, semi_xc, semi_yc, orientation_center, amplitudes,
                              sur_ratio, offset):
         '''
         DoG model with xo, yo, theta for surround coming from center.
         '''
+
         (x_fit, y_fit) = xy_tuple
         acen = (np.cos(orientation_center) ** 2) / (2 * semi_xc ** 2) + (np.sin(orientation_center) ** 2) / (
                     2 * semi_yc ** 2)
@@ -92,7 +93,7 @@ class Mathematics:
 
         return model_fit.ravel()
 
-    # TODO - Replace with call to previous fn
+
     def DoG2D_fixed_double_surround(self, xy_tuple, xoc, yoc, semi_xc, semi_yc, orientation_center, amplitudes):
         """
         DoG model with the angle of orientation and center positions identical and diameter of the surround
@@ -151,17 +152,26 @@ class Mathematics:
 
         return area_of_ellipse
 
-    def cosinebump(self, j, t):
-        a = 3.0  # Hand-tuned
-        c = 0.01  # Hand-tuned
-        phi_j = j * np.pi/2  # Spacing as in Pillow et al. 2008 Nature
+    def lowpass(self, t, n, p, tau):
+        y = p * (t / tau) ** (n) * np.exp(-n * (t / tau - 1))
+        return y
 
-        # First, scale time to logtime
-        t_logtime = a*np.log(t + c) - phi_j
+    def diff_of_lowpass_filters(self, t, n, p1, p2, tau1, tau2):
+        # From Chichilnisky&Kalmar JNeurosci 2002
+        y = self.lowpass(t, n, p1, tau1) - self.lowpass(t, n, p2, tau2)
+        return y
 
-        # Then create the bump
-        if -np.pi <= t_logtime <= np.pi:
-            return (np.cos(t_logtime) + 1) / 2
-        else:
-            return 0
+    # def cosinebump(self, j, t):
+    #     a = 3.0  # Hand-tuned
+    #     c = 0.01  # Hand-tuned
+    #     phi_j = j * np.pi/2  # Spacing as in Pillow et al. 2008 Nature
+    #
+    #     # First, scale time to logtime
+    #     t_logtime = a*np.log(t + c) - phi_j
+    #
+    #     # Then create the bump
+    #     if -np.pi <= t_logtime <= np.pi:
+    #         return (np.cos(t_logtime) + 1) / 2
+    #     else:
+    #         return 0
 

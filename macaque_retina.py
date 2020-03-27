@@ -1160,6 +1160,7 @@ class FunctionalMosaic(Mathematics):
             exp_generator_potential = np.array([np.exp(generator_potential + tonic_drive)])
             dt = (1 / self.stimulus_video.fps) * second
             inst_rates = b2.TimedArray(np.tile(exp_generator_potential.T, (1, n_trials)) * Hz, dt)
+            # TODO - interpolate rates?
 
             poisson_group = b2.PoissonGroup(n_trials, rates='inst_rates(t, i)')
             spike_monitor = b2.SpikeMonitor(poisson_group)
@@ -1171,7 +1172,7 @@ class FunctionalMosaic(Mathematics):
             spiketrains = np.array(list(spike_monitor.spike_trains().values()))
 
         if visualize is True:
-            plt.subplots(2,1,sharex=True)
+            plt.subplots(2, 1, sharex=True)
             plt.subplot(211)
             plt.eventplot(spiketrains)
             plt.xlim([0, duration/second])
@@ -1184,9 +1185,10 @@ class FunctionalMosaic(Mathematics):
             plt.xlim([0, duration / second])
 
             # TODO - average firing rate here (should follow generator)
-            # n_bins = int((duration/second)*100)
-            # a = np.histogram(spiketrains, n_bins) / n_trials
-            # plt.plot(range(len(a)), a)
+            n_bins = int((duration/(1*ms)))
+            binned_spikes = np.histogram(spiketrains.flatten(), n_bins)[0] / n_trials
+
+            plt.plot(np.arange(0, n_bins, 1)*1*ms, np.convolve(binned_spikes, [0.25, 0.5, 0.25], mode='same'))
 
         if return_monitor is True:
             return spike_monitor
