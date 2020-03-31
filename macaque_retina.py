@@ -364,7 +364,7 @@ class MosaicConstructor(Mathematics, Visualize):
     #
     #     return param_names, data_all_viable_cells, bad_data_indices
 
-    def fit_spatial_statistics(self, fitdata, visualize=False):
+    def fit_spatial_statistics(self, visualize=False):
         """
         Collect spatial statistics from Chichilnisky receptive field data
         """
@@ -589,7 +589,7 @@ class MosaicConstructor(Mathematics, Visualize):
 
         self.show_gc_receptive_fields(rho, phi, gc_rf_models, surround_fixed=self.surround_fixed)
 
-    def build(self, fitdata, visualize=False):
+    def build(self, visualize=False):
         """
         Builds the receptive field mosaic
         :return:
@@ -603,7 +603,7 @@ class MosaicConstructor(Mathematics, Visualize):
 
         # -- Second, endow cells with spatial receptive fields
         # Collect spatial statistics for receptive fields
-        spatial_statistics_dict = self.fit_spatial_statistics(fitdata, visualize=visualize)
+        spatial_statistics_dict = self.fit_spatial_statistics(visualize=visualize)
 
         # Get fit parameters for dendritic field diameter with respect to eccentricity. Linear and quadratic fit.
         # Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
@@ -1279,12 +1279,13 @@ class FunctionalMosaic(Mathematics):
 
 
 if __name__ == "__main__":
-    mosaic = MosaicConstructor(gc_type='parasol', response_type='OFF', ecc_limits=[4, 20],
+    mosaic = MosaicConstructor(gc_type='parasol', response_type='off', ecc_limits=[4, 20],
                                sector_limits=[-10.0, 10.0], model_density=1.0, randomize_position=0.15)
     # gc_density_func_params = mosaic.fit_gc_density_data()
     #
     # fitdata2 = load_dog_fits('results_temp/parasol_OFF_surfix.csv')
-    mosaic.build(visualize=True)
+    mosaic.build(visualize=False)
+    mosaic.visualize_mosaic()
     plt.show()
 
     #mosaic.fit_dendritic_diameter_vs_eccentricity(visualize=True)
