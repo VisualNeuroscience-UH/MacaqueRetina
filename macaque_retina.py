@@ -177,7 +177,6 @@ class MosaicConstructor(Mathematics, Visualize):
             sector_surface_area_all.append(sector_surface_area)  # collect sector area for each ecc step
 
             # N cells for given ecc
-            # TODO - gc_density_func_params should not be arguments to the method
             my_gaussian_fit = self.gauss_plus_baseline(center_ecc, *gc_density_func_params)
             Ncells = sector_surface_area * my_gaussian_fit * self.gc_proportion
 
@@ -185,10 +184,15 @@ class MosaicConstructor(Mathematics, Visualize):
             # Vector of cell positions in radial and polar directions. Angle in degrees.
             inner_arc_in_mm = (angle / 360) * 2 * np.pi * eccentricity_in_mm[0]
             delta_eccentricity_in_mm = eccentricity_in_mm[1] - eccentricity_in_mm[0]
-            n_segments_arc = np.sqrt(Ncells * (
-                        inner_arc_in_mm / delta_eccentricity_in_mm))  # note that the n_segments_arc and n_segments_eccentricity are floats
-            n_segments_eccentricity = (delta_eccentricity_in_mm / inner_arc_in_mm) * n_segments_arc
-            int_n_segments_arc = int(round(n_segments_arc))  # cells must be integers
+
+            # By assuming that the ratio of the number of points in x and y direction respects
+            # the sector's aspect ratio, ie.
+            # n_segments_arc / n_segments_eccentricity = inner_arc_in_mm / delta_eccentricity_in_mm
+            # we get:
+            n_segments_arc = np.sqrt(Ncells * (inner_arc_in_mm / delta_eccentricity_in_mm))
+            n_segments_eccentricity = np.sqrt(Ncells * (delta_eccentricity_in_mm / inner_arc_in_mm))
+            # Because n_segments_arc and n_segments_eccentricity can be floats, we round them to integers
+            int_n_segments_arc = int(round(n_segments_arc))
             int_n_segments_eccentricity = int(round(n_segments_eccentricity))
 
             # Recalc delta_eccentricity_in_mm given the n segments to avoid non-continuous cell densities
@@ -197,7 +201,7 @@ class MosaicConstructor(Mathematics, Visualize):
             true_delta_eccentricity_in_mm = (int_n_segments_eccentricity / int_n_segments_arc) * inner_arc_in_mm
 
             radius_segment_length = true_delta_eccentricity_in_mm / int_n_segments_eccentricity
-            theta_segment_angle = angle / int_n_segments_arc
+            theta_segment_angle = angle / int_n_segments_arc  # Note that this is different from inner_arc_in_mm / int_n_segments_arc
 
             # Set the true_eccentricity_end
             true_eccentricity_end = eccentricity_in_mm[0] + true_delta_eccentricity_in_mm
@@ -205,23 +209,27 @@ class MosaicConstructor(Mathematics, Visualize):
             vector_polar_angle = np.linspace(theta[0], theta[1], int_n_segments_arc)
             vector_eccentricity = np.linspace(eccentricity_in_mm[0], true_eccentricity_end - radius_segment_length,
                                               int_n_segments_eccentricity)
-            # print vector_polar_angle
-            # print '\n\n'
-            # print vector_eccentricity
-            # print '\n\n'
 
-            # meshgrid and rotate every second to get good GC tiling
+            # meshgrid and shift every second column to get good GC tiling
             matrix_polar_angle, matrix_eccentricity = np.meshgrid(vector_polar_angle, vector_eccentricity)
             matrix_polar_angle[::2] = matrix_polar_angle[::2] + (
-                        angle / (2 * n_segments_arc))  # rotate half the inter-cell angle
+                        angle / (2 * n_segments_arc))  # shift half the inter-cell angle
 
-            # randomize for given proportion
+            # Randomize with respect to spacing
+            # Randomization using uniform distribution [-0.5, 0.5]
+            # matrix_polar_angle_randomized = matrix_polar_angle + theta_segment_angle * randomize_position \
+            #                                 * (np.random.rand(matrix_polar_angle.shape[0],
+            #                                                   matrix_polar_angle.shape[1]) - 0.5)
+            # matrix_eccentricity_randomized = matrix_eccentricity + radius_segment_length * randomize_position \
+            #                                  * (np.random.rand(matrix_eccentricity.shape[0],
+            #                                                    matrix_eccentricity.shape[1]) - 0.5)
+            # Randomization using normal distribution
             matrix_polar_angle_randomized = matrix_polar_angle + theta_segment_angle * randomize_position \
-                                            * (np.random.rand(matrix_polar_angle.shape[0],
-                                                              matrix_polar_angle.shape[1]) - 0.5)
+                                            * (np.random.randn(matrix_polar_angle.shape[0],
+                                                              matrix_polar_angle.shape[1]))
             matrix_eccentricity_randomized = matrix_eccentricity + radius_segment_length * randomize_position \
-                                             * (np.random.rand(matrix_eccentricity.shape[0],
-                                                               matrix_eccentricity.shape[1]) - 0.5)
+                                             * (np.random.randn(matrix_eccentricity.shape[0],
+                                                               matrix_eccentricity.shape[1]))
 
             matrix_polar_angle_randomized_all = np.append(matrix_polar_angle_randomized_all,
                                                           matrix_polar_angle_randomized.flatten())
@@ -474,15 +482,12 @@ class MosaicConstructor(Mathematics, Visualize):
             distribution = spatial_statistics_dict[key]['distribution']
             gc_rf_models[:, index] = self.get_random_samples_from_known_distribution(shape, loc, scale, n_cells,
                                                                                      distribution)
-        # For semi_yc/semi_xc ratio, noise increases at index 327
-
         # Quality control images
         if visualize:
             self.show_spatial_statistics(gc_rf_models, spatial_statistics_dict)
 
         # Calculate RF diameter scaling factor for all ganglion cells
         # Area of RF = Scaling_factor * Random_factor * Area of ellipse(semi_xc,semi_yc), solve Scaling_factor.
-        area_of_rf = self.circle_diameter2area(gc_diameters)  # All cells
         area_of_ellipse = self.ellipse2area(gc_rf_models[:, 0],
                                             gc_rf_models[:, 1])  # Units are pixels for the Chichilnisky data
 
@@ -1267,11 +1272,17 @@ def load_dog_fits(csv_file_path):
 
 
 if __name__ == "__main__":
-    mosaic = MosaicConstructor(gc_type='parasol', response_type='OFF', ecc_limits=[4, 10],
-                               sector_limits=[-10.0, 10.0], model_density=1.0, randomize_position=0.6)
-    #mosaic.fit_dendritic_diameter_vs_eccentricity(visualize=True)
+    mosaic = MosaicConstructor(gc_type='parasol', response_type='OFF', ecc_limits=[4, 20],
+                               sector_limits=[-10.0, 10.0], model_density=1.0, randomize_position=0.15)
+    gc_density_func_params = mosaic.fit_gc_density_data()
+
     fitdata2 = load_dog_fits('results_temp/parasol_OFF_surfix.csv')
     mosaic.build(fitdata2, visualize=True)
+    plt.show()
+
+    #mosaic.fit_dendritic_diameter_vs_eccentricity(visualize=True)
+    # fitdata2 = load_dog_fits('results_temp/parasol_OFF_surfix.csv')
+    # mosaic.build(fitdata2, visualize=True)
     # gc_density_func_params = mosaic.fit_gc_density_data()
     # mosaic.place_gc_units(gc_density_func_params, visualize=True)
     # plt.show()

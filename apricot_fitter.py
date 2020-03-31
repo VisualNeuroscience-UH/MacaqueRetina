@@ -130,6 +130,17 @@ class ApricotData:
 
         return filter_integrals
 
+    def compute_spatiotemporalfilter_integrals(self):
+        space_rk1 = self.read_space_rk1()
+        time_rk1 = self.read_temporal_filter(flip_negs=False)
+
+        filter_integrals = np.zeros(self.n_cells)
+        for i in range(self.n_cells):
+            abs_spatial_filter = np.abs(np.outer(space_rk1[i], time_rk1[i]))
+            filter_integrals[i] = 0.5 * np.sum(abs_spatial_filter)
+
+        return filter_integrals
+
     def get_tonicdrive_stats(self, remove_bad_data_indices=True, visualize=False):
         """
         Fits a normal distribution to "tonic drive" values
@@ -367,8 +378,8 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
         error_df = pd.DataFrame(error_array, columns=['mse'])
         return pd.concat([parameters_df, error_df], axis=1)
 
-
-    def fit_dog_to_sta_data(self, visualize=False, surround_model=1, save=None, semi_x_always_major=True):
+    # TODO - Plotting done with origin='bottom' - is this a problem?
+    def fit_spatial_filters(self, visualize=False, surround_model=1, save=None, semi_x_always_major=True):
         """
         Fits a function consisting of the difference of two 2-dimensional elliptical Gaussian functions to
         retinal spike triggered average (STA) data.
@@ -629,7 +640,8 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
 
         return parameter_names, data_all_viable_cells, bad_data_indices
 
-
+    def fit_all(self, save=None):
+        pass
 
     # def get_filterintegral_stats(self, remove_bad_data_indices=True, visualize=False):
     #     """
@@ -723,6 +735,9 @@ if __name__ == '__main__':
     # pon = ApricotFits('midget', 'on')
     # pon.fit_dog_to_sta_data(semi_x_always_major=True, surround_model=1, visualize=False)
 
-    pon = ApricotFits('parasol', 'on')
-    a = pon.fit_temporal_filters(visualize=False)
-    pass
+    pon = ApricotFits('midget', 'off')
+    pon.get_spatialfilter_integral_stats(visualize=True)
+    plt.show()
+    # d = pon.compute_spatiotemporalfilter_integrals()
+    # plt.hist(d)
+    # plt.show()
