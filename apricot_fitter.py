@@ -319,15 +319,11 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
     Methods for deriving spatial receptive field parameters from the apricot dataset (Field_2010)
     """
 
-    def __init__(self, gc_type, response_type):
+    def __init__(self, gc_type, response_type, fit_all=True):
 
         super().__init__(gc_type, response_type)
-
-    def save_fits(self):
-        raise NotImplementedError
-
-    def load_fits(self, fits_csv):
-        raise NotImplementedError
+        if fit_all is True:
+            self.fit_all()
 
     def fit_temporal_filters(self, visualize=False):
         """
@@ -355,7 +351,7 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
         # xdata = np.arange(15)
         xdata_finer = np.linspace(0, max(xdata), 100)
 
-        for cell_ix in tqdm(good_indices):
+        for cell_ix in tqdm(good_indices, desc='Fitting temporal filters'):
             ydata = temporal_filters[cell_ix, :]
 
             try:
@@ -375,11 +371,11 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
                 plt.show()
 
         parameters_df = pd.DataFrame(fitted_parameters, columns=parameter_names)
-        error_df = pd.DataFrame(error_array, columns=['mse'])
+        error_df = pd.DataFrame(error_array, columns=['temporalfit_mse'])
         return pd.concat([parameters_df, error_df], axis=1)
 
     # TODO - Plotting done with origin='bottom' - is this a problem?
-    def fit_spatial_filters(self, visualize=False, surround_model=1, save=None, semi_x_always_major=True):
+    def fit_spatial_filters(self, visualize=False, surround_model=1, semi_x_always_major=True):
         """
         Fits a function consisting of the difference of two 2-dimensional elliptical Gaussian functions to
         retinal spike triggered average (STA) data.
@@ -437,7 +433,7 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
 
         # GO THROUGH ALL CELLS
         print(('Fitting DoG model, surround is {0}'.format(surround_status)))
-        for cell_index in tqdm(all_viable_cells):
+        for cell_index in tqdm(all_viable_cells, desc='Fitting spatial  filters'):
             # pbar(cell_index/n_cells)
             data_array = gc_spatial_data_array[:, :, cell_index]
             # Drop outlier cells
@@ -627,21 +623,33 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
                 plt.show()
             # FOR loop ends here
 
-        if save is not None:
-            assert type(save) == str, "Use the parameter save to specify the output filename"
-            fits_df = pd.DataFrame(data_all_viable_cells, columns=parameter_names)
-            aspect_ratios_df = pd.DataFrame(fits_df.semi_xc/fits_df.semi_yc, columns=['aspect_ratio']).fillna(0.0)
-            error_df = pd.DataFrame(error_all_viable_cells, columns=['nmse'])
-            good_indices = np.ones(len(data_all_viable_cells))
-            for i in self.bad_data_indices:
-                good_indices[i] = 0
-            good_indices_df = pd.DataFrame(good_indices, columns=['good_filter_data'])
-            pd.concat([fits_df, aspect_ratios_df, error_df, good_indices_df], axis=1).to_csv(save)
+        # Finally build a dataframe of the fitted parameters
+        fits_df = pd.DataFrame(data_all_viable_cells, columns=parameter_names)
+        aspect_ratios_df = pd.DataFrame(fits_df.semi_xc/fits_df.semi_yc, columns=['aspect_ratio']).fillna(0.0)
+        error_df = pd.DataFrame(error_all_viable_cells, columns=['spatialfit_nmse'])
+        good_indices = np.ones(len(data_all_viable_cells))
+        for i in self.bad_data_indices:
+            good_indices[i] = 0
+        good_indices_df = pd.DataFrame(good_indices, columns=['good_filter_data'])
 
-        return parameter_names, data_all_viable_cells, bad_data_indices
+        return pd.concat([fits_df, aspect_ratios_df, error_df, good_indices_df], axis=1)
+        # return parameter_names, data_all_viable_cells, bad_data_indices
 
-    def fit_all(self, save=None):
-        pass
+    def fit_all(self):
+        spatial_fits = self.fit_spatial_filters(visualize=False, surround_model=1, semi_x_always_major=True)
+        temporal_fits = self.fit_temporal_filters()
+
+        self.all_fits = pd.concat([spatial_fits, temporal_fits], axis=1)
+
+    def get_fits(self):
+        return self.all_fits
+
+    def save(self, filepath):
+        self.all_fits.to_csv(filepath)
+
+
+
+
 
     # def get_filterintegral_stats(self, remove_bad_data_indices=True, visualize=False):
     #     """
@@ -735,9 +743,10 @@ if __name__ == '__main__':
     # pon = ApricotFits('midget', 'on')
     # pon.fit_dog_to_sta_data(semi_x_always_major=True, surround_model=1, visualize=False)
 
-    pon = ApricotFits('midget', 'off')
-    pon.get_spatialfilter_integral_stats(visualize=True)
-    plt.show()
+    pon = ApricotFits('parasol', 'off')
+    pon.save('parasofoff.csv')
+    # pon.get_spatialfilter_integral_stats(visualize=True)
+    # plt.show()
     # d = pon.compute_spatiotemporalfilter_integrals()
     # plt.hist(d)
     # plt.show()

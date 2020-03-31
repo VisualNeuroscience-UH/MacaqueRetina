@@ -32,7 +32,7 @@ class MosaicConstructor(Mathematics, Visualize):
     script_path = Path(__file__).parent
     digitized_figures_path = script_path
 
-    def __init__(self, gc_type, response_type, ecc_limits, sector_limits, model_density=1.0, randomize_position=0.7):
+    def __init__(self, gc_type, response_type, ecc_limits, sector_limits, fits_from_file=None, model_density=1.0, randomize_position=0.7):
         '''
         Initialize the ganglion cell mosaic
 
@@ -59,13 +59,15 @@ class MosaicConstructor(Mathematics, Visualize):
         proportion_of_OFF_response_type = 0.59
 
         # GC type specifications self.gc_proportion
-        if all([gc_type == 'parasol', response_type == 'ON']):
+        gc_type = gc_type.lower()
+        response_type = response_type.lower()
+        if all([gc_type == 'parasol', response_type == 'on']):
             self.gc_proportion = proportion_of_parasol_gc_type * proportion_of_ON_response_type * model_density
-        elif all([gc_type == 'parasol', response_type == 'OFF']):
+        elif all([gc_type == 'parasol', response_type == 'off']):
             self.gc_proportion = proportion_of_parasol_gc_type * proportion_of_OFF_response_type * model_density
-        elif all([gc_type == 'midget', response_type == 'ON']):
+        elif all([gc_type == 'midget', response_type == 'on']):
             self.gc_proportion = proportion_of_midget_gc_type * proportion_of_ON_response_type * model_density
-        elif all([gc_type == 'midget', response_type == 'OFF']):
+        elif all([gc_type == 'midget', response_type == 'off']):
             self.gc_proportion = proportion_of_midget_gc_type * proportion_of_OFF_response_type * model_density
         else:
             print('Unkown ganglion cell type, aborting')
@@ -100,10 +102,15 @@ class MosaicConstructor(Mathematics, Visualize):
         # Set stimulus stuff
         self.stimulus_video = None
 
+        # Make or read fits
+        if fits_from_file is None:
+            self.all_fits_df = apricot.ApricotFits(gc_type, response_type).get_fits()
+        else:
+            self.all_fits_df = pd.read_csv(fits_from_file, header=0, index_col=0).fillna(0.0)
+
         # Get tonic drive and "spatial filter sum" statistics
-        x = apricot.ApricotFits(self.gc_type, self.response_type)
+        x = apricot.ApricotFits(self.gc_type, self.response_type, fit_all=False)
         self.tonicdrive_mean, self.tonicdrive_sd = x.get_tonicdrive_stats()
-        # self.filtersum_mean, self.filtersum_sd = x.get_filterintegral_stats()
         self.filtersum_mean, self.filtersum_sd = x.get_spatialfilter_integral_stats()
 
         # Get the mean temporal filters
@@ -345,17 +352,27 @@ class MosaicConstructor(Mathematics, Visualize):
         cell_density = np.squeeze(gc_density['Ydata']) * 1e3  # Cells are in thousands, thus the 1e3
         return cell_eccentricity, cell_density
 
+    # def load_dog_fits(csv_file_path):
+    #
+    #     # All entries 0.0 => handpicked bad cell, all entries NaN => fitting failed
+    #     dog_fits = pd.read_csv(csv_file_path, header=0, index_col=0).fillna(0.0)
+    #     data_all_viable_cells = np.array(dog_fits)
+    #     # Pick the rows where all the columns are zeros -> "bad data indices"
+    #     bad_data_indices = np.where((dog_fits == 0.0).all(axis=1))[0].tolist()
+    #     param_names = dog_fits.columns.tolist()
+    #     print('Loaded data for %d cells of which %d were bad' % (len(data_all_viable_cells), len(bad_data_indices)))
+    #
+    #     return param_names, data_all_viable_cells, bad_data_indices
+
     def fit_spatial_statistics(self, fitdata, visualize=False):
         """
         Collect spatial statistics from Chichilnisky receptive field data
         """
 
-        # 2D DoG fit to Chichilnisky retina spike triggered average data. The visualize parameter will
-        # show each DoG fit in order to search for bad cell fits and data.
-        # parameter_names, data_all_viable_cells, bad_cell_indices = \
-        #     self.fit_dog_to_sta_data(visualize=False, surround_model=self.surround_fixed)
-        parameter_names, data_all_viable_cells, bad_cell_indices = fitdata
-
+        # parameter_names, data_all_viable_cells, bad_cell_indices = fitdata
+        data_all_viable_cells = np.array(self.all_fits_df)
+        bad_cell_indices = np.where((self.all_fits_df == 0.0).all(axis=1))[0].tolist()
+        parameter_names = self.all_fits_df.columns.tolist()
 
         all_viable_cells = np.delete(data_all_viable_cells, bad_cell_indices, 0)
 
@@ -1257,27 +1274,17 @@ class FunctionalMosaic(Mathematics):
         return tsp, Vmem, mean_fr
 
 
-def load_dog_fits(csv_file_path):
 
-    # All entries 0.0 => handpicked bad cell, all entries NaN => fitting failed
-    dog_fits = pd.read_csv(csv_file_path, header=0, index_col=0).fillna(0.0)
-    data_all_viable_cells = np.array(dog_fits)
-    # Pick the rows where all the columns are zeros -> "bad data indices"
-    bad_data_indices = np.where((dog_fits == 0.0).all(axis=1) )[0].tolist()
-    param_names = dog_fits.columns.tolist()
-    print('Loaded data for %d cells of which %d were bad' % (len(data_all_viable_cells), len(bad_data_indices)))
-
-    return param_names, data_all_viable_cells, bad_data_indices
 
 
 
 if __name__ == "__main__":
     mosaic = MosaicConstructor(gc_type='parasol', response_type='OFF', ecc_limits=[4, 20],
                                sector_limits=[-10.0, 10.0], model_density=1.0, randomize_position=0.15)
-    gc_density_func_params = mosaic.fit_gc_density_data()
-
-    fitdata2 = load_dog_fits('results_temp/parasol_OFF_surfix.csv')
-    mosaic.build(fitdata2, visualize=True)
+    # gc_density_func_params = mosaic.fit_gc_density_data()
+    #
+    # fitdata2 = load_dog_fits('results_temp/parasol_OFF_surfix.csv')
+    mosaic.build(visualize=True)
     plt.show()
 
     #mosaic.fit_dendritic_diameter_vs_eccentricity(visualize=True)
