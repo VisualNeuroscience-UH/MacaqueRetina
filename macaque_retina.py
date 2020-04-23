@@ -352,7 +352,7 @@ class MosaicConstructor(Mathematics, Visualize):
         cell_density = np.squeeze(gc_density['Ydata']) * 1e3  # Cells are in thousands, thus the 1e3
         return cell_eccentricity, cell_density
 
-    # def load_dog_fits(csv_file_path):
+    # def load_dog_fits(csv_file_path):  Obs?
     #
     #     # All entries 0.0 => handpicked bad cell, all entries NaN => fitting failed
     #     dog_fits = pd.read_csv(csv_file_path, header=0, index_col=0).fillna(0.0)
@@ -825,7 +825,7 @@ class FunctionalMosaic(Mathematics):
         spatial_kernel = self.DoG2D_fixed_surround((x_grid, y_grid), amplitudec, gc.q_pix, gc.r_pix,
                                                 gc.semi_xc, gc.semi_yc, gc.orientation_center, gc.amplitudes,
                                                 gc.sur_ratio, offset)
-        spatial_kernel = np.reshape(spatial_kernel, (s,s))
+        spatial_kernel = np.reshape(spatial_kernel, (s, s))
 
         # Scale to match data filter power
         # (simulated spatial filter has more pixels => convolution will have higher value, if not corrected)

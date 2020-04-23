@@ -45,7 +45,7 @@ class ApricotData:
             self.spatial_filename = 'Parasol_ON_spatial.mat'
             # self.bad_data_indices=[15, 67, 71, 86, 89]   # Simo's; Manually selected for Chichilnisky apricot (spatial) data
             self.bad_data_indices = [15, 71, 86, 89]
-            #bad_data_indices = []  # For debugging
+
             self.filename_nonspatial = 'mosaicGLM_apricot_ONParasol-1-mat.mat'
 
         elif gc_type == 'parasol' and response_type == 'off':
@@ -77,6 +77,23 @@ class ApricotData:
         raw_data = sio.loadmat(filepath)  # , squeeze_me=True)
         self.data = raw_data['mosaicGLM'][0]
         self.n_cells = len(self.data)
+        self.inverted_data_indices = self.get_inverted_indices()
+
+
+    def get_inverted_indices(self):
+        """
+        The rank-1 space and time matrices in the dataset have bumps in an inconsistent way, but the
+        outer product always produces a positive deflection first irrespective of on/off polarity.
+        This method tells which cell indices you need to flip to get a spatial filter with positive central component.
+
+        :return: np.array
+        """
+
+        temporal_filters = self.read_temporal_filter(flip_negs=False)
+        inverted_data_indices = np.argwhere(temporal_filters[:, 1] < 0).flatten()
+
+        return inverted_data_indices
+
 
     def read_retina_spatial_data(self):
 
@@ -93,9 +110,11 @@ class ApricotData:
         return gc_spatial_data_array, initial_center_values, self.bad_data_indices
 
 
-    def read_tonicdrive(self):
+    def read_tonicdrive(self, remove_bad_data_indices=True):
 
         tonicdrive = np.array([self.data[cellnum][0][0][0][0][0][1][0][0][0][0][0] for cellnum in range(self.n_cells)])
+        if remove_bad_data_indices is True:
+            tonicdrive[self.bad_data_indices] = 0.0
 
         return tonicdrive
 
@@ -118,30 +137,52 @@ class ApricotData:
 
     def read_space_rk1(self):
         space_rk1 = np.array([self.data[cellnum][0][0][0][0][0][3][0][0][2] for cellnum in range(self.n_cells)])
-        return np.reshape(space_rk1, (self.n_cells, 13**2))  # Spatial data 13x13 in the apricot dataset
+        return np.reshape(space_rk1, (self.n_cells, 13**2))  # Spatial filter is 13x13 pixels in the Apricot dataset
 
-    def compute_spatialfilter_integrals(self):
+    def compute_spatial_filter_sums(self, remove_bad_data_indices=True):
+        """
+        Computes the pixelwise sum of the values in the rank-1 spatial filters. Center (positive part),
+        surround (negative part) and total sum given in separate columns. Don't mix these with areas of
+        1 SD ellipses.
+
+        :param remove_bad_data_indices: bool
+        :return:
+        """
         space_rk1 = self.read_space_rk1()
 
-        filter_integrals = np.zeros(self.n_cells)
+        filter_sums = np.zeros((self.n_cells, 3))
         for i in range(self.n_cells):
-            abs_spatial_filter = np.abs(np.array([space_rk1[i]]))
-            filter_integrals[i] = np.sum(abs_spatial_filter)
+            data_spatial_filter = np.array([space_rk1[i]])
+            if i in self.inverted_data_indices:
+                data_spatial_filter = (-1) * data_spatial_filter
 
-        return filter_integrals
+            filter_sums[i, 0] = np.sum(data_spatial_filter[data_spatial_filter > 0])
+            filter_sums[i, 1] = (-1) * np.sum(data_spatial_filter[data_spatial_filter < 0])
+            filter_sums[i, 2] = np.sum(data_spatial_filter)
 
-    def compute_spatiotemporalfilter_integrals(self):
-        space_rk1 = self.read_space_rk1()
-        time_rk1 = self.read_temporal_filter(flip_negs=False)
+        if remove_bad_data_indices is True:
+            filter_sums[self.bad_data_indices, :] = 0
 
-        filter_integrals = np.zeros(self.n_cells)
+        return pd.DataFrame(filter_sums, columns=['spatial_filtersum_cen', 'spatial_filtersum_sur', 'spatial_filtersum_total'])
+
+    def compute_temporal_filter_sums(self, remove_bad_data_indices=True):
+
+        temporal_filters = self.read_temporal_filter(flip_negs=True)  # 1st deflection positive, 2nd negative
+        filter_sums = np.zeros((self.n_cells, 3))
         for i in range(self.n_cells):
-            abs_spatial_filter = np.abs(np.outer(space_rk1[i], time_rk1[i]))
-            filter_integrals[i] = np.sum(abs_spatial_filter)
+            filter = temporal_filters[i,:]
+            filter_sums[i, 0] = np.sum(filter[filter > 0])
+            filter_sums[i, 1] = (-1) * np.sum(filter[filter < 0])
+            filter_sums[i, 2] = np.sum(filter)
 
-        return filter_integrals
+        if remove_bad_data_indices is True:
+            filter_sums[self.bad_data_indices] = 0
 
-    def get_tonicdrive_stats(self, remove_bad_data_indices=True, visualize=False):
+        return pd.DataFrame(filter_sums, columns=['temporal_filtersum_first', 'temporal_filtersum_second', 'temporal_filtersum_total'])
+
+
+
+    def get_tonicdrive_stats(self, remove_bad_data_indices=True, visualize=False):  # Obs?
         """
         Fits a normal distribution to "tonic drive" values
 
@@ -169,7 +210,28 @@ class ApricotData:
 
         return mean, sd
 
-    def get_spatialfilter_integral_stats(self, remove_bad_data_indices=True, visualize=False):
+    def compute_spatialfilter_integrals(self):  # Obs?
+        space_rk1 = self.read_space_rk1()
+
+        filter_integrals = np.zeros(self.n_cells)
+        for i in range(self.n_cells):
+            abs_spatial_filter = np.abs(np.array([space_rk1[i]]))
+            filter_integrals[i] = np.sum(abs_spatial_filter)
+
+        return filter_integrals
+
+    def compute_spatiotemporalfilter_integrals(self):  # Obs?
+        space_rk1 = self.read_space_rk1()
+        time_rk1 = self.read_temporal_filter(flip_negs=False)
+
+        filter_integrals = np.zeros(self.n_cells)
+        for i in range(self.n_cells):
+            abs_spatial_filter = np.abs(np.outer(space_rk1[i], time_rk1[i]))
+            filter_integrals[i] = np.sum(abs_spatial_filter)
+
+        return filter_integrals
+
+    def get_spatialfilter_integral_stats(self, remove_bad_data_indices=True, visualize=False):  # Obs?
         filterintegrals = self.compute_spatialfilter_integrals()
 
         if remove_bad_data_indices:
@@ -358,7 +420,7 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
             try:
                 popt, pcov = curve_fit(self.diff_of_lowpass_filters, xdata, ydata, bounds=bounds)
                 fitted_parameters[cell_ix, :] = popt
-                error_array[cell_ix] = (1/15)*np.sum((ydata - self.diff_of_lowpass_filters(xdata, *popt))**2)
+                error_array[cell_ix] = (1/15)*np.sum((ydata - self.diff_of_lowpass_filters(xdata, *popt))**2)  # MSE error
             except:
                 print('Fitting for cell index %d failed' % cell_ix)
                 fitted_parameters[cell_ix, :] = np.nan
@@ -376,6 +438,7 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
         return pd.concat([parameters_df, error_df], axis=1)
 
     # TODO - Plotting done with origin='bottom' - is this a problem?
+    # TODO - This method desperately needs a rewrite
     def fit_spatial_filters(self, visualize=False, surround_model=1, semi_x_always_major=True):
         """
         Fits a function consisting of the difference of two 2-dimensional elliptical Gaussian functions to
@@ -429,8 +492,10 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
 
             surround_status = 'independent'
 
-        # Create error array
+        # Create error & other arrays
         error_all_viable_cells = np.zeros((n_cells, 1))
+        dog_filtersum_array = np.zeros((n_cells, 4))
+
 
         # GO THROUGH ALL CELLS
         print(('Fitting DoG model, surround is {0}'.format(surround_status)))
@@ -553,13 +618,20 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
             data_fitted = data_fitted.reshape(pixel_array_shape_y, pixel_array_shape_x)
             fit_deviations = data_fitted - data_array
             data_mean = np.mean(data_array)
-            # Normalized mean square error used here
+            # Normalized mean square error
             # Defn per https://se.mathworks.com/help/ident/ref/goodnessoffit.html without 1 - ...
             # 0 = perfect fit, infty = bad fit
-            fit_error = np.sqrt(np.sum(fit_deviations**2)/(np.sum((data_mean - data_array)**2)))
-            # if fit_error > 1.0:
-            #     print('Warning! NMSE fit error over 1.0 for cell index %d.' % cell_index)
+            # fit_error = np.sqrt(np.sum(fit_deviations**2)/(np.sum((data_mean - data_array)**2)))
+
+            # MSE
+            fit_error = np.sum(fit_deviations**2) / (13*13)
             error_all_viable_cells[cell_index, 0] = fit_error
+
+            # Save DoG fit sums
+            dog_filtersum_array[cell_index, 0] = np.sum(data_fitted[data_fitted > 0])
+            dog_filtersum_array[cell_index, 1] = (-1) * np.sum(data_fitted[data_fitted < 0])
+            dog_filtersum_array[cell_index, 2] = np.sum(data_fitted)
+            dog_filtersum_array[cell_index, 3] = np.sum(data_array[data_array > 0])
 
             # Visualize fits with data
             if visualize:
@@ -627,20 +699,32 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
         # Finally build a dataframe of the fitted parameters
         fits_df = pd.DataFrame(data_all_viable_cells, columns=parameter_names)
         aspect_ratios_df = pd.DataFrame(fits_df.semi_xc/fits_df.semi_yc, columns=['aspect_ratio']).fillna(0.0)
-        error_df = pd.DataFrame(error_all_viable_cells, columns=['spatialfit_nmse'])
+        dog_filtersum_df = pd.DataFrame(dog_filtersum_array, columns=['dog_filtersum_cen',
+                                                                      'dog_filtersum_sur',
+                                                                      'dog_filtersum_total',
+                                                                      'ctrl_filtersum_cen'])
+
+        error_df = pd.DataFrame(error_all_viable_cells, columns=['spatialfit_mse'])
         good_indices = np.ones(len(data_all_viable_cells))
         for i in self.bad_data_indices:
             good_indices[i] = 0
         good_indices_df = pd.DataFrame(good_indices, columns=['good_filter_data'])
 
-        return pd.concat([fits_df, aspect_ratios_df, error_df, good_indices_df], axis=1)
+        return pd.concat([fits_df, aspect_ratios_df, dog_filtersum_df, error_df, good_indices_df], axis=1)
         # return parameter_names, data_all_viable_cells, bad_data_indices
 
     def fit_all(self):
         spatial_fits = self.fit_spatial_filters(visualize=False, surround_model=1, semi_x_always_major=True)
-        temporal_fits = self.fit_temporal_filters()
+        spatial_filter_sums = self.compute_spatial_filter_sums()
 
-        self.all_fits = pd.concat([spatial_fits, temporal_fits], axis=1)
+        temporal_fits = self.fit_temporal_filters()
+        temporal_filter_sums = self.compute_temporal_filter_sums()
+
+        tonicdrives = pd.DataFrame(self.read_tonicdrive(), columns=['tonicdrive'])
+
+        # Collect everything into one big dataframe
+        self.all_fits = pd.concat([spatial_fits, spatial_filter_sums, temporal_fits, temporal_filter_sums, tonicdrives], axis=1)
+        pass
 
     def get_fits(self):
         return self.all_fits
@@ -650,6 +734,9 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
 
 
 class ApricotFitsMatrix(object):
+    """
+    Class for collecting all fitted parameters for all cell types
+    """
 
     def __init__(self):
 
@@ -707,7 +794,10 @@ class ApricotFitsMatrix(object):
 
 if __name__ == '__main__':
 
-    ApricotFitsMatrix()
+    # ApricotFits('parasol', 'on').save('on_parasol_fits.csv')
+    pass
+
+    #ApricotFitsMatrix()
     ### Save spatial fits to files
     # pon = ApricotFits('parasol', 'on')
     # pon.fit_dog_to_sta_data(semi_x_always_major=True, save='spatialfits_parasol_on.csv')
