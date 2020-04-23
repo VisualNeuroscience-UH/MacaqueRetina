@@ -137,7 +137,7 @@ class ApricotData:
         filter_integrals = np.zeros(self.n_cells)
         for i in range(self.n_cells):
             abs_spatial_filter = np.abs(np.outer(space_rk1[i], time_rk1[i]))
-            filter_integrals[i] = 0.5 * np.sum(abs_spatial_filter)
+            filter_integrals[i] = np.sum(abs_spatial_filter)
 
         return filter_integrals
 
@@ -156,6 +156,7 @@ class ApricotData:
             tonicdrive = tonicdrive[good_indices]
 
         mean, sd = norm.fit(tonicdrive)
+        print(len(tonicdrive))
 
         if visualize:
             x_min, x_max = norm.ppf([0.001, 0.999], loc=mean, scale=sd)
@@ -648,86 +649,65 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
         self.all_fits.to_csv(filepath)
 
 
+class ApricotFitsMatrix(object):
+
+    def __init__(self):
+
+        # Create fits for all cell types
+        self.pon_df = ApricotFits('parasol', 'on').get_fits()
+        self.poff_df = ApricotFits('parasol', 'off').get_fits()
+        # self.mon_df = ApricotFits('midget', 'on').get_fits()
+        # self.moff_df = ApricotFits('midget', 'off').get_fits()
+
+        # Label by gc and response type
+        self.pon_df['gc_type'] = 'parasol'
+        self.pon_df['response_type'] = 'on'
+        self.poff_df['gc_type'] = 'parasol'
+        self.poff_df['response_type'] = 'off'
+
+        # self.mon_df['gc_type'] = 'midget'
+        # self.mon_df['response_type'] = 'on'
+        # self.moff_df['gc_type'] = 'midget'
+        # self.moff_df['response_type'] = 'off'
+
+        # Compute nearest neighbor distances
 
 
+        pass
 
-    # def get_filterintegral_stats(self, remove_bad_data_indices=True, visualize=False):
-    #     """
-    #     Fits a normal distribution to the sums/integrals of spatiotemporal kernels
-    #
-    #     :param remove_bad_data_indices: True/False (default True)
-    #     :param visualize: True/False (default False)
-    #     :return: mean and SD of the fitted normal distribution
-    #     """
-    #     filterintegrals = self.compute_filter_integrals()
-    #
-    #     if remove_bad_data_indices:
-    #         good_indices = np.setdiff1d(range(self.n_cells), self.bad_data_indices)
-    #         filterintegrals = filterintegrals[good_indices]
-    #
-    #     mean, sd = norm.fit(filterintegrals)
-    #
-    #     if visualize:
-    #         x_min, x_max = norm.ppf([0.001, 0.999], loc=mean, scale=sd)
-    #         xs = np.linspace(x_min, x_max, 100)
-    #         plt.plot(xs, norm.pdf(xs, loc=mean, scale=sd))
-    #         plt.hist(filterintegrals, density=True)
-    #         plt.title(self.gc_type + ' ' + self.response_type)
-    #         plt.xlabel('Filter integral (a.u.)')
-    #         plt.show()
-    #
-    #     return mean, sd
+    def find_min(self, point_grid, point_ix, grid_to_compare):
+        """
+        Finds the nearest neighbor of point_grid[point_ix] in grid_to_compare (distance > 0) and returns the distance to it
+        """
 
-    # def temporal_filter_func(self, t, f0, f1, f2, f3, f4, f5, f6, f7, f8, f9):
-    #
-    #     bas = self.cosinebump
-    #     funclambda = lambda s: f0 * bas(0, s) + f1 * bas(1, s) + f2 * bas(2, s) + f3 * bas(3, s) + \
-    #                            f4 * bas(4,s) + f5 * bas(5, s) + f6 * bas(6, s) + f7 * bas(7, s) + \
-    #                            f8 * bas(8, s) + f9 * bas(9, s)
-    #
-    #     yvals = [funclambda(s) for s in t]
-    #     return yvals
-    #
-    # def fit_cosine_bumps_to_sta_data(self, remove_bad_data_indices=True, visualize=False):
-    #     N_bas = 10
-    #
-    #     temporal_filters = self.read_temporal_filter()
-    #     len_temporal_filter = len(temporal_filters[0,:])
-    #
-    #     if remove_bad_data_indices:
-    #         good_indices = np.setdiff1d(range(self.n_cells), self.bad_data_indices)
-    #         for i in self.bad_data_indices:
-    #             temporal_filters[i,:] = np.zeros(len_temporal_filter)
-    #     else:
-    #         good_indices = range(self.n_cells)
-    #
-    #     # Some temporal filters first have a negative deflection, which we probably don't want
-    #     for i in range(self.n_cells):
-    #         if temporal_filters[i,1] < 0:
-    #             temporal_filters[i,:] = temporal_filters[i,:] * (-1)
-    #
-    #     if self.response_type == 'off':
-    #         temporal_filters = (-1)*temporal_filters
-    #     # Is this reasonable?
-    #
-    #     fit_values = np.zeros((self.n_cells, N_bas))
-    #
-    #     for i in range(self.n_cells):
-    #         popt, pcov = curve_fit(self.temporal_filter_func, range(15), temporal_filters[i,:], bounds=(-5,5))
-    #         fit_values[i,:] = popt
-    #
-    #     if visualize:
-    #         xs = np.linspace(0, 15, 100)
-    #         for i in range(self.n_cells):
-    #             plt.title('%s %s / cell index %d' % (self.response_type, self.gc_type, i))
-    #             plt.plot(range(15), temporal_filters[i,:], '.')
-    #             plt.plot(xs, self.temporal_filter_func(xs, *fit_values[i]), '-')
-    #             plt.show(block=True)
-    #
-    #     else:
-    #         return fit_values
+        point = point_grid.iloc[point_ix]
+        d = ((grid_to_compare.center_point_x - point.center_point_x) ** 2 + (
+                    grid_to_compare.center_point_y - point.center_point_y) ** 2) ** 0.5
+
+        return min(d[d > 0])
+
+    def get_nearest_neighbor_distances(self, points_df):
+        """
+        Finds the nearest neighbor distances for an array of points
+        """
+        distances = np.array([self.find_min(points_df, i, points_df) for i in range(len(points_df))])
+        return distances
+
+    def get_all_distances(self, gc_type):
+
+        # Pseudocode
+        both_types = pd.concat([on_cells, off_cells])
+
+        on_on_distances = get_nearest_neighbor_distances(on_cells) * um_per_pix
+        off_off_distances = get_nearest_neighbor_distances(off_cells) * um_per_pix
+        sign_indep_distances = get_nearest_neighbor_distances(both_types) * um_per_pix
+
+        return on_on_distances, off_off_distances, sign_indep_distances
+
 
 if __name__ == '__main__':
+
+    ApricotFitsMatrix()
     ### Save spatial fits to files
     # pon = ApricotFits('parasol', 'on')
     # pon.fit_dog_to_sta_data(semi_x_always_major=True, save='spatialfits_parasol_on.csv')
@@ -743,8 +723,9 @@ if __name__ == '__main__':
     # pon = ApricotFits('midget', 'on')
     # pon.fit_dog_to_sta_data(semi_x_always_major=True, surround_model=1, visualize=False)
 
-    pon = ApricotFits('parasol', 'off')
-    pon.save('parasofoff.csv')
+
+    # pon = ApricotFits('parasol', 'off')
+    # pon.save('spatialfits_2020.csv')
     # pon.get_spatialfilter_integral_stats(visualize=True)
     # plt.show()
     # d = pon.compute_spatiotemporalfilter_integrals()
