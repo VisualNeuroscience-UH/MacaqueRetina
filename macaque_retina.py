@@ -628,7 +628,6 @@ class MosaicConstructor(Mathematics, Visualize):
 
         self.show_gc_receptive_fields(rho, phi, gc_rf_models, surround_fixed=self.surround_fixed)
 
-
     def build(self, visualize=False):
         """
         Builds the receptive field mosaic
@@ -697,8 +696,9 @@ class FunctionalMosaic(Mathematics):
         self.vmin_spatial_filter = -0.5
         self.vmax_spatial_filter = 0.5
 
-        self.temporal_filter_fps = 120
-        self.temporal_filter_timesteps = 15
+        self.data_filter_fps = 120  # TODO - this needs to be checked
+        self.data_filter_timesteps = 15
+        self.data_filter_duration = self.data_filter_timesteps * (1000/self.data_filter_fps)  # in milliseconds
 
         # Convert retinal positions (ecc, pol angle) to visual space positions in deg (azimuth, elev)
         vspace_pos = np.array([self.pol2cart(gc.positions_eccentricity, gc.positions_polar_angle)
@@ -768,7 +768,7 @@ class FunctionalMosaic(Mathematics):
 
         # Get parameters from the stimulus object
         from copy import deepcopy
-        self.stimulus_video = deepcopy(stimulus_video)  # TODO - No copying plz
+        self.stimulus_video = deepcopy(stimulus_video)  # TODO - Is copying the best way here?
         stimulus_center = stimulus_video.video_center_vspace
         self.pix_per_deg = stimulus_video.pix_per_deg  # angular resolution (eg. van Hateren 1 arcmin/pix => 60 pix/deg)
 
@@ -790,8 +790,14 @@ class FunctionalMosaic(Mathematics):
         self.gc_df_pixspace.semi_yc = self.gc_df.semi_yc * self.pix_per_deg
 
         # Define spatial filter sidelength (based on angular resolution and widest semimajor axis)
+        # We use the general rule that the sidelength should be at least 5 times the SD
         # Sidelength always odd number
-        self.spatial_filter_sidelen = 2 * 3 * int(max(max(self.gc_df_pixspace.semi_xc), max(self.gc_df_pixspace.semi_yc))) + 1
+        self.spatial_filter_sidelen = 2 * 3 * int(max(max(self.gc_df_pixspace.semi_xc * self.gc_df_pixspace.sur_ratio),
+                                                      max(self.gc_df_pixspace.semi_yc * self.gc_df_pixspace.sur_ratio))) + 1
+
+        # Get temporal parameters from stimulus video
+        self.video_fps = self.stimulus_video.fps
+        self.temporal_filter_len = int(self.data_filter_duration / (1000/self.video_fps))
 
         # Scale vmin_, vmax_spatial_filter based on filter sidelen
         v_spatial_filter_scaling = (13**2) / (self.spatial_filter_sidelen**2)  # 13**2 being the original dimensions
@@ -866,10 +872,11 @@ class FunctionalMosaic(Mathematics):
 
         # Scale to match data filter power
         # (simulated spatial filter has more pixels => convolution will have higher value, if not corrected)
-        data_filtersum = self.gc_df.iloc[cell_index].filtersum
-        scaling_factor = data_filtersum / np.sum(np.abs(spatial_kernel))
+        # data_filtersum = self.gc_df.iloc[cell_index].filtersum
+        # scaling_factor = data_filtersum / np.sum(np.abs(spatial_kernel))
 
         # TODO - Figure out correct scaling here!
+        scaling_factor = 1
         scaled_spatial_kernel = scaling_factor * spatial_kernel
 
         return scaled_spatial_kernel
@@ -881,22 +888,17 @@ class FunctionalMosaic(Mathematics):
         :param cell_index: int
         :return:
         """
-        # temporal_filter = apricot.ApricotFits(self.gc_type, self.response_type).get_mean_temporal_filter()
-        # temporal_filter = np.flip(temporal_filter)
-        temporal_filter = np.fromstring(self.gc_df.iloc[cell_index].temporal_filter[1:-1])
-        temporal_filter = np.array([np.flip(temporal_filter)])
 
-        # If stimulus can have some other fps than 120, then it needs scaling here
+        filter_params = self.gc_df.iloc[cell_index][['n', 'p1', 'p2', 'tau1', 'tau2']]
+        tvec = np.linspace(0, self.data_filter_duration, self.temporal_filter_len)
+        temporal_filter = self.diff_of_lowpass_filters(tvec, *filter_params)
+
+        # TODO - should the filter be scaled in some way depending on fps?
 
         return temporal_filter
 
     def _create_postspike_filter(self, cell_index):
-        postspike_filter = np.fromstring(self.gc_df.iloc[cell_index].postspike_filter[1:-1], sep=' ')
-        postspike_filter = np.array([np.flip(postspike_filter)])
-
-        # If stimulus can have some other fps than 120, then it needs scaling here
-
-        return postspike_filter
+        raise NotImplementedError
 
     def show_gc_view(self, cell_index, frame_number=0):
         """
@@ -972,7 +974,7 @@ class FunctionalMosaic(Mathematics):
             plt.colorbar()
 
             plt.subplot(132)
-            plt.plot(range(self.temporal_filter_timesteps), np.flip(temporal_filter[0,:]))
+            plt.plot(range(self.temporal_filter_len), np.flip(temporal_filter))
             plt.ylim([-2.5, 2.5])  # limits need to change if fps is changing
 
             plt.subplot(133)
@@ -1030,11 +1032,11 @@ class FunctionalMosaic(Mathematics):
 
         # Add some padding to the beginning so that stimulus time and generator potential time match
         # (First time steps of stimulus are not convolved)
-        generator_potential = np.pad(generator_potential, (self.temporal_filter_timesteps-1, 0),
+        generator_potential = np.pad(generator_potential, (self.data_filter_timesteps - 1, 0),
                                      mode='constant', constant_values=0)
 
         if visualize is True:
-            tvec = np.arange(0, len(generator_potential), 1) * (1/self.temporal_filter_fps)
+            tvec = np.arange(0, len(generator_potential), 1) * (1 / self.data_filter_fps)
             plt.subplots(2, 1, sharex=True)
             plt.subplot(211)
             plt.plot(tvec, generator_potential)
@@ -1118,11 +1120,19 @@ class FunctionalMosaic(Mathematics):
 
 if __name__ == "__main__":
     mosaic = MosaicConstructor(gc_type='parasol', response_type='off', ecc_limits=[3, 6],
-                               sector_limits=[-30.0, 30.0], model_density=1.0, randomize_position=0.05)
+                               sector_limits=[-5.0, 5.0], model_density=1.0, randomize_position=0.05)
 
     mosaic.build()
-    mosaic.visualize_mosaic()
+    ret = FunctionalMosaic(mosaic.gc_df, 'parasol', 'on')
+    grating = vs.ConstructStimulus(video_center_vspace=5 + 0j, pattern='sine_grating', temporal_frequency=2,
+                                   spatial_frequency=0.1,
+                                   duration_seconds=2.0, fps=120, orientation=0, image_width=240, image_height=240,
+                                   pix_per_deg=60, stimulus_size=0, contrast=1.0)
+    ret.load_stimulus(grating)
+    ret.create_spatiotemporal_filter(18, visualize=True)
     plt.show()
+    # mosaic.visualize_mosaic()
+    # plt.show()
     # b = mosaic.fit_temporal_statistics(visualize=False)
     # mosaic.create_temporal_filters(b)
     # mosaic.build()
