@@ -112,13 +112,44 @@ class MosaicConstructor(Mathematics, Visualize):
         self.bad_data_indices = np.where((self.all_fits_df == 0.0).all(axis=1))[0].tolist()
         self.good_data_indices = np.setdiff1d(range(self.n_cells_data), self.bad_data_indices)
 
-        # Get tonic drive and "spatial filter sum" statistics
-        # x = apricot.ApricotFits(self.gc_type, self.response_type, fit_all=False)
-        # self.filtersum_mean, self.filtersum_sd = x.get_spatialfilter_integral_stats()
 
-        # Get the mean temporal filters
-        # self.mean_temporal_filter = x.get_mean_temporal_filter()
-        # self.mean_postspike_filter = x.get_mean_postspike_filter()
+    def get_random_samples(self, shape, loc, scale, n_cells, distribution):
+        """
+        Create random samples from a model distribution.
+
+        :param shape:
+        :param loc:
+        :param scale:
+        :param n_cells:
+        :param distribution:
+
+        :returns distribution_parameters
+        """
+        assert distribution in ['gamma', 'beta', 'skewnorm'], "Distribution not supported"
+
+        if distribution == 'gamma':
+            distribution_parameters = stats.gamma.rvs(a=shape, loc=loc, scale=scale, size=n_cells,
+                                                      random_state=None)  # random_state is the seed
+        elif distribution == 'beta':
+            distribution_parameters = stats.beta.rvs(a=shape[0], b=shape[1], loc=loc, scale=scale, size=n_cells,
+                                                     random_state=None)  # random_state is the seed
+        elif distribution == 'skewnorm':
+            distribution_parameters = stats.skewnorm.rvs(a=shape, loc=loc, scale=scale, size=n_cells,
+                                                         random_state=None)
+
+        return distribution_parameters
+
+    def read_gc_density_data(self):
+        '''
+        Read re-digitized old literature data from mat files
+        '''
+        digitized_figures_path = MosaicConstructor.digitized_figures_path
+
+        gc_density = sio.loadmat(digitized_figures_path / 'Perry_1984_Neurosci_GCdensity_c.mat',
+                                 variable_names=['Xdata', 'Ydata'])
+        cell_eccentricity = np.squeeze(gc_density['Xdata'])
+        cell_density = np.squeeze(gc_density['Ydata']) * 1e3  # Cells are in thousands, thus the 1e3
+        return cell_eccentricity, cell_density
 
     def fit_gc_density_data(self):
         """
@@ -135,6 +166,87 @@ class MosaicConstructor(Mathematics, Visualize):
                                    p0=[scale, mean, sigma, baseline0])
 
         return popt  # = gc_density_func_params
+
+    def read_dendritic_fields_vs_eccentricity_data(self):
+        '''
+        Read re-digitized old literature data from mat files
+        '''
+        digitized_figures_path = MosaicConstructor.digitized_figures_path
+
+        if self.gc_type == 'parasol':
+            dendr_diam1 = sio.loadmat(digitized_figures_path / 'Perry_1984_Neurosci_ParasolDendrDiam_c.mat',
+                                      variable_names=['Xdata', 'Ydata'])
+            dendr_diam2 = sio.loadmat(digitized_figures_path / 'Watanabe_1989_JCompNeurol_GCDendrDiam_parasol_c.mat',
+                                      variable_names=['Xdata', 'Ydata'])
+        elif self.gc_type == 'midget':
+            dendr_diam1 = sio.loadmat(digitized_figures_path / 'Perry_1984_Neurosci_MidgetDendrDiam_c.mat',
+                                      variable_names=['Xdata', 'Ydata'])
+            dendr_diam2 = sio.loadmat(digitized_figures_path / 'Watanabe_1989_JCompNeurol_GCDendrDiam_midget_c.mat',
+                                      variable_names=['Xdata', 'Ydata'])
+
+        return dendr_diam1, dendr_diam2
+
+    def fit_dendritic_diameter_vs_eccentricity(self, visualize=False):
+        """
+        Dendritic field diameter with respect to eccentricity. Linear and quadratic fit.
+        Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
+        """
+
+        # Read dendritic field data and return linear fit with scipy.stats.linregress
+        dendr_diam_parameters = {}
+
+        dendr_diam1, dendr_diam2 = self.read_dendritic_fields_vs_eccentricity_data()
+
+        # Parasol fit
+        gc_type = self.gc_type
+
+        # Quality control. Datasets separately for visualization
+        data_set_1_x = np.squeeze(dendr_diam1['Xdata'])
+        data_set_1_y = np.squeeze(dendr_diam1['Ydata'])
+        data_set_2_x = np.squeeze(dendr_diam2['Xdata'])
+        data_set_2_y = np.squeeze(dendr_diam2['Ydata'])
+
+        # Both datasets together
+        data_all_x = np.concatenate((data_set_1_x, data_set_2_x))
+        data_all_y = np.concatenate((data_set_1_y, data_set_2_y))
+
+        # Limit eccentricities for central visual field studies to get better approximation at about 5 deg ecc (1mm)
+        data_all_x_index = data_all_x <= self.visual_field_fit_limit
+        data_all_x = data_all_x[data_all_x_index]
+        data_all_y = data_all_y[data_all_x_index]  # Don't forget to truncate values, too
+
+        # Sort to ascending order
+        data_all_x_index = np.argsort(data_all_x)
+        data_all_x = data_all_x[data_all_x_index]
+        data_all_y = data_all_y[data_all_x_index]
+
+        # Get rf diameter vs eccentricity
+        dendr_diam_model = self.dendr_diam_model  # 'linear' # 'quadratic' # cubic
+        dict_key = '{0}_{1}'.format(self.gc_type, dendr_diam_model)
+
+        if dendr_diam_model == 'linear':
+            polynomial_order = 1
+            polynomials = np.polyfit(data_all_x, data_all_y, polynomial_order)
+            dendr_diam_parameters[dict_key] = {'intercept': polynomials[1], 'slope': polynomials[0]}
+        elif dendr_diam_model == 'quadratic':
+            polynomial_order = 2
+            polynomials = np.polyfit(data_all_x, data_all_y, polynomial_order)
+            dendr_diam_parameters[dict_key] = {'intercept': polynomials[2], 'slope': polynomials[1],
+                                               'square': polynomials[0]}
+        elif dendr_diam_model == 'cubic':
+            polynomial_order = 3
+            polynomials = np.polyfit(data_all_x, data_all_y, polynomial_order)
+            dendr_diam_parameters[dict_key] = {'intercept': polynomials[3], 'slope': polynomials[2],
+                                               'square': polynomials[1], 'cube': polynomials[0]}
+
+        if visualize:
+            # self.show_dendritic_diameter_vs_eccentricity(gc_type, data_all_x, data_all_y,
+            # dataset_name='All data cubic fit', intercept=polynomials[3], slope=polynomials[2], square=polynomials[1], cube=polynomials[0])
+            self.show_dendritic_diameter_vs_eccentricity(self.gc_type, data_all_x, data_all_y, polynomials,
+                                                         dataset_name='All data {0} fit'.format(dendr_diam_model))
+            plt.show()
+
+        return dendr_diam_parameters
 
     def place_gc_units(self, gc_density_func_params, visualize=False):
         """
@@ -262,111 +374,6 @@ class MosaicConstructor(Mathematics, Visualize):
             self.show_gc_positions_and_density(matrix_eccentricity_randomized_all,
                                                matrix_polar_angle_randomized_all, gc_density_func_params)
 
-    def read_dendritic_fields_vs_eccentricity_data(self):
-        '''
-        Read re-digitized old literature data from mat files
-        '''
-        digitized_figures_path = MosaicConstructor.digitized_figures_path
-
-        if self.gc_type == 'parasol':
-            dendr_diam1 = sio.loadmat(digitized_figures_path / 'Perry_1984_Neurosci_ParasolDendrDiam_c.mat',
-                                      variable_names=['Xdata', 'Ydata'])
-            dendr_diam2 = sio.loadmat(digitized_figures_path / 'Watanabe_1989_JCompNeurol_GCDendrDiam_parasol_c.mat',
-                                      variable_names=['Xdata', 'Ydata'])
-        elif self.gc_type == 'midget':
-            dendr_diam1 = sio.loadmat(digitized_figures_path / 'Perry_1984_Neurosci_MidgetDendrDiam_c.mat',
-                                      variable_names=['Xdata', 'Ydata'])
-            dendr_diam2 = sio.loadmat(digitized_figures_path / 'Watanabe_1989_JCompNeurol_GCDendrDiam_midget_c.mat',
-                                      variable_names=['Xdata', 'Ydata'])
-
-        return dendr_diam1, dendr_diam2
-
-    def fit_dendritic_diameter_vs_eccentricity(self, visualize=False):
-        """
-        Dendritic field diameter with respect to eccentricity. Linear and quadratic fit.
-        Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
-        """
-
-        # Read dendritic field data and return linear fit with scipy.stats.linregress
-        dendr_diam_parameters = {}
-
-        dendr_diam1, dendr_diam2 = self.read_dendritic_fields_vs_eccentricity_data()
-
-        # Parasol fit
-        gc_type = self.gc_type
-
-        # Quality control. Datasets separately for visualization
-        data_set_1_x = np.squeeze(dendr_diam1['Xdata'])
-        data_set_1_y = np.squeeze(dendr_diam1['Ydata'])
-        data_set_2_x = np.squeeze(dendr_diam2['Xdata'])
-        data_set_2_y = np.squeeze(dendr_diam2['Ydata'])
-
-        # Both datasets together
-        data_all_x = np.concatenate((data_set_1_x, data_set_2_x))
-        data_all_y = np.concatenate((data_set_1_y, data_set_2_y))
-
-        # Limit eccentricities for central visual field studies to get better approximation at about 5 deg ecc (1mm)
-        data_all_x_index = data_all_x <= self.visual_field_fit_limit
-        data_all_x = data_all_x[data_all_x_index]
-        data_all_y = data_all_y[data_all_x_index]  # Don't forget to truncate values, too
-
-        # Sort to ascending order
-        data_all_x_index = np.argsort(data_all_x)
-        data_all_x = data_all_x[data_all_x_index]
-        data_all_y = data_all_y[data_all_x_index]
-
-        # Get rf diameter vs eccentricity
-        dendr_diam_model = self.dendr_diam_model  # 'linear' # 'quadratic' # cubic
-        dict_key = '{0}_{1}'.format(self.gc_type, dendr_diam_model)
-
-        if dendr_diam_model == 'linear':
-            polynomial_order = 1
-            polynomials = np.polyfit(data_all_x, data_all_y, polynomial_order)
-            dendr_diam_parameters[dict_key] = {'intercept': polynomials[1], 'slope': polynomials[0]}
-        elif dendr_diam_model == 'quadratic':
-            polynomial_order = 2
-            polynomials = np.polyfit(data_all_x, data_all_y, polynomial_order)
-            dendr_diam_parameters[dict_key] = {'intercept': polynomials[2], 'slope': polynomials[1],
-                                               'square': polynomials[0]}
-        elif dendr_diam_model == 'cubic':
-            polynomial_order = 3
-            polynomials = np.polyfit(data_all_x, data_all_y, polynomial_order)
-            dendr_diam_parameters[dict_key] = {'intercept': polynomials[3], 'slope': polynomials[2],
-                                               'square': polynomials[1], 'cube': polynomials[0]}
-
-        if visualize:
-            # self.show_dendritic_diameter_vs_eccentricity(gc_type, data_all_x, data_all_y,
-            # dataset_name='All data cubic fit', intercept=polynomials[3], slope=polynomials[2], square=polynomials[1], cube=polynomials[0])
-            self.show_dendritic_diameter_vs_eccentricity(self.gc_type, data_all_x, data_all_y, polynomials,
-                                                         dataset_name='All data {0} fit'.format(dendr_diam_model))
-            plt.show()
-
-        return dendr_diam_parameters
-
-    def read_gc_density_data(self):
-        '''
-        Read re-digitized old literature data from mat files
-        '''
-        digitized_figures_path = MosaicConstructor.digitized_figures_path
-
-        gc_density = sio.loadmat(digitized_figures_path / 'Perry_1984_Neurosci_GCdensity_c.mat',
-                                 variable_names=['Xdata', 'Ydata'])
-        cell_eccentricity = np.squeeze(gc_density['Xdata'])
-        cell_density = np.squeeze(gc_density['Ydata']) * 1e3  # Cells are in thousands, thus the 1e3
-        return cell_eccentricity, cell_density
-
-    # def load_dog_fits(csv_file_path):  Obs?
-    #
-    #     # All entries 0.0 => handpicked bad cell, all entries NaN => fitting failed
-    #     dog_fits = pd.read_csv(csv_file_path, header=0, index_col=0).fillna(0.0)
-    #     data_all_viable_cells = np.array(dog_fits)
-    #     # Pick the rows where all the columns are zeros -> "bad data indices"
-    #     bad_data_indices = np.where((dog_fits == 0.0).all(axis=1))[0].tolist()
-    #     param_names = dog_fits.columns.tolist()
-    #     print('Loaded data for %d cells of which %d were bad' % (len(data_all_viable_cells), len(bad_data_indices)))
-    #
-    #     return param_names, data_all_viable_cells, bad_data_indices
-
     def fit_spatial_statistics(self, visualize=False):
         """
         Collect spatial statistics from Chichilnisky receptive field data
@@ -436,47 +443,6 @@ class MosaicConstructor(Mathematics, Visualize):
 
         # Return stats for RF creation
         return spatial_statistics_dict
-
-    def fit_tonic_drives(self, visualize=False):
-        tonicdrive_array = np.array(self.all_fits_df.iloc[self.good_data_indices].tonicdrive)
-        shape, loc, scale = stats.gamma.fit(tonicdrive_array)
-
-        if visualize:
-            x_min, x_max = stats.gamma.ppf([0.001, 0.999], a=shape, loc=loc, scale=scale)
-            xs = np.linspace(x_min, x_max, 100)
-            plt.plot(xs, stats.gamma.pdf(xs, a=shape, loc=loc, scale=scale))
-            plt.hist(tonicdrive_array, density=True)
-            plt.title(self.gc_type + ' ' + self.response_type)
-            plt.xlabel('Tonic drive (a.u.)')
-            plt.show()
-
-        return shape, loc, scale
-
-    def get_random_samples(self, shape, loc, scale, n_cells, distribution):
-        """
-        Create random samples from a model distribution.
-
-        :param shape:
-        :param loc:
-        :param scale:
-        :param n_cells:
-        :param distribution:
-
-        :returns distribution_parameters
-        """
-        assert distribution in ['gamma', 'beta', 'skewnorm'], "Distribution not supported"
-
-        if distribution == 'gamma':
-            distribution_parameters = stats.gamma.rvs(a=shape, loc=loc, scale=scale, size=n_cells,
-                                                      random_state=None)  # random_state is the seed
-        elif distribution == 'beta':
-            distribution_parameters = stats.beta.rvs(a=shape[0], b=shape[1], loc=loc, scale=scale, size=n_cells,
-                                                     random_state=None)  # random_state is the seed
-        elif distribution == 'skewnorm':
-            distribution_parameters = stats.skewnorm.rvs(a=shape, loc=loc, scale=scale, size=n_cells,
-                                                         random_state=None)
-
-        return distribution_parameters
 
     def place_spatial_receptive_fields(self, spatial_statistics_dict, dendr_diam_vs_eccentricity_parameters_dict,
                                        visualize=False):
@@ -570,7 +536,8 @@ class MosaicConstructor(Mathematics, Visualize):
         self.gc_df['xy_aspect_ratio'] = gc_rf_models[:, 2]
         self.gc_df['amplitudes'] = gc_rf_models[:, 3]
         self.gc_df['sur_ratio'] = gc_rf_models[:, 4]
-        self.gc_df['orientation_center'] = gc_rf_models[:, 5]
+        # self.gc_df['orientation_center'] = gc_rf_models[:, 5]
+        self.gc_df['orientation_center'] = self.gc_df['positions_polar_angle']  # plus some noise here
 
         if visualize:
             # Quality control for diameter distribution. In micrometers.
@@ -591,24 +558,20 @@ class MosaicConstructor(Mathematics, Visualize):
 
         # All ganglion cell spatial parameters are now saved to ganglion cell object dataframe gc_df
 
-    def visualize_mosaic(self):
-        """
-        Plots the full ganglion cell mosaic
+    def fit_tonic_drives(self, visualize=False):
+        tonicdrive_array = np.array(self.all_fits_df.iloc[self.good_data_indices].tonicdrive)
+        shape, loc, scale = stats.gamma.fit(tonicdrive_array)
 
-        :return:
-        """
-        rho = self.gc_df['positions_eccentricity'].values
-        phi = self.gc_df['positions_polar_angle'].values
+        if visualize:
+            x_min, x_max = stats.gamma.ppf([0.001, 0.999], a=shape, loc=loc, scale=scale)
+            xs = np.linspace(x_min, x_max, 100)
+            plt.plot(xs, stats.gamma.pdf(xs, a=shape, loc=loc, scale=scale))
+            plt.hist(tonicdrive_array, density=True)
+            plt.title(self.gc_type + ' ' + self.response_type)
+            plt.xlabel('Tonic drive (a.u.)')
+            plt.show()
 
-        gc_rf_models = np.zeros((len(self.gc_df), 6))
-        gc_rf_models[:, 0] = self.gc_df['semi_xc']
-        gc_rf_models[:, 1] = self.gc_df['semi_yc']
-        gc_rf_models[:, 2] = self.gc_df['xy_aspect_ratio']
-        gc_rf_models[:, 3] = self.gc_df['amplitudes']
-        gc_rf_models[:, 4] = self.gc_df['sur_ratio']
-        gc_rf_models[:, 5] = self.gc_df['orientation_center']
-
-        self.show_gc_receptive_fields(rho, phi, gc_rf_models, surround_fixed=self.surround_fixed)
+        return shape, loc, scale
 
     def fit_temporal_statistics(self, visualize=False):
         temporal_filter_parameters = ['n', 'p1', 'p2', 'tau1', 'tau2']
@@ -645,6 +608,25 @@ class MosaicConstructor(Mathematics, Visualize):
         for param_name, row in distrib_params_df.iterrows():
             shape, loc, scale = row
             self.gc_df[param_name] = self.get_random_samples(shape, loc, scale, n_rgc, distribution)
+
+    def visualize_mosaic(self):
+        """
+        Plots the full ganglion cell mosaic
+
+        :return:
+        """
+        rho = self.gc_df['positions_eccentricity'].values
+        phi = self.gc_df['positions_polar_angle'].values
+
+        gc_rf_models = np.zeros((len(self.gc_df), 6))
+        gc_rf_models[:, 0] = self.gc_df['semi_xc']
+        gc_rf_models[:, 1] = self.gc_df['semi_yc']
+        gc_rf_models[:, 2] = self.gc_df['xy_aspect_ratio']
+        gc_rf_models[:, 3] = self.gc_df['amplitudes']
+        gc_rf_models[:, 4] = self.gc_df['sur_ratio']
+        gc_rf_models[:, 5] = self.gc_df['orientation_center']
+
+        self.show_gc_receptive_fields(rho, phi, gc_rf_models, surround_fixed=self.surround_fixed)
 
 
     def build(self, visualize=False):
@@ -1135,11 +1117,12 @@ class FunctionalMosaic(Mathematics):
 
 
 if __name__ == "__main__":
-    mosaic = MosaicConstructor(gc_type='parasol', response_type='off', ecc_limits=[1, 40],
-                               sector_limits=[-10.0, 10.0], model_density=1.0, randomize_position=0.15)
+    mosaic = MosaicConstructor(gc_type='parasol', response_type='off', ecc_limits=[3, 6],
+                               sector_limits=[-30.0, 30.0], model_density=1.0, randomize_position=0.05)
 
     mosaic.build()
-    pass
+    mosaic.visualize_mosaic()
+    plt.show()
     # b = mosaic.fit_temporal_statistics(visualize=False)
     # mosaic.create_temporal_filters(b)
     # mosaic.build()

@@ -73,11 +73,12 @@ class Visualize:
                 ellipse_center_y = ycoord[index]
                 semi_xc = gc_rf_models[index, 0]
                 semi_yc = gc_rf_models[index, 1]
-                angle_in_radians = gc_rf_models[index, 5]  # Orientation
+                # angle_in_radians = gc_rf_models[index, 5]  # Orientation
+                angle_in_deg = gc_rf_models[index, 5]  # Orientation
                 diameter_xc = semi_xc * 2
                 diameter_yc = semi_yc * 2
                 e1 = ellipse((ellipse_center_x, ellipse_center_y), diameter_xc, diameter_yc,
-                             angle_in_radians * 180 / np.pi,
+                             angle_in_deg,
                              edgecolor='b', linewidth=0.5, fill=False)
                 ax.add_artist(e1)
         # e2=ellipse((popt[np.array([1,2])]),popt[7]*popt[3],popt[7]*popt[4],-popt[5]*180/np.pi,edgecolor='w', linewidth=2, fill=False, linestyle='--')
