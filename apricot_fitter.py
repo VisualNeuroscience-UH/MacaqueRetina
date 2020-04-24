@@ -12,7 +12,7 @@ import sys
 import numpy as np
 import scipy.optimize as opt
 import scipy.io as sio
-from scipy.stats import norm
+from scipy.stats import norm, skewnorm, gamma
 from scipy.optimize import curve_fit
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -196,13 +196,13 @@ class ApricotData:
             good_indices = np.setdiff1d(range(self.n_cells), self.bad_data_indices)
             tonicdrive = tonicdrive[good_indices]
 
-        mean, sd = norm.fit(tonicdrive)
+        skew, mean, sd = gamma.fit(tonicdrive)
         print(len(tonicdrive))
 
         if visualize:
-            x_min, x_max = norm.ppf([0.001, 0.999], loc=mean, scale=sd)
+            x_min, x_max = gamma.ppf([0.001, 0.999], a=skew, loc=mean, scale=sd)
             xs = np.linspace(x_min, x_max, 100)
-            plt.plot(xs, norm.pdf(xs, loc=mean, scale=sd))
+            plt.plot(xs, gamma.pdf(xs, a=skew, loc=mean, scale=sd))
             plt.hist(tonicdrive, density=True)
             plt.title(self.gc_type + ' ' + self.response_type)
             plt.xlabel('Tonic drive (a.u.)')
@@ -794,7 +794,7 @@ class ApricotFitsMatrix(object):
 
 if __name__ == '__main__':
 
-    # ApricotFits('parasol', 'on').save('on_parasol_fits.csv')
+    ApricotData('parasol', 'off').get_tonicdrive_stats(visualize=True)
     pass
 
     #ApricotFitsMatrix()

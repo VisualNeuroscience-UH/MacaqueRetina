@@ -14,7 +14,7 @@ from visualize import Visualize
 from vision_maths import Mathematics
 from scipy.signal import fftconvolve, convolve
 from scipy.interpolate import interp1d
-from scipy.stats import norm
+from scipy.stats import norm, skewnorm
 from mpl_toolkits import mplot3d
 import brian2 as b2
 from brian2.units import *
@@ -96,7 +96,7 @@ class MosaicConstructor(Mathematics, Visualize):
 
         # Initialize pandas dataframe to hold the ganglion cells (one per row) and all their parameters in one place
         columns = ['positions_eccentricity', 'positions_polar_angle', 'eccentricity_group_index', 'semi_xc', 'semi_yc',
-                   'xy_aspect_ratio', 'amplitudes', 'sur_ratio', 'orientation_center', 'tonicdrive', 'filtersum']
+                   'xy_aspect_ratio', 'amplitudes', 'sur_ratio', 'orientation_center']
         self.gc_df = pd.DataFrame(columns=columns)
 
         # Set stimulus stuff
@@ -108,14 +108,17 @@ class MosaicConstructor(Mathematics, Visualize):
         else:
             self.all_fits_df = pd.read_csv(fits_from_file, header=0, index_col=0).fillna(0.0)
 
+        self.n_cells_data = len(self.all_fits_df)
+        self.bad_data_indices = np.where((self.all_fits_df == 0.0).all(axis=1))[0].tolist()
+        self.good_data_indices = np.setdiff1d(range(self.n_cells_data), self.bad_data_indices)
+
         # Get tonic drive and "spatial filter sum" statistics
-        x = apricot.ApricotFits(self.gc_type, self.response_type, fit_all=False)
-        self.tonicdrive_mean, self.tonicdrive_sd = x.get_tonicdrive_stats()
-        self.filtersum_mean, self.filtersum_sd = x.get_spatialfilter_integral_stats()
+        # x = apricot.ApricotFits(self.gc_type, self.response_type, fit_all=False)
+        # self.filtersum_mean, self.filtersum_sd = x.get_spatialfilter_integral_stats()
 
         # Get the mean temporal filters
-        self.mean_temporal_filter = x.get_mean_temporal_filter()
-        self.mean_postspike_filter = x.get_mean_postspike_filter()
+        # self.mean_temporal_filter = x.get_mean_temporal_filter()
+        # self.mean_postspike_filter = x.get_mean_postspike_filter()
 
     def fit_gc_density_data(self):
         """
@@ -434,7 +437,22 @@ class MosaicConstructor(Mathematics, Visualize):
         # Return stats for RF creation
         return spatial_statistics_dict
 
-    def get_random_samples_from_known_distribution(self, shape, loc, scale, n_cells, distribution):
+    def fit_tonic_drives(self, visualize=False):
+        tonicdrive_array = np.array(self.all_fits_df.iloc[self.good_data_indices].tonicdrive)
+        shape, loc, scale = stats.gamma.fit(tonicdrive_array)
+
+        if visualize:
+            x_min, x_max = stats.gamma.ppf([0.001, 0.999], a=shape, loc=loc, scale=scale)
+            xs = np.linspace(x_min, x_max, 100)
+            plt.plot(xs, stats.gamma.pdf(xs, a=shape, loc=loc, scale=scale))
+            plt.hist(tonicdrive_array, density=True)
+            plt.title(self.gc_type + ' ' + self.response_type)
+            plt.xlabel('Tonic drive (a.u.)')
+            plt.show()
+
+        return shape, loc, scale
+
+    def get_random_samples(self, shape, loc, scale, n_cells, distribution):
         """
         Create random samples from a model distribution.
 
@@ -446,7 +464,7 @@ class MosaicConstructor(Mathematics, Visualize):
 
         :returns distribution_parameters
         """
-        assert distribution in ['gamma', 'beta'], "Distribution should be either gamma or beta"
+        assert distribution in ['gamma', 'beta', 'skewnorm'], "Distribution not supported"
 
         if distribution == 'gamma':
             distribution_parameters = stats.gamma.rvs(a=shape, loc=loc, scale=scale, size=n_cells,
@@ -454,6 +472,9 @@ class MosaicConstructor(Mathematics, Visualize):
         elif distribution == 'beta':
             distribution_parameters = stats.beta.rvs(a=shape[0], b=shape[1], loc=loc, scale=scale, size=n_cells,
                                                      random_state=None)  # random_state is the seed
+        elif distribution == 'skewnorm':
+            distribution_parameters = stats.skewnorm.rvs(a=shape, loc=loc, scale=scale, size=n_cells,
+                                                         random_state=None)
 
         return distribution_parameters
 
@@ -497,8 +518,8 @@ class MosaicConstructor(Mathematics, Visualize):
             loc = spatial_statistics_dict[key]['loc']
             scale = spatial_statistics_dict[key]['scale']
             distribution = spatial_statistics_dict[key]['distribution']
-            gc_rf_models[:, index] = self.get_random_samples_from_known_distribution(shape, loc, scale, n_cells,
-                                                                                     distribution)
+            gc_rf_models[:, index] = self.get_random_samples(shape, loc, scale, n_cells,
+                                                             distribution)
         # Quality control images
         if visualize:
             self.show_spatial_statistics(gc_rf_models, spatial_statistics_dict)
@@ -589,6 +610,43 @@ class MosaicConstructor(Mathematics, Visualize):
 
         self.show_gc_receptive_fields(rho, phi, gc_rf_models, surround_fixed=self.surround_fixed)
 
+    def fit_temporal_statistics(self, visualize=False):
+        temporal_filter_parameters = ['n', 'p1', 'p2', 'tau1', 'tau2']
+        distrib_params = np.zeros((len(temporal_filter_parameters), 3))
+
+        for i, param_name in enumerate(temporal_filter_parameters):
+            param_array = np.array(self.all_fits_df.iloc[self.good_data_indices][param_name])
+            shape, loc, scale = stats.gamma.fit(param_array)
+            distrib_params[i, :] = [shape, loc, scale]
+
+        if visualize:
+            plt.subplots(2,3)
+            plt.suptitle(self.gc_type + ' ' + self.response_type)
+            for i, param_name in enumerate(temporal_filter_parameters):
+                plt.subplot(2,3,i+1)
+                ax = plt.gca()
+                shape, loc, scale = distrib_params[i, :]
+                param_array = np.array(self.all_fits_df.iloc[self.good_data_indices][param_name])
+
+                x_min, x_max = stats.gamma.ppf([0.001, 0.999], a=shape, loc=loc, scale=scale)
+                xs = np.linspace(x_min, x_max, 100)
+                ax.plot(xs, stats.gamma.pdf(xs, a=shape, loc=loc, scale=scale))
+                ax.hist(param_array, density=True)
+                ax.set_title(param_name)
+
+            plt.show()
+
+        return pd.DataFrame(distrib_params, index=temporal_filter_parameters, columns=['shape', 'loc', 'scale'])
+
+    def create_temporal_filters(self, distrib_params_df, distribution='gamma'):
+
+        n_rgc = len(self.gc_df)
+
+        for param_name, row in distrib_params_df.iterrows():
+            shape, loc, scale = row
+            self.gc_df[param_name] = self.get_random_samples(shape, loc, scale, n_rgc, distribution)
+
+
     def build(self, visualize=False):
         """
         Builds the receptive field mosaic
@@ -614,26 +672,23 @@ class MosaicConstructor(Mathematics, Visualize):
         self.place_spatial_receptive_fields(spatial_statistics_dict,
                                             dendr_diam_vs_eccentricity_parameters_dict, visualize)
 
-        # At this point the spatial receptive fields are constructed.
+        # At this point the spatial receptive fields are ready.
         # The positions are in gc_eccentricity, gc_polar_angle, and the rf parameters in gc_rf_models
         n_rgc = len(self.gc_df)
 
         # Summarize RF semi_xc and semi_yc as "RF radius" (geometric mean)
-        rf_radii = pd.DataFrame(np.sqrt(self.gc_df.semi_xc * self.gc_df.semi_yc), columns=['rf_radius'])
+        self.gc_df['rf_radius'] = np.sqrt(self.gc_df.semi_xc * self.gc_df.semi_yc)
 
         # Finally, get non-spatial parameters
-        self.gc_df['tonicdrive'] = norm.rvs(size=n_rgc, loc=self.tonicdrive_mean, scale=self.tonicdrive_sd)
-        self.gc_df['filtersum'] = norm.rvs(size=n_rgc, loc=self.filtersum_mean, scale=self.filtersum_sd)
+        temporal_statistics_df = self.fit_temporal_statistics()
+        self.create_temporal_filters(temporal_statistics_df)
 
-        # Here we just replicate the mean temporal filters to all rows
-        temporal_df = pd.DataFrame({'temporal_filter': [self.mean_temporal_filter.flatten()] * n_rgc})
-        postspike_df = pd.DataFrame({'postspike_filter': [self.mean_postspike_filter.flatten()] * n_rgc})
-
-        self.gc_df = pd.concat([self.gc_df, rf_radii, temporal_df, postspike_df], axis=1)
+        td_shape, td_loc, td_scale = self.fit_tonic_drives()
+        self.gc_df['tonicdrive'] = self.get_random_samples(td_shape, td_loc, td_scale, n_rgc, 'gamma')
 
         print("Built RGC mosaic with %d cells" % n_rgc)
 
-        if Visualize is True:
+        if visualize is True:
             plt.show()
 
     def save_mosaic(self, filepath):
@@ -1082,12 +1137,19 @@ class FunctionalMosaic(Mathematics):
 if __name__ == "__main__":
     mosaic = MosaicConstructor(gc_type='parasol', response_type='off', ecc_limits=[1, 40],
                                sector_limits=[-10.0, 10.0], model_density=1.0, randomize_position=0.15)
+
+    mosaic.build()
+    pass
+    # b = mosaic.fit_temporal_statistics(visualize=False)
+    # mosaic.create_temporal_filters(b)
+    # mosaic.build()
+    # mosaic.fit_tonic_drives(visualize=True)
     # gc_density_func_params = mosaic.fit_gc_density_data()
     #
     # fitdata2 = load_dog_fits('results_temp/parasol_OFF_surfix.csv')
-    mosaic.build(visualize=True)
+    # mosaic.build(visualize=True)
     # mosaic.visualize_mosaic()
-    plt.show()
+    # plt.show()
 
     #mosaic.fit_dendritic_diameter_vs_eccentricity(visualize=True)
     # fitdata2 = load_dog_fits('results_temp/parasol_OFF_surfix.csv')
