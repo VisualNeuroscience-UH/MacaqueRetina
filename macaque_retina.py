@@ -609,6 +609,39 @@ class MosaicConstructor(Mathematics, Visualize):
             shape, loc, scale = row
             self.gc_df[param_name] = self.get_random_samples(shape, loc, scale, n_rgc, distribution)
 
+    def scale_both_amplitudes(self):
+        """
+        Scale center and surround amplitudes so that the spatial RF volume is comparable to that of data.
+        Second step of scaling is done before convolving with the stimulus.
+
+        :return:
+        """
+
+        df = self.all_fits_df.iloc[self.good_data_indices]
+        data_pixel_len = 0.06  # in mm; pixel length 60 micrometers in dataset
+
+        # Get mean center and surround RF size from data in millimeters
+        mean_center_sd = np.mean(np.sqrt(df.semi_xc * df.semi_yc)) * data_pixel_len
+        mean_surround_sd = np.mean(np.sqrt((df.sur_ratio**2 * df.semi_xc * df.semi_yc))) * data_pixel_len
+
+        # For each model cell, set center amplitude as data_cen_mean**2 / sigma_x * sigma_y
+        # For each model cell, scale surround amplitude by data_sur_mean**2 / sur_sigma_x * sur_sigma_y
+        # (Volume of 2D Gaussian = 2 * pi * sigma_x*sigma_y)
+
+        n_rgc = len(self.gc_df)
+        amplitudec = np.zeros(n_rgc)
+        amplitudes = np.zeros(n_rgc)
+
+        for i in range(n_rgc):
+            amplitudec[i] = mean_center_sd**2 / (self.gc_df.iloc[i].semi_xc * self.gc_df.iloc[i].semi_yc)
+            amplitudes[i] = self.gc_df.iloc[i].amplitudes * (mean_surround_sd**2 / (self.gc_df.iloc[i].semi_xc * self.gc_df.iloc[i].semi_yc * self.gc_df.iloc[i].sur_ratio**2))
+
+        self.gc_df['amplitudes_nonscaled'] = self.gc_df['amplitudes']
+        self.gc_df['amplitudec'] = amplitudec
+        self.gc_df['amplitudes'] = amplitudes
+        self.gc_df['relative_sur_amplitude_scaled'] = amplitudes/amplitudec
+
+
     def visualize_mosaic(self):
         """
         Plots the full ganglion cell mosaic
@@ -652,6 +685,10 @@ class MosaicConstructor(Mathematics, Visualize):
         # Construct spatial receptive fields. Centers are saved in the object
         self.place_spatial_receptive_fields(spatial_statistics_dict,
                                             dendr_diam_vs_eccentricity_parameters_dict, visualize)
+
+        # Scale center and surround amplitude so that Gaussian volume is preserved
+        self.scale_both_amplitudes()
+
 
         # At this point the spatial receptive fields are ready.
         # The positions are in gc_eccentricity, gc_polar_angle, and the rf parameters in gc_rf_models
@@ -1119,18 +1156,18 @@ class FunctionalMosaic(Mathematics):
 
 
 if __name__ == "__main__":
-    mosaic = MosaicConstructor(gc_type='parasol', response_type='off', ecc_limits=[3, 6],
+    mosaic = MosaicConstructor(gc_type='parasol', response_type='off', ecc_limits=[20, 22],
                                sector_limits=[-5.0, 5.0], model_density=1.0, randomize_position=0.05)
 
     mosaic.build()
-    ret = FunctionalMosaic(mosaic.gc_df, 'parasol', 'on')
-    grating = vs.ConstructStimulus(video_center_vspace=5 + 0j, pattern='sine_grating', temporal_frequency=2,
-                                   spatial_frequency=0.1,
-                                   duration_seconds=2.0, fps=120, orientation=0, image_width=240, image_height=240,
-                                   pix_per_deg=60, stimulus_size=0, contrast=1.0)
-    ret.load_stimulus(grating)
-    ret.create_spatiotemporal_filter(18, visualize=True)
-    plt.show()
+    # ret = FunctionalMosaic(mosaic.gc_df, 'parasol', 'on')
+    # grating = vs.ConstructStimulus(video_center_vspace=5 + 0j, pattern='sine_grating', temporal_frequency=2,
+    #                                spatial_frequency=0.1,
+    #                                duration_seconds=2.0, fps=120, orientation=0, image_width=240, image_height=240,
+    #                                pix_per_deg=60, stimulus_size=0, contrast=1.0)
+    # ret.load_stimulus(grating)
+    # ret.create_spatiotemporal_filter(18, visualize=True)
+    # plt.show()
     # mosaic.visualize_mosaic()
     # plt.show()
     # b = mosaic.fit_temporal_statistics(visualize=False)
