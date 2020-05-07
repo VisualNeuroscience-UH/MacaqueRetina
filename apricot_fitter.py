@@ -794,8 +794,7 @@ class ApricotFitsMatrix(object):
 
 if __name__ == '__main__':
 
-    ApricotData('parasol', 'off').get_tonicdrive_stats(visualize=True)
-    pass
+    ApricotFits('midget', 'off').save('off_midget_fits.csv')
 
     #ApricotFitsMatrix()
     ### Save spatial fits to files

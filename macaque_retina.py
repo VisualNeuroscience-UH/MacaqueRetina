@@ -19,6 +19,7 @@ from mpl_toolkits import mplot3d
 import brian2 as b2
 from brian2.units import *
 import apricot_fitter as apricot
+from copy import deepcopy
 
 # plt.rcParams['image.cmap'] = 'gray'
 
@@ -630,17 +631,16 @@ class MosaicConstructor(Mathematics, Visualize):
 
         n_rgc = len(self.gc_df)
         amplitudec = np.zeros(n_rgc)
-        amplitudes = np.zeros(n_rgc)
+        # amplitudes = np.zeros(n_rgc)
 
         for i in range(n_rgc):
             amplitudec[i] = mean_center_sd**2 / (self.gc_df.iloc[i].semi_xc * self.gc_df.iloc[i].semi_yc)
-            amplitudes[i] = self.gc_df.iloc[i].amplitudes * (mean_surround_sd**2 / (self.gc_df.iloc[i].semi_xc * self.gc_df.iloc[i].semi_yc * self.gc_df.iloc[i].sur_ratio**2))
+            # amplitudes[i] = self.gc_df.iloc[i].amplitudes * (mean_surround_sd**2 / (self.gc_df.iloc[i].semi_xc * self.gc_df.iloc[i].semi_yc * self.gc_df.iloc[i].sur_ratio**2))
 
-        self.gc_df['amplitudes_nonscaled'] = self.gc_df['amplitudes']
+        data_rel_sur_amplitude = self.gc_df['amplitudes']
         self.gc_df['amplitudec'] = amplitudec
-        self.gc_df['amplitudes'] = amplitudes
-        self.gc_df['relative_sur_amplitude_scaled'] = amplitudes/amplitudec
-
+        self.gc_df['amplitudes'] = amplitudec * data_rel_sur_amplitude
+        self.gc_df['relative_sur_amplitude'] = self.gc_df['amplitudes'] / self.gc_df['amplitudec']
 
     def visualize_mosaic(self):
         """
@@ -733,6 +733,7 @@ class FunctionalMosaic(Mathematics):
         self.vmin_spatial_filter = -0.5
         self.vmax_spatial_filter = 0.5
 
+        self.data_microm_per_pixel = 60
         self.data_filter_fps = 120  # TODO - this needs to be checked
         self.data_filter_timesteps = 15
         self.data_filter_duration = self.data_filter_timesteps * (1000/self.data_filter_fps)  # in milliseconds
@@ -804,7 +805,6 @@ class FunctionalMosaic(Mathematics):
         """
 
         # Get parameters from the stimulus object
-        from copy import deepcopy
         self.stimulus_video = deepcopy(stimulus_video)  # TODO - Is copying the best way here?
         stimulus_center = stimulus_video.video_center_vspace
         self.pix_per_deg = stimulus_video.pix_per_deg  # angular resolution (eg. van Hateren 1 arcmin/pix => 60 pix/deg)
@@ -831,6 +831,8 @@ class FunctionalMosaic(Mathematics):
         # Sidelength always odd number
         self.spatial_filter_sidelen = 2 * 3 * int(max(max(self.gc_df_pixspace.semi_xc * self.gc_df_pixspace.sur_ratio),
                                                       max(self.gc_df_pixspace.semi_yc * self.gc_df_pixspace.sur_ratio))) + 1
+
+        self.microm_per_pix = (1 / self.deg_per_mm) / self.stimulus_video.pix_per_deg * 1000
 
         # Get temporal parameters from stimulus video
         self.video_fps = self.stimulus_video.fps
@@ -860,7 +862,7 @@ class FunctionalMosaic(Mathematics):
         for index, gc in self.gc_df_pixspace.iterrows():
             # When in pixel coordinates, positive value in Ellipse angle is clockwise. Thus minus here.
             circ = Ellipse((gc.q_pix, gc.r_pix), width=2 * gc.semi_xc, height=2 * gc.semi_yc,
-                           angle=gc.orientation_center * (-180 / np.pi), edgecolor='white', facecolor='None')
+                           angle=gc.orientation_center * (-1), edgecolor='white', facecolor='None')
             ax.add_patch(circ)
 
 
@@ -892,9 +894,9 @@ class FunctionalMosaic(Mathematics):
         :return:
         """
 
-        amplitudec = 1.0
         offset = 0.0
         s = self.spatial_filter_sidelen
+        amplitude_scaling = (self.microm_per_pix / self.data_microm_per_pixel)**2  # Scaling due to resolution change
 
         gc = self.gc_df_pixspace.iloc[cell_index]
         qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
@@ -902,21 +904,21 @@ class FunctionalMosaic(Mathematics):
         x_grid, y_grid = np.meshgrid(np.arange(qmin, qmax+1, 1),
                                      np.arange(rmin, rmax+1, 1))
 
-        spatial_kernel = self.DoG2D_fixed_surround((x_grid, y_grid), amplitudec, gc.q_pix, gc.r_pix,
-                                                gc.semi_xc, gc.semi_yc, gc.orientation_center, gc.amplitudes,
-                                                gc.sur_ratio, offset)
+        spatial_kernel = self.DoG2D_fixed_surround((x_grid, y_grid),
+                                                   gc.amplitudec * amplitude_scaling,
+                                                   gc.q_pix, gc.r_pix,
+                                                   gc.semi_xc, gc.semi_yc, gc.orientation_center,
+                                                   gc.amplitudes * amplitude_scaling,
+                                                   gc.sur_ratio, offset)
         spatial_kernel = np.reshape(spatial_kernel, (s, s))
 
+        # Obsolete?
         # Scale to match data filter power
         # (simulated spatial filter has more pixels => convolution will have higher value, if not corrected)
         # data_filtersum = self.gc_df.iloc[cell_index].filtersum
         # scaling_factor = data_filtersum / np.sum(np.abs(spatial_kernel))
 
-        # TODO - Figure out correct scaling here!
-        scaling_factor = 1
-        scaled_spatial_kernel = scaling_factor * spatial_kernel
-
-        return scaled_spatial_kernel
+        return spatial_kernel
 
     def _create_temporal_filter(self, cell_index):
         """
@@ -927,6 +929,10 @@ class FunctionalMosaic(Mathematics):
         """
 
         filter_params = self.gc_df.iloc[cell_index][['n', 'p1', 'p2', 'tau1', 'tau2']]
+        if self.response_type == 'off':
+            filter_params[1] = (-1) * filter_params[1]
+            filter_params[2] = (-1) * filter_params[2]
+
         tvec = np.linspace(0, self.data_filter_duration, self.temporal_filter_len)
         temporal_filter = self.diff_of_lowpass_filters(tvec, *filter_params)
 
@@ -1071,23 +1077,24 @@ class FunctionalMosaic(Mathematics):
         # (First time steps of stimulus are not convolved)
         generator_potential = np.pad(generator_potential, (self.data_filter_timesteps - 1, 0),
                                      mode='constant', constant_values=0)
-
+        tonic_drive = self.gc_df.iloc[cell_index].tonicdrive
         if visualize is True:
             tvec = np.arange(0, len(generator_potential), 1) * (1 / self.data_filter_fps)
+
+
             plt.subplots(2, 1, sharex=True)
             plt.subplot(211)
-            plt.plot(tvec, generator_potential)
+            plt.plot(tvec, generator_potential + tonic_drive)
             plt.xlabel('Time (s)')
             plt.ylabel('Generator potential (a.u.)')
 
             plt.subplot(212)
-            tonic_drive = self.gc_df.iloc[cell_index].tonicdrive
             plt.plot(tvec, np.exp(generator_potential + tonic_drive))
             plt.xlabel('Time (s)')
-            plt.ylabel('Instantaneous spike rate (a.u.)')
+            plt.ylabel('Instantaneous spike rate (Hz)')
 
         # Return the 1-dimensional generator potential
-        return generator_potential
+        return generator_potential + tonic_drive
 
     def run_single_cell(self, cell_index, n_trials=1, postspike_filter=False, visualize=False, return_monitor=False):
         """
@@ -1101,21 +1108,20 @@ class FunctionalMosaic(Mathematics):
         if postspike_filter is True:
             raise NotImplementedError
         else:
-            duration = self.stimulus_video.video_n_frames / self.stimulus_video.fps * second
+            video_dt = (1 / self.stimulus_video.fps) * second
+            duration = self.stimulus_video.video_n_frames * video_dt
             poissongen_dt = 1.0 * ms
 
             # Get instantaneous firing rate
             generator_potential = self.convolve_stimulus(cell_index)
-            tonic_drive = self.gc_df.iloc[cell_index].tonicdrive
-            exp_generator_potential = np.array(np.exp(generator_potential + tonic_drive))
-            video_dt = (1 / self.stimulus_video.fps) * second
+            exp_generator_potential = np.array(np.exp(generator_potential))
 
             # Let's interpolate the rate to 1ms intervals
-            tvec_original = np.arange(0, len(exp_generator_potential)) * video_dt
-            rates_func = interp1d(tvec_original, exp_generator_potential)
+            tvec_original = np.arange(1, len(exp_generator_potential)+1) * video_dt
+            rates_func = interp1d(tvec_original, exp_generator_potential, fill_value=0, bounds_error=False)
 
             tvec_new = np.arange(0, duration, poissongen_dt)
-            interpolated_rates_array = np.array([rates_func(tvec_new)])  # This needs to be 2D array
+            interpolated_rates_array = np.array([rates_func(tvec_new)])  # This needs to be 2D array for Brian!
 
             # Identical rates array for every trial; rows=time, columns=trial index
             inst_rates = b2.TimedArray(np.tile(interpolated_rates_array.T, (1, n_trials)) * Hz, poissongen_dt)
@@ -1129,6 +1135,7 @@ class FunctionalMosaic(Mathematics):
             net.run(duration)
 
             spiketrains = np.array(list(spike_monitor.spike_trains().values()))
+            spiketrains_flat = np.concatenate(list(spike_monitor.spike_trains().values()))
 
         if visualize is True:
             plt.subplots(2, 1, sharex=True)
@@ -1144,10 +1151,19 @@ class FunctionalMosaic(Mathematics):
             plt.xlim([0, duration / second])
 
             # # TODO - average firing rate here (should follow generator)
-            # n_bins = int((duration/(1*ms)))
-            # binned_spikes = np.histogram(spiketrains.flatten(), n_bins)[0] / n_trials
-            #
-            # plt.plot(np.arange(0, n_bins, 1)*1*ms, np.convolve(binned_spikes, [0.25, 0.5, 0.25], mode='same'))
+            hist_dt = 1*ms
+            # n_bins = int((duration/hist_dt))
+            bin_edges = np.append(tvec_new, [duration/second])  # Append the rightmost edge
+            hist, _ = np.histogram(spiketrains_flat, bins=bin_edges)
+            avg_fr = hist / n_trials / (hist_dt / second)
+
+            xsmooth = np.arange(-15, 15+1)
+            smoothing = stats.norm.pdf(xsmooth, scale=5)  # Gaussian smoothing with SD=5 ms
+            smoothed_avg_fr = np.convolve(smoothing, avg_fr, mode='same')
+
+            plt.plot(bin_edges[:-1], smoothed_avg_fr, label='Measured')
+
+            plt.legend()
 
         if return_monitor is True:
             return spike_monitor
@@ -1156,16 +1172,22 @@ class FunctionalMosaic(Mathematics):
 
 
 if __name__ == "__main__":
-    mosaic = MosaicConstructor(gc_type='parasol', response_type='off', ecc_limits=[20, 22],
-                               sector_limits=[-5.0, 5.0], model_density=1.0, randomize_position=0.05)
+    # mosaic = MosaicConstructor(gc_type='parasol', response_type='on', ecc_limits=[4, 6],
+    #                            sector_limits=[-5.0, 5.0], model_density=1.0, randomize_position=0.05)
+    #
+    # mosaic.build()
+    # mosaic.save_mosaic('on_parasol_model2.csv')
+    modelcells = pd.read_csv('on_parasol_model.csv', index_col=0)
 
-    mosaic.build()
-    # ret = FunctionalMosaic(mosaic.gc_df, 'parasol', 'on')
-    # grating = vs.ConstructStimulus(video_center_vspace=5 + 0j, pattern='sine_grating', temporal_frequency=2,
-    #                                spatial_frequency=0.1,
-    #                                duration_seconds=2.0, fps=120, orientation=0, image_width=240, image_height=240,
-    #                                pix_per_deg=60, stimulus_size=0, contrast=1.0)
-    # ret.load_stimulus(grating)
+    ret = FunctionalMosaic(modelcells, 'parasol', 'on')
+    grating = vs.ConstructStimulus(video_center_vspace=5 + 0j, pattern='sine_grating', temporal_frequency=16,
+                                   spatial_frequency=0.6,
+                                   duration_seconds=2.0, fps=120, orientation=0, image_width=240, image_height=240,
+                                   pix_per_deg=60, stimulus_size=0, contrast=0.96)
+    ret.load_stimulus(grating)
+    # ret.show_stimulus_with_gcs()
+    ret.run_single_cell(1, n_trials=5, visualize=True)
+    plt.show()
     # ret.create_spatiotemporal_filter(18, visualize=True)
     # plt.show()
     # mosaic.visualize_mosaic()
