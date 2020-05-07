@@ -89,13 +89,13 @@ class ApricotData:
         :return: np.array
         """
 
-        temporal_filters = self.read_temporal_filter(flip_negs=False)
+        temporal_filters = self.read_temporal_filter_data(flip_negs=False)
         inverted_data_indices = np.argwhere(temporal_filters[:, 1] < 0).flatten()
 
         return inverted_data_indices
 
 
-    def read_retina_spatial_data(self):
+    def read_spatial_filter_data(self):
 
         filepath = retina_data_path / self.spatial_filename
         gc_spatial_data = sio.loadmat(filepath, variable_names=['c', 'stafit'])
@@ -123,7 +123,7 @@ class ApricotData:
         postspike_filter = np.array([self.data[cellnum][0][0][0][0][0][2][0][0][0] for cellnum in range(self.n_cells)])
         return postspike_filter[:,:,0]
 
-    def read_temporal_filter(self, flip_negs=False):
+    def read_temporal_filter_data(self, flip_negs=False):
 
         time_rk1 = np.array([self.data[cellnum][0][0][0][0][0][3][0][0][3] for cellnum in range(self.n_cells)])
         temporal_filters = time_rk1[:,:,0]
@@ -167,7 +167,7 @@ class ApricotData:
 
     def compute_temporal_filter_sums(self, remove_bad_data_indices=True):
 
-        temporal_filters = self.read_temporal_filter(flip_negs=True)  # 1st deflection positive, 2nd negative
+        temporal_filters = self.read_temporal_filter_data(flip_negs=True)  # 1st deflection positive, 2nd negative
         filter_sums = np.zeros((self.n_cells, 3))
         for i in range(self.n_cells):
             filter = temporal_filters[i,:]
@@ -222,7 +222,7 @@ class ApricotData:
 
     def compute_spatiotemporalfilter_integrals(self):  # Obs?
         space_rk1 = self.read_space_rk1()
-        time_rk1 = self.read_temporal_filter(flip_negs=False)
+        time_rk1 = self.read_temporal_filter_data(flip_negs=False)
 
         filter_integrals = np.zeros(self.n_cells)
         for i in range(self.n_cells):
@@ -253,7 +253,7 @@ class ApricotData:
 
     def get_mean_temporal_filter(self, remove_bad_data_indices=True, flip_negs=True, visualize=False):
 
-        temporal_filters = self.read_temporal_filter()
+        temporal_filters = self.read_temporal_filter_data()
         len_temporal_filter = len(temporal_filters[0,:])
 
         if remove_bad_data_indices:
@@ -397,7 +397,7 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
         :return:
         """
         # shape (n_cells, 15); 15 time points @ 120 fps
-        temporal_filters = self.read_temporal_filter(flip_negs=True)
+        temporal_filters = self.read_temporal_filter_data(flip_negs=True)
 
         good_indices = np.setdiff1d(np.arange(self.n_cells), self.bad_data_indices)
         parameter_names = ['n', 'p1', 'p2', 'tau1', 'tau2']
@@ -452,7 +452,7 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
         :return:
         """
 
-        gc_spatial_data_array, initial_center_values, bad_data_indices = self.read_retina_spatial_data()
+        gc_spatial_data_array, initial_center_values, bad_data_indices = self.read_spatial_filter_data()
 
         n_cells = int(gc_spatial_data_array.shape[2])
         pixel_array_shape_y = gc_spatial_data_array.shape[0]  # Check indices: x horizontal, y vertical
@@ -794,7 +794,8 @@ class ApricotFitsMatrix(object):
 
 if __name__ == '__main__':
 
-    ApricotFits('midget', 'off').save('off_midget_fits.csv')
+    a = ApricotFits('midget', 'off')
+    print('Poop!')
 
     #ApricotFitsMatrix()
     ### Save spatial fits to files
