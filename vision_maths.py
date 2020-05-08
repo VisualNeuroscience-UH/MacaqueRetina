@@ -67,6 +67,7 @@ class Mathematics:
                              sur_ratio, offset):
         '''
         DoG model with xo, yo, theta for surround coming from center.
+        Note that semi_xc and semi_yc correspond to radii while matplotlib Ellipse assumes diameters.
         '''
 
         (x_fit, y_fit) = xy_tuple
@@ -97,7 +98,7 @@ class Mathematics:
     def DoG2D_fixed_double_surround(self, xy_tuple, xoc, yoc, semi_xc, semi_yc, orientation_center, amplitudes):
         """
         DoG model with the angle of orientation and center positions identical and diameter of the surround
-        twice that of the center. This is the model used in the data paper.
+        twice that of the center.
         """
 
         raise NotImplementedError

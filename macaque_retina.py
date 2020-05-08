@@ -51,13 +51,13 @@ class MosaicConstructor(Mathematics, Visualize):
         assert model_density <= 1.0, 'Density should be <=1.0, aborting'
 
         # Proportion from all ganglion cells. Density of all ganglion cells is given later as a function of ecc from literature.
-        proportion_of_parasol_gc_type = 0.1
-        proportion_of_midget_gc_type = 0.8
+        proportion_of_parasol_gc_type = 0.08
+        proportion_of_midget_gc_type = 0.64
 
         # Proportion of ON and OFF response type cells, assuming ON rf diameter = 1.2 x OFF rf diamter, and
         # coverage factor =1; Chichilnisky_2002_JNeurosci
-        proportion_of_ON_response_type = 0.41
-        proportion_of_OFF_response_type = 0.59
+        proportion_of_ON_response_type = 0.40
+        proportion_of_OFF_response_type = 0.60
 
         # GC type specifications self.gc_proportion
         gc_type = gc_type.lower()
@@ -77,7 +77,7 @@ class MosaicConstructor(Mathematics, Visualize):
         self.gc_type = gc_type
         self.response_type = response_type
 
-        self.deg_per_mm = 5  # Turn deg2mm retina. One mm retina is 5 deg visual field.
+        self.deg_per_mm = 1/0.220  # Turn deg2mm retina. One deg = 220um (Perry et al 1985). One mm retina is ~4.55 deg visual field.
         self.eccentricity = ecc_limits
         self.eccentricity_in_mm = np.asarray([r / self.deg_per_mm for r in ecc_limits])  # Turn list to numpy array
         self.theta = np.asarray(sector_limits)  # Turn list to numpy array
@@ -249,6 +249,9 @@ class MosaicConstructor(Mathematics, Visualize):
 
         return dendr_diam_parameters
 
+    def densfunc(self, r, d0, beta):
+        return d0 * (1 + beta * r) ** (-2)
+
     def place_gc_units(self, gc_density_func_params, visualize=False):
         """
         Place ganglion cell center positions to retina
@@ -300,7 +303,8 @@ class MosaicConstructor(Mathematics, Visualize):
             sector_surface_area_all.append(sector_surface_area)  # collect sector area for each ecc step
 
             # N cells for given ecc
-            my_gaussian_fit = self.gauss_plus_baseline(center_ecc, *gc_density_func_params)
+            #my_gaussian_fit = self.gauss_plus_baseline(center_ecc, *gc_density_func_params)
+            my_gaussian_fit = self.densfunc(center_ecc, 5.32043939e+05, 2.64289725)
             Ncells = sector_surface_area * my_gaussian_fit * self.gc_proportion
 
             # place cells in regular grid
@@ -519,7 +523,8 @@ class MosaicConstructor(Mathematics, Visualize):
         # a'/a = sqrt(scaling_factor)
 
         # Apply scaling factors to semi_xc and semi_yc. Units are micrometers.
-        scale_random_distribution = 0.08  # Estimated by eye from Watanabe and Perry data. Normal distribution with scale_random_distribution 0.08 cover about 25% above and below the mean value
+        #scale_random_distribution = 0.08  # Estimated by eye from Watanabe and Perry data. Normal distribution with scale_random_distribution 0.08 cover about 25% above and below the mean value
+        scale_random_distribution = 0.001
         random_normal_distribution1 = 1 + np.random.normal(scale=scale_random_distribution, size=n_cells)
         semi_xc = np.sqrt(area_scaling_factors_coverage1) * gc_rf_models[:, 0] * random_normal_distribution1
         random_normal_distribution2 = 1 + np.random.normal(scale=scale_random_distribution,
@@ -724,7 +729,7 @@ class FunctionalMosaic(Mathematics):
         self.gc_type = gc_type
         self.response_type = response_type
 
-        self.deg_per_mm = 5
+        self.deg_per_mm = 1/0.220
         self.stim_vmin = -0.5
         self.stim_vmax = 0.5
 

@@ -465,7 +465,7 @@ class SampleImage:
         self.millimeters_per_pixel = micrometers_per_pixel / 1000  # Turn to millimeters
         self.temporal_resolution = temporal_resolution
         self.optical_aberration = 2 / 60  # unit is degree
-        self.deg_per_mm = 5
+        self.deg_per_mm = 1/0.220
 
     def get_image(self, image_file_name='testi.jpg'):
 
