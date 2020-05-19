@@ -739,7 +739,7 @@ class FunctionalMosaic(Mathematics):
         self.vmax_spatial_filter = 0.5
 
         self.data_microm_per_pixel = 60
-        self.data_filter_fps = 120  # TODO - this needs to be checked
+        self.data_filter_fps = 30
         self.data_filter_timesteps = 15
         self.data_filter_duration = self.data_filter_timesteps * (1000/self.data_filter_fps)  # in milliseconds
 
@@ -917,11 +917,9 @@ class FunctionalMosaic(Mathematics):
                                                    gc.sur_ratio, offset)
         spatial_kernel = np.reshape(spatial_kernel, (s, s))
 
-        # Obsolete?
-        # Scale to match data filter power
-        # (simulated spatial filter has more pixels => convolution will have higher value, if not corrected)
-        # data_filtersum = self.gc_df.iloc[cell_index].filtersum
-        # scaling_factor = data_filtersum / np.sum(np.abs(spatial_kernel))
+        # Scale the spatial filter so that its maximal gain is something reasonable
+        max_gain = np.max(np.abs(np.fft.fft2(spatial_kernel)))
+        spatial_kernel = (5.3/max_gain) * spatial_kernel
 
         return spatial_kernel
 
@@ -941,7 +939,9 @@ class FunctionalMosaic(Mathematics):
         tvec = np.linspace(0, self.data_filter_duration, self.temporal_filter_len)
         temporal_filter = self.diff_of_lowpass_filters(tvec, *filter_params)
 
-        # TODO - should the filter be scaled in some way depending on fps?
+        # Scale the temporal filter so that its maximal gain is 1
+        max_gain = np.max(np.abs(np.fft.fft(temporal_filter)))
+        temporal_filter = (1/max_gain) * temporal_filter
 
         return temporal_filter
 
@@ -1181,18 +1181,26 @@ if __name__ == "__main__":
     #                            sector_limits=[-5.0, 5.0], model_density=1.0, randomize_position=0.05)
     #
     # mosaic.build()
-    # mosaic.save_mosaic('on_parasol_model2.csv')
-    modelcells = pd.read_csv('on_parasol_model.csv', index_col=0)
+    #
+    # ret = FunctionalMosaic(mosaic.gc_df, 'midget', 'on')
+    grating = vs.ConstructStimulus(video_center_vspace=5 + 0j, pattern='sine_grating', temporal_frequency=3.9,
+                                   spatial_frequency=4.3, stimulus_form='circular',
+                                   duration_seconds=2.0, fps=100, orientation=0, image_width=120, image_height=120,
+                                   pix_per_deg=60, stimulus_size=0, contrast=0.5)
 
-    ret = FunctionalMosaic(modelcells, 'parasol', 'on')
-    grating = vs.ConstructStimulus(video_center_vspace=5 + 0j, pattern='sine_grating', temporal_frequency=16,
-                                   spatial_frequency=0.6,
-                                   duration_seconds=2.0, fps=120, orientation=0, image_width=240, image_height=240,
-                                   pix_per_deg=60, stimulus_size=0, contrast=0.96)
-    ret.load_stimulus(grating)
+    # plt.imshow(grating.frames[:, :, 0])
+    # plt.show()
+    print('pop!')
+
+    # ret.load_stimulus(grating)
+    # ret.convolve_stimulus(7, visualize=True)
+    # plt.show()
+
+
+
     # ret.show_stimulus_with_gcs()
-    ret.run_single_cell(1, n_trials=5, visualize=True)
-    plt.show()
+    # ret.run_single_cell(1, n_trials=1, visualize=True)
+    # plt.show()
     # ret.create_spatiotemporal_filter(18, visualize=True)
     # plt.show()
     # mosaic.visualize_mosaic()

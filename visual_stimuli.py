@@ -78,7 +78,7 @@ class VideoBaseClass(object):
         # Get resolution
         options["pix_per_deg"] = options[
                                      "max_spatial_frequency"] * 3  # min sampling at 1.5 x Nyquist frequency of the highest sf
-        options["image_width_in_deg"] = options["image_width"] / options["pix_per_deg"]
+        # options["image_width_in_deg"] = options["image_width"] / options["pix_per_deg"]
 
         self.options = options
 
@@ -145,17 +145,21 @@ class VideoBaseClass(object):
         # Create sine wave
         one_cycle = 2 * np.pi
         cycles_per_degree = spatial_frequency
-        image_width_in_degrees = self.options["image_width_in_deg"]
+        #image_width_in_degrees = self.options["image_width_in_deg"]
         image_width = self.options["image_width"]
         image_height = self.options["image_height"]
+        image_width_in_degrees = image_width / self.options["pix_per_deg"]
 
         # Calculate larger image size to allow rotations
         diameter = np.ceil(np.sqrt(image_height ** 2 + image_width ** 2)).astype(np.int)
         image_width_diameter = diameter
         image_height_diameter = diameter
+        image_width_diameter_in_degrees = image_width_diameter / self.options["pix_per_deg"]
 
         # Draw temporospatial grating
-        image_position_vector = np.linspace(0, one_cycle * cycles_per_degree * image_width_in_degrees,
+        # NB! one_cycle * cycles_per_degree needs to be multiplied with the scaled width to have
+        # the desired number of cpd in output image
+        image_position_vector = np.linspace(0, one_cycle * cycles_per_degree * image_width_diameter_in_degrees,
                                             image_width_diameter)
         n_frames = self.frames.shape[2]
 
@@ -181,6 +185,7 @@ class VideoBaseClass(object):
         self.frames = large_frames[marginal_height:-marginal_height, marginal_width:-marginal_width, :]
         # remove rounding error
         self.frames = self.frames[0:image_height, 0:image_width, :]
+
 
     def _write_frames_to_videofile(self, filename):
         '''Write frames to videofile
@@ -337,7 +342,7 @@ class StimulusForm:
         self.frames = self.frames * mask[..., np.newaxis]
 
     def stencil(self):
-        pass
+        raise NotImplementedError
 
 class ConstructStimulus(VideoBaseClass):
     '''

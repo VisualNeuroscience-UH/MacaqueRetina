@@ -79,6 +79,11 @@ class ApricotData:
         self.n_cells = len(self.data)
         self.inverted_data_indices = self.get_inverted_indices()
 
+        self.metadata = {'data_microm_per_pix': 60,
+                         'data_spatialfilter_width': 13,
+                         'data_spatialfilter_height': 13,
+                         'data_fps': 30,
+                         'data_temporalfilter_samples': 15}
 
     def get_inverted_indices(self):
         """
@@ -123,7 +128,7 @@ class ApricotData:
         postspike_filter = np.array([self.data[cellnum][0][0][0][0][0][2][0][0][0] for cellnum in range(self.n_cells)])
         return postspike_filter[:,:,0]
 
-    def read_temporal_filter_data(self, flip_negs=False):
+    def read_temporal_filter_data(self, flip_negs=False, normalize=False):
 
         time_rk1 = np.array([self.data[cellnum][0][0][0][0][0][3][0][0][3] for cellnum in range(self.n_cells)])
         temporal_filters = time_rk1[:,:,0]
@@ -132,6 +137,13 @@ class ApricotData:
         for i in range(self.n_cells):
             if temporal_filters[i, 1] < 0 and flip_negs is True:
                 temporal_filters[i, :] = temporal_filters[i, :] * (-1)
+
+        if normalize is True:
+            assert flip_negs is True, "Normalization does not make sense without flip_negs"
+            for i in range(self.n_cells):
+                tf = temporal_filters[i, :]
+                pos_sum = np.sum(tf[tf > 0])
+                temporal_filters[i, :] = tf / pos_sum
 
         return temporal_filters
 
@@ -388,7 +400,7 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
         if fit_all is True:
             self.fit_all()
 
-    def fit_temporal_filters(self, visualize=False):
+    def fit_temporal_filters(self, normalize_before_fit=False, visualize=False):
         """
         Fits each temporal filter to a function consisting of the difference of two
         cascades of lowpass filters. This follows Chichilnisky&Kalmar 2002 JNeurosci.
@@ -396,31 +408,40 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
         :param visualize:
         :return:
         """
-        # shape (n_cells, 15); 15 time points @ 120 fps
-        temporal_filters = self.read_temporal_filter_data(flip_negs=True)
+        # shape (n_cells, 15); 15 time points @ 30 Hz
+        if normalize_before_fit is True:
+            temporal_filters = self.read_temporal_filter_data(flip_negs=True, normalize=True)
+        else:
+            temporal_filters = self.read_temporal_filter_data(flip_negs=True)
+
+        data_fps = self.metadata['data_fps']
+        data_n_samples = self.metadata['data_temporalfilter_samples']
 
         good_indices = np.setdiff1d(np.arange(self.n_cells), self.bad_data_indices)
         parameter_names = ['n', 'p1', 'p2', 'tau1', 'tau2']
         # bounds = ([0, 0, 0, 0.1, 3],
         #           [np.inf, 10, 10, 3, 6])  # bounds when time points are 0...14
-        bounds = ([0, 0, 0, 0.1, 3*8.5],
-                  [np.inf, 10, 10, 3*8.5, 6*20])  # bounds when time points are in milliseconds
+        bounds = ([0, 0, 0, 0.1, 12*8.5],
+                  [np.inf, 10, 10, 12*8.5, 400])  # bounds when time points are in milliseconds
 
         fitted_parameters = np.zeros((self.n_cells, len(parameter_names)))
         error_array = np.zeros(self.n_cells)
         max_error = -0.1
 
-        xdata = np.arange(15) * (1/120) * 1000  # time points in milliseconds
+        xdata = np.arange(data_n_samples) * (1/data_fps) * 1000  # time points in milliseconds
         # xdata = np.arange(15)
         xdata_finer = np.linspace(0, max(xdata), 100)
 
         for cell_ix in tqdm(good_indices, desc='Fitting temporal filters'):
             ydata = temporal_filters[cell_ix, :]
+            # if normalize_before_fit is True:
+            #     pos_sum = np.sum(ydata[ydata > 0])
+            #     ydata = ydata / pos_sum
 
             try:
                 popt, pcov = curve_fit(self.diff_of_lowpass_filters, xdata, ydata, bounds=bounds)
                 fitted_parameters[cell_ix, :] = popt
-                error_array[cell_ix] = (1/15)*np.sum((ydata - self.diff_of_lowpass_filters(xdata, *popt))**2)  # MSE error
+                error_array[cell_ix] = (1/data_n_samples)*np.sum((ydata - self.diff_of_lowpass_filters(xdata, *popt))**2)  # MSE error
             except:
                 print('Fitting for cell index %d failed' % cell_ix)
                 fitted_parameters[cell_ix, :] = np.nan
@@ -429,13 +450,51 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
 
             if visualize:
                 plt.scatter(xdata, ydata)
-                plt.plot(xdata_finer, self.diff_of_lowpass_filters(xdata_finer, *popt))
+                plt.plot(xdata_finer, self.diff_of_lowpass_filters(xdata_finer, *popt), c='grey')
                 plt.title('%s %s, cell ix %d' % (self.gc_type, self.response_type, cell_ix))
                 plt.show()
 
         parameters_df = pd.DataFrame(fitted_parameters, columns=parameter_names)
         error_df = pd.DataFrame(error_array, columns=['temporalfit_mse'])
         return pd.concat([parameters_df, error_df], axis=1)
+
+    def fit_mean_temporal_filter(self, visualize=False, return_df=False):
+
+        data_fps = self.metadata['data_fps']
+        data_n_samples = self.metadata['data_temporalfilter_samples']
+        temporal_filters = self.read_temporal_filter_data(flip_negs=True, normalize=True)
+        good_indices = np.setdiff1d(np.arange(self.n_cells), self.bad_data_indices)
+        parameter_names = ['n', 'p1', 'p2', 'tau1', 'tau2']
+        bounds = ([0, 0, 0, 0.1, 12*8.5],
+                  [np.inf, 10, 10, 12*8.5, 400])  # bounds when time points are in milliseconds
+
+        a = temporal_filters[good_indices, :]
+        xdata = np.arange(data_n_samples) * (1 / data_fps) * 1000
+        xdata_finer = np.linspace(0, max(xdata), 100)
+
+        ydata = np.array([np.mean(a[:, j]) for j in range(data_n_samples)])
+        ystd = np.array([np.std(a[:, j]) for j in range(data_n_samples)])
+
+        popt, pcov = curve_fit(self.diff_of_lowpass_filters, xdata, ydata, bounds=bounds)
+        error = (1 / data_n_samples) * np.sum(
+            (ydata - self.diff_of_lowpass_filters(xdata, *popt)) ** 2)  # MSE error
+
+        if visualize is True:
+            plt.errorbar(xdata, ydata, yerr=ystd, fmt='.k')
+            plt.plot(xdata_finer, self.diff_of_lowpass_filters(xdata_finer, *popt), c='grey')
+            plt.show()
+
+        if return_df is True:
+            fitted_parameters = np.tile(popt, (self.n_cells, 1))
+            parameters_df = pd.DataFrame(fitted_parameters, columns=parameter_names)
+            parameters_df['temporalfit_mse'] = error
+            parameters_df.iloc[self.bad_data_indices] = 0.0
+
+            return parameters_df
+
+        else:
+            return popt, xdata, ydata, ystd
+
 
     # TODO - Plotting done with origin='bottom' - is this a problem?
     # TODO - This method desperately needs a rewrite
@@ -794,8 +853,11 @@ class ApricotFitsMatrix(object):
 
 if __name__ == '__main__':
 
-    a = ApricotFits('midget', 'off')
-    print('Poop!')
+    a = ApricotFits('parasol', 'on')
+    # a.read_temporal_filter_data(normalize=True)
+    # a.fit_temporal_filters(visualize=True, normalize_before_fit=True)
+    a.fit_mean_temporal_filter(visualize=True, return_df=True)
+    print('Pop!')
 
     #ApricotFitsMatrix()
     ### Save spatial fits to files
