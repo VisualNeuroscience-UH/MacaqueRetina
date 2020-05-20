@@ -43,7 +43,7 @@ class VideoBaseClass(object):
         options["image_height"] = 720  # Image height in pixels
         options["container"] = 'mp4'
         options["codec"] = 'MP42'
-        options["fps"] = 64.0  # Frames per second
+        options["fps"] = 100.0  #64.0  # Frames per second
         options["duration_seconds"] = 1.0  # seconds
         options["intensity"] = (0, 255)  # video grey scale dynamic range.
         options["pedestal"] = 0  # intensity pedestal
@@ -76,8 +76,8 @@ class VideoBaseClass(object):
         options["background"] = 128  # Background grey value
 
         # Get resolution
-        options["pix_per_deg"] = options[
-                                     "max_spatial_frequency"] * 3  # min sampling at 1.5 x Nyquist frequency of the highest sf
+        options["pix_per_deg"] = 60
+        # options["pix_per_deg"] = options["max_spatial_frequency"] * 3  # min sampling at 1.5 x Nyquist frequency of the highest sf
         # options["image_width_in_deg"] = options["image_width"] / options["pix_per_deg"]
 
         self.options = options
@@ -185,7 +185,6 @@ class VideoBaseClass(object):
         self.frames = large_frames[marginal_height:-marginal_height, marginal_width:-marginal_width, :]
         # remove rounding error
         self.frames = self.frames[0:image_height, 0:image_width, :]
-
 
     def _write_frames_to_videofile(self, filename):
         '''Write frames to videofile
@@ -349,7 +348,7 @@ class ConstructStimulus(VideoBaseClass):
     Create stimulus video and save
     '''
 
-    def __init__(self, video_center_vspace=0 + 0j, **kwargs):
+    def __init__(self, **kwargs):
         '''
         Format: my_video_object.main(filename, keyword1=value1, keyword2=value2,...)
 
@@ -391,7 +390,7 @@ class ConstructStimulus(VideoBaseClass):
         super(ConstructStimulus, self).__init__()
 
         # Set input arguments to video-object, updates the defaults from VideoBaseClass
-        print("Making a stimulus using the following attributes:")
+        print("Making a stimulus with the following properties:")
         for kw in kwargs:
             print(kw, ":", kwargs[kw])
             assert kw in self.options.keys(), f"The keyword '{kw}' was not recognized"
@@ -424,18 +423,18 @@ class ConstructStimulus(VideoBaseClass):
         self.video_width_deg = self.video_width / self.pix_per_deg
         self.video_height_deg = self.video_height / self.pix_per_deg
 
-        self.video_center_vspace = video_center_vspace
+        # self.video_center_vspace = video_center_vspace
 
-    def get_extents_deg(self):
-
-        video_xmin_deg = self.video_center_vspace.real - self.video_width_deg / 2
-        video_xmax_deg = self.video_center_vspace.real + self.video_width_deg / 2
-        video_ymin_deg = self.video_center_vspace.imag - self.video_height_deg / 2
-        video_ymax_deg = self.video_center_vspace.imag + self.video_height_deg / 2
-        # left, right, bottom, top
-        a = [video_xmin_deg, video_xmax_deg, video_ymin_deg, video_ymax_deg]
-
-        return a
+    # def get_extents_deg(self):
+    #
+    #     video_xmin_deg = self.video_center_vspace.real - self.video_width_deg / 2
+    #     video_xmax_deg = self.video_center_vspace.real + self.video_width_deg / 2
+    #     video_ymin_deg = self.video_center_vspace.imag - self.video_height_deg / 2
+    #     video_ymax_deg = self.video_center_vspace.imag + self.video_height_deg / 2
+    #     # left, right, bottom, top
+    #     a = [video_xmin_deg, video_xmax_deg, video_ymin_deg, video_ymax_deg]
+    #
+    #     return a
 
     def get_2d_video(self):
         stim_video_2d = np.reshape(self.video, (self.video_n_frames,

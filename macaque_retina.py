@@ -721,7 +721,8 @@ class MosaicConstructor(Mathematics, Visualize):
 
 class FunctionalMosaic(Mathematics):
 
-    def __init__(self, gc_dataframe, gc_type, response_type):
+    def __init__(self, gc_dataframe, gc_type, response_type, stimulus_center=5+0j, stimulus_width_pix=240, stimulus_height_pix=240,
+                 pix_per_deg=60, fps=100):
         """
 
         :param gc_dataframe: Ganglion cell parameters; positions are retinal coordinates; positions_eccentricity in mm, positions_polar_angle in degrees
@@ -729,21 +730,15 @@ class FunctionalMosaic(Mathematics):
         self.gc_type = gc_type
         self.response_type = response_type
 
-        self.deg_per_mm = 1/0.220
-        self.stim_vmin = -0.5
-        self.stim_vmax = 0.5
+        self.deg_per_mm = 1/0.220  # Perry et al 1985
 
-        self.cmap_stim = 'gray'
-        self.cmap_spatial_filter = 'bwr'
-        self.vmin_spatial_filter = -0.5
-        self.vmax_spatial_filter = 0.5
-
+        # Metadata for Apricot dataset
         self.data_microm_per_pixel = 60
         self.data_filter_fps = 30
         self.data_filter_timesteps = 15
         self.data_filter_duration = self.data_filter_timesteps * (1000/self.data_filter_fps)  # in milliseconds
 
-        # Convert retinal positions (ecc, pol angle) to visual space positions in deg (azimuth, elev)
+        # Convert retinal positions (ecc, pol angle) to visual space positions in deg (x, y)
         vspace_pos = np.array([self.pol2cart(gc.positions_eccentricity, gc.positions_polar_angle)
                                for index, gc in gc_dataframe.iterrows()])
         vspace_pos = vspace_pos * self.deg_per_mm
@@ -758,6 +753,28 @@ class FunctionalMosaic(Mathematics):
         # Drop retinal positions from the df (so that they are not used by accident)
         self.gc_df = self.gc_df.drop(['positions_eccentricity', 'positions_polar_angle'], axis=1)
 
+        # Some settings related to plotting
+        self.cmap_stim = 'gray'
+        self.cmap_spatial_filter = 'bwr'
+        self.vmin_spatial_filter = -0.5
+        self.vmax_spatial_filter = 0.5
+        self.stim_vmin = -0.5
+        self.stim_vmax = 0.5
+
+        # Initialize stuff related to digital sampling
+        self.stimulus_center = stimulus_center
+        self.stimulus_video = None
+        self.stimulus_width_pix = stimulus_width_pix
+        self.stimulus_height_pix = stimulus_height_pix
+        self.stimulus_width_deg = stimulus_width_pix / pix_per_deg
+        self.stimulus_height_deg = stimulus_height_pix / pix_per_deg
+        self.pix_per_deg = pix_per_deg  # angular resolution (eg. van Hateren 1 arcmin/pix => 60 pix/deg)
+        self.fps = fps
+        self.gc_df_pixspace = pd.DataFrame()
+        self.spatial_filter_sidelen = 0
+        self.microm_per_pix = 0
+        self.temporal_filter_len = 0
+        self.initialize_digital_sampling()
 
     def show_test_image(self, image_extents=[3.5, 6.5, -1.5, 1.5]):
         """
@@ -783,41 +800,44 @@ class FunctionalMosaic(Mathematics):
         Converts visual space coordinates (in degrees; x=eccentricity, y=elevation) to pixel space coordinates.
         In pixel space, coordinates (q,r) correspond to matrix locations, ie. (0,0) is top-left.
 
-        :param x: azimuth
-        :param y: elevation
+        :param x: eccentricity (deg)
+        :param y: elevation (deg)
         :return:
         """
-        video_width_px = self.stimulus_video.video_width
-        video_height_px = self.stimulus_video.video_height
-        pix_per_deg = self.stimulus_video.pix_per_deg
+        video_width_px = self.stimulus_width_pix  #self.stimulus_video.video_width
+        video_height_px = self.stimulus_height_pix  #self.stimulus_video.video_height
+        pix_per_deg = self.pix_per_deg  #self.stimulus_video.pix_per_deg
 
         # 1) Set the video center in visual coordinates as origin
         # 2) Scale to pixel space. Mirror+scale in y axis due to y-coordinate running top-to-bottom in pixel space
         # 3) Move the origin to video center in pixel coordinates
-        q = pix_per_deg * (x - self.stimulus_video.video_center_vspace.real) + (video_width_px / 2)
-        r = -pix_per_deg * (y - self.stimulus_video.video_center_vspace.imag) + (video_height_px / 2)
+        q = pix_per_deg * (x - self.stimulus_center.real) + (video_width_px / 2)
+        r = -pix_per_deg * (y - self.stimulus_center.imag) + (video_height_px / 2)
 
         return q, r
 
-    def load_stimulus(self, stimulus_video, visualize=False, frame_number=0):
+    def get_extents_deg(self):
         """
-        Loads stimulus video & endows RGCs with stimulus space coordinates
+        Get the stimulus/screen extents in degrees
 
-        :param stimulus_video: VideoBaseClass, visual stimulus to project to the ganglion cell mosaic
-        :param visualize: True/False, show 1 frame of stimulus in pixel and visual coordinate systems (default False)
-        :param frame_number: int, which frame of stimulus to show (default 0 = first frame)
+        :return: [xmin, xmax, ymin, ymax]
+        """
+
+        video_xmin_deg = self.stimulus_center.real - self.stimulus_width_deg / 2
+        video_xmax_deg = self.stimulus_center.real + self.stimulus_width_deg / 2
+        video_ymin_deg = self.stimulus_center.imag - self.stimulus_height_deg / 2
+        video_ymax_deg = self.stimulus_center.imag + self.stimulus_height_deg / 2
+        # left, right, bottom, top
+        a = [video_xmin_deg, video_xmax_deg, video_ymin_deg, video_ymax_deg]
+
+        return a
+
+    def initialize_digital_sampling(self):
+        """
+        Endows RGCs with stimulus/pixel space coordinates
+
         :return:
         """
-
-        # Get parameters from the stimulus object
-        self.stimulus_video = deepcopy(stimulus_video)  # TODO - Is copying the best way here?
-        stimulus_center = stimulus_video.video_center_vspace
-        self.pix_per_deg = stimulus_video.pix_per_deg  # angular resolution (eg. van Hateren 1 arcmin/pix => 60 pix/deg)
-
-        # Scale stimulus pixel values from 0-255 to [-0.5, 0.5]
-        assert np.min(stimulus_video.frames) >= 0 and np.max(stimulus_video.frames) <= 255, \
-            "Stimulus values must be between 0 and 255"
-        self.stimulus_video.frames = (stimulus_video.frames / 255) - 0.5
 
         # Endow RGCs with pixel coordinates.
         # NB! Here we make a new dataframe where everything is in pixels
@@ -837,19 +857,47 @@ class FunctionalMosaic(Mathematics):
         self.spatial_filter_sidelen = 2 * 3 * int(max(max(self.gc_df_pixspace.semi_xc * self.gc_df_pixspace.sur_ratio),
                                                       max(self.gc_df_pixspace.semi_yc * self.gc_df_pixspace.sur_ratio))) + 1
 
-        self.microm_per_pix = (1 / self.deg_per_mm) / self.stimulus_video.pix_per_deg * 1000
+        self.microm_per_pix = (1 / self.deg_per_mm) / self.pix_per_deg * 1000
 
         # Get temporal parameters from stimulus video
-        self.video_fps = self.stimulus_video.fps
-        self.temporal_filter_len = int(self.data_filter_duration / (1000/self.video_fps))
+        # self.video_fps = self.stimulus_video.fps
+        self.temporal_filter_len = int(self.data_filter_duration / (1000/self.fps))
 
-        # Scale vmin_, vmax_spatial_filter based on filter sidelen
+        # OBSOLETE? Scale vmin_, vmax_spatial_filter based on filter sidelen
         v_spatial_filter_scaling = (13**2) / (self.spatial_filter_sidelen**2)  # 13**2 being the original dimensions
         self.vmin_spatial_filter = v_spatial_filter_scaling * self.vmin_spatial_filter
         self.vmax_spatial_filter = v_spatial_filter_scaling * self.vmax_spatial_filter
 
+    def load_stimulus(self, stimulus_video, visualize=False):
+        """
+        Loads stimulus video
+
+        :param stimulus_video: VideoBaseClass, visual stimulus to project to the ganglion cell mosaic
+        :param visualize: True/False, show 1 frame of stimulus in pixel and visual coordinate systems (default False)
+        :return:
+        """
+
+        # TODO - Assert stimulus must match pre-set dimensions
+        assert (stimulus_video.video_width == self.stimulus_width_pix) &\
+               (stimulus_video.video_height == self.stimulus_height_pix),\
+            "Check that stimulus dimensions match those of the mosaic"
+        assert (stimulus_video.fps == self.fps), \
+            "Check that stimulus frame rate matches that of the mosaic"
+        assert (stimulus_video.pix_per_deg == self.pix_per_deg), \
+            "Check that stimulus resolution matches that of the mosaic"
+
+        # Get parameters from the stimulus object
+        self.stimulus_video = deepcopy(stimulus_video)  # TODO - Is copying the best way here?
+        # stimulus_center = stimulus_video.video_center_vspace
+        # self.pix_per_deg = stimulus_video.pix_per_deg
+
+        # Scale stimulus pixel values from 0-255 to [-0.5, 0.5]
+        assert np.min(stimulus_video.frames) >= 0 and np.max(stimulus_video.frames) <= 255, \
+            "Stimulus values must be between 0 and 255"
+        self.stimulus_video.frames = (stimulus_video.frames / 255) - 0.5
+
         # Drop RGCs whose center is not inside the stimulus
-        xmin, xmax, ymin, ymax = self.stimulus_video.get_extents_deg()
+        xmin, xmax, ymin, ymax = self.get_extents_deg()  #self.stimulus_video.get_extents_deg()
         for index, gc in self.gc_df_pixspace.iterrows():
             if (gc.x_deg < xmin) | (gc.x_deg > xmax) | (gc.y_deg < ymin) | (gc.y_deg > ymax):
                 self.gc_df.iloc[index] = 0.0  # all columns set as zero
@@ -857,19 +905,50 @@ class FunctionalMosaic(Mathematics):
         if visualize is True:
             self.show_stimulus_with_gcs()
 
+    def show_stimulus_with_gcs(self, frame_number=0, ax=None):
+        """
+        Plots the 1SD ellipses of the RGC mosaic
 
-    def show_stimulus_with_gcs(self, ax=None):
-        frame_number = 0
+        :param frame_number: int
+        :param ax: matplotlib Axes object
+        :return:
+        """
         ax = ax or plt.gca()
-        ax.imshow(self.stimulus_video.frames[:, :, frame_number])
+        ax.imshow(self.stimulus_video.frames[:, :, frame_number],
+                  vmin=self.stim_vmin, vmax=self.stim_vmax)
         ax = plt.gca()
 
         for index, gc in self.gc_df_pixspace.iterrows():
             # When in pixel coordinates, positive value in Ellipse angle is clockwise. Thus minus here.
+            # Width and height in Ellipse are diameters, thus x2.
             circ = Ellipse((gc.q_pix, gc.r_pix), width=2 * gc.semi_xc, height=2 * gc.semi_yc,
                            angle=gc.orientation_center * (-1), edgecolor='white', facecolor='None')
             ax.add_patch(circ)
 
+    def show_single_gc_view(self, cell_index, frame_number=0, ax=None):
+        """
+        Plots the stimulus frame cropped to RGC surroundings
+
+        :param cell_index: int
+        :param frame_number: int
+        :param ax: matplotlib Axes object
+        :return:
+        """
+        ax = ax or plt.gca()
+
+        gc = self.gc_df_pixspace.iloc[cell_index]
+        qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
+
+        # 1) Show stimulus frame cropped to RGC surroundings & overlay 1SD center RF on top of that
+        ax.imshow(self.stimulus_video.frames[:, :, frame_number], cmap=self.cmap_stim,
+                  vmin=self.stim_vmin, vmax=self.stim_vmax)
+        ax.set_xlim([qmin, qmax])
+        ax.set_ylim([rmax, rmin])
+
+        # When in pixel coordinates, positive value in Ellipse angle is clockwise. Thus minus here.
+        circ = Ellipse((gc.q_pix, gc.r_pix), width=2 * gc.semi_xc, height=2 * gc.semi_yc,
+                       angle=gc.orientation_center * (-180 / np.pi), edgecolor='white', facecolor='None')
+        ax.add_patch(circ)
 
     def _get_crop_pixels(self, cell_index):
         """
@@ -948,52 +1027,51 @@ class FunctionalMosaic(Mathematics):
     def _create_postspike_filter(self, cell_index):
         raise NotImplementedError
 
-    def show_gc_view(self, cell_index, frame_number=0):
-        """
-        Plots the stimulus frame cropped to RGC surroundings, spatial kernel and
-        elementwise multiplication of the two
-
-        :param cell_index: int
-        :param frame_number: int
-        :return:
-        """
-        gc = self.gc_df_pixspace.iloc[cell_index]
-        qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
-
-        # 1) Show stimulus frame cropped to RGC surroundings & overlay 1SD center RF on top of that
-        plt.subplot(131)
-        plt.title('Cropped stimulus')
-        plt.imshow(self.stimulus_video.frames[:, :, frame_number], cmap=self.cmap_stim)
-        plt.xlim([qmin, qmax])
-        plt.ylim([rmax, rmin])
-        ax = plt.gca()
-
-        # When in pixel coordinates, positive value in Ellipse angle is clockwise. Thus minus here.
-        circ = Ellipse((gc.q_pix, gc.r_pix), width=2 * gc.semi_xc, height=2 * gc.semi_yc,
-                       angle=gc.orientation_center * (-180 / np.pi), edgecolor='white', facecolor='None')
-        ax.add_patch(circ)
-
-        # 2) Show spatial kernel created for the stimulus resolution
-        plt.subplot(132)
-        plt.title('Spatial filter')
-        spatial_kernel = self._create_spatial_filter(cell_index)
-        plt.imshow(spatial_kernel, cmap=self.cmap_spatial_filter, vmin=self.vmin_spatial_filter, vmax=self.vmax_spatial_filter)
-
-        # 3) Stimulus pixels multiplied elementwise with spatial filter ("keyhole view")
-        plt.subplot(133)
-        plt.title('Keyhole')
-
-        # Pad the stimulus with zeros in case RGC is at the border
-        the_frame = self.stimulus_video.frames[:, :, frame_number]
-        padlen = (self.spatial_filter_sidelen - 1) // 2
-        padded_frame = np.pad(the_frame, ((padlen, padlen),(padlen, padlen)),
-                              mode='constant', constant_values=0)
-        padded_frame_crop = padded_frame[padlen+rmin:padlen+rmax+1, padlen+qmin:padlen+qmax+1]
-
-        # Then multiply elementwise
-        keyhole_view = np.multiply(padded_frame_crop, spatial_kernel)
-        plt.imshow(keyhole_view, cmap='bwr', vmin=-0.5, vmax=0.5)
-
+    # def show_gc_view(self, cell_index, frame_number=0):
+    #     """
+    #     Plots the stimulus frame cropped to RGC surroundings, spatial kernel and
+    #     elementwise multiplication of the two
+    #
+    #     :param cell_index: int
+    #     :param frame_number: int
+    #     :return:
+    #     """
+    #     gc = self.gc_df_pixspace.iloc[cell_index]
+    #     qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
+    #
+    #     # 1) Show stimulus frame cropped to RGC surroundings & overlay 1SD center RF on top of that
+    #     plt.subplot(131)
+    #     plt.title('Cropped stimulus')
+    #     plt.imshow(self.stimulus_video.frames[:, :, frame_number], cmap=self.cmap_stim)
+    #     plt.xlim([qmin, qmax])
+    #     plt.ylim([rmax, rmin])
+    #     ax = plt.gca()
+    #
+    #     # When in pixel coordinates, positive value in Ellipse angle is clockwise. Thus minus here.
+    #     circ = Ellipse((gc.q_pix, gc.r_pix), width=2 * gc.semi_xc, height=2 * gc.semi_yc,
+    #                    angle=gc.orientation_center * (-180 / np.pi), edgecolor='white', facecolor='None')
+    #     ax.add_patch(circ)
+    #
+    #     # 2) Show spatial kernel created for the stimulus resolution
+    #     plt.subplot(132)
+    #     plt.title('Spatial filter')
+    #     spatial_kernel = self._create_spatial_filter(cell_index)
+    #     plt.imshow(spatial_kernel, cmap=self.cmap_spatial_filter, vmin=self.vmin_spatial_filter, vmax=self.vmax_spatial_filter)
+    #
+    #     # 3) Stimulus pixels multiplied elementwise with spatial filter ("keyhole view")
+    #     plt.subplot(133)
+    #     plt.title('Keyhole')
+    #
+    #     # Pad the stimulus with zeros in case RGC is at the border
+    #     the_frame = self.stimulus_video.frames[:, :, frame_number]
+    #     padlen = (self.spatial_filter_sidelen - 1) // 2
+    #     padded_frame = np.pad(the_frame, ((padlen, padlen),(padlen, padlen)),
+    #                           mode='constant', constant_values=0)
+    #     padded_frame_crop = padded_frame[padlen+rmin:padlen+rmax+1, padlen+qmin:padlen+qmax+1]
+    #
+    #     # Then multiply elementwise
+    #     keyhole_view = np.multiply(padded_frame_crop, spatial_kernel)
+    #     plt.imshow(keyhole_view, cmap='bwr', vmin=-0.5, vmax=0.5)
 
     def create_spatiotemporal_filter(self, cell_index, visualize=False):
         """
@@ -1181,20 +1259,26 @@ if __name__ == "__main__":
     #                            sector_limits=[-5.0, 5.0], model_density=1.0, randomize_position=0.05)
     #
     # mosaic.build()
-    #
-    # ret = FunctionalMosaic(mosaic.gc_df, 'midget', 'on')
-    grating = vs.ConstructStimulus(video_center_vspace=5 + 0j, pattern='sine_grating', temporal_frequency=3.9,
-                                   spatial_frequency=4.3, stimulus_form='circular',
-                                   duration_seconds=2.0, fps=100, orientation=0, image_width=120, image_height=120,
-                                   pix_per_deg=60, stimulus_size=0, contrast=0.5)
+    # mosaic.save_mosaic('testmosaic0520_on_parasol.csv')
+    testmosaic = pd.read_csv('testmosaic0520_on_parasol.csv', index_col=0)
+
+    ret = FunctionalMosaic(testmosaic, 'parasol', 'on', stimulus_center=5+0j,
+                           stimulus_width_pix=240, stimulus_height_pix=240)
+
+    grating = vs.ConstructStimulus(pattern='sine_grating', stimulus_form='circular',
+                                   temporal_frequency=4.0, spatial_frequency=2.3,
+                                   duration_seconds=2.0, orientation=0, image_width=240, image_height=240,
+                                   stimulus_size=0, contrast=0.9)
+
+    ret.load_stimulus(grating)
+    ret.run_single_cell(5, n_trials=10, visualize=True)
+    plt.show()
 
     # plt.imshow(grating.frames[:, :, 0])
     # plt.show()
-    print('pop!')
+    # print('pop!')
 
-    # ret.load_stimulus(grating)
-    # ret.convolve_stimulus(7, visualize=True)
-    # plt.show()
+
 
 
 
