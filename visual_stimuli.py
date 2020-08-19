@@ -82,25 +82,15 @@ class VideoBaseClass(object):
 
         self.options = options
 
-    # def get_xrange_deg(self):
-    #     stimulus_center_x = self.options['stimulus_position'][0]
-    #     stimulus_width_deg = self.options['image_width'] / self.options['pix_per_deg']
-    #     return [stimulus_center_x - (stimulus_width_deg / 2), stimulus_center_x + (stimulus_width_deg / 2)]
-    #
-    # def get_yrange_deg(self):
-    #     stimulus_center_y = self.options['stimulus_position'][1]
-    #     stimulus_height_deg = self.options['image_width'] / self.options['pix_per_deg']
-    #     return [stimulus_center_y - (stimulus_height_deg / 2), stimulus_center_y + (stimulus_height_deg / 2)]
-
     def _scale_intensity(self):
 
         '''Scale intensity to 8-bit grey scale. Calculating peak-to-peak here allows different
             luminances and contrasts'''
 
         raw_intensity_scale = np.ptp(self.frames)
-        intensity_min = np.min(self.options["intensity"])
+        # intensity_min = np.min(self.options["intensity"])
         intensity_max = np.max(self.options["intensity"])
-        full_intensity_scale = np.ptp((intensity_min, intensity_max))
+        # full_intensity_scale = np.ptp((intensity_min, intensity_max))
         pedestal = self.options["pedestal"]  # This is the bottom of final dynamic range
         contrast = self.options["contrast"]
 
@@ -111,10 +101,15 @@ class VideoBaseClass(object):
         self.frames = self.frames - np.min(self.frames)
 
         # Scale to correct intensity scale
-        self.frames = self.frames * (final_scale / raw_intensity_scale) * contrast
+        # such that intensity is modulated around mean background light = intensity_max/2
+        self.frames = (self.frames * (2/raw_intensity_scale) - 1.0) * contrast * (intensity_max/2)
+        self.frames = self.frames + (intensity_max/2)
 
+        # Simo's version
+        # Scale to correct intensity scale
+        #self.frames = self.frames * (final_scale / raw_intensity_scale) * contrast
         # Shift to pedestal
-        self.frames = self.frames + pedestal
+        #self.frames = self.frames + pedestal
 
         # Round result to avoid unnecessary errors
         self.frames = np.round(self.frames, 1)
@@ -423,18 +418,6 @@ class ConstructStimulus(VideoBaseClass):
         self.video_width_deg = self.video_width / self.pix_per_deg
         self.video_height_deg = self.video_height / self.pix_per_deg
 
-        # self.video_center_vspace = video_center_vspace
-
-    # def get_extents_deg(self):
-    #
-    #     video_xmin_deg = self.video_center_vspace.real - self.video_width_deg / 2
-    #     video_xmax_deg = self.video_center_vspace.real + self.video_width_deg / 2
-    #     video_ymin_deg = self.video_center_vspace.imag - self.video_height_deg / 2
-    #     video_ymax_deg = self.video_center_vspace.imag + self.video_height_deg / 2
-    #     # left, right, bottom, top
-    #     a = [video_xmin_deg, video_xmax_deg, video_ymin_deg, video_ymax_deg]
-    #
-    #     return a
 
     def get_2d_video(self):
         stim_video_2d = np.reshape(self.video, (self.video_n_frames,
