@@ -496,6 +496,7 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
             return popt, xdata, ydata, ystd
 
 
+    # REMOVE surround_model = 2
     # TODO - Plotting done with origin='bottom' - is this a problem?
     # TODO - This method desperately needs a rewrite
     def fit_spatial_filters(self, visualize=False, surround_model=1, semi_x_always_major=True):
@@ -792,94 +793,7 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
         self.all_fits.to_csv(filepath)
 
 
-class ApricotFitsMatrix(object):
-    """
-    Class for collecting all fitted parameters for all cell types
-    """
-
-    def __init__(self):
-
-        # Create fits for all cell types
-        self.pon_df = ApricotFits('parasol', 'on').get_fits()
-        self.poff_df = ApricotFits('parasol', 'off').get_fits()
-        # self.mon_df = ApricotFits('midget', 'on').get_fits()
-        # self.moff_df = ApricotFits('midget', 'off').get_fits()
-
-        # Label by gc and response type
-        self.pon_df['gc_type'] = 'parasol'
-        self.pon_df['response_type'] = 'on'
-        self.poff_df['gc_type'] = 'parasol'
-        self.poff_df['response_type'] = 'off'
-
-        # self.mon_df['gc_type'] = 'midget'
-        # self.mon_df['response_type'] = 'on'
-        # self.moff_df['gc_type'] = 'midget'
-        # self.moff_df['response_type'] = 'off'
-
-        # Compute nearest neighbor distances
-
-
-        pass
-
-    def find_min(self, point_grid, point_ix, grid_to_compare):
-        """
-        Finds the nearest neighbor of point_grid[point_ix] in grid_to_compare (distance > 0) and returns the distance to it
-        """
-
-        point = point_grid.iloc[point_ix]
-        d = ((grid_to_compare.center_point_x - point.center_point_x) ** 2 + (
-                    grid_to_compare.center_point_y - point.center_point_y) ** 2) ** 0.5
-
-        return min(d[d > 0])
-
-    def get_nearest_neighbor_distances(self, points_df):
-        """
-        Finds the nearest neighbor distances for an array of points
-        """
-        distances = np.array([self.find_min(points_df, i, points_df) for i in range(len(points_df))])
-        return distances
-
-    def get_all_distances(self, gc_type):
-
-        # Pseudocode
-        both_types = pd.concat([on_cells, off_cells])
-
-        on_on_distances = get_nearest_neighbor_distances(on_cells) * um_per_pix
-        off_off_distances = get_nearest_neighbor_distances(off_cells) * um_per_pix
-        sign_indep_distances = get_nearest_neighbor_distances(both_types) * um_per_pix
-
-        return on_on_distances, off_off_distances, sign_indep_distances
-
-
 if __name__ == '__main__':
 
     a = ApricotFits('parasol', 'on')
-    # a.read_temporal_filter_data(normalize=True)
-    # a.fit_temporal_filters(visualize=True, normalize_before_fit=True)
-    a.fit_mean_temporal_filter(visualize=True, return_df=True)
-    print('Pop!')
-
-    #ApricotFitsMatrix()
-    ### Save spatial fits to files
-    # pon = ApricotFits('parasol', 'on')
-    # pon.fit_dog_to_sta_data(semi_x_always_major=True, save='spatialfits_parasol_on.csv')
-    # poff = ApricotFits('parasol', 'off')
-    # poff.fit_dog_to_sta_data(semi_x_always_major=True, save='spatialfits_parasol_off.csv')
-    #
-    # mon = ApricotFits('midget', 'on')
-    # mon.fit_dog_to_sta_data(semi_x_always_major=True, save='spatialfits_midget_on.csv')
-    # moff = ApricotFits('midget', 'off')
-    # moff.fit_dog_to_sta_data(semi_x_always_major=True, save='spatialfits_midget_off.csv')
-
-    ### Test on ON parasols
-    # pon = ApricotFits('midget', 'on')
-    # pon.fit_dog_to_sta_data(semi_x_always_major=True, surround_model=1, visualize=False)
-
-
-    # pon = ApricotFits('parasol', 'off')
-    # pon.save('spatialfits_2020.csv')
-    # pon.get_spatialfilter_integral_stats(visualize=True)
-    # plt.show()
-    # d = pon.compute_spatiotemporalfilter_integrals()
-    # plt.hist(d)
-    # plt.show()
+    a.fit_temporal_filters(visualize=True, normalize_before_fit=True)

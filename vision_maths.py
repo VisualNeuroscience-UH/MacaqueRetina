@@ -103,35 +103,6 @@ class Mathematics:
 
         raise NotImplementedError
 
-        # sur_ratio = 2
-        # offset = 0
-        # amplitudec = 1
-        #
-        # (x_fit, y_fit) = xy_tuple
-        # acen = (np.cos(orientation_center) ** 2) / (2 * semi_xc ** 2) + (np.sin(orientation_center) ** 2) / (
-        #         2 * semi_yc ** 2)
-        # bcen = -(np.sin(2 * orientation_center)) / (4 * semi_xc ** 2) + (np.sin(2 * orientation_center)) / (
-        #         4 * semi_yc ** 2)
-        # ccen = (np.sin(orientation_center) ** 2) / (2 * semi_xc ** 2) + (np.cos(orientation_center) ** 2) / (
-        #         2 * semi_yc ** 2)
-        #
-        # asur = (np.cos(orientation_center) ** 2) / (2 * sur_ratio * semi_xc ** 2) + (
-        #         np.sin(orientation_center) ** 2) / (2 * sur_ratio * semi_yc ** 2)
-        # bsur = -(np.sin(2 * orientation_center)) / (4 * sur_ratio * semi_xc ** 2) + (np.sin(2 * orientation_center)) / (
-        #         4 * sur_ratio * semi_yc ** 2)
-        # csur = (np.sin(orientation_center) ** 2) / (2 * sur_ratio * semi_xc ** 2) + (
-        #         np.cos(orientation_center) ** 2) / (2 * sur_ratio * semi_yc ** 2)
-        #
-        # ## Difference of gaussians
-        # model_fit = offset + \
-        #             amplitudec * np.exp(
-        #     - (acen * ((x_fit - xoc) ** 2) + 2 * bcen * (x_fit - xoc) * (y_fit - yoc) + ccen * ((y_fit - yoc) ** 2))) - \
-        #             amplitudes * np.exp(
-        #     - (asur * ((x_fit - xoc) ** 2) + 2 * bsur * (x_fit - xoc) * (y_fit - yoc) + csur * ((y_fit - yoc) ** 2)))
-        #
-        # return model_fit.ravel()
-
-
 
     def sector2area(self, radius, angle):  # Calculate sector area. Angle in deg, radius in mm
         pi = np.pi
@@ -165,17 +136,4 @@ class Mathematics:
         y = self.lowpass(t, n, p1, tau1) - self.lowpass(t, n, p2, tau2)
         return y
 
-    # def cosinebump(self, j, t):
-    #     a = 3.0  # Hand-tuned
-    #     c = 0.01  # Hand-tuned
-    #     phi_j = j * np.pi/2  # Spacing as in Pillow et al. 2008 Nature
-    #
-    #     # First, scale time to logtime
-    #     t_logtime = a*np.log(t + c) - phi_j
-    #
-    #     # Then create the bump
-    #     if -np.pi <= t_logtime <= np.pi:
-    #         return (np.cos(t_logtime) + 1) / 2
-    #     else:
-    #         return 0
 
