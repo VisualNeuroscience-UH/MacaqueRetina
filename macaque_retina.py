@@ -21,8 +21,6 @@ from brian2.units import *
 import apricot_fitter as apricot
 from copy import deepcopy
 
-# plt.rcParams['image.cmap'] = 'gray'
-
 
 class MosaicConstructor(Mathematics, Visualize):
     '''
@@ -756,10 +754,6 @@ class FunctionalMosaic(Mathematics):
         # Some settings related to plotting
         self.cmap_stim = 'gray'
         self.cmap_spatial_filter = 'bwr'
-        self.vmin_spatial_filter = -0.5
-        self.vmax_spatial_filter = 0.5
-        self.stim_vmin = -0.5
-        self.stim_vmax = 0.5
 
         # Initialize stuff related to digital sampling
         self.stimulus_center = stimulus_center
@@ -775,25 +769,6 @@ class FunctionalMosaic(Mathematics):
         self.microm_per_pix = 0
         self.temporal_filter_len = 0
         self.initialize_digital_sampling()
-
-    def show_test_image(self, image_extents=[3.5, 6.5, -1.5, 1.5]):
-        """
-        Shows the mosaic overlayed on top of the test image.
-
-        :param image_extents: image extents in visual space; given as [bottom, top, left, right] degrees
-        :return:
-        """
-        image = cv2.imread('test_image.jpg', 0)
-        plt.imshow(image, extent=image_extents, vmin=0, vmax=255)
-        plt.title('Test image')
-        plt.xlabel('X (deg)')
-        plt.ylabel('Y (deg)')
-        ax = plt.gca()
-
-        for index, gc in self.gc_df.iterrows():
-            circ = Ellipse((gc.x_deg, gc.y_deg), width=2 * gc.semi_xc, height=2 * gc.semi_yc,
-                           angle=gc.orientation_center * (180 / np.pi), edgecolor='white', facecolor='None')
-            ax.add_patch(circ)
 
     def _vspace_to_pixspace(self, x, y):
         """
@@ -863,10 +838,6 @@ class FunctionalMosaic(Mathematics):
         # self.video_fps = self.stimulus_video.fps
         self.temporal_filter_len = int(self.data_filter_duration / (1000/self.fps))
 
-        # OBSOLETE? Scale vmin_, vmax_spatial_filter based on filter sidelen
-        v_spatial_filter_scaling = (13**2) / (self.spatial_filter_sidelen**2)  # 13**2 being the original dimensions
-        self.vmin_spatial_filter = v_spatial_filter_scaling * self.vmin_spatial_filter
-        self.vmax_spatial_filter = v_spatial_filter_scaling * self.vmax_spatial_filter
 
     def load_stimulus(self, stimulus_video, visualize=False):
         """
@@ -877,7 +848,6 @@ class FunctionalMosaic(Mathematics):
         :return:
         """
 
-        # TODO - Assert stimulus must match pre-set dimensions
         assert (stimulus_video.video_width == self.stimulus_width_pix) &\
                (stimulus_video.video_height == self.stimulus_height_pix),\
             "Check that stimulus dimensions match those of the mosaic"
@@ -887,14 +857,12 @@ class FunctionalMosaic(Mathematics):
             "Check that stimulus resolution matches that of the mosaic"
 
         # Get parameters from the stimulus object
-        self.stimulus_video = deepcopy(stimulus_video)  # TODO - Is copying the best way here?
-        # stimulus_center = stimulus_video.video_center_vspace
-        # self.pix_per_deg = stimulus_video.pix_per_deg
+        self.stimulus_video = deepcopy(stimulus_video)  # Not sure if copying the best way here...
 
-        # Scale stimulus pixel values from 0-255 to [-0.5, 0.5]
+        # Scale stimulus pixel values from [0, 255] to [-1.0, 1.0]
         assert np.min(stimulus_video.frames) >= 0 and np.max(stimulus_video.frames) <= 255, \
-            "Stimulus values must be between 0 and 255"
-        self.stimulus_video.frames = (stimulus_video.frames / 255) - 0.5
+            "Stimulus pixel values must be between 0 and 255"
+        self.stimulus_video.frames = stimulus_video.frames / 127.5 - 1.0
 
         # Drop RGCs whose center is not inside the stimulus
         xmin, xmax, ymin, ymax = self.get_extents_deg()  #self.stimulus_video.get_extents_deg()
@@ -915,15 +883,19 @@ class FunctionalMosaic(Mathematics):
         """
         ax = ax or plt.gca()
         ax.imshow(self.stimulus_video.frames[:, :, frame_number],
-                  vmin=self.stim_vmin, vmax=self.stim_vmax)
+                  vmin=-1.0, vmax=1.0)
         ax = plt.gca()
 
         for index, gc in self.gc_df_pixspace.iterrows():
             # When in pixel coordinates, positive value in Ellipse angle is clockwise. Thus minus here.
+            # Note that Ellipse angle is in degrees.
             # Width and height in Ellipse are diameters, thus x2.
             circ = Ellipse((gc.q_pix, gc.r_pix), width=2 * gc.semi_xc, height=2 * gc.semi_yc,
                            angle=gc.orientation_center * (-1), edgecolor='white', facecolor='None')
             ax.add_patch(circ)
+
+        plt.xticks([])
+        plt.yticks([])
 
     def show_single_gc_view(self, cell_index, frame_number=0, ax=None):
         """
@@ -939,16 +911,20 @@ class FunctionalMosaic(Mathematics):
         gc = self.gc_df_pixspace.iloc[cell_index]
         qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
 
-        # 1) Show stimulus frame cropped to RGC surroundings & overlay 1SD center RF on top of that
+        # Show stimulus frame cropped to RGC surroundings & overlay 1SD center RF on top of that
         ax.imshow(self.stimulus_video.frames[:, :, frame_number], cmap=self.cmap_stim,
-                  vmin=self.stim_vmin, vmax=self.stim_vmax)
+                  vmin=-1.0, vmax=1.0)
         ax.set_xlim([qmin, qmax])
         ax.set_ylim([rmax, rmin])
 
         # When in pixel coordinates, positive value in Ellipse angle is clockwise. Thus minus here.
+        # Note that Ellipse angle is in degrees.
+        # Width and height in Ellipse are diameters, thus x2.
         circ = Ellipse((gc.q_pix, gc.r_pix), width=2 * gc.semi_xc, height=2 * gc.semi_yc,
-                       angle=gc.orientation_center * (-180 / np.pi), edgecolor='white', facecolor='None')
+                       angle=gc.orientation_center * (-1), edgecolor='white', facecolor='None')
         ax.add_patch(circ)
+        plt.xticks([])
+        plt.yticks([])
 
     def _get_crop_pixels(self, cell_index):
         """
@@ -980,7 +956,6 @@ class FunctionalMosaic(Mathematics):
 
         offset = 0.0
         s = self.spatial_filter_sidelen
-        amplitude_scaling = (self.microm_per_pix / self.data_microm_per_pixel)**2  # Scaling due to resolution change
 
         gc = self.gc_df_pixspace.iloc[cell_index]
         qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
@@ -988,16 +963,19 @@ class FunctionalMosaic(Mathematics):
         x_grid, y_grid = np.meshgrid(np.arange(qmin, qmax+1, 1),
                                      np.arange(rmin, rmax+1, 1))
 
+        orientation_center = gc.orientation_center * (np.pi/180)
         spatial_kernel = self.DoG2D_fixed_surround((x_grid, y_grid),
-                                                   gc.amplitudec * amplitude_scaling,
+                                                   gc.amplitudec,
                                                    gc.q_pix, gc.r_pix,
-                                                   gc.semi_xc, gc.semi_yc, gc.orientation_center,
-                                                   gc.amplitudes * amplitude_scaling,
+                                                   gc.semi_xc, gc.semi_yc, orientation_center,
+                                                   gc.amplitudes,
                                                    gc.sur_ratio, offset)
         spatial_kernel = np.reshape(spatial_kernel, (s, s))
 
         # Scale the spatial filter so that its maximal gain is something reasonable
+        # TODO - how should you scale the kernel??
         max_gain = np.max(np.abs(np.fft.fft2(spatial_kernel)))
+        # 5.3 here just to give exp(5.3) = 200 Hz max firing rate to sinusoids
         spatial_kernel = (5.3/max_gain) * spatial_kernel
 
         return spatial_kernel
@@ -1019,59 +997,30 @@ class FunctionalMosaic(Mathematics):
         temporal_filter = self.diff_of_lowpass_filters(tvec, *filter_params)
 
         # Scale the temporal filter so that its maximal gain is 1
+        # TODO - how should you scale the kernel??
         max_gain = np.max(np.abs(np.fft.fft(temporal_filter)))
         temporal_filter = (1/max_gain) * temporal_filter
 
         return temporal_filter
 
+    def plot_tf_amplitude_response(self, cell_index, ax=None):
+
+        ax = ax or plt.gca()
+
+        tf = self._create_temporal_filter(cell_index)
+        ft_tf = np.fft.fft(tf)
+        timestep = self.data_filter_duration / len(tf) / 1000  # in seconds
+        freqs = np.fft.fftfreq(tf.size, d=timestep)
+        amplitudes = np.abs(ft_tf)
+
+        ax.set_xscale('log')
+        ax.set_xlim([0.1,100])
+        plt.xlabel('Frequency [Hz]')
+        plt.ylabel('Gain')
+        ax.plot(freqs,amplitudes,'.')
+
     def _create_postspike_filter(self, cell_index):
         raise NotImplementedError
-
-    # def show_gc_view(self, cell_index, frame_number=0):
-    #     """
-    #     Plots the stimulus frame cropped to RGC surroundings, spatial kernel and
-    #     elementwise multiplication of the two
-    #
-    #     :param cell_index: int
-    #     :param frame_number: int
-    #     :return:
-    #     """
-    #     gc = self.gc_df_pixspace.iloc[cell_index]
-    #     qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
-    #
-    #     # 1) Show stimulus frame cropped to RGC surroundings & overlay 1SD center RF on top of that
-    #     plt.subplot(131)
-    #     plt.title('Cropped stimulus')
-    #     plt.imshow(self.stimulus_video.frames[:, :, frame_number], cmap=self.cmap_stim)
-    #     plt.xlim([qmin, qmax])
-    #     plt.ylim([rmax, rmin])
-    #     ax = plt.gca()
-    #
-    #     # When in pixel coordinates, positive value in Ellipse angle is clockwise. Thus minus here.
-    #     circ = Ellipse((gc.q_pix, gc.r_pix), width=2 * gc.semi_xc, height=2 * gc.semi_yc,
-    #                    angle=gc.orientation_center * (-180 / np.pi), edgecolor='white', facecolor='None')
-    #     ax.add_patch(circ)
-    #
-    #     # 2) Show spatial kernel created for the stimulus resolution
-    #     plt.subplot(132)
-    #     plt.title('Spatial filter')
-    #     spatial_kernel = self._create_spatial_filter(cell_index)
-    #     plt.imshow(spatial_kernel, cmap=self.cmap_spatial_filter, vmin=self.vmin_spatial_filter, vmax=self.vmax_spatial_filter)
-    #
-    #     # 3) Stimulus pixels multiplied elementwise with spatial filter ("keyhole view")
-    #     plt.subplot(133)
-    #     plt.title('Keyhole')
-    #
-    #     # Pad the stimulus with zeros in case RGC is at the border
-    #     the_frame = self.stimulus_video.frames[:, :, frame_number]
-    #     padlen = (self.spatial_filter_sidelen - 1) // 2
-    #     padded_frame = np.pad(the_frame, ((padlen, padlen),(padlen, padlen)),
-    #                           mode='constant', constant_values=0)
-    #     padded_frame_crop = padded_frame[padlen+rmin:padlen+rmax+1, padlen+qmin:padlen+qmax+1]
-    #
-    #     # Then multiply elementwise
-    #     keyhole_view = np.multiply(padded_frame_crop, spatial_kernel)
-    #     plt.imshow(keyhole_view, cmap='bwr', vmin=-0.5, vmax=0.5)
 
     def create_spatiotemporal_filter(self, cell_index, visualize=False):
         """
@@ -1085,28 +1034,27 @@ class FunctionalMosaic(Mathematics):
         spatial_filter = self._create_spatial_filter(cell_index)
         s = self.spatial_filter_sidelen
         spatial_filter_1d = np.array([np.reshape(spatial_filter, s**2)]).T
-        # TODO - Check that reshape doesn't mix dimensions
+
         temporal_filter = self._create_temporal_filter(cell_index)
 
         spatiotemporal_filter = spatial_filter_1d * temporal_filter  # (Nx1) * (1xT) = NxT
-        # Scaling wrt experimental filter gain done in _create_spatial_filter()
 
         if visualize is True:
-            plt.subplots(1, 3, figsize=(16, 4))
+            vmax = np.max(np.abs(spatial_filter))
+            vmin = -vmax
+
+            plt.subplots(1, 2, figsize=(10, 4))
             plt.suptitle(self.gc_type + ' ' + self.response_type + ' / cell ix ' + str(cell_index))
-            plt.subplot(131)
-            plt.imshow(spatial_filter, cmap=self.cmap_spatial_filter,
-                       vmin=self.vmin_spatial_filter, vmax=self.vmax_spatial_filter)
+            plt.subplot(121)
+            plt.imshow(spatial_filter, cmap=self.cmap_spatial_filter, vmin=vmin, vmax=vmax)
             plt.colorbar()
 
-            plt.subplot(132)
+            plt.subplot(122)
             plt.plot(range(self.temporal_filter_len), np.flip(temporal_filter))
-            plt.ylim([-2.5, 2.5])  # limits need to change if fps is changing
 
-            plt.subplot(133)
-            plt.imshow(np.flip(spatiotemporal_filter, axis=1), aspect='auto', cmap='bwr',
-                       vmin=2*self.vmin_spatial_filter, vmax=2*self.vmax_spatial_filter)
-            plt.colorbar()
+            # plt.subplot(133)
+            # plt.imshow(np.flip(spatiotemporal_filter, axis=1), aspect='auto', cmap='bwr', vmin=vmin, vmax=vmax)
+            # plt.colorbar()
 
             plt.tight_layout()
 
@@ -1120,14 +1068,9 @@ class FunctionalMosaic(Mathematics):
         :param reshape:
         :return:
         """
-        # Pad the stimulus with zeros in case RGC is at the border
-        # the_frame = self.stimulus_video.frames[:, :, frame_number]
-        # padlen = (self.spatial_filter_sidelen - 1) // 2
-        # padded_frame = np.pad(the_frame, ((padlen, padlen),(padlen, padlen)),
-        #                       mode='constant', constant_values=0)
-        # padded_frame_crop = padded_frame[padlen+rmin:padlen+rmax+1, padlen+qmin:padlen+qmax+1]
-        # TODO - Handle RGCs that are near the border
-        # TODO - Check that reshape doesn't mix dimensions
+
+        # TODO - Handle RGCs that are near the border of the stimulus
+
         qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
         stimulus_cropped = self.stimulus_video.frames[rmin:rmax+1, qmin:qmax+1, :]
 
@@ -1233,7 +1176,7 @@ class FunctionalMosaic(Mathematics):
             plt.plot(tvec, exp_generator_potential.flatten(), label='Generator')
             plt.xlim([0, duration / second])
 
-            # # TODO - average firing rate here (should follow generator)
+            # Compute average firing rate over trials (should approximately follow generator)
             hist_dt = 1*ms
             # n_bins = int((duration/hist_dt))
             bin_edges = np.append(tvec_new, [duration/second])  # Append the rightmost edge
@@ -1268,11 +1211,11 @@ if __name__ == "__main__":
     grating = vs.ConstructStimulus(pattern='sine_grating', stimulus_form='circular',
                                    temporal_frequency=4.0, spatial_frequency=2.3,
                                    duration_seconds=2.0, orientation=0, image_width=240, image_height=240,
-                                   stimulus_size=0, contrast=0.9)
+                                   stimulus_size=0, contrast=0.6)
 
     ret.load_stimulus(grating)
-    ret.run_single_cell(5, n_trials=10, visualize=True)
-    plt.show()
+    # ret.run_single_cell(5, n_trials=10, visualize=True)
+    # plt.show()
 
     # plt.imshow(grating.frames[:, :, 0])
     # plt.show()
@@ -1282,151 +1225,17 @@ if __name__ == "__main__":
 
 
 
-    # ret.show_stimulus_with_gcs()
-    # ret.run_single_cell(1, n_trials=1, visualize=True)
-    # plt.show()
-    # ret.create_spatiotemporal_filter(18, visualize=True)
-    # plt.show()
-    # mosaic.visualize_mosaic()
-    # plt.show()
-    # b = mosaic.fit_temporal_statistics(visualize=False)
-    # mosaic.create_temporal_filters(b)
-    # mosaic.build()
-    # mosaic.fit_tonic_drives(visualize=True)
-    # gc_density_func_params = mosaic.fit_gc_density_data()
-    #
-    # fitdata2 = load_dog_fits('results_temp/parasol_OFF_surfix.csv')
-    # mosaic.build(visualize=True)
-    # mosaic.visualize_mosaic()
-    # plt.show()
-
-    #mosaic.fit_dendritic_diameter_vs_eccentricity(visualize=True)
-    # fitdata2 = load_dog_fits('results_temp/parasol_OFF_surfix.csv')
-    # mosaic.build(fitdata2, visualize=True)
-    # gc_density_func_params = mosaic.fit_gc_density_data()
-    # mosaic.place_gc_units(gc_density_func_params, visualize=True)
-    # plt.show()
-
-    # You can fit data at runtime
-    # import apricot_fitter
-    #
-    # x = apricot_fitter.ConstructReceptiveFields()
-    # fitdata = x.fit_dog_to_sta_data('midget', 'OFF', surround_model=1,
-    #                       semi_x_always_major=True)
-
-    # ...or load premade fits
-    # fitdata2 = load_dog_fits('results_temp/parasol_OFF_surfix.csv')
-    #
-    #
-    # mosaic = GanglionCells(gc_type='parasol', response_type='OFF', ecc_limits=[4, 6],
-    #                                   sector_limits=[-10.0, 10.0], model_density=1.0, randomize_position=0.6)
-    # mosaic.build(fitdata2, visualize=False)
-    # # Or you can load a previously built mosaic
-    # #
-    # # mosaic.visualize_mosaic()
-    #
-    # a = vs.ConstructStimulus(video_center_vspace=5 + 0j, pattern='sine_grating', temporal_frequency=2,
-    #                          spatial_frequency=0.5,
-    #                          duration_seconds=5, fps=120, orientation=45, image_width=90, image_height=90,
-    #                          pix_per_deg=30, stimulus_size=0, contrast=0.7)
-    #
-    # mosaic.load_stimulus(a)
-
-    #
-    # mosaic.visualize_stimulus_and_grid(marked_cells=[2])
-    # mosaic.visualize_rgc_view(100, show_block=True)
-
-    # all_spikes = []
-    # for i in range(10):
-    #     # mosaic.create_spatiotemporal_kernel(i, visualize=True)
-    #     # mosaic.simple_spiking(i)
-    #     mosaic.visualize_rgc_view(i, show_block=True)
-    #     #
-    #     # filtered_stuff = mosaic.feed_stimulus_thru_filter(i)
-    #     # n = len(filtered_stuff)
-    #     # plt.plot(range(n), filtered_stuff)
-    #     #
-    #     tsp, Vmem, meanfr = mosaic.pillow_spiking(0)
-    #     all_spikes.append(np.array(tsp) * (1/120))
-    #
-    # plt.eventplot(all_spikes)
-    # plt.show()
-
-    # Test experiment
-    # contrasts = np.arange(0.1, 1.0, 0.1)
-    # spatial_freqs = [1, 2, 4, 6, 12, 24]
-    # results_table = np.zeros((len(contrasts), len(spatial_freqs)))
-    # cont_grid, spatfreq_grid = np.meshgrid(contrasts, spatial_freqs)
-    # response_threshold = 10
-    # cell_ix = 0
-    #
-    # for j, spatfreq in enumerate(spatial_freqs):
-    #     for i, contrast in enumerate(contrasts):
-    #         a = vs.ConstructStimulus(video_center_vspace=5 + 0j, pattern='sine_grating', temporal_frequency=6,
-    #                                  spatial_frequency=spatfreq,
-    #                                  duration_seconds=5, fps=120, orientation=45, image_width=320, image_height=240,
-    #                                  pix_per_deg=30, stimulus_size=5.0, contrast=contrast)
-    #
-    #         mosaic.load_stimulus(a)
-    #         tsp, Vmem, meanfr = mosaic.pillow_spiking(cell_ix)
-    #         results_table[i,j] = meanfr
-    #
-    # np.savetxt("results_temp/parasol_spat_tuning.csv", results_table, delimiter=',')
-
-# Todo (Henri's)
-# - RGC view: orientation is different in every friggin plot.... >.<
-# - Normalize kernel energy => still sometimes cells with very high firing rates...
-# - Saving/loading generated mosaic
-# - Check scale of filter values in data
-# - Fit temporal kernel
-# - Fit postspike currents
-
-# - Eccentricity and polar angle used sometimes as if they are the same thing
-# - "center" has double meaning: RF center or center/surround
-# - semi_x and semi_y... write somewhere that semi_x = horizontal, semi_y = vertical and orientation rotates ccw
-
-
-# chichilnisky_fits = parasol_ON_object.fit_spatial_statistics(visualize=False)
-
-# VisualImageArray(pattern='white_noise', stimulus_form='rectangular', duration_seconds=2,
-#							 fps=30, pedestal =0, orientation=0, stimulus_position=(0,0), stimulus_size=4)
-
-# # Define eccentricity and theta in degrees. Model_density is the relative density compared to true macaque values.
-# ganglion_cell_object = GanglionCells(gc_type='parasol', responsetype='ON', eccentricity=[3,7], theta=[-30.0,30.0], density=1.0, randomize_position = 0.6)
-
-# Operator.run_retina_construction(ganglion_cell_object, visualize=1)
-
-# parasol_ON_object = GanglionCells(gc_type='parasol', responsetype='ON', eccentricity=[0.5,30], theta=[-30.0,30.0], model_density=1.0, randomize_position = 0.6)
-
-# Retina.run_retina_construction(parasol_ON_object, visualize=1)
-
-# parasol_OFF_object = GanglionCells(gc_type='parasol', responsetype='OFF', eccentricity=[3,7], theta=[-30.0,30.0], model_density=1.0, randomize_position = 0.6)
-
-# Operator.run_retina_construction(parasol_OFF_object, visualize=1)
-
-# midget_ON_object = GanglionCells(gc_type='midget', responsetype='ON', eccentricity=[3,7], theta=[-30.0,30.0], model_density=1.0, randomize_position = 0.6)
-
-# Operator.run_retina_construction(midget_ON_object, visualize=0)
-
-# midget_OFF_object = GanglionCells(gc_type='midget', responsetype='OFF', eccentricity=[3,7], theta=[-30.0,30.0], model_density=1.0, randomize_position = 0.6)
-
-# Operator.run_retina_construction(midget_OFF_object, visualize=0)
-
-# sample_image_object = SampleImage()
-
-# Operator.run_stimulus_sampling(sample_image_object, visualize=1)
-
 # TODO (Simo's):
 
 # Visual stimuli
 
-#   -xy_aspcects_ratio show to some extent bimodal distribution. It should be convertable to all y_sigma > x_sigma, but attempt to do this failed. Fit quality decreased
-
 #	-consider implementing significant correlations between spatial parameters
-
-#   -model and apply time behaviour
+#   -correlations between temporal filter parameters
+#   => consider volume of center/surround gaussian envelopes; compare resulting AR functions to data ARs?
 
 #   -construct LGN. Probably a filter rather than spiking neurons. The latter dont make sense because we are interested in cx, not sub-cx.s
+#   => or maybe just use the RGC spikes (but max firing rate lower) like the Allen people do.
+
 
 
 '''
