@@ -20,6 +20,7 @@ import brian2 as b2
 from brian2.units import *
 import apricot_fitter as apricot
 from copy import deepcopy
+from tqdm import tqdm
 
 
 class MosaicConstructor(Mathematics, Visualize):
@@ -1069,7 +1070,7 @@ class FunctionalMosaic(Mathematics):
         :return:
         """
 
-        # TODO - Handle RGCs that are near the border of the stimulus
+        # TODO - RGCs that are near the border of the stimulus will fail
 
         qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
         stimulus_cropped = self.stimulus_video.frames[rmin:rmax+1, qmin:qmax+1, :]
@@ -1087,6 +1088,7 @@ class FunctionalMosaic(Mathematics):
         Convolves the stimulus with the stimulus filter
 
         :param cell_index: int
+        :param visualize: bool
         :return: array of length (stimulus timesteps)
         """
         # Get spatiotemporal filter
@@ -1101,74 +1103,76 @@ class FunctionalMosaic(Mathematics):
 
         # Add some padding to the beginning so that stimulus time and generator potential time match
         # (First time steps of stimulus are not convolved)
-        generator_potential = np.pad(generator_potential, (self.data_filter_timesteps - 1, 0),
+        video_dt = (1 / self.stimulus_video.fps) * second
+        n_padding = int(self.data_filter_duration*ms / video_dt - 1)
+        generator_potential = np.pad(generator_potential, (n_padding, 0),
                                      mode='constant', constant_values=0)
-        tonic_drive = self.gc_df.iloc[cell_index].tonicdrive
-        if visualize is True:
-            tvec = np.arange(0, len(generator_potential), 1) * (1 / self.data_filter_fps)
 
+        tonic_drive = self.gc_df.iloc[cell_index].tonicdrive
+
+        if visualize is True:
+
+            tvec = np.arange(0, len(generator_potential), 1) * video_dt
 
             plt.subplots(2, 1, sharex=True)
             plt.subplot(211)
             plt.plot(tvec, generator_potential + tonic_drive)
-            plt.xlabel('Time (s)')
-            plt.ylabel('Generator potential (a.u.)')
+            plt.ylabel('Generator [a.u.]')
 
             plt.subplot(212)
             plt.plot(tvec, np.exp(generator_potential + tonic_drive))
-            plt.xlabel('Time (s)')
-            plt.ylabel('Instantaneous spike rate (Hz)')
+            plt.xlabel('Time [s]')
+            plt.ylabel('Firing rate [Hz]')
 
         # Return the 1-dimensional generator potential
         return generator_potential + tonic_drive
 
-    def run_single_cell(self, cell_index, n_trials=1, postspike_filter=False, visualize=False, return_monitor=False):
+    def run_single_cell(self, cell_index, n_trials=1, visualize=False, return_monitor=False):
         """
         Runs the LNP pipeline for a single ganglion cell (spiking by Brian2)
 
         :param cell_index: int
         :param n_trials: int
-        :param postspike_filter: bool
+        :param visualize: bool
+        :param return_monitor: bool, whether to return a raw Brian2 SpikeMonitor
         :return:
         """
-        if postspike_filter is True:
-            raise NotImplementedError
-        else:
-            video_dt = (1 / self.stimulus_video.fps) * second
-            duration = self.stimulus_video.video_n_frames * video_dt
-            poissongen_dt = 1.0 * ms
 
-            # Get instantaneous firing rate
-            generator_potential = self.convolve_stimulus(cell_index)
-            exp_generator_potential = np.array(np.exp(generator_potential))
+        video_dt = (1 / self.stimulus_video.fps) * second
+        duration = self.stimulus_video.video_n_frames * video_dt
+        poissongen_dt = 1.0 * ms
 
-            # Let's interpolate the rate to 1ms intervals
-            tvec_original = np.arange(1, len(exp_generator_potential)+1) * video_dt
-            rates_func = interp1d(tvec_original, exp_generator_potential, fill_value=0, bounds_error=False)
+        # Get instantaneous firing rate
+        generator_potential = self.convolve_stimulus(cell_index)
+        exp_generator_potential = np.array(np.exp(generator_potential))
 
-            tvec_new = np.arange(0, duration, poissongen_dt)
-            interpolated_rates_array = np.array([rates_func(tvec_new)])  # This needs to be 2D array for Brian!
+        # Let's interpolate the rate to 1ms intervals
+        tvec_original = np.arange(1, len(exp_generator_potential)+1) * video_dt
+        rates_func = interp1d(tvec_original, exp_generator_potential, fill_value=0, bounds_error=False)
 
-            # Identical rates array for every trial; rows=time, columns=trial index
-            inst_rates = b2.TimedArray(np.tile(interpolated_rates_array.T, (1, n_trials)) * Hz, poissongen_dt)
+        tvec_new = np.arange(0, duration, poissongen_dt)
+        interpolated_rates_array = np.array([rates_func(tvec_new)])  # This needs to be 2D array for Brian!
 
-            # Create Brian PoissonGroup (inefficient implementation but nevermind)
-            poisson_group = b2.PoissonGroup(n_trials, rates='inst_rates(t, i)')
-            spike_monitor = b2.SpikeMonitor(poisson_group)
-            net = b2.Network(poisson_group, spike_monitor)
+        # Identical rates array for every trial; rows=time, columns=trial index
+        inst_rates = b2.TimedArray(np.tile(interpolated_rates_array.T, (1, n_trials)) * Hz, poissongen_dt)
 
-            # duration = len(generator_potential) * video_dt
-            net.run(duration)
+        # Create Brian PoissonGroup (inefficient implementation but nevermind)
+        poisson_group = b2.PoissonGroup(n_trials, rates='inst_rates(t, i)')
+        spike_monitor = b2.SpikeMonitor(poisson_group)
+        net = b2.Network(poisson_group, spike_monitor)
 
-            spiketrains = np.array(list(spike_monitor.spike_trains().values()))
-            spiketrains_flat = np.concatenate(list(spike_monitor.spike_trains().values()))
+        # duration = len(generator_potential) * video_dt
+        net.run(duration)
+
+        spiketrains = np.array(list(spike_monitor.spike_trains().values()))
+        spiketrains_flat = np.concatenate(list(spike_monitor.spike_trains().values()))
 
         if visualize is True:
             plt.subplots(2, 1, sharex=True)
             plt.subplot(211)
             plt.eventplot(spiketrains)
             plt.xlim([0, duration/second])
-            plt.xlabel('Time (s)')
+            plt.ylabel('Trials')
 
             plt.subplot(212)
             # Plot the generator and the average firing rate
@@ -1188,6 +1192,8 @@ class FunctionalMosaic(Mathematics):
             smoothed_avg_fr = np.convolve(smoothing, avg_fr, mode='same')
 
             plt.plot(bin_edges[:-1], smoothed_avg_fr, label='Measured')
+            plt.ylabel('Firing rate [Hz]')
+            plt.xlabel('Time (s)')
 
             plt.legend()
 
@@ -1195,6 +1201,30 @@ class FunctionalMosaic(Mathematics):
             return spike_monitor
         else:
             return spiketrains, interpolated_rates_array.flatten()
+
+    def run_all_cells(self, visualize=True):
+        """
+        Runs the LNP pipeline for all ganglion cells (single trial)
+
+        :param visualize: bool
+        :return:
+        """
+
+        all_spiketrains = []
+
+        for cell_index in tqdm(range(len(self.gc_df))):
+            spiketrain, _ = self.run_single_cell(cell_index)
+            spiketrain = spiketrain.flatten()
+
+            all_spiketrains.append(spiketrain)
+
+        if visualize is True:
+
+            plt.eventplot(all_spiketrains)
+            plt.ylabel('Cell index')
+            plt.xlabel('Time [s]')
+
+        return all_spiketrains
 
 
 if __name__ == "__main__":
@@ -1210,12 +1240,16 @@ if __name__ == "__main__":
 
     grating = vs.ConstructStimulus(pattern='sine_grating', stimulus_form='circular',
                                    temporal_frequency=4.0, spatial_frequency=2.3,
-                                   duration_seconds=2.0, orientation=0, image_width=240, image_height=240,
+                                   duration_seconds=3.0, orientation=0, image_width=240, image_height=240,
                                    stimulus_size=0, contrast=0.6)
 
     ret.load_stimulus(grating)
-    # ret.run_single_cell(5, n_trials=10, visualize=True)
+    # ret.convolve_stimulus(7, visualize=True)
     # plt.show()
+    # ret.run_single_cell(5, n_trials=100, visualize=True)
+    # plt.show()
+    ret.run_all_cells(visualize=True)
+    plt.show()
 
     # plt.imshow(grating.frames[:, :, 0])
     # plt.show()
