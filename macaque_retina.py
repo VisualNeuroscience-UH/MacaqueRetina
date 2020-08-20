@@ -1212,7 +1212,7 @@ class FunctionalMosaic(Mathematics):
 
         all_spiketrains = []
 
-        for cell_index in tqdm(range(len(self.gc_df))):
+        for cell_index in tqdm(range(len(self.gc_df)), desc='Simulating RGCs '):
             spiketrain, _ = self.run_single_cell(cell_index)
             spiketrain = spiketrain.flatten()
 
@@ -1250,26 +1250,6 @@ if __name__ == "__main__":
     # plt.show()
     ret.run_all_cells(visualize=True)
     plt.show()
-
-    # plt.imshow(grating.frames[:, :, 0])
-    # plt.show()
-    # print('pop!')
-
-
-
-
-
-# TODO (Simo's):
-
-# Visual stimuli
-
-#	-consider implementing significant correlations between spatial parameters
-#   -correlations between temporal filter parameters
-#   => consider volume of center/surround gaussian envelopes; compare resulting AR functions to data ARs?
-
-#   -construct LGN. Probably a filter rather than spiking neurons. The latter dont make sense because we are interested in cx, not sub-cx.s
-#   => or maybe just use the RGC spikes (but max firing rate lower) like the Allen people do.
-
 
 
 '''
