@@ -82,7 +82,7 @@ class ApricotData:
         self.metadata = {'data_microm_per_pix': 60,
                          'data_spatialfilter_width': 13,
                          'data_spatialfilter_height': 13,
-                         'data_fps': 30,
+                         'data_fps': 30,  # Uncertain - "30 or 120 Hz"
                          'data_temporalfilter_samples': 15}
 
     def get_inverted_indices(self):
@@ -325,69 +325,6 @@ class ApricotData:
         else:
             return mean_filter
 
-    # def compute_filter_integrals(self):  # Obsolete
-    #     time_rk1 = self.read_temporal_filter()
-    #     space_rk1 = self.read_space_rk1()
-    #
-    #     filter_integrals = np.zeros(self.n_cells)
-    #     for i in range(self.n_cells):
-    #         spatiotemp_filter = np.array([space_rk1[i]]) * np.array([time_rk1[i]]).T
-    #         filter_integrals[i] = np.sum(spatiotemp_filter)
-    #
-    #     return filter_integrals
-
-    # def compute_pos_filter_integrals(self): # Obsolete
-    #     time_rk1 = self.read_temporal_filter()
-    #     space_rk1 = self.read_space_rk1()
-    #
-    #     filter_integrals = np.zeros(self.n_cells)
-    #     for i in range(self.n_cells):
-    #         spatiotemp_filter = np.array([space_rk1[i]]) * np.array([time_rk1[i]]).T
-    #         zeromatrix = np.zeros(np.shape(spatiotemp_filter))
-    #         spatiotemp_filter_nonneg = np.maximum(spatiotemp_filter, zeromatrix)
-    #         filter_integrals[i] = np.sum(spatiotemp_filter_nonneg)
-    #
-    #     return filter_integrals
-
-    # def compute_neg_filter_integrals(self): # Obsolete
-    #     time_rk1 = self.read_temporal_filter()
-    #     space_rk1 = self.read_space_rk1()
-    #
-    #     filter_integrals = np.zeros(self.n_cells)
-    #     for i in range(self.n_cells):
-    #         spatiotemp_filter = np.array([space_rk1[i]]) * np.array([time_rk1[i]]).T
-    #         filter_integrals[i] = np.sum(spatiotemp_filter)
-    #         zeromatrix = np.zeros(np.shape(spatiotemp_filter))
-    #         spatiotemp_filter_nonpos = np.minimum(spatiotemp_filter, zeromatrix)
-    #         filter_integrals[i] = np.sum(spatiotemp_filter_nonpos)
-    #
-    #     return filter_integrals
-
-    # def describe(self, visualize=False):
-    #     describedata = dict()
-    #     describedata['tonicdrive'] = self.read_tonicdrive()
-    #
-    #     gc_spatial_data_array, sta_fits, bad_data_indices = self.read_retina_spatial_data()
-    #     describedata['bad_data'] = [i in bad_data_indices for i in range(self.n_cells)]
-    #     describedata['center_x'] = [float(sta_fits[0,i][0]) for i in range(self.n_cells)]
-    #     describedata['center_y'] = [float(sta_fits[0,i][1]) for i in range(self.n_cells)]
-    #     describedata['center_sd_x'] = [float(sta_fits[0,i][2]) for i in range(self.n_cells)]
-    #     describedata['center_sd_y'] = [float(sta_fits[0,i][3]) for i in range(self.n_cells)]
-    #     describedata['orientation'] = [float(sta_fits[0,i][4]) for i in range(self.n_cells)]
-    #
-    #     describe_df = pd.DataFrame.from_dict(describedata)
-    #
-    #     describe_df['center_rf_area'] = np.pi * describe_df.center_sd_x * describe_df.center_sd_y
-    #     describe_df['filter_integral'] = self.compute_filter_integrals()
-    #
-    #     if visualize:
-    #         import seaborn as sns
-    #         sns.heatmap(describe_df.corr(), cmap='viridis')
-    #         plt.title(self.gc_type + ' ' + self.response_type)
-    #         plt.show()
-    #
-    #     return describe_df
-
 
 class ApricotFits(ApricotData, Visualize, Mathematics):
     """
@@ -494,8 +431,6 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
 
         else:
             return popt, xdata, ydata, ystd
-
-
 
     # TODO - This method desperately needs a rewrite
     def fit_spatial_filters(self, visualize=False, surround_model=1, semi_x_always_major=True):

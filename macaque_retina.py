@@ -733,7 +733,7 @@ class FunctionalMosaic(Mathematics):
 
         # Metadata for Apricot dataset
         self.data_microm_per_pixel = 60
-        self.data_filter_fps = 30
+        self.data_filter_fps = 30  # Uncertain - "30 or 120 Hz"
         self.data_filter_timesteps = 15
         self.data_filter_duration = self.data_filter_timesteps * (1000/self.data_filter_fps)  # in milliseconds
 
@@ -1239,17 +1239,17 @@ if __name__ == "__main__":
                            stimulus_width_pix=240, stimulus_height_pix=240)
 
     grating = vs.ConstructStimulus(pattern='sine_grating', stimulus_form='circular',
-                                   temporal_frequency=4.0, spatial_frequency=2.3,
+                                   temporal_frequency=16.0, spatial_frequency=2.3,
                                    duration_seconds=3.0, orientation=0, image_width=240, image_height=240,
                                    stimulus_size=0, contrast=0.6)
 
     ret.load_stimulus(grating)
     # ret.convolve_stimulus(7, visualize=True)
     # plt.show()
-    # ret.run_single_cell(5, n_trials=100, visualize=True)
-    # plt.show()
-    ret.run_all_cells(visualize=True)
+    ret.run_single_cell(5, n_trials=100, visualize=True)
     plt.show()
+    # ret.run_all_cells(visualize=True)
+    # plt.show()
 
 
 '''
