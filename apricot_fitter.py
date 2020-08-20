@@ -496,8 +496,7 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
             return popt, xdata, ydata, ystd
 
 
-    # REMOVE surround_model = 2
-    # TODO - Plotting done with origin='bottom' - is this a problem?
+
     # TODO - This method desperately needs a rewrite
     def fit_spatial_filters(self, visualize=False, surround_model=1, semi_x_always_major=True):
         """
@@ -506,7 +505,7 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
         The visualize parameter will show each DoG fit in order to search for bad cell fits and data.
 
         :param visualize: boolean, whether to visualize all fits
-        :param surround_model: 0=fit center and surround separately, 1=surround midpoint same as center midpoint, 2=same as 1 but surround ratio fixed at 2 and no offset
+        :param surround_model: 0=fit center and surround separately, 1=surround midpoint same as center midpoint
         :param save: string, relative path to a csv file for saving
         :param semi_x_always_major: boolean, whether to rotate Gaussians so that semi_x is always the semimajor/longer axis
         :return:
@@ -536,13 +535,6 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
                                'sur_ratio', 'offset']
             data_all_viable_cells = np.zeros(np.array([n_cells, len(parameter_names)]))
             surround_status = 'fixed'
-
-        elif surround_model == 2:
-            # Same parameter names as in "fixed surround" but amplitudec, sur_ratio or offset will not be fitted
-            parameter_names = ['amplitudec', 'xoc', 'yoc', 'semi_xc', 'semi_yc', 'orientation_center', 'amplitudes',
-                               'sur_ratio', 'offset']
-            data_all_viable_cells = np.zeros(np.array([n_cells, len(parameter_names)]))
-            surround_status = 'fixed_double'
 
         else:
             parameter_names = ['amplitudec', 'xoc', 'yoc', 'semi_xc', 'semi_yc', 'orientation_center', 'amplitudes',
@@ -591,15 +583,6 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
             # boundaries=(np.array([.999, -np.inf, -np.inf, 0, 0, 0, 0, 1, -np.inf]),
             # np.array([1, np.inf, np.inf, np.inf, np.inf, 2*np.pi, 1, np.inf, np.inf]))
 
-            elif surround_model == 2:
-                # Initial guess for
-                # xoc, yoc, semi_xc, semi_yc, orientation_center, amplitudes
-                p0 = np.array([7, 7, 1, 1, 0, 0.1])
-                boundaries = (
-                    np.array([-np.inf, -np.inf, -np.inf, -np.inf, 0,      -np.inf]),
-                    np.array([np.inf,   np.inf,  np.inf,  np.inf, 2*np.pi, np.inf])
-                )
-
             else:
                 # Build initial guess for (amplitudec, xoc, yoc, semi_xc, semi_yc, orientation_center, amplitudes, xos, yos, semi_xs, semi_ys, orientation_surround, offset)
                 p0 = np.array([1, 7, 7, 3, 3,
@@ -615,15 +598,6 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
                     popt, pcov = opt.curve_fit(self.DoG2D_fixed_surround, (x_grid, y_grid), data_array.ravel(), p0=p0,
                                                bounds=boundaries)
                     data_all_viable_cells[cell_index, :] = popt
-
-                elif surround_model == 2:
-                    popt, pcov = opt.curve_fit(self.DoG2D_fixed_double_surround, (x_grid, y_grid), data_array.ravel(), p0=p0,
-                                               bounds=boundaries)
-                    data_all_viable_cells[cell_index, 1:7] = popt
-                    data_all_viable_cells[:, 0] = 1.0  # amplitudec
-                    data_all_viable_cells[:, 7] = 2.0  # sur_ratio
-                    data_all_viable_cells[:, 8] = 0.0  # offset
-
 
                 else:
                     popt, pcov = opt.curve_fit(self.DoG2D_independent_surround, (x_grid, y_grid), data_array.ravel(),
@@ -670,8 +644,6 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
             # Compute fitting error
             if surround_model == 1:
                 data_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
-            elif surround_model == 2:
-                data_fitted = self.DoG2D_fixed_double_surround((x_grid, y_grid), *popt[1:7])
             else:
                 data_fitted = self.DoG2D_independent_surround((x_grid, y_grid), *popt)
 
@@ -726,14 +698,6 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
                 # e2=ellipse((popt[np.array([1,2])]),popt[7]*popt[3],popt[7]*(popt[3]+popt[4]),-popt[5]*180/np.pi,edgecolor='w', linewidth=2, fill=False, linestyle='--')
                 # print popt[0], popt[np.array([1,2])],'semi_xc=',popt[3], 'delta_semi_y=', popt[4],-popt[5]*180/np.pi
                 # print popt[6], 'sur_ratio=', popt[7], 'offset=', popt[8]
-                elif surround_model == 2:
-                    data_fitted = self.DoG2D_fixed_double_surround((x_grid, y_grid), *popt[1:7])
-                    e1 = Ellipse((popt[np.array([1, 2])]), popt[3], popt[4], -popt[5] * 180 / np.pi, edgecolor='w',
-                                 linewidth=2, fill=False)
-                    e2 = Ellipse((popt[np.array([1, 2])]), popt[7] * popt[3], popt[7] * popt[4], -popt[5] * 180 / np.pi,
-                                 edgecolor='w', linewidth=2, fill=False, linestyle='--')
-                    print(popt[0], popt[np.array([1, 2])], popt[3], popt[4], -popt[5] * 180 / np.pi)
-                    print(popt[6], 'sur_ratio=', popt[7], 'offset=', popt[8])
 
                 else:
                     data_fitted = self.DoG2D_independent_surround((x_grid, y_grid), *popt)
