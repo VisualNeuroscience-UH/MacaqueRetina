@@ -733,7 +733,7 @@ class FunctionalMosaic(Mathematics):
 
         # Metadata for Apricot dataset
         self.data_microm_per_pixel = 60
-        self.data_filter_fps = 30  # Uncertain - "30 or 120 Hz"
+        self.data_filter_fps = 120  # Uncertain - "30 or 120 Hz"
         self.data_filter_timesteps = 15
         self.data_filter_duration = self.data_filter_timesteps * (1000/self.data_filter_fps)  # in milliseconds
 

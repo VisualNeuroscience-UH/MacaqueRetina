@@ -82,7 +82,7 @@ class ApricotData:
         self.metadata = {'data_microm_per_pix': 60,
                          'data_spatialfilter_width': 13,
                          'data_spatialfilter_height': 13,
-                         'data_fps': 30,  # Uncertain - "30 or 120 Hz"
+                         'data_fps': 120,  # Uncertain - "30 or 120 Hz"
                          'data_temporalfilter_samples': 15}
 
     def get_inverted_indices(self):
@@ -153,9 +153,7 @@ class ApricotData:
 
     def compute_spatial_filter_sums(self, remove_bad_data_indices=True):
         """
-        Computes the pixelwise sum of the values in the rank-1 spatial filters. Center (positive part),
-        surround (negative part) and total sum given in separate columns. Don't mix these with areas of
-        1 SD ellipses.
+        Computes the pixelwise sum of the values in the rank-1 spatial filters.
 
         :param remove_bad_data_indices: bool
         :return:
@@ -218,47 +216,6 @@ class ApricotData:
             plt.hist(tonicdrive, density=True)
             plt.title(self.gc_type + ' ' + self.response_type)
             plt.xlabel('Tonic drive (a.u.)')
-            plt.show()
-
-        return mean, sd
-
-    def compute_spatialfilter_integrals(self):  # Obs?
-        space_rk1 = self.read_space_rk1()
-
-        filter_integrals = np.zeros(self.n_cells)
-        for i in range(self.n_cells):
-            abs_spatial_filter = np.abs(np.array([space_rk1[i]]))
-            filter_integrals[i] = np.sum(abs_spatial_filter)
-
-        return filter_integrals
-
-    def compute_spatiotemporalfilter_integrals(self):  # Obs?
-        space_rk1 = self.read_space_rk1()
-        time_rk1 = self.read_temporal_filter_data(flip_negs=False)
-
-        filter_integrals = np.zeros(self.n_cells)
-        for i in range(self.n_cells):
-            abs_spatial_filter = np.abs(np.outer(space_rk1[i], time_rk1[i]))
-            filter_integrals[i] = np.sum(abs_spatial_filter)
-
-        return filter_integrals
-
-    def get_spatialfilter_integral_stats(self, remove_bad_data_indices=True, visualize=False):  # Obs?
-        filterintegrals = self.compute_spatialfilter_integrals()
-
-        if remove_bad_data_indices:
-            good_indices = np.setdiff1d(range(self.n_cells), self.bad_data_indices)
-            filterintegrals = filterintegrals[good_indices]
-
-        mean, sd = norm.fit(filterintegrals)
-
-        if visualize:
-            x_min, x_max = norm.ppf([0.001, 0.999], loc=mean, scale=sd)
-            xs = np.linspace(x_min, x_max, 100)
-            plt.plot(xs, norm.pdf(xs, loc=mean, scale=sd))
-            plt.hist(filterintegrals, density=True)
-            plt.title(self.gc_type + ' ' + self.response_type)
-            plt.xlabel('Spatial filter integral (a.u.)')
             plt.show()
 
         return mean, sd
@@ -356,24 +313,21 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
 
         good_indices = np.setdiff1d(np.arange(self.n_cells), self.bad_data_indices)
         parameter_names = ['n', 'p1', 'p2', 'tau1', 'tau2']
-        # bounds = ([0, 0, 0, 0.1, 3],
-        #           [np.inf, 10, 10, 3, 6])  # bounds when time points are 0...14
-        bounds = ([0, 0, 0, 0.1, 12*8.5],
-                  [np.inf, 10, 10, 12*8.5, 400])  # bounds when time points are in milliseconds
+        bounds = ([0, 0, 0, 0.1, 3],
+                  [np.inf, 10, 10, 3, 6])  # bounds when time points are 0...14
+        # bounds = ([0, 0, 0, 0.1, 12*8.5],
+        #           [np.inf, 10, 10, 12*8.5, 400])  # bounds when time points are in milliseconds
 
         fitted_parameters = np.zeros((self.n_cells, len(parameter_names)))
         error_array = np.zeros(self.n_cells)
         max_error = -0.1
 
-        xdata = np.arange(data_n_samples) * (1/data_fps) * 1000  # time points in milliseconds
-        # xdata = np.arange(15)
+        # xdata = np.arange(data_n_samples) * (1/data_fps) * 1000  # time points in milliseconds
+        xdata = np.arange(15)
         xdata_finer = np.linspace(0, max(xdata), 100)
 
         for cell_ix in tqdm(good_indices, desc='Fitting temporal filters'):
             ydata = temporal_filters[cell_ix, :]
-            # if normalize_before_fit is True:
-            #     pos_sum = np.sum(ydata[ydata > 0])
-            #     ydata = ydata / pos_sum
 
             try:
                 popt, pcov = curve_fit(self.diff_of_lowpass_filters, xdata, ydata, bounds=bounds)
@@ -392,6 +346,10 @@ class ApricotFits(ApricotData, Visualize, Mathematics):
                 plt.show()
 
         parameters_df = pd.DataFrame(fitted_parameters, columns=parameter_names)
+        # Convert taus to milliseconds
+        parameters_df['tau1'] = parameters_df['tau1'] * (1 / data_fps) * 1000
+        parameters_df['tau2'] = parameters_df['tau2'] * (1 / data_fps) * 1000
+
         error_df = pd.DataFrame(error_array, columns=['temporalfit_mse'])
         return pd.concat([parameters_df, error_df], axis=1)
 
