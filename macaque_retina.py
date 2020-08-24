@@ -6,16 +6,12 @@ import scipy.stats as stats
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
-import cv2
 from pathlib import Path
-#import seaborn as sns
 import visual_stimuli as vs
 from visualize import Visualize
 from vision_maths import Mathematics
 from scipy.signal import fftconvolve, convolve
 from scipy.interpolate import interp1d
-from scipy.stats import norm, skewnorm
-from mpl_toolkits import mplot3d
 import brian2 as b2
 from brian2.units import *
 import apricot_fitter as apricot
@@ -614,38 +610,6 @@ class MosaicConstructor(Mathematics, Visualize):
             shape, loc, scale = row
             self.gc_df[param_name] = self.get_random_samples(shape, loc, scale, n_rgc, distribution)
 
-    def scale_both_amplitudes(self):
-        """
-        Scale center and surround amplitudes so that the spatial RF volume is comparable to that of data.
-        Second step of scaling is done before convolving with the stimulus.
-
-        :return:
-        """
-
-        df = self.all_fits_df.iloc[self.good_data_indices]
-        data_pixel_len = 0.06  # in mm; pixel length 60 micrometers in dataset
-
-        # Get mean center and surround RF size from data in millimeters
-        mean_center_sd = np.mean(np.sqrt(df.semi_xc * df.semi_yc)) * data_pixel_len
-        mean_surround_sd = np.mean(np.sqrt((df.sur_ratio**2 * df.semi_xc * df.semi_yc))) * data_pixel_len
-
-        # For each model cell, set center amplitude as data_cen_mean**2 / sigma_x * sigma_y
-        # For each model cell, scale surround amplitude by data_sur_mean**2 / sur_sigma_x * sur_sigma_y
-        # (Volume of 2D Gaussian = 2 * pi * sigma_x*sigma_y)
-
-        n_rgc = len(self.gc_df)
-        amplitudec = np.zeros(n_rgc)
-        # amplitudes = np.zeros(n_rgc)
-
-        for i in range(n_rgc):
-            amplitudec[i] = mean_center_sd**2 / (self.gc_df.iloc[i].semi_xc * self.gc_df.iloc[i].semi_yc)
-            # amplitudes[i] = self.gc_df.iloc[i].amplitudes * (mean_surround_sd**2 / (self.gc_df.iloc[i].semi_xc * self.gc_df.iloc[i].semi_yc * self.gc_df.iloc[i].sur_ratio**2))
-
-        data_rel_sur_amplitude = self.gc_df['amplitudes']
-        self.gc_df['amplitudec'] = amplitudec
-        self.gc_df['amplitudes'] = amplitudec * data_rel_sur_amplitude
-        self.gc_df['relative_sur_amplitude'] = self.gc_df['amplitudes'] / self.gc_df['amplitudec']
-
     def visualize_mosaic(self):
         """
         Plots the full ganglion cell mosaic
@@ -689,9 +653,6 @@ class MosaicConstructor(Mathematics, Visualize):
         # Construct spatial receptive fields. Centers are saved in the object
         self.place_spatial_receptive_fields(spatial_statistics_dict,
                                             dendr_diam_vs_eccentricity_parameters_dict, visualize)
-
-        # Scale center and surround amplitude so that Gaussian volume is preserved
-        self.scale_both_amplitudes()
 
 
         # At this point the spatial receptive fields are ready.
@@ -1295,8 +1256,8 @@ if __name__ == "__main__":
     # ret.run_single_cell(5, n_trials=100, visualize=True)
     # plt.show()
 
-    # ret.run_all_cells(visualize=False)
-    # plt.show()
+    ret.run_all_cells(visualize=True)
+    plt.show()
 
 
 '''
