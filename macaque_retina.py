@@ -756,6 +756,9 @@ class FunctionalMosaic(Mathematics):
         self.cmap_stim = 'gray'
         self.cmap_spatial_filter = 'bwr'
 
+        # Simulated data
+        self.simulated_spiketrains = []
+
         # Initialize stuff related to digital sampling
         self.stimulus_center = stimulus_center
         self.stimulus_video = None
@@ -1202,7 +1205,7 @@ class FunctionalMosaic(Mathematics):
         else:
             return spiketrains, interpolated_rates_array.flatten()
 
-    def run_all_cells(self, visualize=True):
+    def run_all_cells(self, visualize=False):
         """
         Runs the LNP pipeline for all ganglion cells (single trial)
 
@@ -1211,12 +1214,16 @@ class FunctionalMosaic(Mathematics):
         """
 
         all_spiketrains = []
+        tqdm_desc = 'Simulating ' + self.response_type + ' ' + self.gc_type + ' mosaic'
 
-        for cell_index in tqdm(range(len(self.gc_df)), desc='Simulating RGCs '):
+        # TODO - Parallelize this
+        for cell_index in tqdm(range(len(self.gc_df)), desc=tqdm_desc):
             spiketrain, _ = self.run_single_cell(cell_index)
             spiketrain = spiketrain.flatten()
 
             all_spiketrains.append(spiketrain)
+
+        self.simulated_spiketrains = all_spiketrains
 
         if visualize is True:
 
@@ -1224,7 +1231,46 @@ class FunctionalMosaic(Mathematics):
             plt.ylabel('Cell index')
             plt.xlabel('Time [s]')
 
-        return all_spiketrains
+    def save_spikes_csv(self, filename=None):
+        """
+        Saves spikes as a csv file with rows of the form cell_index, spike_time.
+        This file can be used in ViSimpl:
+        visimpl.AppImage -csv parasol_structure.csv parasol_spikes.csv
+
+        :param filename: str
+        :return:
+        """
+        assert len(self.simulated_spiketrains) > 0, "There are no simulated spiketrains to save"
+
+        if filename is None:
+            filename = self.gc_type + '_' + self.response_type + '_spikes.csv'
+
+        spikes_df = pd.DataFrame(columns=['cell_index', 'spike_time'])
+        for cell_index in range(len(self.gc_df)):
+            spiketrain = self.simulated_spiketrains[cell_index]
+            index_array = cell_index * np.ones(len(spiketrain))
+            temp_df = pd.DataFrame(np.column_stack((index_array, spiketrain)), columns=['cell_index', 'spike_time'])
+            spikes_df = pd.concat([spikes_df, temp_df], axis=0)
+
+        spikes_df['cell_index'] = spikes_df['cell_index'].astype(int)
+        spikes_df = spikes_df.sort_values(by='spike_time')
+        spikes_df.to_csv(filename, index=False, header=False)
+
+    def save_structure_csv(self, filename=None):
+        """
+        Saves x,y coordinates of model cells to a csv file (for use in ViSimpl).
+
+        :param filename: str
+        :return:
+        """
+        if filename is None:
+            filename = self.gc_type + '_' + self.response_type + '_structure.csv'
+
+        rgc_coords = self.gc_df[['x_deg', 'y_deg']].copy()
+        rgc_coords['z_deg'] = 0.0
+
+        rgc_coords.to_csv(filename, header=False, index=False)
+
 
 
 if __name__ == "__main__":
@@ -1239,16 +1285,17 @@ if __name__ == "__main__":
                            stimulus_width_pix=240, stimulus_height_pix=240)
 
     grating = vs.ConstructStimulus(pattern='sine_grating', stimulus_form='circular',
-                                   temporal_frequency=16.0, spatial_frequency=2.3,
-                                   duration_seconds=3.0, orientation=0, image_width=240, image_height=240,
+                                   temporal_frequency=4.0, spatial_frequency=2.0,
+                                   duration_seconds=5.0, orientation=0, image_width=240, image_height=240,
                                    stimulus_size=0, contrast=0.6)
 
     ret.load_stimulus(grating)
     # ret.convolve_stimulus(7, visualize=True)
     # plt.show()
-    ret.run_single_cell(5, n_trials=100, visualize=True)
-    plt.show()
-    # ret.run_all_cells(visualize=True)
+    # ret.run_single_cell(5, n_trials=100, visualize=True)
+    # plt.show()
+
+    # ret.run_all_cells(visualize=False)
     # plt.show()
 
 
