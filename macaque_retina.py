@@ -727,7 +727,7 @@ class FunctionalMosaic(Mathematics):
 
         # Metadata for Apricot dataset
         self.data_microm_per_pixel = 60
-        self.data_filter_fps = 120  # Uncertain - "30 or 120 Hz"
+        self.data_filter_fps = 30  # Uncertain - "30 or 120 Hz"
         self.data_filter_timesteps = 15
         self.data_filter_duration = self.data_filter_timesteps * (1000/self.data_filter_fps)  # in milliseconds
 
@@ -855,15 +855,14 @@ class FunctionalMosaic(Mathematics):
             "Check that stimulus resolution matches that of the mosaic"
 
         # Get parameters from the stimulus object
-        self.stimulus_video = deepcopy(stimulus_video)  # Not sure if copying the best way here...
+        # self.stimulus_video = deepcopy(stimulus_video)  # Not sure if copying the best way here...
+        self.stimulus_video = stimulus_video
 
-        # Scale stimulus pixel values from [0, 255] to [-1.0, 1.0]
         assert np.min(stimulus_video.frames) >= 0 and np.max(stimulus_video.frames) <= 255, \
             "Stimulus pixel values must be between 0 and 255"
-        self.stimulus_video.frames = stimulus_video.frames / 127.5 - 1.0
 
         # Drop RGCs whose center is not inside the stimulus
-        xmin, xmax, ymin, ymax = self.get_extents_deg()  #self.stimulus_video.get_extents_deg()
+        xmin, xmax, ymin, ymax = self.get_extents_deg()
         for index, gc in self.gc_df_pixspace.iterrows():
             if (gc.x_deg < xmin) | (gc.x_deg > xmax) | (gc.y_deg < ymin) | (gc.y_deg > ymax):
                 self.gc_df.iloc[index] = 0.0  # all columns set as zero
@@ -881,7 +880,7 @@ class FunctionalMosaic(Mathematics):
         """
         ax = ax or plt.gca()
         ax.imshow(self.stimulus_video.frames[:, :, frame_number],
-                  vmin=-1.0, vmax=1.0)
+                  vmin=0, vmax=255)
         ax = plt.gca()
 
         for index, gc in self.gc_df_pixspace.iterrows():
@@ -911,7 +910,7 @@ class FunctionalMosaic(Mathematics):
 
         # Show stimulus frame cropped to RGC surroundings & overlay 1SD center RF on top of that
         ax.imshow(self.stimulus_video.frames[:, :, frame_number], cmap=self.cmap_stim,
-                  vmin=-1.0, vmax=1.0)
+                  vmin=0, vmax=255)
         ax.set_xlim([qmin, qmax])
         ax.set_ylim([rmax, rmin])
 
@@ -1058,7 +1057,7 @@ class FunctionalMosaic(Mathematics):
 
         return spatiotemporal_filter
 
-    def get_cropped_video(self, cell_index, reshape=False):
+    def get_cropped_video(self, cell_index, contrast=True, reshape=False):
         """
         Crops the video to RGC surroundings
 
@@ -1067,10 +1066,15 @@ class FunctionalMosaic(Mathematics):
         :return:
         """
 
-        # TODO - RGCs that are near the border of the stimulus will fail
+        # TODO - RGCs that are near the border of the stimulus will fail (no problem if stim is large enough)
 
         qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
-        stimulus_cropped = self.stimulus_video.frames[rmin:rmax+1, qmin:qmax+1, :]
+        stimulus_cropped = self.stimulus_video.frames[rmin:rmax+1, qmin:qmax+1, :].copy()
+
+        # Scale stimulus pixel values from [0, 255] to [-1.0, 1.0]
+        # TODO - This is brutal and unphysiological, at least for natural movies
+        if contrast is True:
+            stimulus_cropped = stimulus_cropped / 127.5 - 1.0
 
         if reshape is True:
             s = self.spatial_filter_sidelen
@@ -1079,6 +1083,75 @@ class FunctionalMosaic(Mathematics):
             stimulus_cropped = np.reshape(stimulus_cropped, (s**2, n_frames))
 
         return stimulus_cropped
+
+    def plot_midpoint_contrast(self, cell_index, ax=None):
+        """
+        Plots the contrast in the mid-pixel of the stimulus cropped to RGC surroundings
+
+        :param cell_index:
+        :return:
+        """
+        stimulus_cropped = self.get_cropped_video(cell_index)
+
+        midpoint_ix = (self.spatial_filter_sidelen - 1) // 2
+        signal = stimulus_cropped[midpoint_ix, midpoint_ix, :]
+
+        video_dt = (1 / self.stimulus_video.fps) * second
+        tvec = np.arange(0, len(signal)) * video_dt
+
+        ax = ax or plt.gca()
+        ax.plot(tvec, signal)
+        ax.set_ylim([-1, 1])
+
+    def plot_local_rms_contrast(self, cell_index, ax=None):
+        """
+        Plots local RMS contrast in the stimulus cropped to RGC surroundings.
+        Note that is just a frame-by-frame computation, no averaging here
+
+        :param cell_index:
+        :return:
+        """
+        stimulus_cropped = self.get_cropped_video(cell_index, contrast=False)  # get stimulus intensities
+        n_frames = self.stimulus_video.video_n_frames
+        s = self.spatial_filter_sidelen
+        signal = np.zeros(n_frames)
+
+        for t in range(n_frames):
+            frame_mean = np.mean(stimulus_cropped[:,:,t])
+            squared_sum = np.sum((stimulus_cropped[:,:,t] - frame_mean)**2)
+            signal[t] = np.sqrt(1/(frame_mean**2 * s**2) * squared_sum)
+
+        video_dt = (1 / self.stimulus_video.fps) * second
+        tvec = np.arange(0, len(signal)) * video_dt
+
+        ax = ax or plt.gca()
+        ax.plot(tvec, signal)
+        ax.set_ylim([0, 1])
+
+    def plot_local_michelson_contrast(self, cell_index, ax=None):
+        """
+        Plots local RMS contrast in the stimulus cropped to RGC surroundings.
+        Note that is just a frame-by-frame computation, no averaging here
+
+        :param cell_index:
+        :return:
+        """
+        stimulus_cropped = self.get_cropped_video(cell_index, contrast=False)  # get stimulus intensities
+        n_frames = self.stimulus_video.video_n_frames
+        s = self.spatial_filter_sidelen
+        signal = np.zeros(n_frames)
+
+        for t in range(n_frames):
+            frame_min = np.min(stimulus_cropped[:,:,t])
+            frame_max = np.max(stimulus_cropped[:, :, t])
+            signal[t] = (frame_max-frame_min)/(frame_max+frame_min)
+
+        video_dt = (1 / self.stimulus_video.fps) * second
+        tvec = np.arange(0, len(signal)) * video_dt
+
+        ax = ax or plt.gca()
+        ax.plot(tvec, signal)
+        ax.set_ylim([0, 1])
 
     def convolve_stimulus(self, cell_index, visualize=False):
         """
@@ -1275,24 +1348,31 @@ if __name__ == "__main__":
     # mosaic.save_mosaic('testmosaic0520_on_parasol.csv')
     testmosaic = pd.read_csv('testmosaic0520_on_parasol.csv', index_col=0)
 
-    ret = FunctionalMosaic(testmosaic, 'parasol', 'on', stimulus_center=5+0j,
-                           stimulus_width_pix=240, stimulus_height_pix=240)
-
+    # ret = FunctionalMosaic(testmosaic, 'parasol', 'on', stimulus_center=5+0j,
+    #                        stimulus_width_pix=240, stimulus_height_pix=240)
     # grating = vs.ConstructStimulus(pattern='sine_grating', stimulus_form='circular',
     #                                temporal_frequency=4.0, spatial_frequency=2.0,
     #                                duration_seconds=5.0, orientation=0, image_width=240, image_height=240,
     #                                stimulus_size=0, contrast=0.6)
+    # ret.load_stimulus(grating)
 
     ret = FunctionalMosaic(testmosaic, 'parasol', 'on', stimulus_center=5+0j,
                            stimulus_width_pix=720, stimulus_height_pix=576)
-    movie = vs.NaturalMovie('/home/henhok/nature4_orig35_slowed.avi', fps=100, pix_per_deg=60)
+    movie = vs.NaturalMovie('/home/henhok/nature4_orig35_fps100.avi', fps=100, pix_per_deg=60)
     ret.load_stimulus(movie)
 
-    # ret.load_stimulus(grating)
+    # ret.plot_midpoint_contrast(0)
+    # plt.show()
+    # ret.plot_local_rms_contrast(0)
+    # plt.show()
+    # ret.plot_local_michelson_contrast(0)
+    # plt.show()
+
+
     # ret.convolve_stimulus(7, visualize=True)
     # plt.show()
-    ret.run_single_cell(5, n_trials=100, visualize=True)
-    plt.show()
+    # ret.run_single_cell(5, n_trials=100, visualize=True)
+    # plt.show()
 
     # ret.run_all_cells(visualize=True)
     # plt.show()

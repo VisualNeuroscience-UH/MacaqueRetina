@@ -82,7 +82,7 @@ class ApricotData:
         self.metadata = {'data_microm_per_pix': 60,
                          'data_spatialfilter_width': 13,
                          'data_spatialfilter_height': 13,
-                         'data_fps': 120,  # Uncertain - "30 or 120 Hz"
+                         'data_fps': 30,  # Uncertain - "30 or 120 Hz"
                          'data_temporalfilter_samples': 15}
 
     def get_inverted_indices(self):
