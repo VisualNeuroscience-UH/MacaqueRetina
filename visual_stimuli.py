@@ -439,6 +439,51 @@ class ConstructStimulus(VideoBaseClass):
         raise NotImplementedError
 
 
+class NaturalMovie(VideoBaseClass):
+
+    def __init__(self, filename, **kwargs):
+        super(NaturalMovie, self).__init__()
+
+        for kw in kwargs:
+            # print(kw, ":", kwargs[kw])
+            assert kw in self.options.keys(), f"The keyword '{kw}' was not recognized"
+        self.options.update(kwargs)
+
+        cap = cv2.VideoCapture(filename)
+
+        self.fps = self.options['fps']
+        self.pix_per_deg = self.options['pix_per_deg']
+
+        self.video_n_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        self.video_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self.video_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        self.video_width_deg = self.video_width / self.pix_per_deg
+        self.video_height_deg = self.video_height / self.pix_per_deg
+
+        # self.video = self.frames.transpose(2, 0, 1)
+        self.frames = np.ones((self.video_height, self.video_width, self.video_n_frames))
+        self._extract_frames(cap)
+
+        print('Loaded movie file with dimensions %d x %d px, %d frames at %d fps.' % (self.video_width, self.video_height,
+                                                                                   self.video_n_frames, self.fps))
+
+    def _extract_frames(self, cap):
+        """
+        Extracts the frames from a cv2.VideoCapture object
+
+        :param cap:
+        :return:
+        """
+
+        # Load each frame as array of gray values between 0-255
+        for frame_ix in range(self.video_n_frames):
+            _, frame = cap.read()
+            self.frames[:, :, frame_ix] = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        cap.release()
+
+
+
 class SampleImage:
     '''
     This class gets one image at a time, and provides the cone response.
@@ -532,10 +577,4 @@ class Operator:
 
 
 if __name__ == "__main__":
-    pass
-# filename = 'test3'
-# my_video = ConstructStimulus(filename, pattern='white_noise', stimulus_form='rectangular', duration_seconds=2,
-#							 fps=30, pedestal =0, orientation=0, stimulus_position=(0,0), stimulus_size=4)	# Instantiate
-
-# my_video.main(	filename, pattern='white_noise', stimulus_form='rectangular', duration_seconds=2,
-#				fps=30, pedestal =0, orientation=0, stimulus_position=(0,0), stimulus_size=4 ) # Do the work.	Put here the needs in the keyword argumets
+    NaturalMovie('/home/henhok/nature4_orig35_slowed.avi', fps=100, pix_per_deg=60)
