@@ -845,7 +845,7 @@ class FunctionalMosaic(Mathematics):
         :param visualize: True/False, show 1 frame of stimulus in pixel and visual coordinate systems (default False)
         :return:
         """
-
+        # import pdb; pdb.set_trace()
         assert (stimulus_video.video_width == self.stimulus_width_pix) &\
                (stimulus_video.video_height == self.stimulus_height_pix),\
             "Check that stimulus dimensions match those of the mosaic"
@@ -1343,7 +1343,7 @@ class FunctionalMosaic(Mathematics):
 if __name__ == "__main__":
     # mosaic = MosaicConstructor(gc_type='parasol', response_type='on', ecc_limits=[4, 6],
     #                            sector_limits=[-5.0, 5.0], model_density=1.0, randomize_position=0.05)
-    #
+    
     # mosaic.build()
     # mosaic.save_mosaic('testmosaic0520_on_parasol.csv')
     testmosaic = pd.read_csv('testmosaic0520_on_parasol.csv', index_col=0)
@@ -1356,9 +1356,12 @@ if __name__ == "__main__":
     #                                stimulus_size=0, contrast=0.6)
     # ret.load_stimulus(grating)
 
+    # # ret = FunctionalMosaic(testmosaic, 'parasol', 'on', stimulus_center=5+0j,
+    # #                        stimulus_width_pix=720, stimulus_height_pix=576)
     ret = FunctionalMosaic(testmosaic, 'parasol', 'on', stimulus_center=5+0j,
-                           stimulus_width_pix=720, stimulus_height_pix=576)
-    movie = vs.NaturalMovie('/home/henhok/nature4_orig35_fps100.avi', fps=100, pix_per_deg=60)
+                           stimulus_width_pix=752, stimulus_height_pix=432)
+    # movie = vs.NaturalMovie('/home/henhok/nature4_orig35_fps100.avi', fps=100, pix_per_deg=60)
+    movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)
     ret.load_stimulus(movie)
 
     # ret.plot_midpoint_contrast(0)
@@ -1391,7 +1394,7 @@ A = 0.1 + 4.21E + 0.038E^2 (Drasdo and Fowler, 1974; Dacey and Petersen, 1992)
 
 We have extracted statistics of macaque ganglion cell receptive fields from literature and build continuous functions.
 
-The density of meny cell types is inversely proportional to dendritic field coverage, 
+The density of many cell types is inversely proportional to dendritic field coverage, 
 suggesting constant coverage factor (Perry_1984_Neurosci, Wassle_1991_PhysRev).
 Midget coverage factor is 1  (Dacey_1993_JNeurosci for humans; Wassle_1991_PhysRev, Lee_2010_ProgRetEyeRes).
 Parasol coverage factor is 3-4 close to fovea (Grunert_1993_VisRes); 2-7 according to Perry_1984_Neurosci.
