@@ -836,7 +836,6 @@ class FunctionalMosaic(Mathematics):
         # self.video_fps = self.stimulus_video.fps
         self.temporal_filter_len = int(self.data_filter_duration / (1000/self.fps))
 
-
     def load_stimulus(self, stimulus_video, visualize=False):
         """
         Loads stimulus video
@@ -870,7 +869,7 @@ class FunctionalMosaic(Mathematics):
         if visualize is True:
             self.show_stimulus_with_gcs()
 
-    def show_stimulus_with_gcs(self, frame_number=0, ax=None):
+    def show_stimulus_with_gcs(self, frame_number=0, ax=None, example_gc=5):
         """
         Plots the 1SD ellipses of the RGC mosaic
 
@@ -888,8 +887,13 @@ class FunctionalMosaic(Mathematics):
             # When in pixel coordinates, positive value in Ellipse angle is clockwise. Thus minus here.
             # Note that Ellipse angle is in degrees.
             # Width and height in Ellipse are diameters, thus x2.
+            if index==example_gc:
+                facecolor='yellow'
+            else:
+                facecolor='None'
+
             circ = Ellipse((gc.q_pix, gc.r_pix), width=2 * gc.semi_xc, height=2 * gc.semi_yc,
-                           angle=gc.orientation_center * (-1), edgecolor='white', facecolor='None')
+                           angle=gc.orientation_center * (-1), edgecolor='white', facecolor=facecolor)
             ax.add_patch(circ)
 
         # Annotate
@@ -1379,8 +1383,8 @@ if __name__ == "__main__":
     ret = FunctionalMosaic(testmosaic, 'parasol', 'on', stimulus_center=5+0j,
                            stimulus_width_pix=240, stimulus_height_pix=240)
     grating = vs.ConstructStimulus(pattern='sine_grating', stimulus_form='circular',
-                                   temporal_frequency=2.0, spatial_frequency=2.0,
-                                   duration_seconds=5.0, orientation=45, image_width=240, image_height=240,
+                                   temporal_frequency=20.0, spatial_frequency=1.0,
+                                   duration_seconds=5.0, orientation=0, image_width=240, image_height=240,
                                    stimulus_size=0, contrast=0.6)
     ret.load_stimulus(grating)
 
@@ -1399,16 +1403,16 @@ if __name__ == "__main__":
     # ret.plot_local_michelson_contrast(0)
     # plt.show()
 
-
-    # ret.convolve_stimulus(7, visualize=True)
+    example_gc=40
+    # ret.convolve_stimulus(example_gc, visualize=True)
     # plt.show()
-    # ret.run_single_cell(5, n_trials=100, visualize=True)
-    # plt.show()
+    ret.run_single_cell(example_gc, n_trials=100, visualize=True)
+    plt.show(block = False)
 
     # ret.run_all_cells(visualize=True)
     # plt.show()
 
-    ret.show_stimulus_with_gcs()
+    ret.show_stimulus_with_gcs(example_gc=example_gc)
     plt.show()
 
 '''
