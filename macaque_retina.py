@@ -723,7 +723,7 @@ class FunctionalMosaic(Mathematics):
         self.gc_type = gc_type
         self.response_type = response_type
 
-        self.deg_per_mm = 1/0.220  # Perry et al 1985
+        self.deg_per_mm = 1/0.220  # Perry_1985_VisRes; 0.223 um/deg in the fovea, 169 um/deg at 90 deg ecc
 
         # Metadata for Apricot dataset
         self.data_microm_per_pixel = 60
@@ -878,6 +878,7 @@ class FunctionalMosaic(Mathematics):
         :param ax: matplotlib Axes object
         :return:
         """
+        fig=plt.figure()
         ax = ax or plt.gca()
         ax.imshow(self.stimulus_video.frames[:, :, frame_number],
                   vmin=0, vmax=255)
@@ -891,8 +892,35 @@ class FunctionalMosaic(Mathematics):
                            angle=gc.orientation_center * (-1), edgecolor='white', facecolor='None')
             ax.add_patch(circ)
 
-        plt.xticks([])
-        plt.yticks([])
+        # Annotate
+        # Get y tics in pixels
+        locs, labels = plt.yticks()
+
+        # Remove tick marks outside stimulus
+        locs=locs[locs<self.stimulus_height_pix]
+        # locs=locs[locs>=0] # Including zero seems to shift center at least in deg
+        locs=locs[locs>0]
+
+        # Set left y tick labels (pixels)
+        left_y_labels = locs.astype(int)
+        # plt.yticks(ticks=locs, labels=left_y_labels)
+        plt.yticks(ticks=locs)
+        ax.set_ylabel('pix')
+
+        # Set x tick labels (degrees)
+        xlocs = locs - np.mean(locs)
+        down_x_labels = np.round(xlocs / self.pix_per_deg, decimals=2) + np.real(self.stimulus_center)
+        plt.xticks(ticks=locs, labels=down_x_labels)
+        ax.set_xlabel('deg')
+
+        # Set right y tick labels (mm)
+        ax2 = ax.twinx()  # instantiate a second axes that shares the same x-axis
+        ax2.tick_params(axis='y')
+        right_y_labels = np.round((locs / self.pix_per_deg) / self.deg_per_mm, decimals=2)
+        plt.yticks(ticks=locs, labels=right_y_labels)
+        ax2.set_ylabel('mm')
+
+        fig.tight_layout()
 
     def show_single_gc_view(self, cell_index, frame_number=0, ax=None):
         """
@@ -1348,21 +1376,21 @@ if __name__ == "__main__":
     # mosaic.save_mosaic('testmosaic0520_on_parasol.csv')
     testmosaic = pd.read_csv('testmosaic0520_on_parasol.csv', index_col=0)
 
-    # ret = FunctionalMosaic(testmosaic, 'parasol', 'on', stimulus_center=5+0j,
-    #                        stimulus_width_pix=240, stimulus_height_pix=240)
-    # grating = vs.ConstructStimulus(pattern='sine_grating', stimulus_form='circular',
-    #                                temporal_frequency=4.0, spatial_frequency=2.0,
-    #                                duration_seconds=5.0, orientation=0, image_width=240, image_height=240,
-    #                                stimulus_size=0, contrast=0.6)
-    # ret.load_stimulus(grating)
-
-    # # ret = FunctionalMosaic(testmosaic, 'parasol', 'on', stimulus_center=5+0j,
-    # #                        stimulus_width_pix=720, stimulus_height_pix=576)
     ret = FunctionalMosaic(testmosaic, 'parasol', 'on', stimulus_center=5+0j,
-                           stimulus_width_pix=752, stimulus_height_pix=432)
-    # movie = vs.NaturalMovie('/home/henhok/nature4_orig35_fps100.avi', fps=100, pix_per_deg=60)
-    movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)
-    ret.load_stimulus(movie)
+                           stimulus_width_pix=240, stimulus_height_pix=240)
+    grating = vs.ConstructStimulus(pattern='sine_grating', stimulus_form='circular',
+                                   temporal_frequency=2.0, spatial_frequency=2.0,
+                                   duration_seconds=5.0, orientation=45, image_width=240, image_height=240,
+                                   stimulus_size=0, contrast=0.6)
+    ret.load_stimulus(grating)
+
+    # # # ret = FunctionalMosaic(testmosaic, 'parasol', 'on', stimulus_center=5+0j,
+    # # #                        stimulus_width_pix=720, stimulus_height_pix=576)
+    # ret = FunctionalMosaic(testmosaic, 'parasol', 'on', stimulus_center=5+0j,
+    #                        stimulus_width_pix=752, stimulus_height_pix=432)
+    # # movie = vs.NaturalMovie('/home/henhok/nature4_orig35_fps100.avi', fps=100, pix_per_deg=60)
+    # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)
+    # ret.load_stimulus(movie)
 
     # ret.plot_midpoint_contrast(0)
     # plt.show()
@@ -1380,6 +1408,8 @@ if __name__ == "__main__":
     # ret.run_all_cells(visualize=True)
     # plt.show()
 
+    ret.show_stimulus_with_gcs()
+    plt.show()
 
 '''
 This is code for building macaque retinal filters corresponding to midget and parasol cells' responses.

@@ -187,6 +187,7 @@ class VideoBaseClass(object):
         # Init openCV VideoWriter
         fourcc = VideoWriter_fourcc(*self.options["codec"])
         filename_out = './{0}.{1}'.format(filename, self.options["container"])
+        print(filename_out)
         video = VideoWriter(filename_out, fourcc, float(self.options["fps"]),
                             (self.options["image_width"], self.options["image_height"]),
                             isColor=False)  # path, codec, fps, size. Note, the isColor the flag is currently supported on Windows only
@@ -338,6 +339,7 @@ class StimulusForm:
     def stencil(self):
         raise NotImplementedError
 
+
 class ConstructStimulus(VideoBaseClass):
     '''
     Create stimulus video and save
@@ -481,7 +483,6 @@ class NaturalMovie(VideoBaseClass):
             self.frames[:, :, frame_ix] = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         cap.release()
-
 
 
 class SampleImage:
