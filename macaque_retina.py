@@ -1242,6 +1242,9 @@ class FunctionalMosaic(Mathematics):
         :return:
         """
 
+        # Save spike generation method
+        self.spike_generator_model = spike_generator_model
+
         video_dt = (1 / self.stimulus_video.fps) * second
         duration = self.stimulus_video.video_n_frames * video_dt
         poissongen_dt = 1.0 * ms
@@ -1327,32 +1330,32 @@ class FunctionalMosaic(Mathematics):
 
             plt.legend()
 
-        if spike_generator_model=='refractory':
-            plt.subplots(2, 1, sharex=True)
-            plt.subplot(211)
-            plt.plot(   spiketrains[cell_index], np.ones(spiketrains[cell_index].shape) * 
-                        np.mean(state_monitor.lambda_ttlast[cell_index]), 'g+')
-            # plt.plot(state_monitor.t, state_monitor.v[50])
-            plt.plot(state_monitor.t, state_monitor.lambda_ttlast[cell_index])
+            if spike_generator_model=='refractory':
+                plt.subplots(2, 1, sharex=True)
+                plt.subplot(211)
+                plt.plot(   spiketrains[cell_index], np.ones(spiketrains[cell_index].shape) * 
+                            np.mean(state_monitor.lambda_ttlast[cell_index]), 'g+')
+                # plt.plot(state_monitor.t, state_monitor.v[50])
+                plt.plot(state_monitor.t, state_monitor.lambda_ttlast[cell_index])
 
-            plt.xlim([0, duration/second])
-            plt.ylabel('lambda_ttlast')
+                plt.xlim([0, duration/second])
+                plt.ylabel('lambda_ttlast')
 
-            plt.subplot(212)
-            # Plot the generator and the average firing rate
-            # plt.plot(state_monitor.t, state_monitor.ref[50])
-            plt.plot(state_monitor.t, state_monitor.w[cell_index])
-            plt.xlim([0, duration / second])
-            plt.ylabel('w')
+                plt.subplot(212)
+                # Plot the generator and the average firing rate
+                # plt.plot(state_monitor.t, state_monitor.ref[50])
+                plt.plot(state_monitor.t, state_monitor.w[cell_index])
+                plt.xlim([0, duration / second])
+                plt.ylabel('w')
 
-            plt.xlabel('Time (s)')
+                plt.xlabel('Time (s)')
 
         if return_monitor is True:
             return spike_monitor
         else:
             return spiketrains, interpolated_rates_array.flatten()
 
-    def run_all_cells(self, visualize=False):
+    def run_all_cells(self, visualize=False, spike_generator_model='refractory'):
         """
         Runs the LNP pipeline for all ganglion cells (single trial)
 
@@ -1365,7 +1368,7 @@ class FunctionalMosaic(Mathematics):
 
         # TODO - Parallelize this
         for cell_index in tqdm(range(len(self.gc_df)), desc=tqdm_desc):
-            spiketrain, _ = self.run_single_cell(cell_index)
+            spiketrain, _ = self.run_single_cell(cell_index, spike_generator_model=spike_generator_model)
             spiketrain = spiketrain.flatten()
 
             all_spiketrains.append(spiketrain)
@@ -1418,6 +1421,33 @@ class FunctionalMosaic(Mathematics):
 
         rgc_coords.to_csv(filename, header=False, index=False)
 
+    def show_analysis(self, filename=None, visualize=False):
+        print(f'Analysing spiketrains...')
+        spiketrains = self.simulated_spiketrains
+        n_cells = len(spiketrains) # TODO check for consistency
+        means = np.empty(n_cells)
+        variances = np.empty(n_cells)
+        means[:] = np.nan
+        variances[:] = np.nan
+        for index, this_array in enumerate(spiketrains):
+            means[index] = np.mean(this_array)
+            variances[index] = np.var(this_array)
+        
+        if visualize is True:
+            fig, (ax1, ax2) = plt.subplots(2, 1)
+            plt.subplot(211)
+            # Draw variances vs means and unity line
+            min_value = np.min([np.min(means), np.min(variances)])
+            max_value = np.max([np.max(means), np.max(variances)])
+        
+            plt.plot(means,variances,'.')
+            plt.plot(np.array([min_value,max_value]),np.array([min_value,max_value]),'k-')
+            plt.xlabel('Means')
+            plt.ylabel('Variances')
+            fig.suptitle(f"Var vs Mean for all cells, spikeGenModel={self.spike_generator_model} ")
+
+            plt.subplot(212)
+            # Draw ISI histogram. TODO
 
 
 if __name__ == "__main__":
@@ -1430,10 +1460,13 @@ if __name__ == "__main__":
 
     ret = FunctionalMosaic(testmosaic, 'parasol', 'on', stimulus_center=5+0j,
                            stimulus_width_pix=240, stimulus_height_pix=240)
-    grating = vs.ConstructStimulus(pattern='sine_grating', stimulus_form='circular',
+    grating = vs.ConstructStimulus(pattern='colored_temporal_noise', stimulus_form='circular',
                                    temporal_frequency=10.0, spatial_frequency=1.0,
-                                   duration_seconds=5.0, orientation=0, image_width=240, image_height=240,
+                                   duration_seconds=2.0, orientation=0, image_width=240, image_height=240,
                                    stimulus_size=0, contrast=0.6)
+    
+    grating.save_to_file(filename='col_temp_noise')
+
     ret.load_stimulus(grating)
 
     # # # ret = FunctionalMosaic(testmosaic, 'parasol', 'on', stimulus_center=5+0j,
@@ -1454,13 +1487,17 @@ if __name__ == "__main__":
     example_gc=40
     # ret.convolve_stimulus(example_gc, visualize=True)
     # plt.show()
-    ret.run_single_cell(example_gc, n_trials=100, visualize=True, spike_generator_model='poisson')
+    # ret.run_single_cell(example_gc, n_trials=100, visualize=True, 
+    #                     spike_generator_model='refractory')
+    # plt.show(block = False)
+
+    ret.run_all_cells(visualize=True, spike_generator_model='poisson')
     plt.show(block = False)
 
-    # ret.run_all_cells(visualize=True)
-    # plt.show()
+    # ret.show_stimulus_with_gcs(example_gc=example_gc)
+    # plt.show(block = False)
 
-    ret.show_stimulus_with_gcs(example_gc=example_gc)
+    ret.show_analysis(filename='poisson_analysis.kukkuu', visualize=True)
     plt.show()
 
 '''
