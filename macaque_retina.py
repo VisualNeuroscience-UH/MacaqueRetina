@@ -1229,7 +1229,8 @@ class FunctionalMosaic(Mathematics):
         # Return the 1-dimensional generator potential
         return generator_potential + tonic_drive
 
-    def run_single_cell(self, cell_index, n_trials=1, visualize=False, return_monitor=False):
+    def run_single_cell(self, cell_index, n_trials=1, visualize=False, 
+                        return_monitor=False, spike_generator_model='refractory'):
         """
         Runs the LNP pipeline for a single ganglion cell (spiking by Brian2)
 
@@ -1237,6 +1238,7 @@ class FunctionalMosaic(Mathematics):
         :param n_trials: int
         :param visualize: bool
         :param return_monitor: bool, whether to return a raw Brian2 SpikeMonitor
+        :param spike_generator_model: str, 'refractory' or 'poisson'
         :return:
         """
 
@@ -1258,12 +1260,38 @@ class FunctionalMosaic(Mathematics):
         # Identical rates array for every trial; rows=time, columns=trial index
         inst_rates = b2.TimedArray(np.tile(interpolated_rates_array.T, (1, n_trials)) * Hz, poissongen_dt)
 
-        # Create Brian PoissonGroup (inefficient implementation but nevermind)
-        poisson_group = b2.PoissonGroup(n_trials, rates='inst_rates(t, i)')
-        spike_monitor = b2.SpikeMonitor(poisson_group)
-        net = b2.Network(poisson_group, spike_monitor)
 
-        # duration = len(generator_potential) * video_dt
+        if spike_generator_model=='refractory':
+            # Create Brian NeuronGroup
+            # calculate probability of firing for current timebin (eg .1 ms)
+            # draw spike/nonspike from random distribution
+            
+            # Recovery function from Berry_1998_JNeurosci, Uzzell_2004_JNeurophysiol
+            # abs and rel refractory estimated from Uzzell_2004_JNeurophysiol, 
+            # Fig 7B, bottom row, inset. Parasol ON cell
+            abs_refractory = 1 * ms
+            rel_refractory = 3 * ms
+            p_exp = 4
+            neuron_group = b2.NeuronGroup(
+                n_trials, 
+                model = '''
+                lambda_ttlast = inst_rates(t, i) * dt * w: 1
+                t_diff = clip(t - lastspike - abs_refractory, 0, 100) : second
+                w = t_diff**p_exp / (t_diff**p_exp + rel_refractory**p_exp) : 1
+                ''',
+                threshold='rand()<lambda_ttlast',
+                refractory = '(t-lastspike) < abs_refractory') # This is necessary for brian2 to generate lastspike variable. Does not affect refractory behaviour
+
+            state_monitor = b2.StateMonitor(neuron_group, ['lambda_ttlast','w','t_diff'] , record=True)    
+            spike_monitor = b2.SpikeMonitor(neuron_group)
+            net = b2.Network(neuron_group, spike_monitor, state_monitor)
+
+        elif spike_generator_model=='poisson':
+            # Create Brian PoissonGroup (inefficient implementation but nevermind)
+            poisson_group = b2.PoissonGroup(n_trials, rates='inst_rates(t, i)')
+            spike_monitor = b2.SpikeMonitor(poisson_group)
+            net = b2.Network(poisson_group, spike_monitor)
+
         net.run(duration)
 
         spiketrains = np.array(list(spike_monitor.spike_trains().values()))
@@ -1298,6 +1326,26 @@ class FunctionalMosaic(Mathematics):
             plt.xlabel('Time (s)')
 
             plt.legend()
+
+        if spike_generator_model=='refractory':
+            plt.subplots(2, 1, sharex=True)
+            plt.subplot(211)
+            plt.plot(   spiketrains[cell_index], np.ones(spiketrains[cell_index].shape) * 
+                        np.mean(state_monitor.lambda_ttlast[cell_index]), 'g+')
+            # plt.plot(state_monitor.t, state_monitor.v[50])
+            plt.plot(state_monitor.t, state_monitor.lambda_ttlast[cell_index])
+
+            plt.xlim([0, duration/second])
+            plt.ylabel('lambda_ttlast')
+
+            plt.subplot(212)
+            # Plot the generator and the average firing rate
+            # plt.plot(state_monitor.t, state_monitor.ref[50])
+            plt.plot(state_monitor.t, state_monitor.w[cell_index])
+            plt.xlim([0, duration / second])
+            plt.ylabel('w')
+
+            plt.xlabel('Time (s)')
 
         if return_monitor is True:
             return spike_monitor
@@ -1383,7 +1431,7 @@ if __name__ == "__main__":
     ret = FunctionalMosaic(testmosaic, 'parasol', 'on', stimulus_center=5+0j,
                            stimulus_width_pix=240, stimulus_height_pix=240)
     grating = vs.ConstructStimulus(pattern='sine_grating', stimulus_form='circular',
-                                   temporal_frequency=20.0, spatial_frequency=1.0,
+                                   temporal_frequency=10.0, spatial_frequency=1.0,
                                    duration_seconds=5.0, orientation=0, image_width=240, image_height=240,
                                    stimulus_size=0, contrast=0.6)
     ret.load_stimulus(grating)
@@ -1406,7 +1454,7 @@ if __name__ == "__main__":
     example_gc=40
     # ret.convolve_stimulus(example_gc, visualize=True)
     # plt.show()
-    ret.run_single_cell(example_gc, n_trials=100, visualize=True)
+    ret.run_single_cell(example_gc, n_trials=100, visualize=True, spike_generator_model='poisson')
     plt.show(block = False)
 
     # ret.run_all_cells(visualize=True)
