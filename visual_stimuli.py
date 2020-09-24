@@ -42,11 +42,12 @@ class VideoBaseClass(object):
         options["image_width"] = 1280  # Image width in pixels
         options["image_height"] = 720  # Image height in pixels
         options["container"] = 'mp4'
-        options["codec"] = 'MP42'
+        # options["codec"] = 'MP42'
+        options["codec"] = 'mp4v'
         options["fps"] = 100.0  #64.0  # Frames per second
         options["duration_seconds"] = 1.0  # seconds
         options["intensity"] = (0, 255)  # video grey scale dynamic range.
-        options["pedestal"] = 0  # intensity pedestal
+        options["mean"] = 128  # intensity mean
         options["contrast"] = 1
 
         # Valid options sine_grating; square_grating; colored_temporal_noise; white_noise; natural_images; natural_video; phase_scrambled_video
@@ -73,13 +74,16 @@ class VideoBaseClass(object):
         options["min_temporal_frequency"] = 0.5  # cycles per second, Hz
         options["max_temporal_frequency"] = 32.0  # cycles per second, Hz.
 
-        options["background"] = 128  # Background grey value
+        options["background"] = 255  # Background grey value
 
         # Get resolution
         options["pix_per_deg"] = 60
         # options["pix_per_deg"] = options["max_spatial_frequency"] * 3  # min sampling at 1.5 x Nyquist frequency of the highest sf
         # options["image_width_in_deg"] = options["image_width"] / options["pix_per_deg"]
 
+        options["baseline_start_seconds"] = 0
+        options["baseline_end_seconds"] = 0
+        
         self.options = options
 
     def _scale_intensity(self):
@@ -87,29 +91,41 @@ class VideoBaseClass(object):
         '''Scale intensity to 8-bit grey scale. Calculating peak-to-peak here allows different
             luminances and contrasts'''
 
-        raw_intensity_scale = np.ptp(self.frames)
-        # intensity_min = np.min(self.options["intensity"])
         intensity_max = np.max(self.options["intensity"])
-        # full_intensity_scale = np.ptp((intensity_min, intensity_max))
-        pedestal = self.options["pedestal"]  # This is the bottom of final dynamic range
+        mean = self.options["mean"]  # This is the mean of final dynamic range
         contrast = self.options["contrast"]
 
-        final_dynamic_range = (pedestal, intensity_max)
-        final_scale = np.ptp(final_dynamic_range)
 
-        # Shift to zero
+        # Simo's new version
+        # Shift to 0
         self.frames = self.frames - np.min(self.frames)
+        # Scale to 1
+        frames_max = np.max(self.frames)
+        self.frames = self.frames / frames_max
+        # Scale to final range
+        self.frames = self.frames * contrast * intensity_max
+        # Shift mean to 0
+        frames_mean = np.mean(self.frames)
+        self.frames = self.frames - frames_mean
+        # Shift to final values
+        self.frames = self.frames + mean
+        # import pdb; pdb.set_trace()
 
-        # Scale to correct intensity scale
-        # such that intensity is modulated around mean background light = intensity_max/2
-        self.frames = (self.frames * (2/raw_intensity_scale) - 1.0) * contrast * (intensity_max/2)
-        self.frames = self.frames + (intensity_max/2)
+        # # Henri's version
+        # # Scale to correct intensity scale
+        # # such that intensity is modulated around mean background light = intensity_max/2
+        # raw_intensity_scale = np.ptp(self.frames)
+        # self.frames = (self.frames * (2/raw_intensity_scale) - 1.0) * contrast * (intensity_max/2)
+        # self.frames = self.frames + (intensity_max/2)
 
-        # Simo's version
-        # Scale to correct intensity scale
-        #self.frames = self.frames * (final_scale / raw_intensity_scale) * contrast
-        # Shift to pedestal
-        #self.frames = self.frames + pedestal
+        # # Simo's old version
+        # # Scale to correct intensity scale
+        # pedestal = self.options["pedestal"]  # This is the pedestal of final dynamic range
+        # final_dynamic_range = (pedestal, intensity_max)
+        # final_scale = np.ptp(final_dynamic_range)
+        # self.frames = self.frames * (final_scale / raw_intensity_scale) * contrast
+        # # Shift to pedestal
+        # self.frames = self.frames + pedestal
 
         # Round result to avoid unnecessary errors
         self.frames = np.round(self.frames, 1)
@@ -187,7 +203,7 @@ class VideoBaseClass(object):
         # Init openCV VideoWriter
         fourcc = VideoWriter_fourcc(*self.options["codec"])
         filename_out = './{0}.{1}'.format(filename, self.options["container"])
-        print(filename_out)
+        # print(filename_out)
         video = VideoWriter(filename_out, fourcc, float(self.options["fps"]),
                             (self.options["image_width"], self.options["image_height"]),
                             isColor=False)  # path, codec, fps, size. Note, the isColor the flag is currently supported on Windows only
@@ -229,6 +245,12 @@ class VideoBaseClass(object):
         mask = dist_from_center <= radius_pix
         return mask
 
+    def _combine_background(self, mask):
+        # OLD: self.frames = self.frames * mask[..., np.newaxis]
+        self.frames_background = np.ones(self.frames.shape) * self.options['background']
+        self.frames_background[mask] = self.frames[mask]
+        self.frames = self.frames_background
+
 
 class StimulusPattern:
     '''
@@ -255,6 +277,49 @@ class StimulusPattern:
 
     def white_noise(self):
         self.frames = np.random.normal(loc=0.0, scale=1.0, size=self.frames.shape)
+
+    def temporal_sine_pattern(self):
+        '''Create temporal pattern
+        '''
+
+        temporal_frequency = self.options["temporal_frequency"]
+        fps = self.options["fps"]
+        duration_seconds = self.options["duration_seconds"]
+
+        if not temporal_frequency:
+            print('Temporal_frequency missing, setting to 1')
+            temporal_frequency = 1
+
+        # self.frames = np.random.normal(loc=0.0, scale=1.0, size=self.frames.shape)
+
+        # Create sine wave
+        one_cycle = 2 * np.pi
+        cycles_per_second = temporal_frequency
+
+        n_frames = self.frames.shape[2]
+        image_width = self.options["image_width"]
+        image_height = self.options["image_height"]
+
+        # time_vector in radians, temporal modulation via np.sin()
+        time_vec_end = 2 * np.pi * temporal_frequency * duration_seconds
+        time_vec = np.linspace(0, time_vec_end, int(fps * duration_seconds))
+        temporal_modulation = np.sin(time_vec)
+        # Divide by bg to get ones. Set the frames to sin values 
+        frames = np.ones(self.frames.shape) * temporal_modulation
+        # import pdb; pdb.set_trace()
+        # frames = frames - np.min(frames) # Shift to start from 0
+        # # scale to 0-1
+        # ptp = np.ptp(frames)
+        # frames = frames / ptp
+
+        # # Scale back to full intensity
+        # frames = frames * np.max(self.options["intensity"]) 
+
+        assert temporal_modulation.shape[0] == n_frames, "Unequal N frames, aborting..."
+        assert image_width != n_frames, "Errors in 3D broadcasting, change image width/height NOT to match n frames "
+        assert image_height != n_frames, "Errors in 3D broadcasting, change image width/height NOT to match n frames "
+
+        self.frames = frames
 
     def colored_temporal_noise(self):
         beta = 1  # the exponent. 1 = pink noise, 2 = brown noise, 0 = white noise?
@@ -300,8 +365,9 @@ class StimulusForm:
     def circular(self):
 
         mask = self._prepare_circular_mask(self.options["stimulus_size"])
-        # newaxis adds 3rd dim, multiplication broadcasts one 3rd dim to N 3rd dims in self.frames
-        self.frames = self.frames * mask[..., np.newaxis]
+
+        # self.frames = self.frames * mask[..., np.newaxis]
+        self._combine_background(mask)
 
     def rectangular(self):
 
@@ -317,7 +383,8 @@ class StimulusForm:
         mask = np.logical_and((X_distance_matrix <= radius_pix), (Y_distance_matrix <= radius_pix))
 
         # newaxis adds 3rd dim, multiplication broadcasts one 3rd dim to N 3rd dims in self.frames
-        self.frames = self.frames * mask[..., np.newaxis]
+        # self.frames = self.frames * mask[..., np.newaxis]
+        self._combine_background(mask)
 
     def annulus(self):
 
@@ -334,8 +401,9 @@ class StimulusForm:
         mask_outer = self._prepare_circular_mask(size_outer)
 
         mask = mask_outer ^ mask_inner
-        self.frames = self.frames * mask[..., np.newaxis]
-
+        # self.frames = self.frames * mask[..., np.newaxis]
+        self._combine_background(mask)
+    
     def stencil(self):
         raise NotImplementedError
 
@@ -357,25 +425,30 @@ class ConstructStimulus(VideoBaseClass):
         codec: compression format
         fps: frames per second
         duration_seconds: stimulus duration
+        baseline_start_seconds: midgray at the beginning
+        baseline_end_seconds: midgray at the end
         pattern:
             'sine_grating'; 'square_grating'; 'colored_temporal_noise'; 'white_noise';
-            'natural_images'; 'phase_scrambled_images'; 'natural_video'; 'phase_scrambled_video'
+            'natural_images'; 'phase_scrambled_images'; 'natural_video'; 'phase_scrambled_video';
+            'temporal_sine_pattern'
         stimulus_form: 'circular'; 'rectangular'; 'annulus'
         stimulus_position: in degrees, (0,0) is the center.
         stimulus_size: In degrees. Radius for circle and annulus, half-width for rectangle.
         contrast: between 0 and 1
-        pedestal: lowest stimulus intensity between 0, 256
+        mean: mean stimulus intensity between 0, 256
+
+        Note if mean + ((contrast * max(intensity)) / 2) exceed 255 or if  
+                mean - ((contrast * max(intensity)) / 2) go below 0
+                the stimulus generation fails 
 
         For sine_grating and square_grating, additional arguments are:
         spatial_frequency: in cycles per degree
         temporal_frequency: in Hz
         orientation: in degrees
 
-        For white_noise and colored_temporal_noise, additional arguments are:
-        spatial_band_pass: (cycles per degree min, cycles per degree max)
-        temporal_band_pass: (Hz min, Hz max)
-
-        For natural_images, phase_scrambled_images, natural_video and phase_scrambled_video, additional arguments are:
+        TODO Below not implemented yet. 
+        For natural_images, phase_scrambled_images, natural_video and phase_scrambled_video, 
+        additional arguments are:
         spatial_band_pass: (cycles per degree min, cycles per degree max)
         temporal_band_pass: (Hz min, Hz max)
         orientation: in degrees
@@ -394,21 +467,31 @@ class ConstructStimulus(VideoBaseClass):
         self.options.update(kwargs)
 
         # Init 3-D frames numpy array. Number of frames = frames per second * duration in seconds
-        self.frames = np.ones((self.options["image_height"], self.options["image_width"],
-                               int(self.options["fps"] * self.options["duration_seconds"])),
-                              dtype=np.uint8) * self.options["background"]
+        
+        self.frames = self._create_frames(self.options["duration_seconds"]) # background for stimulus
 
         # Call StimulusPattern class method to get patterns (numpy array)
         # self.frames updated according to the pattern
         eval(
             f'StimulusPattern.{self.options["pattern"]}(self)')  # Direct call to class.method() requires the self argument
 
+        # Now only the stimulus is scaled. The baseline and bg comes from options
+        self._scale_intensity()
+
         # Call StimulusForm class method to mask frames
         # self.frames updated according to the form
         eval(
             f'StimulusForm.{self.options["stimulus_form"]}(self)')  # Direct call to class.method() requires the self argument
 
-        self._scale_intensity()
+        self.frames_baseline_start = self._create_frames(self.options["baseline_start_seconds"]) # background for baseline before stimulus
+        self.frames_baseline_end = self._create_frames(self.options["baseline_end_seconds"]) # background for baseline after stimulus
+        
+        # Concatenate baselines and stimulus, recycle to self.frames
+        self.frames = np.concatenate((self.frames_baseline_start, self.frames, self.frames_baseline_end), axis=2)
+        self.frames = self.frames.astype(np.uint8)
+        # import pdb; pdb.set_trace()
+        # self._scale_intensity()
+
 
         self.video = self.frames.transpose(2, 0, 1)
         self.fps = self.options['fps']
@@ -421,6 +504,14 @@ class ConstructStimulus(VideoBaseClass):
         self.video_height_deg = self.video_height / self.pix_per_deg
 
 
+    def _create_frames(self, epoch__in_seconds):
+        # Create frames for the requested duration in sec 
+        frames = np.ones((self.options["image_height"], self.options["image_width"],
+                               int(self.options["fps"] * epoch__in_seconds)),
+                              dtype=np.uint8) * self.options['background']
+
+        return frames
+    
     def get_2d_video(self):
         stim_video_2d = np.reshape(self.video, (self.video_n_frames,
                                                 self.video_height * self.video_width)).T  # pixels as rows, time as cols
@@ -578,4 +669,12 @@ class Operator:
 
 
 if __name__ == "__main__":
-    NaturalMovie('/home/henhok/nature4_orig35_slowed.avi', fps=100, pix_per_deg=60)
+    # NaturalMovie('/home/henhok/nature4_orig35_slowed.avi', fps=100, pix_per_deg=60)
+
+    stim = ConstructStimulus(pattern='temporal_sine_pattern', stimulus_form='annulus',
+                                temporal_frequency=1.0, spatial_frequency=1.0,
+                                duration_seconds=1.0, orientation=0, image_width=140, image_height=240,
+                                stimulus_size=0, contrast=0.1, baseline_start_seconds = 0.8,
+                                baseline_end_seconds = 0.2, background=50, mean=50)
+
+    stim.save_to_file(filename='most_recent_stimulus')

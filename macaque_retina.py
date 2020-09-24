@@ -1355,23 +1355,49 @@ class FunctionalMosaic(Mathematics):
         else:
             return spiketrains, interpolated_rates_array.flatten()
 
-    def run_all_cells(self, visualize=False, spike_generator_model='refractory'):
+    def run_all_cells(  self, visualize=False, spike_generator_model='refractory',
+                        reload_last=False):
+
         """
         Runs the LNP pipeline for all ganglion cells (single trial)
 
         :param visualize: bool
+        :param spike_generator_model: str, 'refractory' or 'poisson'
+        :param reload_last: bool
         :return:
         """
+        do_all_spiketrains = True
+        filename_out = f"tmp_spiketrains_{spike_generator_model}.csv"
 
-        all_spiketrains = []
-        tqdm_desc = 'Simulating ' + self.response_type + ' ' + self.gc_type + ' mosaic'
+        if reload_last:
+            try:
+                # Try loading existing spiketrain in current directory
+                df = pd.read_csv(filename_out, index_col=0)
+                all_spiketrains = [[float(y) for y in x.strip('][').split()] for x in df['col']]
+                print(f'Reloaded spiketrains from {filename_out}')
+                do_all_spiketrains = False
+                self.spike_generator_model = spike_generator_model
+            except:
+                print(f'Failed to reload spiketrains from {filename_out}')
 
-        # TODO - Parallelize this
-        for cell_index in tqdm(range(len(self.gc_df)), desc=tqdm_desc):
-            spiketrain, _ = self.run_single_cell(cell_index, spike_generator_model=spike_generator_model)
-            spiketrain = spiketrain.flatten()
+            # If not found, keep flag for calculating
 
-            all_spiketrains.append(spiketrain)
+        if do_all_spiketrains:
+            all_spiketrains = []
+            tqdm_desc = 'Simulating ' + self.response_type + ' ' + self.gc_type + ' mosaic'
+
+            # TODO - Parallelize this
+            for cell_index in tqdm(range(len(self.gc_df)), desc=tqdm_desc):
+                spiketrain, _ = self.run_single_cell(cell_index, spike_generator_model=spike_generator_model)
+                spiketrain = spiketrain.flatten()
+
+                all_spiketrains.append(spiketrain)
+
+            # Save all_spiketrains to temporary variable for reloading
+            # import pdb; pdb.set_trace()
+            # np.savetxt(filename_out, all_spiketrains, delimiter=',')
+            df = pd.DataFrame({'col':all_spiketrains})
+            df.to_csv(path_or_buf=filename_out)
 
         self.simulated_spiketrains = all_spiketrains
 
@@ -1422,6 +1448,20 @@ class FunctionalMosaic(Mathematics):
         rgc_coords.to_csv(filename, header=False, index=False)
 
     def show_analysis(self, filename=None, visualize=False):
+        # Tsekkaa ärsyke ja analyysi Uzzell_2004_JNeurophysiol paperista:
+        '''The stimulus was a spatially uniform display that assumed one of
+two intensity values, randomly selected on every frame. The temporal
+contrast of the stimulus (96% in 3 experiments, 80% in 1 experiment,
+and 48% in 1 experiment) was defined as the SD of the intensity
+divided by the mean. A single random stimulus sequence 8–30 s long
+was presented repeatedly (19–176 times in different experiments).
+The mean photon absorption rate caused by the stimulus in the long-,
+middle-, and short-wavelength-sensitive cones was approximately
+equal to the absorption that would have been caused by spatially
+uniform monochromatic lights of wavelength 564, 534, and 432 nm
+and intensities of 3,850–15,030, 3,770–14,740, and 2,020–7,900
+photons–m2s1, respectively (values indicate range across experiments).'''
+        
         print(f'Analysing spiketrains...')
         spiketrains = self.simulated_spiketrains
         n_cells = len(spiketrains) # TODO check for consistency
@@ -1461,11 +1501,11 @@ if __name__ == "__main__":
     ret = FunctionalMosaic(testmosaic, 'parasol', 'on', stimulus_center=5+0j,
                            stimulus_width_pix=240, stimulus_height_pix=240)
     grating = vs.ConstructStimulus(pattern='colored_temporal_noise', stimulus_form='circular',
-                                   temporal_frequency=10.0, spatial_frequency=1.0,
+                                   temporal_frequency=2.0, spatial_frequency=1.0,
                                    duration_seconds=2.0, orientation=0, image_width=240, image_height=240,
                                    stimulus_size=0, contrast=0.6)
     
-    grating.save_to_file(filename='col_temp_noise')
+    grating.save_to_file(filename='most_recent_stimulus')
 
     ret.load_stimulus(grating)
 
@@ -1491,13 +1531,13 @@ if __name__ == "__main__":
     #                     spike_generator_model='refractory')
     # plt.show(block = False)
 
-    ret.run_all_cells(visualize=True, spike_generator_model='poisson')
+    ret.run_all_cells(visualize=True, spike_generator_model='refractory', reload_last=True)
     plt.show(block = False)
 
     # ret.show_stimulus_with_gcs(example_gc=example_gc)
     # plt.show(block = False)
 
-    ret.show_analysis(filename='poisson_analysis.kukkuu', visualize=True)
+    ret.show_analysis(filename='my_analysis', visualize=True)
     plt.show()
 
 '''
