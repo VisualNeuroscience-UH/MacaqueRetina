@@ -49,10 +49,11 @@ class VideoBaseClass(object):
         options["intensity"] = (0, 255)  # video grey scale dynamic range.
         options["mean"] = 128  # intensity mean
         options["contrast"] = 1
+        options["raw_intensity"] = None # Dynamic range before scaling, set by each stimulus pattern method
 
         # Valid options sine_grating; square_grating; colored_temporal_noise; white_noise; natural_images; natural_video; phase_scrambled_video
         options["pattern"] = 'sine_grating'
-
+        options["phase_shift"] = 0 # 0 - 2pi, to have grating or temporal oscillation phase shifted
         options["stimulus_form"] = 'circular'  # Valid options circular, rectangular, annulus
         options["stimulus_position"] = (0.0, 0.0)  # Stimulus center position in degrees inside the video. (0,0) is the center.
 
@@ -94,22 +95,34 @@ class VideoBaseClass(object):
         intensity_max = np.max(self.options["intensity"])
         mean = self.options["mean"]  # This is the mean of final dynamic range
         contrast = self.options["contrast"]
+        raw_min_value = np.min(self.options["raw_intensity"])
+        raw_peak_to_peak = np.ptp(self.options["raw_intensity"])
 
-
+        frames = self.frames
         # Simo's new version
+        
+        # Scale values
         # Shift to 0
-        self.frames = self.frames - np.min(self.frames)
+        frames = frames - raw_min_value
         # Scale to 1
-        frames_max = np.max(self.frames)
-        self.frames = self.frames / frames_max
+        frames = frames / raw_peak_to_peak
         # Scale to final range
-        self.frames = self.frames * contrast * intensity_max
-        # Shift mean to 0
-        frames_mean = np.mean(self.frames)
-        self.frames = self.frames - frames_mean
+        frames = frames * contrast * intensity_max
+        
+        # Scale mean
+        # Shift to 0
+        # import pdb;pdb.set_trace()
+        raw_mean_value  = np.mean(self.options["raw_intensity"])
+        raw_mean_value = raw_mean_value - raw_min_value
+        # Scale to 1
+        raw_mean_value = raw_mean_value / raw_peak_to_peak
+        # Scale to final range
+        scaled_mean_value = raw_mean_value * contrast * intensity_max
+
+        intensity_shift_to_mean =  self.options["mean"] - scaled_mean_value
+
         # Shift to final values
-        self.frames = self.frames + mean
-        # import pdb; pdb.set_trace()
+        frames = frames + intensity_shift_to_mean
 
         # # Henri's version
         # # Scale to correct intensity scale
@@ -128,13 +141,13 @@ class VideoBaseClass(object):
         # self.frames = self.frames + pedestal
 
         # Round result to avoid unnecessary errors
-        self.frames = np.round(self.frames, 1)
-
+        frames = np.round(frames, 1)
+        # import pdb; pdb.set_trace()
         # Check that the values are between 0 and 255 to get correct conversion to uint8
-        assert np.all(0 <= self.frames.flatten()) and np.all(
-            self.frames.flatten() <= 255), "Cannot safely convert to uint8. Check intensity/dynamic range."
+        assert np.all(0 <= frames.flatten()) and np.all(
+            frames.flatten() <= 255), f"Cannot safely convert range {np.min(frames.flatten())}- {np.max(frames.flatten())}to uint8. Check intensity/dynamic range."
         # Return
-        self.frames = self.frames.astype(np.uint8)
+        self.frames = frames.astype(np.uint8)
 
     def _prepare_grating(self):
         '''Create temporospatial grating
@@ -251,46 +264,18 @@ class VideoBaseClass(object):
         self.frames_background[mask] = self.frames[mask]
         self.frames = self.frames_background
 
-
-class StimulusPattern:
-    '''
-    Construct the stimulus images
-    '''
-
-    def sine_grating(self):
-        # Create temporospatial grating
-        self._prepare_grating()
-
-        # Turn to sine values
-        self.frames = np.sin(self.frames)
-
-    def square_grating(self):
-        # Create temporospatial grating
-        self._prepare_grating()
-
-        # Turn to sine values
-        self.frames = np.sin(self.frames)
-
-        # Turn to square grating values, threshold at zero.
-        threshold = 0  # Change this between [-1 1] if you want uneven grating. Default is 0
-        self.frames = (self.frames > threshold) * self.frames / self.frames * 2 - 1
-
-    def white_noise(self):
-        self.frames = np.random.normal(loc=0.0, scale=1.0, size=self.frames.shape)
-
-    def temporal_sine_pattern(self):
-        '''Create temporal pattern
+    def _prepare_temporal_sine_pattern(self):
+        ''' Prepare temporal sine pattern
         '''
 
         temporal_frequency = self.options["temporal_frequency"]
         fps = self.options["fps"]
         duration_seconds = self.options["duration_seconds"]
+        phase_shift = self.options["phase_shift"]
 
         if not temporal_frequency:
             print('Temporal_frequency missing, setting to 1')
             temporal_frequency = 1
-
-        # self.frames = np.random.normal(loc=0.0, scale=1.0, size=self.frames.shape)
 
         # Create sine wave
         one_cycle = 2 * np.pi
@@ -302,24 +287,72 @@ class StimulusPattern:
 
         # time_vector in radians, temporal modulation via np.sin()
         time_vec_end = 2 * np.pi * temporal_frequency * duration_seconds
-        time_vec = np.linspace(0, time_vec_end, int(fps * duration_seconds))
+        time_vec = np.linspace( 0 + phase_shift, 
+                                time_vec_end + phase_shift, 
+                                int(fps * duration_seconds))
         temporal_modulation = np.sin(time_vec)
-        # Divide by bg to get ones. Set the frames to sin values 
-        frames = np.ones(self.frames.shape) * temporal_modulation
         # import pdb; pdb.set_trace()
-        # frames = frames - np.min(frames) # Shift to start from 0
-        # # scale to 0-1
-        # ptp = np.ptp(frames)
-        # frames = frames / ptp
+        # Set the frames to sin values 
+        frames = np.ones(self.frames.shape) * temporal_modulation
 
-        # # Scale back to full intensity
-        # frames = frames * np.max(self.options["intensity"]) 
+        # Set raw_intensity to [-1 1]
+        self.options["raw_intensity"] = (-1, 1)
 
         assert temporal_modulation.shape[0] == n_frames, "Unequal N frames, aborting..."
         assert image_width != n_frames, "Errors in 3D broadcasting, change image width/height NOT to match n frames "
         assert image_height != n_frames, "Errors in 3D broadcasting, change image width/height NOT to match n frames "
 
         self.frames = frames
+ 
+
+class StimulusPattern:
+    '''
+    Construct the stimulus images
+    '''
+
+    def sine_grating(self):
+        # Create temporospatial grating
+        self._prepare_grating()
+
+        # Turn to sine values
+        self.frames = np.sin(self.frames + self.options["phase_shift"])
+
+        # Set raw_intensity to [-1 1]
+        self.options["raw_intensity"] = (-1, 1)
+
+    def square_grating(self):
+        # Create temporospatial grating
+        self._prepare_grating()
+
+        # Turn to sine values
+        self.frames = np.sin(self.frames + self.options["phase_shift"])
+
+        # Set raw_intensity to [-1 1]
+        self.options["raw_intensity"] = (-1, 1)
+
+        # Turn to square grating values, threshold at zero.
+        threshold = 0  # Change this between [-1 1] if you want uneven grating. Default is 0
+        self.frames = (self.frames > threshold) * self.frames / self.frames * 2 - 1
+
+    def white_noise(self):
+        self.frames = np.random.normal(loc=0.0, scale=1.0, size=self.frames.shape)
+
+    def temporal_sine_pattern(self):
+        '''Create temporal sine pattern
+        '''
+
+        self._prepare_temporal_sine_pattern()
+    
+    def temporal_square_pattern(self):
+        '''Create temporal sine pattern
+        '''
+
+        self._prepare_temporal_sine_pattern()
+        # Turn to square grating values, threshold at zero.
+        threshold = 0  # Change this between [-1 1] if you want uneven grating. Default is 0
+
+        self.frames[self.frames >= threshold] = 1 
+        self.frames[self.frames < threshold] = -1 
 
     def colored_temporal_noise(self):
         beta = 1  # the exponent. 1 = pink noise, 2 = brown noise, 0 = white noise?
@@ -430,7 +463,7 @@ class ConstructStimulus(VideoBaseClass):
         pattern:
             'sine_grating'; 'square_grating'; 'colored_temporal_noise'; 'white_noise';
             'natural_images'; 'phase_scrambled_images'; 'natural_video'; 'phase_scrambled_video';
-            'temporal_sine_pattern'
+            'temporal_sine_pattern'; 'temporal_square_pattern'
         stimulus_form: 'circular'; 'rectangular'; 'annulus'
         stimulus_position: in degrees, (0,0) is the center.
         stimulus_size: In degrees. Radius for circle and annulus, half-width for rectangle.
@@ -445,6 +478,9 @@ class ConstructStimulus(VideoBaseClass):
         spatial_frequency: in cycles per degree
         temporal_frequency: in Hz
         orientation: in degrees
+
+        For all temporal and spatial gratings, additional argument is
+        phase_shift: between 0 and 2pi
 
         TODO Below not implemented yet. 
         For natural_images, phase_scrambled_images, natural_video and phase_scrambled_video, 
@@ -470,6 +506,9 @@ class ConstructStimulus(VideoBaseClass):
         
         self.frames = self._create_frames(self.options["duration_seconds"]) # background for stimulus
 
+        # Check that phase shift is in radians
+        assert 0 <= self.options["phase_shift"] <= 2 * np.pi, "Phase shift should be between 0 and 2 pi"
+        
         # Call StimulusPattern class method to get patterns (numpy array)
         # self.frames updated according to the pattern
         eval(
@@ -670,11 +709,18 @@ class Operator:
 
 if __name__ == "__main__":
     # NaturalMovie('/home/henhok/nature4_orig35_slowed.avi', fps=100, pix_per_deg=60)
+    ''' pattern:
+                'sine_grating'; 'square_grating'; 'colored_temporal_noise'; 'white_noise';
+                'natural_images'; 'phase_scrambled_images'; 'natural_video'; 'phase_scrambled_video';
+                'temporal_sine_pattern'; 'temporal_square_pattern'
+    '''
 
-    stim = ConstructStimulus(pattern='temporal_sine_pattern', stimulus_form='annulus',
-                                temporal_frequency=1.0, spatial_frequency=1.0,
-                                duration_seconds=1.0, orientation=0, image_width=140, image_height=240,
-                                stimulus_size=0, contrast=0.1, baseline_start_seconds = 0.8,
-                                baseline_end_seconds = 0.2, background=50, mean=50)
+    stim = ConstructStimulus(pattern='temporal_sine_pattern', stimulus_form='rectangular',
+                                temporal_frequency=1, spatial_frequency=1.0,
+                                duration_seconds=.5, orientation=90, image_width=240, image_height=240,
+                                stimulus_size=1, contrast=.9, baseline_start_seconds = 0.2,
+                                baseline_end_seconds = 0.2, background=128, mean=128, phase_shift=0)
 
     stim.save_to_file(filename='most_recent_stimulus')
+
+   
