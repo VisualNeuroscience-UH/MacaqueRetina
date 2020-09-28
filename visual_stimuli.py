@@ -51,7 +51,7 @@ class VideoBaseClass(object):
         options["contrast"] = 1
         options["raw_intensity"] = None # Dynamic range before scaling, set by each stimulus pattern method
 
-        # Valid options sine_grating; square_grating; colored_temporal_noise; white_noise; natural_images; natural_video; phase_scrambled_video
+        # Valid options sine_grating; square_grating; colored_temporal_noise; white_gaussian_noise; natural_images; natural_video; phase_scrambled_video
         options["pattern"] = 'sine_grating'
         options["phase_shift"] = 0 # 0 - 2pi, to have grating or temporal oscillation phase shifted
         options["stimulus_form"] = 'circular'  # Valid options circular, rectangular, annulus
@@ -111,7 +111,6 @@ class VideoBaseClass(object):
         
         # Scale mean
         # Shift to 0
-        # import pdb;pdb.set_trace()
         raw_mean_value  = np.mean(self.options["raw_intensity"])
         raw_mean_value = raw_mean_value - raw_min_value
         # Scale to 1
@@ -142,7 +141,6 @@ class VideoBaseClass(object):
 
         # Round result to avoid unnecessary errors
         frames = np.round(frames, 1)
-        # import pdb; pdb.set_trace()
         # Check that the values are between 0 and 255 to get correct conversion to uint8
         assert np.all(0 <= frames.flatten()) and np.all(
             frames.flatten() <= 255), f"Cannot safely convert range {np.min(frames.flatten())}- {np.max(frames.flatten())}to uint8. Check intensity/dynamic range."
@@ -291,7 +289,7 @@ class VideoBaseClass(object):
                                 time_vec_end + phase_shift, 
                                 int(fps * duration_seconds))
         temporal_modulation = np.sin(time_vec)
-        # import pdb; pdb.set_trace()
+
         # Set the frames to sin values 
         frames = np.ones(self.frames.shape) * temporal_modulation
 
@@ -303,7 +301,10 @@ class VideoBaseClass(object):
         assert image_height != n_frames, "Errors in 3D broadcasting, change image width/height NOT to match n frames "
 
         self.frames = frames
- 
+
+    def _raw_intensity_from_data(self):
+
+        self.options["raw_intensity"] = (np.min(self.frames), np.max(self.frames))     
 
 class StimulusPattern:
     '''
@@ -334,8 +335,10 @@ class StimulusPattern:
         threshold = 0  # Change this between [-1 1] if you want uneven grating. Default is 0
         self.frames = (self.frames > threshold) * self.frames / self.frames * 2 - 1
 
-    def white_noise(self):
+    def white_gaussian_noise(self):
         self.frames = np.random.normal(loc=0.0, scale=1.0, size=self.frames.shape)
+
+        self._raw_intensity_from_data()
 
     def temporal_sine_pattern(self):
         '''Create temporal sine pattern
@@ -363,9 +366,10 @@ class StimulusPattern:
         # Cut variance to [-3,3]
         frame_time_series_unit_variance_clipped = np.clip(frame_time_series_unit_variance, variance_limits.min(),
                                                           variance_limits.max())
-
         # Scale to [0 1]
         frame_time_series = (frame_time_series_unit_variance_clipped - variance_limits.min()) / variance_limits.ptp()
+
+        self.options["raw_intensity"] = (0, 1)
 
         # Cast time series to frames
         assert len(frame_time_series) not in self.frames.shape[
@@ -375,18 +379,22 @@ class StimulusPattern:
     def natural_images(self, full_path_to_folder, width, height, fps, duration, spatial_band_pass=None,
                        temporal_band_pass=None, orientation=0):
         # filtering: http://www.djmannion.net/psych_programming/vision/sf_filt/sf_filt.html
+        self._raw_intensity_from_data()
         pass
 
     def phase_scrambled_images(self, full_path_to_folder, width, height, fps, duration, spatial_band_pass=None,
                                temporal_band_pass=None, orientation=0):
+        self._raw_intensity_from_data()
         pass
 
     def natural_video(self, full_path, width, height, fps, duration, spatial_band_pass=None, temporal_band_pass=None,
                       orientation=0):
+        self._raw_intensity_from_data()
         pass
 
     def phase_scrambled_video(self, full_path, width, height, fps, duration, spatial_band_pass=None,
                               temporal_band_pass=None, orientation=0):
+        self._raw_intensity_from_data()
         pass
 
 
@@ -461,7 +469,7 @@ class ConstructStimulus(VideoBaseClass):
         baseline_start_seconds: midgray at the beginning
         baseline_end_seconds: midgray at the end
         pattern:
-            'sine_grating'; 'square_grating'; 'colored_temporal_noise'; 'white_noise';
+            'sine_grating'; 'square_grating'; 'colored_temporal_noise'; 'white_gaussian_noise';
             'natural_images'; 'phase_scrambled_images'; 'natural_video'; 'phase_scrambled_video';
             'temporal_sine_pattern'; 'temporal_square_pattern'
         stimulus_form: 'circular'; 'rectangular'; 'annulus'
@@ -528,9 +536,6 @@ class ConstructStimulus(VideoBaseClass):
         # Concatenate baselines and stimulus, recycle to self.frames
         self.frames = np.concatenate((self.frames_baseline_start, self.frames, self.frames_baseline_end), axis=2)
         self.frames = self.frames.astype(np.uint8)
-        # import pdb; pdb.set_trace()
-        # self._scale_intensity()
-
 
         self.video = self.frames.transpose(2, 0, 1)
         self.fps = self.options['fps']
@@ -710,15 +715,15 @@ class Operator:
 if __name__ == "__main__":
     # NaturalMovie('/home/henhok/nature4_orig35_slowed.avi', fps=100, pix_per_deg=60)
     ''' pattern:
-                'sine_grating'; 'square_grating'; 'colored_temporal_noise'; 'white_noise';
+                'sine_grating'; 'square_grating'; 'colored_temporal_noise'; 'white_gaussian_noise';
                 'natural_images'; 'phase_scrambled_images'; 'natural_video'; 'phase_scrambled_video';
                 'temporal_sine_pattern'; 'temporal_square_pattern'
     '''
 
-    stim = ConstructStimulus(pattern='temporal_sine_pattern', stimulus_form='rectangular',
-                                temporal_frequency=1, spatial_frequency=1.0,
-                                duration_seconds=.5, orientation=90, image_width=240, image_height=240,
-                                stimulus_size=1, contrast=.9, baseline_start_seconds = 0.2,
+    stim = ConstructStimulus(pattern='colored_temporal_noise', stimulus_form='rectangular',
+                                temporal_frequency=2, spatial_frequency=1.0,
+                                duration_seconds=1, orientation=90, image_width=240, image_height=240,
+                                stimulus_size=1, contrast=.49, baseline_start_seconds = 0.8,
                                 baseline_end_seconds = 0.2, background=128, mean=128, phase_shift=0)
 
     stim.save_to_file(filename='most_recent_stimulus')
