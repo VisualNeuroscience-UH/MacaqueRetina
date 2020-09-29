@@ -68,6 +68,9 @@ class VideoBaseClass(object):
         options["orientation"] = 0.0  # No rotation or vertical
         options["size_inner"] = None
         options["size_outer"] = None
+        options["on_proportion"]  = 0.5 # between 0 and 1, proportion of stimulus-on time
+        options["direction"] = 'increment' # or 'decrement'
+
 
         # Limits, no need to go beyond these
         options["min_spatial_frequency"] = 0.0625  # cycles per degree
@@ -376,6 +379,37 @@ class StimulusPattern:
                                              :-1], "Oops. Two different dimensions match the time series length."
         self.frames = np.zeros(self.frames.shape) + frame_time_series
 
+    def spatially_uniform_binary_noise(self):
+        on_proportion = self.options["on_proportion"]
+        samples = self.frames.shape[2]
+        direction = self.options["direction"]
+
+        def _rand_bin_array(samples, on_proportion):
+            N = samples
+            K = np.int(N * on_proportion)
+            arr = np.zeros(N)
+            arr[:K]  = 1
+            np.random.shuffle(arr)
+            return arr
+
+        frame_time_series = _rand_bin_array(samples, on_proportion)
+
+        
+        if direction is 'decrement':
+            frame_time_series = frame_time_series * -1 # flip
+        elif direction is 'increment':
+            frame_time_series = frame_time_series * 1 # Isn't it beautiful? For consistency
+        else:
+            raise NotImplementedError('Unknown option for "direction", should be "increment" or "decrement"')
+        
+        # Note the stim has dyn range 1 and thus contrast will be halved by the 
+        # dyn range -1 1, thus the doubling
+        self.options["contrast"] = self.options["contrast"] * 2
+        self.options["raw_intensity"] = (-1, 1)
+        
+        self.frames = np.zeros(self.frames.shape) + frame_time_series
+
+
     def natural_images(self, full_path_to_folder, width, height, fps, duration, spatial_band_pass=None,
                        temporal_band_pass=None, orientation=0):
         # filtering: http://www.djmannion.net/psych_programming/vision/sf_filt/sf_filt.html
@@ -471,7 +505,7 @@ class ConstructStimulus(VideoBaseClass):
         pattern:
             'sine_grating'; 'square_grating'; 'colored_temporal_noise'; 'white_gaussian_noise';
             'natural_images'; 'phase_scrambled_images'; 'natural_video'; 'phase_scrambled_video';
-            'temporal_sine_pattern'; 'temporal_square_pattern'
+            'temporal_sine_pattern'; 'temporal_square_pattern'; 'spatially_uniform_binary_noise'
         stimulus_form: 'circular'; 'rectangular'; 'annulus'
         stimulus_position: in degrees, (0,0) is the center.
         stimulus_size: In degrees. Radius for circle and annulus, half-width for rectangle.
@@ -489,6 +523,10 @@ class ConstructStimulus(VideoBaseClass):
 
         For all temporal and spatial gratings, additional argument is
         phase_shift: between 0 and 2pi
+
+        For spatially_uniform_binary_noise, additional argument is 
+        on_proportion: between 0 and 1, proportion of on-stimulus, default 0.5
+        direction: 'increment' or 'decrement'
 
         TODO Below not implemented yet. 
         For natural_images, phase_scrambled_images, natural_video and phase_scrambled_video, 
@@ -717,14 +755,15 @@ if __name__ == "__main__":
     ''' pattern:
                 'sine_grating'; 'square_grating'; 'colored_temporal_noise'; 'white_gaussian_noise';
                 'natural_images'; 'phase_scrambled_images'; 'natural_video'; 'phase_scrambled_video';
-                'temporal_sine_pattern'; 'temporal_square_pattern'
+                'temporal_sine_pattern'; 'temporal_square_pattern'; 'spatially_uniform_binary_noise'
     '''
 
-    stim = ConstructStimulus(pattern='colored_temporal_noise', stimulus_form='rectangular',
+    stim = ConstructStimulus(pattern='spatially_uniform_binary_noise', stimulus_form='rectangular',
                                 temporal_frequency=2, spatial_frequency=1.0,
                                 duration_seconds=1, orientation=90, image_width=240, image_height=240,
-                                stimulus_size=1, contrast=.49, baseline_start_seconds = 0.8,
-                                baseline_end_seconds = 0.2, background=128, mean=128, phase_shift=0)
+                                stimulus_size=1, contrast=.2, baseline_start_seconds = 0.8,
+                                baseline_end_seconds = 0.2, background=128, mean=128, phase_shift=0, 
+                                on_proportion=0.05, direction='increment')
 
     stim.save_to_file(filename='most_recent_stimulus')
 
