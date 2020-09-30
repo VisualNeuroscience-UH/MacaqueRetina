@@ -950,7 +950,7 @@ class FunctionalMosaic(Mathematics):
         # Note that Ellipse angle is in degrees.
         # Width and height in Ellipse are diameters, thus x2.
         circ = Ellipse((gc.q_pix, gc.r_pix), width=2 * gc.semi_xc, height=2 * gc.semi_yc,
-                       angle=gc.orientation_center * (-1), edgecolor='white', facecolor='None')
+                       angle=gc.orientation_center * (-1), edgecolor='white', facecolor='yellow')
         ax.add_patch(circ)
         plt.xticks([])
         plt.yticks([])
@@ -1194,7 +1194,7 @@ class FunctionalMosaic(Mathematics):
         :return: array of length (stimulus timesteps)
         """
         # Get spatiotemporal filter
-        spatiotemporal_filter = self.create_spatiotemporal_filter(cell_index)
+        spatiotemporal_filter = self.create_spatiotemporal_filter(cell_index, visualize=True)
 
         # Get cropped stimulus
         stimulus_cropped = self.get_cropped_video(cell_index, reshape=True)
@@ -1229,8 +1229,8 @@ class FunctionalMosaic(Mathematics):
         # Return the 1-dimensional generator potential
         return generator_potential + tonic_drive
 
-    def run_single_cell(self, cell_index, n_trials=1, visualize=False, 
-                        return_monitor=False, spike_generator_model='refractory'):
+    def run_cells(self, cell_index, n_trials=1, visualize=False, 
+                        return_monitor=False, spike_generator_model='refractory', save_data=False):
         """
         Runs the LNP pipeline for a single ganglion cell (spiking by Brian2)
 
@@ -1355,57 +1355,200 @@ class FunctionalMosaic(Mathematics):
         else:
             return spiketrains, interpolated_rates_array.flatten()
 
-    def run_all_cells(  self, visualize=False, spike_generator_model='refractory',
-                        reload_last=False):
+    # def run_single_cell(self, cell_index, n_trials=1, visualize=False, 
+    #                     return_monitor=False, spike_generator_model='refractory', save_example_data=False):
+    #     """
+    #     Runs the LNP pipeline for a single ganglion cell (spiking by Brian2)
 
-        """
-        Runs the LNP pipeline for all ganglion cells (single trial)
+    #     :param cell_index: int
+    #     :param n_trials: int
+    #     :param visualize: bool
+    #     :param return_monitor: bool, whether to return a raw Brian2 SpikeMonitor
+    #     :param spike_generator_model: str, 'refractory' or 'poisson'
+    #     :return:
+    #     """
 
-        :param visualize: bool
-        :param spike_generator_model: str, 'refractory' or 'poisson'
-        :param reload_last: bool
-        :return:
-        """
-        do_all_spiketrains = True
-        filename_out = f"tmp_spiketrains_{spike_generator_model}.csv"
+    #     # Save spike generation method
+    #     self.spike_generator_model = spike_generator_model
 
-        if reload_last:
-            try:
-                # Try loading existing spiketrain in current directory
-                df = pd.read_csv(filename_out, index_col=0)
-                all_spiketrains = [[float(y) for y in x.strip('][').split()] for x in df['col']]
-                print(f'Reloaded spiketrains from {filename_out}')
-                do_all_spiketrains = False
-                self.spike_generator_model = spike_generator_model
-            except:
-                print(f'Failed to reload spiketrains from {filename_out}')
+    #     video_dt = (1 / self.stimulus_video.fps) * second
+    #     duration = self.stimulus_video.video_n_frames * video_dt
+    #     poissongen_dt = 1.0 * ms
 
-            # If not found, keep flag for calculating
+    #     # Get instantaneous firing rate
+    #     generator_potential = self.convolve_stimulus(cell_index)
+    #     exp_generator_potential = np.array(np.exp(generator_potential))
 
-        if do_all_spiketrains:
-            all_spiketrains = []
-            tqdm_desc = 'Simulating ' + self.response_type + ' ' + self.gc_type + ' mosaic'
+    #     # Let's interpolate the rate to 1ms intervals
+    #     tvec_original = np.arange(1, len(exp_generator_potential)+1) * video_dt
+    #     rates_func = interp1d(tvec_original, exp_generator_potential, fill_value=0, bounds_error=False)
 
-            # TODO - Parallelize this
-            for cell_index in tqdm(range(len(self.gc_df)), desc=tqdm_desc):
-                spiketrain, _ = self.run_single_cell(cell_index, spike_generator_model=spike_generator_model)
-                spiketrain = spiketrain.flatten()
+    #     tvec_new = np.arange(0, duration, poissongen_dt)
+    #     interpolated_rates_array = np.array([rates_func(tvec_new)])  # This needs to be 2D array for Brian!
 
-                all_spiketrains.append(spiketrain)
+    #     # Identical rates array for every trial; rows=time, columns=trial index
+    #     inst_rates = b2.TimedArray(np.tile(interpolated_rates_array.T, (1, n_trials)) * Hz, poissongen_dt)
 
-            # Save all_spiketrains to temporary variable for reloading
-            # import pdb; pdb.set_trace()
-            # np.savetxt(filename_out, all_spiketrains, delimiter=',')
-            df = pd.DataFrame({'col':all_spiketrains})
-            df.to_csv(path_or_buf=filename_out)
 
-        self.simulated_spiketrains = all_spiketrains
+    #     if spike_generator_model=='refractory':
+    #         # Create Brian NeuronGroup
+    #         # calculate probability of firing for current timebin (eg .1 ms)
+    #         # draw spike/nonspike from random distribution
+            
+    #         # Recovery function from Berry_1998_JNeurosci, Uzzell_2004_JNeurophysiol
+    #         # abs and rel refractory estimated from Uzzell_2004_JNeurophysiol, 
+    #         # Fig 7B, bottom row, inset. Parasol ON cell
+    #         abs_refractory = 1 * ms
+    #         rel_refractory = 3 * ms
+    #         p_exp = 4
+    #         neuron_group = b2.NeuronGroup(
+    #             n_trials, 
+    #             model = '''
+    #             lambda_ttlast = inst_rates(t, i) * dt * w: 1
+    #             t_diff = clip(t - lastspike - abs_refractory, 0, 100) : second
+    #             w = t_diff**p_exp / (t_diff**p_exp + rel_refractory**p_exp) : 1
+    #             ''',
+    #             threshold='rand()<lambda_ttlast',
+    #             refractory = '(t-lastspike) < abs_refractory') # This is necessary for brian2 to generate lastspike variable. Does not affect refractory behaviour
 
-        if visualize is True:
+    #         state_monitor = b2.StateMonitor(neuron_group, ['lambda_ttlast','w','t_diff'] , record=True)    
+    #         spike_monitor = b2.SpikeMonitor(neuron_group)
+    #         net = b2.Network(neuron_group, spike_monitor, state_monitor)
 
-            plt.eventplot(all_spiketrains)
-            plt.ylabel('Cell index')
-            plt.xlabel('Time [s]')
+    #     elif spike_generator_model=='poisson':
+    #         # Create Brian PoissonGroup (inefficient implementation but nevermind)
+    #         poisson_group = b2.PoissonGroup(n_trials, rates='inst_rates(t, i)')
+    #         spike_monitor = b2.SpikeMonitor(poisson_group)
+    #         net = b2.Network(poisson_group, spike_monitor)
+
+    #     net.run(duration)
+
+    #     spiketrains = np.array(list(spike_monitor.spike_trains().values()))
+    #     spiketrains_flat = np.concatenate(list(spike_monitor.spike_trains().values()))
+
+    #     if visualize is True:
+    #         plt.subplots(2, 1, sharex=True)
+    #         plt.subplot(211)
+    #         plt.eventplot(spiketrains)
+    #         plt.xlim([0, duration/second])
+    #         plt.ylabel('Trials')
+
+    #         plt.subplot(212)
+    #         # Plot the generator and the average firing rate
+    #         tvec = np.arange(0, len(generator_potential), 1) * video_dt
+    #         plt.plot(tvec, exp_generator_potential.flatten(), label='Generator')
+    #         plt.xlim([0, duration / second])
+
+    #         # Compute average firing rate over trials (should approximately follow generator)
+    #         hist_dt = 1*ms
+    #         # n_bins = int((duration/hist_dt))
+    #         bin_edges = np.append(tvec_new, [duration/second])  # Append the rightmost edge
+    #         hist, _ = np.histogram(spiketrains_flat, bins=bin_edges)
+    #         avg_fr = hist / n_trials / (hist_dt / second)
+
+    #         xsmooth = np.arange(-15, 15+1)
+    #         smoothing = stats.norm.pdf(xsmooth, scale=5)  # Gaussian smoothing with SD=5 ms
+    #         smoothed_avg_fr = np.convolve(smoothing, avg_fr, mode='same')
+
+    #         plt.plot(bin_edges[:-1], smoothed_avg_fr, label='Measured')
+    #         plt.ylabel('Firing rate [Hz]')
+    #         plt.xlabel('Time (s)')
+
+    #         plt.legend()
+
+    #         if spike_generator_model=='refractory':
+    #             plt.subplots(2, 1, sharex=True)
+    #             plt.subplot(211)
+    #             plt.plot(   spiketrains[cell_index], np.ones(spiketrains[cell_index].shape) * 
+    #                         np.mean(state_monitor.lambda_ttlast[cell_index]), 'g+')
+    #             # plt.plot(state_monitor.t, state_monitor.v[50])
+    #             plt.plot(state_monitor.t, state_monitor.lambda_ttlast[cell_index])
+
+    #             plt.xlim([0, duration/second])
+    #             plt.ylabel('lambda_ttlast')
+
+    #             plt.subplot(212)
+    #             # Plot the generator and the average firing rate
+    #             # plt.plot(state_monitor.t, state_monitor.ref[50])
+    #             plt.plot(state_monitor.t, state_monitor.w[cell_index])
+    #             plt.xlim([0, duration / second])
+    #             plt.ylabel('w')
+
+    #             plt.xlabel('Time (s)')
+
+    #     if return_monitor is True:
+    #         return spike_monitor
+    #     else:
+    #         return spiketrains, interpolated_rates_array.flatten()
+
+    def run_all_cells(  self, spike_generator_model='refractory',
+                        save_data=False, visualize=False):    
+    # 
+    #     """
+    #     Runs the LNP pipeline for all ganglion cells (legacy function)
+
+    #     :param visualize: bool
+    #     :param spike_generator_model: str, 'refractory' or 'poisson'
+    #     :param save_data: bool
+    #     :return:
+    #     """
+
+        self.run_cells( cell_index=None, n_trials=1, spike_generator_model=spike_generator_model, 
+                        save_data=save_data, visualize=visualize)
+
+    
+
+    # # def run_all_cells(  self, visualize=False, spike_generator_model='refractory',
+    #                     reload_last=False):
+
+    #     """
+    #     Runs the LNP pipeline for all ganglion cells (single trial)
+
+    #     :param visualize: bool
+    #     :param spike_generator_model: str, 'refractory' or 'poisson'
+    #     :param reload_last: bool
+    #     :return:
+    #     """
+    #     do_all_spiketrains = True
+    #     filename_out = f"tmp_spiketrains_{spike_generator_model}.csv"
+
+    #     if reload_last:
+    #         try:
+    #             # Try loading existing spiketrain in current directory
+    #             df = pd.read_csv(filename_out, index_col=0)
+    #             all_spiketrains = [[float(y) for y in x.strip('][').split()] for x in df['col']]
+    #             print(f'Reloaded spiketrains from {filename_out}')
+    #             do_all_spiketrains = False
+    #             self.spike_generator_model = spike_generator_model
+    #         except:
+    #             print(f'Failed to reload spiketrains from {filename_out}')
+
+    #         # If not found, keep flag do_all_spiketrains for calculating
+
+    #     if do_all_spiketrains:
+    #         all_spiketrains = []
+    #         tqdm_desc = 'Simulating ' + self.response_type + ' ' + self.gc_type + ' mosaic'
+
+    #         # TODO - Parallelize this
+    #         for cell_index in tqdm(range(len(self.gc_df)), desc=tqdm_desc):
+    #             spiketrain, _ = self.run_single_cell(cell_index, spike_generator_model=spike_generator_model)
+    #             spiketrain = spiketrain.flatten()
+
+    #             all_spiketrains.append(spiketrain)
+
+    #         # Save all_spiketrains to temporary variable for reloading
+    #         # import pdb; pdb.set_trace()
+    #         # np.savetxt(filename_out, all_spiketrains, delimiter=',')
+    #         df = pd.DataFrame({'col':all_spiketrains})
+    #         df.to_csv(path_or_buf=filename_out)
+
+    #     self.simulated_spiketrains = all_spiketrains
+
+    #     if visualize is True:
+
+    #         plt.eventplot(all_spiketrains)
+    #         plt.ylabel('Cell index')
+    #         plt.xlabel('Time [s]')
 
     def save_spikes_csv(self, filename=None):
         """
@@ -1491,23 +1634,41 @@ photons–m2s1, respectively (values indicate range across experiments).'''
 
 
 if __name__ == "__main__":
-    # mosaic = MosaicConstructor(gc_type='parasol', response_type='on', ecc_limits=[4, 6],
+    # mosaic = MosaicConstructor(gc_type='parasol', response_type='off', ecc_limits=[4, 6],
     #                            sector_limits=[-5.0, 5.0], model_density=1.0, randomize_position=0.05)
     
     # mosaic.build()
-    # mosaic.save_mosaic('testmosaic0520_on_parasol.csv')
-    testmosaic = pd.read_csv('testmosaic0520_on_parasol.csv', index_col=0)
+    # mosaic.save_mosaic('testmosaic0920_off_parasol.csv')
 
-    ret = FunctionalMosaic(testmosaic, 'parasol', 'on', stimulus_center=5+0j,
-                           stimulus_width_pix=240, stimulus_height_pix=240)
-    grating = vs.ConstructStimulus(pattern='colored_temporal_noise', stimulus_form='circular',
-                                   temporal_frequency=2.0, spatial_frequency=1.0,
-                                   duration_seconds=2.0, orientation=0, image_width=240, image_height=240,
-                                   stimulus_size=0, contrast=0.6)
+    # # mosaic = MosaicConstructor(gc_type='midget', response_type='on', ecc_limits=[4.8, 5.2],
+    # #                            sector_limits=[-0.5, 0.5], model_density=1.0, randomize_position=0.05)
     
-    grating.save_to_file(filename='most_recent_stimulus')
+    # # mosaic.build()
+    # # mosaic.save_mosaic('midget_on_ecc0p4_pol1.csv')
 
-    ret.load_stimulus(grating)
+    testmosaic = pd.read_csv('midget_on_ecc0p4_pol1.csv', index_col=0)
+
+    ret = FunctionalMosaic(testmosaic, 'midget', 'on', stimulus_center=5+0j,
+                           stimulus_width_pix=240, stimulus_height_pix=240)
+
+    # grating = vs.ConstructStimulus(pattern='colored_temporal_noise', stimulus_form='circular',
+    #                                temporal_frequency=2.0, spatial_frequency=1.0,
+    #                                duration_seconds=2.0, orientation=0, image_width=240, image_height=240,
+    #                                stimulus_size=0, contrast=0.6)
+    
+    # grating.save_to_file(filename='most_recent_stimulus')
+
+    stim = vs.ConstructStimulus(pattern='temporal_square_pattern', stimulus_form='circular',
+                                temporal_frequency=1, spatial_frequency=1.0,
+                                duration_seconds=.4, image_width=240, image_height=240,
+                                stimulus_size=1, contrast=.9, baseline_start_seconds = 1,
+                                baseline_end_seconds = 0.5, background=128, mean=128, phase_shift=0) 
+                                # on_proportion=0.05, direction='increment')
+
+    stim.save_to_file(filename='tmp')
+
+    # ret.load_stimulus(grating)
+    ret.load_stimulus(stim)
 
     # # # ret = FunctionalMosaic(testmosaic, 'parasol', 'on', stimulus_center=5+0j,
     # # #                        stimulus_width_pix=720, stimulus_height_pix=576)
@@ -1524,21 +1685,23 @@ if __name__ == "__main__":
     # ret.plot_local_michelson_contrast(0)
     # plt.show()
 
-    example_gc=40
+    example_gc=5
     # ret.convolve_stimulus(example_gc, visualize=True)
     # plt.show()
     # ret.run_single_cell(example_gc, n_trials=100, visualize=True, 
-    #                     spike_generator_model='refractory')
+    #                     spike_generator_model='poisson', save_example_data=True) # 'refractory'
     # plt.show(block = False)
 
-    ret.run_all_cells(visualize=True, spike_generator_model='refractory', reload_last=True)
+    ret.run_all_cells(visualize=True, spike_generator_model='refractory', reload_last=False)
+    plt.show(block = False)
+    ret.save_spikes_csv()
+
+    ret.show_stimulus_with_gcs(example_gc=example_gc, frame_number=101)
+    # ret.show_single_gc_view(cell_index=example_gc, frame_number=101)
     plt.show(block = False)
 
-    # ret.show_stimulus_with_gcs(example_gc=example_gc)
-    # plt.show(block = False)
-
-    ret.show_analysis(filename='my_analysis', visualize=True)
-    plt.show()
+    # ret.show_analysis(filename='my_analysis', visualize=True)
+    # plt.show()
 
 '''
 This is code for building macaque retinal filters corresponding to midget and parasol cells' responses.

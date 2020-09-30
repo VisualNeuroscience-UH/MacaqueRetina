@@ -309,6 +309,7 @@ class VideoBaseClass(object):
 
         self.options["raw_intensity"] = (np.min(self.frames), np.max(self.frames))     
 
+
 class StimulusPattern:
     '''
     Construct the stimulus images
@@ -408,7 +409,6 @@ class StimulusPattern:
         self.options["raw_intensity"] = (-1, 1)
         
         self.frames = np.zeros(self.frames.shape) + frame_time_series
-
 
     def natural_images(self, full_path_to_folder, width, height, fps, duration, spatial_band_pass=None,
                        temporal_band_pass=None, orientation=0):
@@ -758,13 +758,13 @@ if __name__ == "__main__":
                 'temporal_sine_pattern'; 'temporal_square_pattern'; 'spatially_uniform_binary_noise'
     '''
 
-    stim = ConstructStimulus(pattern='spatially_uniform_binary_noise', stimulus_form='rectangular',
-                                temporal_frequency=2, spatial_frequency=1.0,
-                                duration_seconds=1, orientation=90, image_width=240, image_height=240,
-                                stimulus_size=1, contrast=.2, baseline_start_seconds = 0.8,
-                                baseline_end_seconds = 0.2, background=128, mean=128, phase_shift=0, 
+    stim = ConstructStimulus(pattern='temporal_square_pattern', stimulus_form='circular',
+                                temporal_frequency=1, spatial_frequency=1.0,
+                                duration_seconds=.49, orientation=90, image_width=240, image_height=240,
+                                stimulus_size=1, contrast=.2, baseline_start_seconds = 0.26,
+                                baseline_end_seconds = 0.25, background=128, mean=128, phase_shift=0, 
                                 on_proportion=0.05, direction='increment')
 
-    stim.save_to_file(filename='most_recent_stimulus')
+    stim.save_to_file(filename='temporal_square_pattern_increment')
 
    
