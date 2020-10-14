@@ -102,29 +102,42 @@ class VideoBaseClass(object):
         raw_peak_to_peak = np.ptp(self.options["raw_intensity"])
 
         frames = self.frames
-        # Simo's new version
+
+        # Simo's new version, Lmin, Lmax from mean and Michelson contrast, check against 0 and intensity_max
+        # Michelson contrast = (Lmax -Lmin) / (Lmax + Lmin); mean = (Lmax + Lmin) / 2 =>
+        Lmax = mean * (contrast + 1)
+        Lmin = 2 * mean - Lmax
+        peak_to_peak = Lmax - Lmin
+        
         
         # Scale values
         # Shift to 0
         frames = frames - raw_min_value
         # Scale to 1
         frames = frames / raw_peak_to_peak
-        # Scale to final range
-        frames = frames * contrast * intensity_max
+
+        # Final scale
+        frames = frames * peak_to_peak
+
+        # Final offset
+        frames = frames + Lmin
+
+        # # Scale to final range
+        # frames = frames * contrast * intensity_max
         
-        # Scale mean
-        # Shift to 0
-        raw_mean_value  = np.mean(self.options["raw_intensity"])
-        raw_mean_value = raw_mean_value - raw_min_value
-        # Scale to 1
-        raw_mean_value = raw_mean_value / raw_peak_to_peak
-        # Scale to final range
-        scaled_mean_value = raw_mean_value * contrast * intensity_max
+        # # Scale mean
+        # # Shift to 0
+        # raw_mean_value  = np.mean(self.options["raw_intensity"])
+        # raw_mean_value = raw_mean_value - raw_min_value
+        # # Scale to 1
+        # raw_mean_value = raw_mean_value / raw_peak_to_peak
+        # # Scale to final range
+        # scaled_mean_value = raw_mean_value * contrast * intensity_max
 
-        intensity_shift_to_mean =  self.options["mean"] - scaled_mean_value
+        # intensity_shift_to_mean =  self.options["mean"] - scaled_mean_value
 
-        # Shift to final values
-        frames = frames + intensity_shift_to_mean
+        # # Shift to final values
+        # frames = frames + intensity_shift_to_mean
 
         # # Henri's version
         # # Scale to correct intensity scale
@@ -144,6 +157,7 @@ class VideoBaseClass(object):
 
         # Round result to avoid unnecessary errors
         frames = np.round(frames, 1)
+
         # Check that the values are between 0 and 255 to get correct conversion to uint8
         assert np.all(0 <= frames.flatten()) and np.all(
             frames.flatten() <= 255), f"Cannot safely convert range {np.min(frames.flatten())}- {np.max(frames.flatten())}to uint8. Check intensity/dynamic range."
@@ -761,7 +775,7 @@ if __name__ == "__main__":
     stim = ConstructStimulus(pattern='temporal_square_pattern', stimulus_form='circular',
                                 temporal_frequency=1, spatial_frequency=1.0,
                                 duration_seconds=.49, orientation=90, image_width=240, image_height=240,
-                                stimulus_size=1, contrast=.2, baseline_start_seconds = 0.26,
+                                stimulus_size=1, contrast=.2, baseline_start_seconds = 0,
                                 baseline_end_seconds = 0.25, background=128, mean=128, phase_shift=0, 
                                 on_proportion=0.05, direction='increment')
 
