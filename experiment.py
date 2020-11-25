@@ -8,6 +8,7 @@ import pandas as pd
 
 from macaque_retina import MosaicConstructor, FunctionalMosaic
 import visual_stimuli as vs
+from cxsystem2.core.tools import write_to_file, load_from_file
 
 import pdb
 
@@ -47,7 +48,6 @@ class Experiment():
         # Get conditions_idx
         conditions_metadata_idx = np.meshgrid(*[np.arange(len(v)) for v in varargs])
         conditions_metadata_idx_flat = [v.flatten() for v in conditions_metadata_idx]
-
         # Get conditions
         # list with N dicts, N = N experiments to run. Each of the N dicts contains all 
         # condition:value pairs
@@ -75,15 +75,18 @@ class Experiment():
         # Get conditions_metadata_key
         conditions_metadata_key = dict(zip(conditions_to_meshgrid, varargs))
 
-        return conditions, conditions_metadata_key, conditions_idx
+        return conditions, conditions_metadata_key, conditions_idx, conditions_metadata_idx_flat
     
-    def contrast_respose(self):
+    def contrast_respose(self, contrast_min = .98, contrast_max = .98, contrast_steps = 1):
         '''
         Setup
         '''
-        contrast_min = 0.02
-        contrast_max = .98
-        contrast_steps = 13
+        # contrast_min = 0.02
+        # contrast_max = .98
+        # contrast_steps = 13
+        # contrast_min = .98
+        # contrast_max = .98
+        # contrast_steps = 1
 
         contrasts = np.logspace(np.log10(contrast_min),np.log10(contrast_max),contrast_steps)
 
@@ -93,7 +96,8 @@ class Experiment():
 
         # means = np.logspace(np.log10(mean_min),np.log10(mean_max),mean_steps)
 
-        temporal_frequencies = np.array([1.22, 9.76, 39.1])
+        # temporal_frequencies = np.array([1.22, 9.76, 39.1])
+        temporal_frequencies = np.array([1.22])
 
         # Calculate voltage values, assuming voltage = Td
         # meshgrid with mean lum and freq
@@ -101,10 +105,10 @@ class Experiment():
         # conditions_to_meshgrid = ['contrast', 'mean', 'temporal_frequency']
         conditions_to_meshgrid = ['contrast', 'temporal_frequency']
 
-        conditions, conditions_metadata_key, conditions_idx = \
+        conditions, conditions_metadata_key, conditions_idx, conditions_metadata_idx_flat = \
             self._meshgrid_conditions(conditions_to_meshgrid, contrasts, temporal_frequencies)
                 
-        return conditions, conditions_metadata_key, conditions_idx
+        return conditions, conditions_metadata_key, conditions_idx, conditions_metadata_idx_flat
 
     def amplitude_sensitivity(self):
         '''
@@ -136,7 +140,8 @@ class Experiment():
         '''
         pass
 
-    def run(self, ret, conditions, metadata, conditions_idx, data_folder=''):
+    def run(self,   ret, conditions, metadata, conditions_idx, conditions_metadata_idx_flat, 
+                    n_trials=1, data_folder='', save_only_metadata=False):
         '''
         Unpack and run all conditions
         '''
@@ -146,16 +151,17 @@ class Experiment():
         # Test data_folder, create if missing
         os.makedirs(data_folder, exist_ok=True)
 
+
+        save_path = os.path.join(data_folder,'metadata_conditions.gz')
+        write_to_file(save_path,[metadata, conditions_idx, conditions_metadata_idx_flat])
+
+        if save_only_metadata:
+            return
+
         # Replace with input options
         for idx, input_options in enumerate(conditions):
             self._replace_options(input_options)
             stim = vs.ConstructStimulus(**self.options)
-            # TÄHÄN JÄIT: Set vs.ConstructStimulus kwargs to options, set stim save name, set response save name
-            # stim = vs.ConstructStimulus(pattern='temporal_square_pattern', stimulus_form='circular',
-            #                             temporal_frequency=1, spatial_frequency=1.0,
-            #                             duration_seconds=.4, image_width=240, image_height=240,
-            #                             stimulus_size=1, contrast=.9, baseline_start_seconds = 0.5,
-            #                             baseline_end_seconds = 0.5, background=128, mean=128, phase_shift=0)  # np.pi+(np.pi/100)
 
             stim.save_to_file(filename=os.path.join(data_folder,'Stim_' + conditions_idx[idx]))
 
@@ -165,17 +171,22 @@ class Experiment():
 
             filename = os.path.join(data_folder,'Response_' + conditions_idx[idx])
 
-            ret.run_cells(cell_index=example_gc, n_trials=1, visualize=False, save_data=True, 
-                            spike_generator_model='poisson', return_monitor=False, filename=filename) # 'refractory'
+            ret.run_cells(cell_index=example_gc, n_trials=n_trials, visualize=False, save_data=True, 
+                            spike_generator_model='poisson', return_monitor=False, filename=filename) # spike_generator_model='refractory' or 'poisson'
         
 
 if __name__ == "__main__":
 
-    cell_type = 'parasol'
-    response_type = 'off'
+    root_path = r'C:\Users\Simo\Laskenta\SimuOut'
+    # root_path = ''
+    
+    cell_type = 'midget'
+    response_type = 'on'
+
+    n_trials = 100
 
     options = {}
-    options["duration_seconds"] = 6  # seconds
+    options["duration_seconds"] = 0.4  # seconds
     options["mean"] = 128  # intensity mean
     options["contrast"] = .9
     options["image_width"] = 240  # Image width in pixels
@@ -185,7 +196,7 @@ if __name__ == "__main__":
 
 
     # Valid options sine_grating; square_grating; colored_temporal_noise; white_gaussian_noise; 
-    # natural_images; natural_video; phase_scrambled_video
+    # natural_images; natural_video; phase_scrambled_video; temporal_sine_pattern; temporal_square_pattern
     options["pattern"] = 'temporal_square_pattern'
     options["phase_shift"] = 0 # 0 - 2pi, to have grating or temporal oscillation phase shifted
     options["stimulus_form"] = 'circular'  # Valid options circular, rectangular, annulus
@@ -205,9 +216,9 @@ if __name__ == "__main__":
     options["on_proportion"]  = 0.5 # between 0 and 1, proportion of stimulus-on time
     options["direction"] = 'increment' # or 'decrement'
 
-    options["baseline_start_seconds"] = 0.5
-    options["baseline_end_seconds"] = 0.5
-    
+    options["baseline_start_seconds"] = 0.4
+    options["baseline_end_seconds"] = 0.2
+
     E=Experiment(options)
     
     # Get retina
@@ -217,10 +228,16 @@ if __name__ == "__main__":
                            stimulus_width_pix=240, stimulus_height_pix=240)
 
     # Get all conditions to run
-    conditions, metadata, idx = E.contrast_respose() 
+    conditions, metadata, idx,conditions_metadata_idx_flat = E.contrast_respose(
+        contrast_min = 0.02, 
+        contrast_max = .98, 
+        contrast_steps = 13) 
 
-    data_folder = cell_type + '_' + response_type.upper()
-    E.run(ret, conditions, metadata, idx, data_folder=data_folder)
+    # data_folder = cell_type + '_' + response_type.upper() + '_c12tf0'
+    data_folder_path = os.path.join(root_path,cell_type + '_' + response_type.upper() + '_c13')
+    # data_folder = cell_type + '_' + response_type.upper() + '_metadata'
+    E.run(  ret, conditions, metadata, idx, conditions_metadata_idx_flat, 
+            n_trials=n_trials, data_folder=data_folder_path, save_only_metadata=False)
 
 
 

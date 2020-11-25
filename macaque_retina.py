@@ -1191,6 +1191,13 @@ class FunctionalMosaic(Mathematics):
         ax.plot(tvec, signal)
         ax.set_ylim([0, 1])
 
+    def _generator_to_firing_rate(self, generator_potential):
+
+        # firing_rate = np.exp(generator_potential)
+        firing_rate = np.power(generator_potential,2)
+
+        return firing_rate
+
     def convolve_stimulus(self, cell_index, visualize=False):
         """
         Convolves the stimulus with the stimulus filter
@@ -1201,6 +1208,7 @@ class FunctionalMosaic(Mathematics):
         """
         # Get spatiotemporal filter
         spatiotemporal_filter = self.create_spatiotemporal_filter(cell_index, visualize=False)
+        # spatiotemporal_filter = self.create_spatiotemporal_filter(cell_index, visualize=True)
 
         # Get cropped stimulus
         stimulus_cropped = self.get_cropped_video(cell_index, reshape=True)
@@ -1218,6 +1226,8 @@ class FunctionalMosaic(Mathematics):
 
         tonic_drive = self.gc_df.iloc[cell_index].tonicdrive
 
+        firing_rate = self._generator_to_firing_rate(generator_potential + tonic_drive)
+
         if visualize is True:
 
             tvec = np.arange(0, len(generator_potential), 1) * video_dt
@@ -1228,7 +1238,7 @@ class FunctionalMosaic(Mathematics):
             plt.ylabel('Generator [a.u.]')
 
             plt.subplot(212)
-            plt.plot(tvec, np.exp(generator_potential + tonic_drive))
+            plt.plot(tvec, firing_rate)
             plt.xlabel('Time (s)]')
             plt.ylabel('Firing rate (Hz)]')
 
@@ -1343,8 +1353,10 @@ class FunctionalMosaic(Mathematics):
         data_to_save = {}
         for ii in range(len(spike_mons)):
             data_to_save['spikes_' + str(ii)] = []
-            data_to_save['spikes_' + str(ii)].append(spike_mons[ii].it[0].__array__())
-            data_to_save['spikes_' + str(ii)].append(spike_mons[ii].it[1].__array__())
+            # data_to_save['spikes_' + str(ii)].append(spike_mons[ii].it[0].__array__())
+            # data_to_save['spikes_' + str(ii)].append(spike_mons[ii].it[1].__array__())
+            data_to_save['spikes_' + str(ii)].append(spike_mons[ii][0])
+            data_to_save['spikes_' + str(ii)].append(spike_mons[ii][1])
         data_to_save['w_coord'] = self.w_coord
         data_to_save['z_coord'] = self.z_coord
 
@@ -1371,19 +1383,14 @@ class FunctionalMosaic(Mathematics):
         nix_fullpath = save_path + self.output_file_extension
 
         # create a new file overwriting any existing content
-        # nixfile = NixIO(filename="my_data.h5")
         nixfile = NixIO(filename=nix_fullpath)
-        # nixfile = nix.File.open(nix_fullpath, nix.FileMode.Overwrite)
-        # print(nixfile.format, nixfile.version, nixfile.created_at)
-
-        # nixfile = nix.NixIO(nix_fullpath, mode='rw')
 
         self.w_coord, self.z_coord = self._get_w_z_coords()
 
         # Prep Neo
         # Create Neo Block to contain all generated data
         block = neo.Block(name='my block with neo')
-        # block = nixfile.create_block('my block with neo', "nix.session")
+
         # Create multiple Segments corresponding to trials
         block.segments = [neo.Segment(index=i) for i in range(n_trials)]
         # Create one ChannelIndex (analog channels)
@@ -1455,9 +1462,12 @@ class FunctionalMosaic(Mathematics):
         print('Preparing generator potential...')
         generator_potential = np.zeros([self.stimulus_video.video_n_frames, n_cells])
         for idx, this_cell in enumerate(cell_index):
-            generator_potential[:, idx] = self.convolve_stimulus(this_cell)
+            generator_potential[:, idx] = self.convolve_stimulus(this_cell, visualize=False)
 
-        exp_generator_potential = np.array(np.exp(generator_potential))
+        # exp_generator_potential = np.array(np.exp(generator_potential))
+        # exp_generator_potential = generator_potential
+        exp_generator_potential = self._generator_to_firing_rate(generator_potential)
+        # exp_generator_potential = stats.norm.cdf(generator_potential)
 
         # Let's interpolate the rate to 1ms intervals
         tvec_original = np.arange(1, self.stimulus_video.video_n_frames+1) * video_dt
@@ -1522,20 +1532,22 @@ class FunctionalMosaic(Mathematics):
             spiketrains = np.array(list(spike_monitor.spike_trains().values()))
             all_spiketrains.append(spiketrains.flatten())
 
-            # Cxsystem spikemon save natively suports multiple monitors
-            spikemons.append(spike_monitor)
-
+            # Cxsystem spikemon save natively supports multiple monitors
+            # spikemons.append(spike_monitor) 
+            spikemons.append([  deepcopy(spike_monitor.it[0].__array__()), 
+                                deepcopy(spike_monitor.it[1].__array__())]) 
+        # pdb.set_trace()
 
         if save_data is True:
-            self._save_for_neo( spikemons, 
-                                n_trials,
-                                n_cells, 
-                                t_start, 
-                                t_end, 
-                                filename=filename, 
-                                analog_signal=interpolated_rates_array.flatten(),
-                                analog_step = poissongen_dt
-                                )
+            # self._save_for_neo( spikemons, 
+            #                     n_trials,
+            #                     n_cells, 
+            #                     t_start, 
+            #                     t_end, 
+            #                     filename=filename, 
+            #                     analog_signal=interpolated_rates_array.flatten(),
+            #                     analog_step = poissongen_dt
+            #                     )
 
             # # Temporary for Tomas
             self._save_for_cxsystem(spikemons, filename=filename, analog_signal=interpolated_rates_array.flatten())

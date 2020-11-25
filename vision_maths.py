@@ -1,4 +1,6 @@
 import numpy as np
+from scipy.stats import norm
+import matplotlib.pyplot as plt
 
 
 class Mathematics:
@@ -136,4 +138,23 @@ class Mathematics:
         y = self.lowpass(t, n, p1, tau1) - self.lowpass(t, n, p2, tau2)
         return y
 
+    def generator2firing(self, generator=0, visualize=True):
+        '''
+        Generator potential to firing rate by cumulative normal distribution
+        From Chichilnisky_2002_JNeurosci: 
+        The response nonlinearity N was well approximated using the lower 
+        portion of a sigmoidal function: n(x) = aG(bx + c), where
+        x is the generator signal, n(x) is the firing rate, G(x) is the 
+        cumulative normal (indefinite integral of standard normal distribution), 
+        and a, b, and c are free parameters.
+        '''
+        max_firing_rate=160 # max firing rate, plateau, demo 1
+        slope=1 # slope, demo 1
+        half_height=1 # at what generator signal is half-height, demo 0
+        firing_freq = max_firing_rate * norm.cdf(generator, loc=half_height, scale=slope)
+        if visualize==True:
+            generator=np.linspace(-3,3,num=200)
+            firing_freq = max_firing_rate * norm.cdf(generator, loc=half_height, scale=slope)
+            plt.plot(generator,firing_freq);plt.show()
+        # return firing_freq
 

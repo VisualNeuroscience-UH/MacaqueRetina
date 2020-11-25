@@ -225,12 +225,16 @@ class VideoBaseClass(object):
         # remove rounding error
         self.frames = self.frames[0:image_height, 0:image_width, :]
 
-    def _write_frames_to_videofile(self, filename):
+    def _write_frames_to_videofile(self, filename, path=None):
         '''Write frames to videofile
         '''
         # Init openCV VideoWriter
         fourcc = VideoWriter_fourcc(*self.options["codec"])
-        filename_out = './{0}.{1}'.format(filename, self.options["container"])
+        if path is not None:
+            filename_out = os.path.join(path,'{0}.{1}'.format(filename, self.options["container"]))
+        else:
+            filename_out = './{0}.{1}'.format(filename, self.options["container"])
+        
         # print(filename_out)
         video = VideoWriter(filename_out, fourcc, float(self.options["fps"]),
                             (self.options["image_width"], self.options["image_height"]),
@@ -614,15 +618,21 @@ class ConstructStimulus(VideoBaseClass):
         return stim_video_2d
 
     def save_to_file(self, filename):
-        self._write_frames_to_videofile(filename)
+
+        # Test for fullpath, is path exist, separate, and drop to _write_frames_to_videofile method.
+        path, filename_root = os.path.split(filename)
+
+        self._write_frames_to_videofile(filename_root, path = path)
 
         # save video to hdf5 file
-        filename_out = f"{filename}.hdf5"
-        save_array_to_hdf5(self.frames, filename_out)
+        filename_out = f"{filename_root}.hdf5"
+        full_path_out = os.path.join(path,filename_out)
+        save_array_to_hdf5(self.frames, full_path_out)
 
         # save options as metadata in the same format
-        filename_out_options = f"{filename}_options.hdf5"
-        save_dict_to_hdf5(self.options, filename_out_options)
+        filename_out_options = f"{filename_root}_options.hdf5"
+        full_path_out_options = os.path.join(path,filename_out_options)
+        save_dict_to_hdf5(self.options, full_path_out_options)
 
     def set_test_image(self):
         raise NotImplementedError
