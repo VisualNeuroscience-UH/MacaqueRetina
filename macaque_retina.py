@@ -25,6 +25,7 @@ import os
 from cxsystem2.core.tools import write_to_file, load_from_file
 
 import pdb
+import utilities as ut
 
 
 class MosaicConstructor(Mathematics, Visualize):
@@ -1367,9 +1368,6 @@ class FunctionalMosaic(Mathematics):
 
     def _save_for_neo(self, spike_mons, n_trials, n_cells, t_start, t_end, filename=None, analog_signal=None, analog_step=None):
 
-        # import nixio as nix    
-        # from neo.core import AnalogSignal
-
         # Save to current working dir
         if filename is None:
             save_path = os.path.join(os.getcwd(),'most_recent_spikes_neo')
@@ -1383,7 +1381,7 @@ class FunctionalMosaic(Mathematics):
         nix_fullpath = save_path + self.output_file_extension
 
         # create a new file overwriting any existing content
-        nixfile = NixIO(filename=nix_fullpath)
+        nixfile = NixIO(filename=nix_fullpath, mode='ow') # modes 'ow' overwrite, 'rw' append?, 'ro' read only
 
         self.w_coord, self.z_coord = self._get_w_z_coords()
 
@@ -1402,19 +1400,18 @@ class FunctionalMosaic(Mathematics):
 
         # Save spikes
         for idx, seg, spike_monitor in zip(range(n_trials), block.segments, spike_mons):
-            for spikes, channel_index in zip(spike_monitor.spike_trains().values(), block.channel_indexes):
+            for idx2, channel_index in enumerate(block.channel_indexes):
+                spikes = spike_monitor.spike_trains()[idx2]
                 train = neo.SpikeTrain( spikes, 
                                         t_end[idx], 
                                         t_start=t_start[idx],
                                         units='sec')
-                # train = neo.SpikeTrain( t_end, 
-                #                         t_end[idx])
                 seg.spiketrains.append(train)
                 channel_index.units[0].spiketrains.append(train)
 
-                if analog_signal is not None:
+                if analog_signal is not None and idx == 0:
                     stepsize = (analog_step / second) * pq.s
-                    analog_sigarr = neo.AnalogSignal(   analog_signal, 
+                    analog_sigarr = neo.AnalogSignal(   analog_signal[:,idx2], 
                                                     units="Hz",
                                                     t_start=t_start[idx],
                                                     sampling_period=stepsize)
@@ -1425,6 +1422,7 @@ class FunctionalMosaic(Mathematics):
 
         # close file
         nixfile.close()
+        # pdb.set_trace()
 
     def run_cells(self, cell_index=None, n_trials=1, visualize=False, save_data=False, 
                   spike_generator_model='refractory', return_monitor=False, filename=None):
@@ -1516,6 +1514,7 @@ class FunctionalMosaic(Mathematics):
         net.store()
         all_spiketrains = []
         spikemons = []
+        spikearrays = []
         t_start = []
         t_end = []
         
@@ -1533,24 +1532,25 @@ class FunctionalMosaic(Mathematics):
             all_spiketrains.append(spiketrains.flatten())
 
             # Cxsystem spikemon save natively supports multiple monitors
-            # spikemons.append(spike_monitor) 
-            spikemons.append([  deepcopy(spike_monitor.it[0].__array__()), 
-                                deepcopy(spike_monitor.it[1].__array__())]) 
-        # pdb.set_trace()
+            spikemons.append(spike_monitor) 
+            spikearrays.append([    deepcopy(spike_monitor.it[0].__array__()), 
+                                    deepcopy(spike_monitor.it[1].__array__())]) 
 
         if save_data is True:
-            # self._save_for_neo( spikemons, 
-            #                     n_trials,
-            #                     n_cells, 
-            #                     t_start, 
-            #                     t_end, 
-            #                     filename=filename, 
-            #                     analog_signal=interpolated_rates_array.flatten(),
-            #                     analog_step = poissongen_dt
-            #                     )
+            # pdb.set_trace()
+            self._save_for_neo( spikemons, 
+            # self._save_for_neo( all_spiketrains, 
+                                n_trials,
+                                n_cells, 
+                                t_start, 
+                                t_end, 
+                                filename=filename, 
+                                analog_signal=interpolated_rates_array,
+                                analog_step = poissongen_dt
+                                )
 
-            # # Temporary for Tomas
-            self._save_for_cxsystem(spikemons, filename=filename, analog_signal=interpolated_rates_array.flatten())
+            # cxsystem
+            self._save_for_cxsystem(spikearrays, filename=filename, analog_signal=interpolated_rates_array)
 
         if visualize is True:
             self._old_style_visualization_for_run_cells(n_trials, n_cells, all_spiketrains, exp_generator_potential, duration, generator_potential, video_dt, tvec_new)
@@ -1617,42 +1617,26 @@ class FunctionalMosaic(Mathematics):
 
 
 if __name__ == "__main__":
-    # mosaic = MosaicConstructor(gc_type='parasol', response_type='off', ecc_limits=[4, 6],
-    #                            sector_limits=[-5.0, 5.0], model_density=1.0, randomize_position=0.05)
+    '''
+    Build and test your retina here, one gc type at a time. Temporal hemiretina of macaques.
+    '''
+    # mosaic = MosaicConstructor(gc_type='parasol', response_type='on', ecc_limits=[4.8, 5.2],
+    #                            sector_limits=[-.4, .4], model_density=1.0, randomize_position=0.05)
     
     # mosaic.build()
-    # mosaic.save_mosaic('testmosaic0920_off_parasol.csv')
+    # mosaic.save_mosaic('parasol_on_single.csv')
 
-    # mosaic = MosaicConstructor(gc_type='parasol', response_type='on', ecc_limits=[4.4, 5.6],
-    #                            sector_limits=[-2.0, 2.0], model_density=1.0, randomize_position=0.05)
-    
-    # mosaic.build()
-    # mosaic.save_mosaic('parasol_on_poster.csv')
+    testmosaic = pd.read_csv('parasol_on_single.csv', index_col=0)
 
-    testmosaic = pd.read_csv('parasol_off_poster.csv', index_col=0)
 
-    # mosaic = MosaicConstructor(gc_type='midget', response_type='on', ecc_limits=[4.8, 5.2],
-    #                            sector_limits=[-0.5, 0.5], model_density=1.0, randomize_position=0.05)
-    
-    # # mosaic.build()
-    # # mosaic.save_mosaic('midget_on_ecc0p4_pol1.csv')
-
-    # testmosaic = pd.read_csv('midget_on_ecc0p4_pol1.csv', index_col=0)
-
-    ret = FunctionalMosaic(testmosaic, 'parasol', 'off', stimulus_center=5+0j,
+    ret = FunctionalMosaic(testmosaic, 'parasol', 'on', stimulus_center=5+0j,
                            stimulus_width_pix=240, stimulus_height_pix=240)
 
-    # grating = vs.ConstructStimulus(pattern='colored_temporal_noise', stimulus_form='circular',
-    #                                temporal_frequency=2.0, spatial_frequency=1.0,
-    #                                duration_seconds=2.0, orientation=0, image_width=240, image_height=240,
-    #                                stimulus_size=0, contrast=0.6)
-    
-    # grating.save_to_file(filename='most_recent_stimulus')
 
     stim = vs.ConstructStimulus(pattern='temporal_square_pattern', stimulus_form='circular',
-                                temporal_frequency=1, spatial_frequency=1.0,
+                                temporal_frequency=0.1, spatial_frequency=1.0, stimulus_position=(-.06, 0.03),
                                 duration_seconds=.4, image_width=240, image_height=240,
-                                stimulus_size=1, contrast=.9, baseline_start_seconds = 0.5,
+                                stimulus_size=.1, contrast=.99, baseline_start_seconds = 0.5,
                                 baseline_end_seconds = 0.5, background=128, mean=128, phase_shift=0)  # np.pi+(np.pi/100)
 
     stim.save_to_file(filename='tmp')
@@ -1660,10 +1644,6 @@ if __name__ == "__main__":
     # ret.load_stimulus(grating)
     ret.load_stimulus(stim)
 
-    # # # ret = FunctionalMosaic(testmosaic, 'parasol', 'on', stimulus_center=5+0j,
-    # # #                        stimulus_width_pix=720, stimulus_height_pix=576)
-    # ret = FunctionalMosaic(testmosaic, 'parasol', 'on', stimulus_center=5+0j,
-    #                        stimulus_width_pix=752, stimulus_height_pix=432)
     # # movie = vs.NaturalMovie('/home/henhok/nature4_orig35_fps100.avi', fps=100, pix_per_deg=60)
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)
     # ret.load_stimulus(movie)
@@ -1675,10 +1655,10 @@ if __name__ == "__main__":
     # ret.plot_local_michelson_contrast(0)
     # plt.show()
 
-    # example_gc=10 # int or 'None'
-    example_gc=None # int or 'None'
+    example_gc=2 # int or 'None'
     # ret.convolve_stimulus(example_gc, visualize=True)
     # plt.show()
+
     # ret.run_single_cell(example_gc, n_trials=100, visualize=True, 
     #                     spike_generator_model='poisson', save_example_data=True) # 'refractory'
     # plt.show(block = False)
@@ -1687,7 +1667,7 @@ if __name__ == "__main__":
 
     for filename in filenames:
 
-        ret.run_cells(cell_index=example_gc, n_trials=1, visualize=True, save_data=False, 
+        ret.run_cells(cell_index=example_gc, n_trials=200, visualize=True, save_data=False, 
                         spike_generator_model='poisson', return_monitor=False, filename=filename)
     # plt.show(block = False)
 

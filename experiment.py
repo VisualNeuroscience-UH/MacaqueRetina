@@ -153,7 +153,7 @@ class Experiment():
 
 
         save_path = os.path.join(data_folder,'metadata_conditions.gz')
-        write_to_file(save_path,[metadata, conditions_idx, conditions_metadata_idx_flat])
+        write_to_file(save_path,[metadata, conditions_idx, conditions_metadata_idx_flat, self.options])
 
         if save_only_metadata:
             return
@@ -180,10 +180,10 @@ if __name__ == "__main__":
     root_path = r'C:\Users\Simo\Laskenta\SimuOut'
     # root_path = ''
     
-    cell_type = 'midget'
+    cell_type = 'parasol'
     response_type = 'on'
 
-    n_trials = 100
+    n_trials = 10
 
     options = {}
     options["duration_seconds"] = 0.4  # seconds
@@ -200,10 +200,10 @@ if __name__ == "__main__":
     options["pattern"] = 'temporal_square_pattern'
     options["phase_shift"] = 0 # 0 - 2pi, to have grating or temporal oscillation phase shifted
     options["stimulus_form"] = 'circular'  # Valid options circular, rectangular, annulus
-    options["stimulus_position"] = (0.0, 0.0)  # Stimulus center position in degrees inside the video. (0,0) is the center.
+    options["stimulus_position"] = (-.06, 0.03)  # (0, 0) Stimulus center position in degrees inside the video. (0,0) is the center.
 
     # In degrees. Radius for circle and annulus, half-width for rectangle. 0 gives smallest distance from image borders, ie max radius
-    options["stimulus_size"] = 1.0
+    options["stimulus_size"] = .1
 
     # Init optional arguments
     options["spatial_frequency"] = 1.0
@@ -222,19 +222,24 @@ if __name__ == "__main__":
     E=Experiment(options)
     
     # Get retina
-    testmosaic = pd.read_csv(f'{cell_type}_{response_type}_poster.csv', index_col=0)
+    testmosaic = pd.read_csv(f'{cell_type}_{response_type}_single.csv', index_col=0)
 
+    # ret = FunctionalMosaic(testmosaic, cell_type, response_type, stimulus_center=5.03-0.01j,
+    #                        stimulus_width_pix=240, stimulus_height_pix=240)
     ret = FunctionalMosaic(testmosaic, cell_type, response_type, stimulus_center=5+0j,
                            stimulus_width_pix=240, stimulus_height_pix=240)
 
     # Get all conditions to run
     conditions, metadata, idx,conditions_metadata_idx_flat = E.contrast_respose(
-        contrast_min = 0.02, 
+        # contrast_min = 0.02, 
+        # contrast_max = .98, 
+        # contrast_steps = 3) 
+        contrast_min = 0.98, 
         contrast_max = .98, 
-        contrast_steps = 13) 
+        contrast_steps = 1) 
 
     # data_folder = cell_type + '_' + response_type.upper() + '_c12tf0'
-    data_folder_path = os.path.join(root_path,cell_type + '_' + response_type.upper() + '_c13')
+    data_folder_path = os.path.join(root_path,cell_type + '_' + response_type.upper() + '_c1')
     # data_folder = cell_type + '_' + response_type.upper() + '_metadata'
     E.run(  ret, conditions, metadata, idx, conditions_metadata_idx_flat, 
             n_trials=n_trials, data_folder=data_folder_path, save_only_metadata=False)
