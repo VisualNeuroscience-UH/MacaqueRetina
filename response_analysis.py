@@ -138,7 +138,7 @@ class ResponseAnalysis():
         data_df = pd.DataFrame(index=contrasts, columns=temporal_frequencies)
 
         # for this_file in filenames:
-        unit_idx = 2
+        unit_idx = 2 # Representative unit
         for cond_idx_key, idx in zip(cond_idx.keys(), cond_idx.values()):
             this_file_list = [i for i in filenames if cond_idx_key in i] 
             assert len(this_file_list) == 1, 'Not unique filename, aborting...'
@@ -201,7 +201,7 @@ if __name__ == "__main__":
     response_type = 'on'
  
     # data_folder = cell_type + '_' + response_type.upper() + '_c12tf0'
-    data_folder_path = os.path.join(root_path,cell_type + '_' + response_type.upper() + '_c13')
+    data_folder_path = os.path.join(root_path,cell_type + '_' + response_type.upper() + '_c13b')
     R = ResponseAnalysis(data_folder_path)
     R.contrast_respose()
 

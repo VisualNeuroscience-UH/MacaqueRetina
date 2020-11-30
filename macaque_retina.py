@@ -1499,9 +1499,7 @@ class FunctionalMosaic(Mathematics):
                 threshold='rand()<lambda_ttlast',
                 refractory = '(t-lastspike) < abs_refractory') # This is necessary for brian2 to generate lastspike variable. Does not affect refractory behaviour
 
-            # state_monitor = b2.StateMonitor(neuron_group, ['lambda_ttlast','w','t_diff'] , record=True)    
             spike_monitor = b2.SpikeMonitor(neuron_group)
-            # net = b2.Network(neuron_group, spike_monitor, state_monitor)
             net = b2.Network(neuron_group, spike_monitor)
 
         elif spike_generator_model=='poisson':
@@ -1520,7 +1518,6 @@ class FunctionalMosaic(Mathematics):
         
         # Run cells in parallel, trials in loop
         tqdm_desc = 'Simulating ' + self.response_type + ' ' + self.gc_type + ' mosaic'
-        # for trial, seg in tqdm(zip(range(n_trials), block.segments), desc=tqdm_desc):
         for trial in tqdm(range(n_trials), desc=tqdm_desc):
             net.restore()  # Restore the initial state
             t_start.append( (net.t / second) * pq.second)
@@ -1537,9 +1534,7 @@ class FunctionalMosaic(Mathematics):
                                     deepcopy(spike_monitor.it[1].__array__())]) 
 
         if save_data is True:
-            # pdb.set_trace()
             self._save_for_neo( spikemons, 
-            # self._save_for_neo( all_spiketrains, 
                                 n_trials,
                                 n_cells, 
                                 t_start, 
@@ -1549,7 +1544,6 @@ class FunctionalMosaic(Mathematics):
                                 analog_step = poissongen_dt
                                 )
 
-            # cxsystem
             self._save_for_cxsystem(spikearrays, filename=filename, analog_signal=interpolated_rates_array)
 
         if visualize is True:

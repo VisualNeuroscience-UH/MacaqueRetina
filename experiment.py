@@ -183,7 +183,7 @@ if __name__ == "__main__":
     cell_type = 'parasol'
     response_type = 'on'
 
-    n_trials = 10
+    n_trials = 200
 
     options = {}
     options["duration_seconds"] = 0.4  # seconds
@@ -231,15 +231,15 @@ if __name__ == "__main__":
 
     # Get all conditions to run
     conditions, metadata, idx,conditions_metadata_idx_flat = E.contrast_respose(
-        # contrast_min = 0.02, 
-        # contrast_max = .98, 
-        # contrast_steps = 3) 
-        contrast_min = 0.98, 
+        contrast_min = 0.02, 
         contrast_max = .98, 
-        contrast_steps = 1) 
+        contrast_steps = 13) 
+        # contrast_min = 0.98, 
+        # contrast_max = .98, 
+        # contrast_steps = 1) 
 
     # data_folder = cell_type + '_' + response_type.upper() + '_c12tf0'
-    data_folder_path = os.path.join(root_path,cell_type + '_' + response_type.upper() + '_c1')
+    data_folder_path = os.path.join(root_path,cell_type + '_' + response_type.upper() + '_c13b')
     # data_folder = cell_type + '_' + response_type.upper() + '_metadata'
     E.run(  ret, conditions, metadata, idx, conditions_metadata_idx_flat, 
             n_trials=n_trials, data_folder=data_folder_path, save_only_metadata=False)
