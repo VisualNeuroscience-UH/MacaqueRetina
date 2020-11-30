@@ -1384,13 +1384,13 @@ class FunctionalMosaic(Mathematics):
         nixfile = NixIO(filename=nix_fullpath, mode='ow') # modes 'ow' overwrite, 'rw' append?, 'ro' read only
 
         self.w_coord, self.z_coord = self._get_w_z_coords()
-
+        # pdb.set_trace()
         # Prep Neo
         # Create Neo Block to contain all generated data
-        block = neo.Block(name='my block with neo')
+        block = neo.Block(name=filename)
 
-        # Create multiple Segments corresponding to trials
-        block.segments = [neo.Segment(index=i) for i in range(n_trials)]
+        # # Create multiple Segments corresponding to trials
+        # block.segments = [neo.Segment(index=i) for i in range(n_trials)]
         # Create one ChannelIndex (analog channels)
         block.channel_indexes = [neo.ChannelIndex(name='C%d' % i, index=i) for i in range(n_cells)]
         # Attach one Units (cells) to each ChannelIndex
@@ -1399,23 +1399,24 @@ class FunctionalMosaic(Mathematics):
             channel_idx.index = np.array([idx])
 
         # Save spikes
-        for idx, seg, spike_monitor in zip(range(n_trials), block.segments, spike_mons):
-            for idx2, channel_index in enumerate(block.channel_indexes):
+        for idx2, channel_index in enumerate(block.channel_indexes):
+            for idx, spike_monitor in zip(range(n_trials), spike_mons):
                 spikes = spike_monitor.spike_trains()[idx2]
                 train = neo.SpikeTrain( spikes, 
                                         t_end[idx], 
                                         t_start=t_start[idx],
                                         units='sec')
-                seg.spiketrains.append(train)
+                train.name=f'Unit {idx2}, trial {idx}'
+                # seg.spiketrains.append(train)
                 channel_index.units[0].spiketrains.append(train)
 
-                if analog_signal is not None and idx == 0:
-                    stepsize = (analog_step / second) * pq.s
-                    analog_sigarr = neo.AnalogSignal(   analog_signal[:,idx2], 
-                                                    units="Hz",
-                                                    t_start=t_start[idx],
-                                                    sampling_period=stepsize)
-                    seg.analogsignals.append(analog_sigarr)
+            if analog_signal is not None:
+                stepsize = (analog_step / second) * pq.s
+                analog_sigarr = neo.AnalogSignal(   analog_signal[:,idx2], 
+                                                units="Hz",
+                                                t_start=t_start[idx],
+                                                sampling_period=stepsize)
+                channel_index.analogsignals.append(analog_sigarr)
 
         # save nix to file
         nixfile.write_block(block)

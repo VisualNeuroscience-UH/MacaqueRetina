@@ -52,7 +52,7 @@ def save_array_to_hdf5(array, filename):
     assert isinstance(array, np.ndarray), f'Cannot save {type(array)} type'
     with h5py.File(filename, 'w') as hdf5_file_handle:
         # highest compression as default     
-        dset = hdf5_file_handle.create_dataset("array", data=array, compression="gzip", compression_opts=9)     
+        dset = hdf5_file_handle.create_dataset("array", data=array, compression="gzip", compression_opts=6)     
 
 def load_array_from_hdf5(filename):
     """
