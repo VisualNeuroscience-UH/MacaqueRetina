@@ -1,8 +1,9 @@
 '''
 Analysis of retinal model ganglion cell spiking responses.
 Contrast response function: Lee_1990_JOSA
+Contrast sensitivity: Enroth-Cugell_1966_JPhysiol
 Amplitude sensitivity: Lee_1990_JOSA
-Receptive field: Shah_2020_eLife
+Receptive field: Chichilnisky_2001_Network
 Fano factor: Uzzell_2004_JNeurophysiol
 ISI analysis: : Uzzell_2004_JNeurophysiol
 Temporal correlation: Greschner_2011_JPhysiol
@@ -123,16 +124,32 @@ class ResponseAnalysis():
         '''
         filenames = self.filenames
         path = self.path
-
+        
+        '''
+        TÄHÄN JÄIT: MODULARISOI RESPONSSIANALYYSI
+        MINIMOI ASIAT JOTKA TÄYTYY VAAN TIETÄÄ
+        MAKSIMOI ASIAT JOTKA NÄKYVÄT YHDELLÄ SILMÄYKSELLÄ
+        PSEUDOCODE
+        1. YLEINEN OSA, GET METADATA, GET CONDITIONS
+        2. ALUSTA TARVITTAVAT TULOS DF:T
+        -MEAN DF
+        -PROBABILITY DISTRIBUTION
+        --GET TIME INTERVAL
+        --SET RESPONSE DYNAMIC RANGE/BIN EDGES
+        3. GET SPIKE COUNTS, SET DF VALUES
+        4. VISUALIZE DF DATA
+        '''    
+        
         # Loop files
         metadata_folder = ''
-        load_path = os.path.join(path + metadata_folder, 'metadata_conditions.gz')
+        load_path = os.path.join(path, metadata_folder, 'metadata_conditions.gz')
         metadata_conditions = load_from_file(load_path)
         # Create dict of cond_names : row_col_idxs
         row_col_idxs = np.column_stack((metadata_conditions[2][0],metadata_conditions[2][1])).tolist()
         cond_idx = dict(zip(metadata_conditions[1], row_col_idxs))
-        # Create pd.DataFrame with corresponding data, fill the data below
 
+        # Create pd.DataFrame with corresponding data, fill the data below
+        # Get conditions
         contrasts = np.round(metadata_conditions[0]['contrast'] * 100,1)
         temporal_frequencies = np.round(metadata_conditions[0]['temporal_frequency'],1)
         data_df = pd.DataFrame(index=contrasts, columns=temporal_frequencies)
@@ -148,8 +165,17 @@ class ResponseAnalysis():
             # Get spiketrains dataframe by condition
             spiketrains_df = self._get_spike_trains(fullpath)
             
+            # Get firing rate for each trial for a specified time interval
+            # -get time interval
+            # -set response dynamic range, bin edges
+            # -count spikes from time interval,
+            #separately for each trial
+            # -set df value
+            # -show joint probability distribution
+
             # Get mean spiketrains across trials
             # spiketrains_mean_df = self._get_mean_spike_trains(spiketrains_df)
+
 
             self._show_rasterplot_from_df(spiketrains_df,unit_idx=unit_idx, title=cond_idx_key)
             # pdb.set_trace()
@@ -201,7 +227,7 @@ if __name__ == "__main__":
     response_type = 'on'
  
     # data_folder = cell_type + '_' + response_type.upper() + '_c12tf0'
-    data_folder_path = os.path.join(root_path,cell_type + '_' + response_type.upper() + '_c13b')
+    data_folder_path = os.path.join(root_path,cell_type + '_' + response_type.upper() + '_c13')
     R = ResponseAnalysis(data_folder_path)
     R.contrast_respose()
 
