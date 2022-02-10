@@ -17,15 +17,15 @@ from brian2.units import *
 import apricot_fitter as apricot
 from copy import deepcopy
 from tqdm import tqdm
-import neo
-from neo.io import NixIO
+# import neo
+# from neo.io import NixIO
 # from neo.io import nixio as nix
 import quantities as pq
 import os
 from cxsystem2.core.tools import write_to_file, load_from_file
 
 import pdb
-import utilities as ut
+# import utilities as ut
 
 
 class MosaicConstructor(Mathematics, Visualize):
@@ -1366,64 +1366,64 @@ class FunctionalMosaic(Mathematics):
 
         write_to_file(save_path + self.output_file_extension, data_to_save)
 
-    def _save_for_neo(self, spike_mons, n_trials, n_cells, t_start, t_end, filename=None, analog_signal=None, analog_step=None):
+    # def _save_for_neo(self, spike_mons, n_trials, n_cells, t_start, t_end, filename=None, analog_signal=None, analog_step=None):
 
-        # Save to current working dir
-        if filename is None:
-            save_path = os.path.join(os.getcwd(),'most_recent_spikes_neo')
-        else:
-            save_path = os.path.join(os.getcwd(),filename)
+    #     # Save to current working dir
+    #     if filename is None:
+    #         save_path = os.path.join(os.getcwd(),'most_recent_spikes_neo')
+    #     else:
+    #         save_path = os.path.join(os.getcwd(),filename)
         
-        self.output_file_extension = '.h5' # NEO
+    #     self.output_file_extension = '.h5' # NEO
 
-        # Prep path
-        print(" -  Saving spikes, rgc coordinates and analog signal (if not None)...")
-        nix_fullpath = save_path + self.output_file_extension
+    #     # Prep path
+    #     print(" -  Saving spikes, rgc coordinates and analog signal (if not None)...")
+    #     nix_fullpath = save_path + self.output_file_extension
 
-        # create a new file overwriting any existing content
-        nixfile = NixIO(filename=nix_fullpath, mode='ow') # modes 'ow' overwrite, 'rw' append?, 'ro' read only
+    #     # create a new file overwriting any existing content
+    #     nixfile = NixIO(filename=nix_fullpath, mode='ow') # modes 'ow' overwrite, 'rw' append?, 'ro' read only
 
-        self.w_coord, self.z_coord = self._get_w_z_coords()
-        # pdb.set_trace()
-        # Prep Neo
-        # Create Neo Block to contain all generated data
-        block = neo.Block(name=filename)
+    #     self.w_coord, self.z_coord = self._get_w_z_coords()
+    #     # pdb.set_trace()
+    #     # Prep Neo
+    #     # Create Neo Block to contain all generated data
+    #     block = neo.Block(name=filename)
 
-        # # Create multiple Segments corresponding to trials
-        # block.segments = [neo.Segment(index=i) for i in range(n_trials)]
-        # Create one ChannelIndex (analog channels)
-        block.channel_indexes = [neo.ChannelIndex(name='C%d' % i, index=i) for i in range(n_cells)]
-        # Attach one Units (cells) to each ChannelIndex
-        for idx, channel_idx in enumerate(block.channel_indexes):
-            channel_idx.units = [neo.Unit('U%d' % i) for i in range(1)]
-            channel_idx.index = np.array([idx])
+    #     # # Create multiple Segments corresponding to trials
+    #     # block.segments = [neo.Segment(index=i) for i in range(n_trials)]
+    #     # Create one ChannelIndex (analog channels)
+    #     block.channel_indexes = [neo.ChannelIndex(name='C%d' % i, index=i) for i in range(n_cells)]
+    #     # Attach one Units (cells) to each ChannelIndex
+    #     for idx, channel_idx in enumerate(block.channel_indexes):
+    #         channel_idx.units = [neo.Unit('U%d' % i) for i in range(1)]
+    #         channel_idx.index = np.array([idx])
 
-        # Save spikes
-        for idx2, channel_index in enumerate(block.channel_indexes):
-            for idx, spike_monitor in zip(range(n_trials), spike_mons):
-                spikes = spike_monitor.spike_trains()[idx2]
-                train = neo.SpikeTrain( spikes, 
-                                        t_end[idx], 
-                                        t_start=t_start[idx],
-                                        units='sec')
-                train.name=f'Unit {idx2}, trial {idx}'
-                # seg.spiketrains.append(train)
-                channel_index.units[0].spiketrains.append(train)
+    #     # Save spikes
+    #     for idx2, channel_index in enumerate(block.channel_indexes):
+    #         for idx, spike_monitor in zip(range(n_trials), spike_mons):
+    #             spikes = spike_monitor.spike_trains()[idx2]
+    #             train = neo.SpikeTrain( spikes, 
+    #                                     t_end[idx], 
+    #                                     t_start=t_start[idx],
+    #                                     units='sec')
+    #             train.name=f'Unit {idx2}, trial {idx}'
+    #             # seg.spiketrains.append(train)
+    #             channel_index.units[0].spiketrains.append(train)
 
-            if analog_signal is not None:
-                stepsize = (analog_step / second) * pq.s
-                analog_sigarr = neo.AnalogSignal(   analog_signal[:,idx2], 
-                                                units="Hz",
-                                                t_start=t_start[idx],
-                                                sampling_period=stepsize)
-                channel_index.analogsignals.append(analog_sigarr)
+    #         if analog_signal is not None:
+    #             stepsize = (analog_step / second) * pq.s
+    #             analog_sigarr = neo.AnalogSignal(   analog_signal[:,idx2], 
+    #                                             units="Hz",
+    #                                             t_start=t_start[idx],
+    #                                             sampling_period=stepsize)
+    #             channel_index.analogsignals.append(analog_sigarr)
 
-        # save nix to file
-        nixfile.write_block(block)
+    #     # save nix to file
+    #     nixfile.write_block(block)
 
-        # close file
-        nixfile.close()
-        # pdb.set_trace()
+    #     # close file
+    #     nixfile.close()
+    #     # pdb.set_trace()
 
     def run_cells(self, cell_index=None, n_trials=1, visualize=False, save_data=False, 
                   spike_generator_model='refractory', return_monitor=False, filename=None):
@@ -1535,15 +1535,15 @@ class FunctionalMosaic(Mathematics):
                                     deepcopy(spike_monitor.it[1].__array__())]) 
 
         if save_data is True:
-            self._save_for_neo( spikemons, 
-                                n_trials,
-                                n_cells, 
-                                t_start, 
-                                t_end, 
-                                filename=filename, 
-                                analog_signal=interpolated_rates_array,
-                                analog_step = poissongen_dt
-                                )
+            # self._save_for_neo( spikemons, 
+            #                     n_trials,
+            #                     n_cells, 
+            #                     t_start, 
+            #                     t_end, 
+            #                     filename=filename, 
+            #                     analog_signal=interpolated_rates_array,
+            #                     analog_step = poissongen_dt
+            #                     )
 
             self._save_for_cxsystem(spikearrays, filename=filename, analog_signal=interpolated_rates_array)
 
