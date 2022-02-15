@@ -29,33 +29,33 @@ class AnalogInput():
     frameduration assumes milliseconds
     '''
     def __init__(   self, 
-                    Nrequested_units = 3, 
-                    Ntime = 10000, 
+                    N_units = 3, 
+                    N_tp = 10000, 
                     filename_out = 'my_video.mat', 
                     input_type = 'quadratic_oscillation',
                     coord_type = 'dummy',
-                    Ncycles = 2,
+                    N_cycles = 2,
                     frameduration = 15):
 
 
         # get Input
         if input_type == 'noise':
-            Input = self.create_noise_input(Nx = Nrequested_units, Ntime = Ntime)
+            Input = self.create_noise_input(Nx = N_units, N_tp = N_tp)
         elif input_type == 'quadratic_oscillation':
-            if Nrequested_units != 2:
+            if N_units != 2:
                 print(f'NOTE: You requested {input_type} input type, setting excessive units to 0 value')
-            Input = self.create_quadratic_oscillation_input(Nx = Nrequested_units, Ntime = Ntime, Ncycles = Ncycles)
+            Input = self.create_quadratic_oscillation_input(Nx = N_units, N_tp = N_tp, N_cycles = N_cycles)
         elif input_type == 'step_current':
-            Input = self.create_step_input(Nx = Nrequested_units, Ntime = Ntime)
+            Input = self.create_step_input(Nx = N_units, N_tp = N_tp)
         # if current_injection is True:
         #     Input = self.create_current_injection(Input)
         #     filename_out = filename_out[:-4] + '_ci.mat'
 
         # get coordinates
         if coord_type == 'dummy':
-            w_coord, z_coord = self.get_dummy_coordinates(Nx = Nrequested_units)
+            w_coord, z_coord = self.get_dummy_coordinates(Nx = N_units)
         elif coord_type == 'real':
-            w_coord, z_coord = self.get_real_coordinates(Nx = Nrequested_units)
+            w_coord, z_coord = self.get_real_coordinates(Nx = N_units)
 
         assert 'w_coord' in locals(), 'coord_type not set correctly, check __init__, aborting'
         w_coord = np.expand_dims(w_coord, 1)
@@ -85,11 +85,11 @@ class AnalogInput():
         Input = Input / max(np.ravel(Input))
         return Input
 
-    def create_noise_input(self, Nx = 0, Ntime = None):   
+    def create_noise_input(self, Nx = 0, N_tp = None):   
 
         assert Nx != 0, 'N units not set, aborting...'
-        assert Ntime is not None, 'N timepoints not set, aborting...'
-        Input=(np.random.multivariate_normal(np.zeros([Nx]), np.eye(Nx), Ntime)).T
+        assert N_tp is not None, 'N timepoints not set, aborting...'
+        Input=(np.random.multivariate_normal(np.zeros([Nx]), np.eye(Nx), N_tp)).T
 
         # Get gaussian filter, apply
         w = self._gaussian_filter()
@@ -100,37 +100,62 @@ class AnalogInput():
         return Input
 
 
-    def create_quadratic_oscillation_input(self, Nx = 0, Ntime = None, Ncycles = 0):   
+    def create_quadratic_oscillation_input(self, Nx = 0, N_tp = None, N_cycles = 0): 
+        '''
+        Creates analog oscillatory input
+
+        :param Nx: int, number of units
+        :param N_tp: int, number of time points
+        :param N_cycles: int, float or list of ints or floats, number of oscillatory cycles. Scalar value creates a quadratic pair. List enables assigning distinct frequencies to distinct channels. Every 1,3,5... unit will be sine and 2,4,6... will be cosine transformed. 
+        '''  
 
         assert Nx != 0, 'N units not set, aborting...'
-        assert Ncycles != 0, 'N cycles not set, aborting...'
-        assert Ntime is not None, 'N timepoints not set, aborting...'
+        assert N_cycles != 0, 'N cycles not set, aborting...'
+        assert N_tp is not None, 'N timepoints not set, aborting...'
 
-        freq = Ncycles * 2 * np.pi * 1/Ntime # frequency, this gives Ncycles over all time points
-        time = np.arange(Ntime)
+        tp_vector = np.arange(N_tp)
         A = 5 # Deneve project was 2000, from their Learning.py file
 
-        sine_wave = np.sin(freq * time)
-        cosine_wave = np.cos(freq * time)
-
-        if Nx > 2:
+        if isinstance(N_cycles, int) or isinstance(N_cycles, float):
+            # frequency, this gives N_cycles over all time points
+            freq = N_cycles * 2 * np.pi * 1/N_tp 
+            sine_wave = np.sin(freq * tp_vector)
+            cosine_wave = np.cos(freq * tp_vector)
             Input = A * np.array([sine_wave, cosine_wave])
-            unit_zero_input = np.zeros(sine_wave.shape)
-            stack_to_add = np.tile(unit_zero_input, (Nx - 2, 1))
-            zero_padded_input_stack = np.vstack((Input, stack_to_add))
-            Input = zero_padded_input_stack
+            if Nx > 2:
+                unit_zero_input = np.zeros(sine_wave.shape)
+                stack_to_add = np.tile(unit_zero_input, (Nx - 2, 1))
+                zero_padded_input_stack = np.vstack((Input, stack_to_add))
+                Input = zero_padded_input_stack
+        elif isinstance(N_cycles, list):
+            for index, this_Nx in enumerate(range(Nx)):
+                if index > len(N_cycles) - 1:
+                    freq = 0
+                else:
+                    freq = N_cycles[this_Nx] * 2 * np.pi * 1/N_tp
+
+                if index % 2 == 0:
+                    oscillations = np.sin(freq * tp_vector)
+                else:
+                    oscillations = np.cos(freq * tp_vector)
+                    if freq == 0:
+                        oscillations = oscillations * 0
+                if 'Input' not in locals():
+                    Input = A * np.array([oscillations])
+                else:
+                    Input = np.vstack((Input, A * np.array([oscillations])))
 
         return Input
 
-    def create_step_input(self, Nx = 0, Ntime = None):   
+    def create_step_input(self, Nx = 0, N_tp = None):   
 
         assert Nx != 0, 'N units not set, aborting...'
-        assert Ntime is not None, 'N timepoints not set, aborting...'
+        assert N_tp is not None, 'N timepoints not set, aborting...'
 
         # Create your input here. Zeros and ones at this point.
         # Create matrix of zeros with shape of Input
-        Input = (np.concatenate((np.zeros((Ntime//3,), dtype=int), np.ones((Ntime//3), dtype=int), np.zeros((Ntime//3), dtype=int)), axis=None))
-        Input = (np.concatenate((Input, np.zeros((Ntime-np.size((Input),0),), dtype=int)), axis=None))
+        Input = (np.concatenate((np.zeros((N_tp//3,), dtype=int), np.ones((N_tp//3), dtype=int), np.zeros((N_tp//3), dtype=int)), axis=None))
+        Input = (np.concatenate((Input, np.zeros((N_tp-np.size((Input),0),), dtype=int)), axis=None))
         Input = (np.tile(Input.T, (Nx,1)))
 
         A = 5 # Amplification, Units = ?
@@ -178,7 +203,7 @@ class AnalogInput():
                                    stimulus_width_pix=240, stimulus_height_pix=240)
         w_coord, z_coord = FunctionalMosaic._get_w_z_coords(ret)
 
-        # Get random sample sized Nrequested_units, assert for too small sample
+        # Get random sample sized N_units, assert for too small sample
 
         Nmosaic_units = w_coord.size
         assert Nx <= Nmosaic_units, 'Too few units in mosaic, increase ecc and / or sector limits in get_real_coordinates method'
@@ -208,23 +233,27 @@ if __name__ == "__main__":
     if sys.platform == 'linux':
         root_path = r'/opt3/Laskenta/Models/Deneve/in'
     elif sys.platform == 'win32':
-        root_path = r'C:\Users\Simo\Laskenta\SimuOut\Deneve\Replica_test\Replica_in'
+        root_path = r'C:\Users\Simo\Laskenta\Models\VenDor\in'
 
-    for idx in np.arange(5,20):
-        # filename_out = 'input_noise_210408.mat'
-        filename_out = f'noise_210916_SingleSpike_{str(idx)}.mat'
-        full_filename_out = os.path.join(root_path, filename_out)
-        Nrequested_units = 3
-        Ntime = 20000
-        input_type = 'noise' # 'quadratic_oscillation' or 'noise' or 'step_current'
-        Ncycles = 4
-        dt = 0.1 # IMPORTANT: assuming milliseconds
+    # for idx in np.arange(5,20):
+    #     filename_out = f'noise_210916_SingleSpike_{str(idx)}.mat'
 
-        AnalogInput(
-            Nrequested_units = Nrequested_units, 
-            Ntime = Ntime, 
-            filename_out = full_filename_out, 
-            input_type = input_type,
-            Ncycles = Ncycles,
-            frameduration = dt)
+
+    filename_out = 'input_quadratic_oscillation_220215.mat'
+    full_filename_out = os.path.join(root_path, filename_out)
+    N_units = 6
+    N_tp = 20000
+    input_type = 'quadratic_oscillation' # 'quadratic_oscillation' or 'noise' or 'step_current'
+    N_cycles = [4, 4, 0, 0, 0, 0] # Scalar provides two units at quadrature, other units are zero. List of ints/floats provides separate freq to each. Ignored for noise.
+    dt = 0.1 # IMPORTANT: assuming milliseconds
+
+
+    AnalogInput(
+        N_units = N_units, 
+        N_tp = N_tp, 
+        filename_out = full_filename_out, 
+        input_type = input_type,
+        N_cycles = N_cycles,
+        frameduration = dt)
+
 
