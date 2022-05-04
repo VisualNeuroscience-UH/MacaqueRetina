@@ -235,25 +235,25 @@ if __name__ == "__main__":
     elif sys.platform == 'win32':
         root_path = r'C:\Users\Simo\Laskenta\Models\VenDor\in'
 
-    # for idx in np.arange(5,20):
-    #     filename_out = f'noise_210916_SingleSpike_{str(idx)}.mat'
+    for idx in np.arange(0,20):
+        filename_out = f'noise_220309_{idx:02}.mat'
 
 
-    filename_out = 'input_quadratic_oscillation_220215.mat'
-    full_filename_out = os.path.join(root_path, filename_out)
-    N_units = 6
-    N_tp = 20000
-    input_type = 'quadratic_oscillation' # 'quadratic_oscillation' or 'noise' or 'step_current'
-    N_cycles = [4, 4, 0, 0, 0, 0] # Scalar provides two units at quadrature, other units are zero. List of ints/floats provides separate freq to each. Ignored for noise.
-    dt = 0.1 # IMPORTANT: assuming milliseconds
+        # filename_out = 'input_quadratic_oscillation_220215.mat'
+        full_filename_out = os.path.join(root_path, filename_out)
+        N_units = 6
+        N_tp = 20000
+        input_type = 'noise' # 'quadratic_oscillation' or 'noise' or 'step_current'
+        N_cycles = [4, 4, 0, 0, 0, 0] # Scalar provides two units at quadrature, other units are zero. List of ints/floats provides separate freq to each. Ignored for noise.
+        dt = 0.1 # IMPORTANT: assuming milliseconds
 
 
-    AnalogInput(
-        N_units = N_units, 
-        N_tp = N_tp, 
-        filename_out = full_filename_out, 
-        input_type = input_type,
-        N_cycles = N_cycles,
-        frameduration = dt)
+        AnalogInput(
+            N_units = N_units, 
+            N_tp = N_tp, 
+            filename_out = full_filename_out, 
+            input_type = input_type,
+            N_cycles = N_cycles,
+            frameduration = dt)
 
 

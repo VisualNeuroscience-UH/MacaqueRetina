@@ -103,7 +103,7 @@ class Visualize:
         for index in np.arange(n_distributions):
             ax = axes[index]
 
-            bin_values, foo, foo2 = ax.hist(ydata[:, index], bins=20, density=True);
+            bin_values, foo, foo2 = ax.hist(ydata[:, index], bins=20, density=True)
 
             if model_fit_data != None:  # Assumes tuple of arrays, see below
                 x_model_fit, y_model_fit = model_fit_data[0], model_fit_data[1]

@@ -10,16 +10,15 @@ from pathlib import Path
 import visual_stimuli as vs
 from visualize import Visualize
 from vision_maths import Mathematics
-from scipy.signal import fftconvolve, convolve
+from scipy.signal import convolve
 from scipy.interpolate import interp1d
 import brian2 as b2
 from brian2.units import *
 import apricot_fitter as apricot
 from copy import deepcopy
 from tqdm import tqdm
-import neo
-from neo.io import NixIO
-# from neo.io import nixio as nix
+# import neo
+# from neo.io import NixIO
 import quantities as pq
 import os
 from cxsystem2.core.tools import write_to_file, load_from_file
@@ -75,7 +74,7 @@ class MosaicConstructor(Mathematics, Visualize):
         elif all([gc_type == 'midget', response_type == 'off']):
             self.gc_proportion = proportion_of_midget_gc_type * proportion_of_OFF_response_type * model_density
         else:
-            print('Unkown ganglion cell type, aborting')
+            print('Unknown ganglion cell type, aborting')
             sys.exit()
 
         self.gc_type = gc_type
@@ -366,7 +365,7 @@ class MosaicConstructor(Mathematics, Visualize):
             matrix_eccentricity_randomized_all = np.append(matrix_eccentricity_randomized_all,
                                                            matrix_eccentricity_randomized.flatten())
 
-            assert true_n_cells == len(matrix_eccentricity_randomized.flatten()), "N cells dont match, check the code"
+            assert true_n_cells == len(matrix_eccentricity_randomized.flatten()), "N cells don't match, check the code"
             gc_eccentricity_group_index = np.append(gc_eccentricity_group_index,
                                                     np.ones(true_n_cells) * eccentricity_group_index)
 
@@ -1366,64 +1365,64 @@ class FunctionalMosaic(Mathematics):
 
         write_to_file(save_path + self.output_file_extension, data_to_save)
 
-    def _save_for_neo(self, spike_mons, n_trials, n_cells, t_start, t_end, filename=None, analog_signal=None, analog_step=None):
+    # def _save_for_neo(self, spike_mons, n_trials, n_cells, t_start, t_end, filename=None, analog_signal=None, analog_step=None):
 
-        # Save to current working dir
-        if filename is None:
-            save_path = os.path.join(os.getcwd(),'most_recent_spikes_neo')
-        else:
-            save_path = os.path.join(os.getcwd(),filename)
+    #     # Save to current working dir
+    #     if filename is None:
+    #         save_path = os.path.join(os.getcwd(),'most_recent_spikes_neo')
+    #     else:
+    #         save_path = os.path.join(os.getcwd(),filename)
         
-        self.output_file_extension = '.h5' # NEO
+    #     self.output_file_extension = '.h5' # NEO
 
-        # Prep path
-        print(" -  Saving spikes, rgc coordinates and analog signal (if not None)...")
-        nix_fullpath = save_path + self.output_file_extension
+    #     # Prep path
+    #     print(" -  Saving spikes, rgc coordinates and analog signal (if not None)...")
+    #     nix_fullpath = save_path + self.output_file_extension
 
-        # create a new file overwriting any existing content
-        nixfile = NixIO(filename=nix_fullpath, mode='ow') # modes 'ow' overwrite, 'rw' append?, 'ro' read only
+    #     # create a new file overwriting any existing content
+    #     nixfile = NixIO(filename=nix_fullpath, mode='ow') # modes 'ow' overwrite, 'rw' append?, 'ro' read only
 
-        self.w_coord, self.z_coord = self._get_w_z_coords()
-        # pdb.set_trace()
-        # Prep Neo
-        # Create Neo Block to contain all generated data
-        block = neo.Block(name=filename)
+    #     self.w_coord, self.z_coord = self._get_w_z_coords()
+    #     # pdb.set_trace()
+    #     # Prep Neo
+    #     # Create Neo Block to contain all generated data
+    #     block = neo.Block(name=filename)
 
-        # # Create multiple Segments corresponding to trials
-        # block.segments = [neo.Segment(index=i) for i in range(n_trials)]
-        # Create one ChannelIndex (analog channels)
-        block.channel_indexes = [neo.ChannelIndex(name='C%d' % i, index=i) for i in range(n_cells)]
-        # Attach one Units (cells) to each ChannelIndex
-        for idx, channel_idx in enumerate(block.channel_indexes):
-            channel_idx.units = [neo.Unit('U%d' % i) for i in range(1)]
-            channel_idx.index = np.array([idx])
+    #     # # Create multiple Segments corresponding to trials
+    #     # block.segments = [neo.Segment(index=i) for i in range(n_trials)]
+    #     # Create one ChannelIndex (analog channels)
+    #     block.channel_indexes = [neo.ChannelIndex(name='C%d' % i, index=i) for i in range(n_cells)]
+    #     # Attach one Units (cells) to each ChannelIndex
+    #     for idx, channel_idx in enumerate(block.channel_indexes):
+    #         channel_idx.units = [neo.Unit('U%d' % i) for i in range(1)]
+    #         channel_idx.index = np.array([idx])
 
-        # Save spikes
-        for idx2, channel_index in enumerate(block.channel_indexes):
-            for idx, spike_monitor in zip(range(n_trials), spike_mons):
-                spikes = spike_monitor.spike_trains()[idx2]
-                train = neo.SpikeTrain( spikes, 
-                                        t_end[idx], 
-                                        t_start=t_start[idx],
-                                        units='sec')
-                train.name=f'Unit {idx2}, trial {idx}'
-                # seg.spiketrains.append(train)
-                channel_index.units[0].spiketrains.append(train)
+    #     # Save spikes
+    #     for idx2, channel_index in enumerate(block.channel_indexes):
+    #         for idx, spike_monitor in zip(range(n_trials), spike_mons):
+    #             spikes = spike_monitor.spike_trains()[idx2]
+    #             train = neo.SpikeTrain( spikes, 
+    #                                     t_end[idx], 
+    #                                     t_start=t_start[idx],
+    #                                     units='sec')
+    #             train.name=f'Unit {idx2}, trial {idx}'
+    #             # seg.spiketrains.append(train)
+    #             channel_index.units[0].spiketrains.append(train)
 
-            if analog_signal is not None:
-                stepsize = (analog_step / second) * pq.s
-                analog_sigarr = neo.AnalogSignal(   analog_signal[:,idx2], 
-                                                units="Hz",
-                                                t_start=t_start[idx],
-                                                sampling_period=stepsize)
-                channel_index.analogsignals.append(analog_sigarr)
+    #         if analog_signal is not None:
+    #             stepsize = (analog_step / second) * pq.s
+    #             analog_sigarr = neo.AnalogSignal(   analog_signal[:,idx2], 
+    #                                             units="Hz",
+    #                                             t_start=t_start[idx],
+    #                                             sampling_period=stepsize)
+    #             channel_index.analogsignals.append(analog_sigarr)
 
-        # save nix to file
-        nixfile.write_block(block)
+    #     # save nix to file
+    #     nixfile.write_block(block)
 
-        # close file
-        nixfile.close()
-        # pdb.set_trace()
+    #     # close file
+    #     nixfile.close()
+    #     # pdb.set_trace()
 
     def run_cells(self, cell_index=None, n_trials=1, visualize=False, save_data=False, 
                   spike_generator_model='refractory', return_monitor=False, filename=None):
@@ -1478,7 +1477,7 @@ class FunctionalMosaic(Mathematics):
         # Identical rates array for every trial; rows=time, columns=cell index
         inst_rates = b2.TimedArray(interpolated_rates_array * Hz, poissongen_dt)
 
-        # Cells in parallel (NG), trial iterations (repreated runs)
+        # Cells in parallel (NG), trial iterations (repeated runs)
         if spike_generator_model=='refractory':
             # Create Brian NeuronGroup
             # calculate probability of firing for current timebin (eg .1 ms)
@@ -1498,7 +1497,7 @@ class FunctionalMosaic(Mathematics):
                 w = t_diff**p_exp / (t_diff**p_exp + rel_refractory**p_exp) : 1
                 ''',
                 threshold='rand()<lambda_ttlast',
-                refractory = '(t-lastspike) < abs_refractory') # This is necessary for brian2 to generate lastspike variable. Does not affect refractory behaviour
+                refractory = '(t-lastspike) < abs_refractory') # This is necessary for brian2 to generate lastspike variable. Does not affect refractory behavior
 
             spike_monitor = b2.SpikeMonitor(neuron_group)
             net = b2.Network(neuron_group, spike_monitor)
@@ -1684,7 +1683,7 @@ We keep modular code structure, to be able to add new features at later phase.
 The cone photoreceptor sampling is approximated as achromatic (single) compressive cone response(Baylor_1987_JPhysiol).
 
 Visual angle ( A) in degrees from previous studies (Croner and Kaplan, 1995) was approksimated with relation 5 deg/mm.
-This works fine up to 20 deg ecc, but undesestimates the distance thereafter. If more peripheral representations are later
+This works fine up to 20 deg ecc, but underestimates the distance thereafter. If more peripheral representations are later
 necessary, the millimeters should be calculates by inverting the inverting the relation 
 A = 0.1 + 4.21E + 0.038E^2 (Drasdo and Fowler, 1974; Dacey and Petersen, 1992)
 
@@ -1703,7 +1702,7 @@ difference-of-Gaussians model. The original spike triggered averaging RGC data i
 described in Chichilnisky_2001_Network, Chichilnisky_2002_JNeurosci; Field_2010_Nature.
 
 Chichilnisky_2002_JNeurosci states that L-ON (parasol) cells have on average 21% larger RFs than L-OFF cells. 
-He also shows that OFF cells have more nonlinear response to input, which is not implemented currently (a no-brainer to imeplement 
+He also shows that OFF cells have more nonlinear response to input, which is not implemented currently (a no-brainer to implement 
 if necessary).
 
 NOTE: bad cell indices hard coded from Chichilnisky apricot data. For another data set, visualize fits, and change the bad cells.
@@ -1712,7 +1711,7 @@ NOTE: If eccentricity stays under 20 deg, dendritic diameter data fitted up to 2
 -center-surround response ratio (in vivo, anesthetized, recorded from LGN; Croner_1995_VisRes) PC: ; MC: ;
 -Michelson contrast definition for sinusoidal gratings (Croner_1995_VisRes).
 -Optical quality probably poses no major limit to behaviorally measured spatial vision (Williams_1981_IOVS).
--spatial contrast sensitivity nonlinearity in the center subunits is omitted. This might reduce senstivity to natural scenes Turner_2018_eLife.
+-spatial contrast sensitivity nonlinearity in the center subunits is omitted. This might reduce sensitivity to natural scenes Turner_2018_eLife.
 
 -quality control: compare to Watanabe_1989_JCompNeurol
     -dendritic diameter scatter is on average (lower,upper quartile) 21.3% of the median diameter in the local area
