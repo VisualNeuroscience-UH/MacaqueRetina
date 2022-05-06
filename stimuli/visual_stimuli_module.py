@@ -511,10 +511,33 @@ class ConstructStimulus(VideoBaseClass):
     '''
     Create stimulus video and save
     '''
+    _properties_list = [
+    "path",
+    "output_folder",
+    ]
 
-    def __init__(self, **kwargs):
+
+    def __init__(self, context, data_io):
+        # super(ConstructStimulus, self).__init__()
+        super().__init__()
+
+        self._context = context.set_context(self._properties_list)
+        self._data_io = data_io
+
+    @property
+    def context(self):
+        return self._context
+
+    @property
+    def data_io(self):
+        return self._data_io
+
+
+
+    def make_stimulus_video(self, **kwargs):
         '''
         Format: my_video_object.main(filename, keyword1=value1, keyword2=value2,...)
+
 
         Valid input keyword arguments include
 
@@ -563,7 +586,6 @@ class ConstructStimulus(VideoBaseClass):
         Output: stimulus video file
         '''
 
-        super(ConstructStimulus, self).__init__()
 
         # Set input arguments to video-object, updates the defaults from VideoBaseClass
         print("Making a stimulus with the following properties:")
@@ -609,7 +631,6 @@ class ConstructStimulus(VideoBaseClass):
         self.video_width_deg = self.video_width / self.pix_per_deg
         self.video_height_deg = self.video_height / self.pix_per_deg
 
-
     def _create_frames(self, epoch__in_seconds):
         # Create frames for the requested duration in sec 
         frames = np.ones((self.options["image_height"], self.options["image_width"],
@@ -633,12 +654,12 @@ class ConstructStimulus(VideoBaseClass):
         # save video to hdf5 file
         filename_out = f"{filename_root}.hdf5"
         full_path_out = os.path.join(path,filename_out)
-        DataIO.save_array_to_hdf5(self.frames, full_path_out)
+        self.data_io.save_array_to_hdf5(self.frames, full_path_out)
 
         # save options as metadata in the same format
         filename_out_options = f"{filename_root}_options.hdf5"
         full_path_out_options = os.path.join(path,filename_out_options)
-        DataIO.save_dict_to_hdf5(self.options, full_path_out_options)
+        self.data_io.save_dict_to_hdf5(self.options, full_path_out_options)
 
     def set_test_image(self):
         raise NotImplementedError
@@ -780,21 +801,21 @@ class Operator:
             plt.show()
 
 
-if __name__ == "__main__":
-    # NaturalMovie('/home/henhok/nature4_orig35_slowed.avi', fps=100, pix_per_deg=60)
-    ''' pattern:
-                'sine_grating'; 'square_grating'; 'colored_temporal_noise'; 'white_gaussian_noise';
-                'natural_images'; 'phase_scrambled_images'; 'natural_video'; 'phase_scrambled_video';
-                'temporal_sine_pattern'; 'temporal_square_pattern'; 'spatially_uniform_binary_noise'
-    '''
+# if __name__ == "__main__":
+    # # NaturalMovie('/home/henhok/nature4_orig35_slowed.avi', fps=100, pix_per_deg=60)
+    # ''' pattern:
+    #             'sine_grating'; 'square_grating'; 'colored_temporal_noise'; 'white_gaussian_noise';
+    #             'natural_images'; 'phase_scrambled_images'; 'natural_video'; 'phase_scrambled_video';
+    #             'temporal_sine_pattern'; 'temporal_square_pattern'; 'spatially_uniform_binary_noise'
+    # '''
 
-    stim = ConstructStimulus(pattern='temporal_square_pattern', stimulus_form='circular',
-                                temporal_frequency=1, spatial_frequency=1.0,
-                                duration_seconds=.49, orientation=90, image_width=240, image_height=240,
-                                stimulus_size=1, contrast=.2, baseline_start_seconds = 0,
-                                baseline_end_seconds = 0.25, background=128, mean=128, phase_shift=0, 
-                                on_proportion=0.05, direction='increment')
+    # stim = ConstructStimulus(pattern='temporal_square_pattern', stimulus_form='circular',
+    #                             temporal_frequency=1, spatial_frequency=1.0,
+    #                             duration_seconds=.49, orientation=90, image_width=240, image_height=240,
+    #                             stimulus_size=1, contrast=.2, baseline_start_seconds = 0,
+    #                             baseline_end_seconds = 0.25, background=128, mean=128, phase_shift=0, 
+    #                             on_proportion=0.05, direction='increment')
 
-    stim.save_to_file(filename='temporal_square_pattern_increment')
+    # stim.save_to_file(filename='temporal_square_pattern_increment')
 
    

@@ -11,7 +11,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Local
-from macaque_retina import MosaicConstructor, FunctionalMosaic
+from construct.macaque_retina_module import MosaicConstructor, FunctionalMosaic
 from stimuli import visual_stimuli_module as vs
 from cxsystem2.core.tools import write_to_file, load_from_file
 

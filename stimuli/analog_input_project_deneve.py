@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 # Local
 # import utilities as ut
 # from system_utilities import SystemUtilities as ut
-from project.macaque_retina import MosaicConstructor, FunctionalMosaic
+from construct.macaque_retina_module import MosaicConstructor, FunctionalMosaic
 
 # Builtin
 import os
