@@ -3,9 +3,9 @@ import numpy as np
 import pandas as pd
 
 # Comput Neurosci
-import neo
-import quantities as pq
-import elephant
+# import neo
+# import quantities as pq
+# import elephant
 
 # Viz
 import matplotlib.pyplot as plt

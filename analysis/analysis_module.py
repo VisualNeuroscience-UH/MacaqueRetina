@@ -17,7 +17,7 @@ import pandas as pd
 
 # Comput Neurosci
 import neo
-import quantities as pq
+# import quantities as pq
 # from neo.io import NixIO
 # import elephant as el
 import brian2.units as b2u 
@@ -56,7 +56,7 @@ class ResponseAnalysis():
 
     def _show_rasterplot(self, spiketrain_list, title):
         for i, spiketrain in enumerate(spiketrain_list):
-            t = spiketrain.rescale(pq.ms)
+            t = spiketrain.rescale(b2u.ms)
             plt.plot(t, i * np.ones_like(t), 'k.', markersize=2)
         plt.axis('tight')
         plt.xlim(0, 7000)
@@ -69,7 +69,7 @@ class ResponseAnalysis():
     def _show_rasterplot_from_df(self, spiketrain_df, unit_idx=0,title=''):
         # pdb.set_trace()
         # for i, spiketrain in enumerate(spiketrain_list):
-        #     t = spiketrain.rescale(pq.ms)
+        #     t = spiketrain.rescale(b2u.ms)
         #     plt.plot(t, i * np.ones_like(t), 'k.', markersize=2)
         plt.figure()
         unit_data_df = spiketrain_df.loc[spiketrain_df['unit_idx'] == unit_idx]

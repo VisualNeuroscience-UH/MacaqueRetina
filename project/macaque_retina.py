@@ -14,10 +14,10 @@ from tqdm import tqdm
 
 #Comput Neurosci
 import brian2 as b2
-from brian2.units import *
+import brian2.units as b2u
 # import neo
 # from neo.io import NixIO
-import quantities as pq
+# import quantities as pq
 
 # Local
 import utilities as ut # Where is this coming from?
@@ -1143,7 +1143,7 @@ class FunctionalMosaic(Mathematics):
         midpoint_ix = (self.spatial_filter_sidelen - 1) // 2
         signal = stimulus_cropped[midpoint_ix, midpoint_ix, :]
 
-        video_dt = (1 / self.stimulus_video.fps) * second
+        video_dt = (1 / self.stimulus_video.fps) * b2u.second
         tvec = np.arange(0, len(signal)) * video_dt
 
         ax = ax or plt.gca()
@@ -1166,9 +1166,9 @@ class FunctionalMosaic(Mathematics):
         for t in range(n_frames):
             frame_mean = np.mean(stimulus_cropped[:,:,t])
             squared_sum = np.sum((stimulus_cropped[:,:,t] - frame_mean)**2)
-            signal[t] = np.sqrt(1/(frame_mean**2 * s**2) * squared_sum)
+            signal[t] = np.sqrt(1/(frame_mean**2 * b2u.s**2) * squared_sum)
 
-        video_dt = (1 / self.stimulus_video.fps) * second
+        video_dt = (1 / self.stimulus_video.fps) * b2u.second
         tvec = np.arange(0, len(signal)) * video_dt
 
         ax = ax or plt.gca()
@@ -1193,7 +1193,7 @@ class FunctionalMosaic(Mathematics):
             frame_max = np.max(stimulus_cropped[:, :, t])
             signal[t] = (frame_max-frame_min)/(frame_max+frame_min)
 
-        video_dt = (1 / self.stimulus_video.fps) * second
+        video_dt = (1 / self.stimulus_video.fps) * b2u.second
         tvec = np.arange(0, len(signal)) * video_dt
 
         ax = ax or plt.gca()
@@ -1228,8 +1228,8 @@ class FunctionalMosaic(Mathematics):
 
         # Add some padding to the beginning so that stimulus time and generator potential time match
         # (First time steps of stimulus are not convolved)
-        video_dt = (1 / self.stimulus_video.fps) * second
-        n_padding = int(self.data_filter_duration*ms / video_dt - 1) # constant 49, comes from Apricot dataset. This might not be correct for short stimulus. Check SV 13.10.2020
+        video_dt = (1 / self.stimulus_video.fps) * b2u.second
+        n_padding = int(self.data_filter_duration * b2u.ms / video_dt - 1) # constant 49, comes from Apricot dataset. This might not be correct for short stimulus. Check SV 13.10.2020
         generator_potential = np.pad(generator_potential, (n_padding, 0),
                                      mode='constant', constant_values=0)
 
@@ -1277,7 +1277,7 @@ class FunctionalMosaic(Mathematics):
         plt.subplot(211)
         # plt.eventplot(spiketrains)
         plt.eventplot(for_eventplot)
-        plt.xlim([0, duration/second])
+        plt.xlim([0, duration / b2u.second])
         # plt.ylabel('Trials')
         plt.ylabel(sample_name)
 
@@ -1286,16 +1286,16 @@ class FunctionalMosaic(Mathematics):
         tvec = np.arange(0, len(generator_potential), 1) * video_dt
         # plt.plot(tvec, exp_generator_potential.flatten(), label='Generator')
         plt.plot(tvec, for_generatorplot, label='Generator')
-        plt.xlim([0, duration / second])
+        plt.xlim([0, duration / b2u.second])
 
         # Compute average firing rate over trials (should approximately follow generator)
-        hist_dt = 1*ms
+        hist_dt = 1 * b2u.ms
         # n_bins = int((duration/hist_dt))
-        bin_edges = np.append(tvec_new, [duration/second])  # Append the rightmost edge
+        bin_edges = np.append(tvec_new, [duration/ b2u.second])  # Append the rightmost edge
         # hist, _ = np.histogram(spiketrains_flat, bins=bin_edges)
         hist, _ = np.histogram(for_histogram, bins=bin_edges)
-        # avg_fr = hist / n_trials / (hist_dt / second)
-        avg_fr = hist / n_samples / (hist_dt / second)
+        # avg_fr = hist / n_trials / (hist_dt / b2u.second)
+        avg_fr = hist / n_samples / (hist_dt / b2u.second)
 
         xsmooth = np.arange(-15, 15+1)
         smoothing = stats.norm.pdf(xsmooth, scale=5)  # Gaussian smoothing with SD=5 ms
@@ -1315,14 +1315,14 @@ class FunctionalMosaic(Mathematics):
         #     # plt.plot(state_monitor.t, state_monitor.v[50])
         #     plt.plot(state_monitor.t, state_monitor.lambda_ttlast[cell_index])
 
-        #     plt.xlim([0, duration/second])
+        #     plt.xlim([0, duration / b2u.second])
         #     plt.ylabel('lambda_ttlast')
 
         #     plt.subplot(212)
         #     # Plot the generator and the average firing rate
         #     # plt.plot(state_monitor.t, state_monitor.ref[50])
         #     plt.plot(state_monitor.t, state_monitor.w[cell_index])
-        #     plt.xlim([0, duration / second])
+        #     plt.xlim([0, duration / b2u.second])
         #     plt.ylabel('w')
 
         #     plt.xlabel('Time (s)')
@@ -1419,7 +1419,7 @@ class FunctionalMosaic(Mathematics):
     #             channel_index.units[0].spiketrains.append(train)
 
     #         if analog_signal is not None:
-    #             stepsize = (analog_step / second) * pq.s
+    #             stepsize = (analog_step / b2u.second) * pq.s
     #             analog_sigarr = neo.AnalogSignal(   analog_signal[:,idx2], 
     #                                             units="Hz",
     #                                             t_start=t_start[idx],
@@ -1450,9 +1450,9 @@ class FunctionalMosaic(Mathematics):
         # Save spike generation model
         self.spike_generator_model = spike_generator_model
 
-        video_dt = (1 / self.stimulus_video.fps) * second
+        video_dt = (1 / self.stimulus_video.fps) * b2u.second
         duration = self.stimulus_video.video_n_frames * video_dt
-        poissongen_dt = 1.0 * ms
+        poissongen_dt = 1.0 * b2u.ms
 
         # Run all cells
         if cell_index is None:
@@ -1484,7 +1484,7 @@ class FunctionalMosaic(Mathematics):
         interpolated_rates_array = rates_func(tvec_new)  # This needs to be 2D array for Brian!
 
         # Identical rates array for every trial; rows=time, columns=cell index
-        inst_rates = b2.TimedArray(interpolated_rates_array * Hz, poissongen_dt)
+        inst_rates = b2.TimedArray(interpolated_rates_array * b2u.Hz, poissongen_dt)
 
         # Cells in parallel (NG), trial iterations (repeated runs)
         if spike_generator_model=='refractory':
@@ -1495,8 +1495,8 @@ class FunctionalMosaic(Mathematics):
             # Recovery function from Berry_1998_JNeurosci, Uzzell_2004_JNeurophysiol
             # abs and rel refractory estimated from Uzzell_2004_JNeurophysiol, 
             # Fig 7B, bottom row, inset. Parasol ON cell
-            abs_refractory = 1 * ms
-            rel_refractory = 3 * ms
+            abs_refractory = 1 * b2u.ms
+            rel_refractory = 3 * b2u.ms
             p_exp = 4
             neuron_group = b2.NeuronGroup(
                 n_cells, 
@@ -1529,9 +1529,9 @@ class FunctionalMosaic(Mathematics):
         tqdm_desc = 'Simulating ' + self.response_type + ' ' + self.gc_type + ' mosaic'
         for trial in tqdm(range(n_trials), desc=tqdm_desc):
             net.restore()  # Restore the initial state
-            t_start.append( (net.t / second) * pq.second)
+            t_start.append( (net.t / b2u.second) * b2u.second) # pq => b2u
             net.run(duration)
-            t_end.append( (net.t / second) * pq.second)
+            t_end.append( (net.t / b2u.second) * b2u.second)
 
             # for old visualization
             spiketrains = np.array(list(spike_monitor.spike_trains().values()))
