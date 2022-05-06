@@ -63,8 +63,6 @@ class Mathematics:
 
         return model_fit.ravel()
 
-
-
     def DoG2D_fixed_surround(self, xy_tuple, amplitudec, xoc, yoc, semi_xc, semi_yc, orientation_center, amplitudes,
                              sur_ratio, offset):
         '''
@@ -96,7 +94,6 @@ class Mathematics:
 
         return model_fit.ravel()
 
-
     def DoG2D_fixed_double_surround(self, xy_tuple, xoc, yoc, semi_xc, semi_yc, orientation_center, amplitudes):
         """
         DoG model with the angle of orientation and center positions identical and diameter of the surround
@@ -104,7 +101,6 @@ class Mathematics:
         """
 
         raise NotImplementedError
-
 
     def sector2area(self, radius, angle):  # Calculate sector area. Angle in deg, radius in mm
         pi = np.pi
