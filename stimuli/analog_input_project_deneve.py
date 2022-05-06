@@ -1,25 +1,25 @@
-# External
+# Numerical
+import numpy as np
 import scipy.io as sio
 import pandas as pd
-import numpy as np
+
+# Viz
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-# Builtin
-import os
-
-# Own
+# Local
 # import utilities as ut
 # from system_utilities import SystemUtilities as ut
+from project.macaque_retina import MosaicConstructor, FunctionalMosaic
 
-# Construction
-import time
+# Builtin
+import os
+# import time
 import sys
 import pdb
 
 # sys.path.append(r'C:\Users\Simo\Laskenta\Git_Repos\MacaqueRetina_Git') # temp
-sys.path.append(r'/opt2/Laskenta_ssd/Git_Repos/MacaqueRetina') # temp
-from macaque_retina import MosaicConstructor, FunctionalMosaic
+# sys.path.append(r'/opt2/Laskenta_ssd/Git_Repos/MacaqueRetina') # temp # INACT SV 220506
 
 
 class AnalogInput():

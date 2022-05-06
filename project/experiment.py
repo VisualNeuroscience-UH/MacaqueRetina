@@ -1,16 +1,23 @@
-import neo
-import quantities as pq
-import os
-import elephant
+# Analysis
 import numpy as np
-import matplotlib.pyplot as plt
 import pandas as pd
 
+# Comput Neurosci
+import neo
+import quantities as pq
+import elephant
+
+# Viz
+import matplotlib.pyplot as plt
+
+# Local
 from macaque_retina import MosaicConstructor, FunctionalMosaic
-import visual_stimuli as vs
+from stimuli import visual_stimuli_module as vs
 from cxsystem2.core.tools import write_to_file, load_from_file
 
+# Builtin
 import pdb
+import os
 
 class Experiment():
     '''
@@ -101,7 +108,7 @@ class Experiment():
 
         # Calculate voltage values, assuming voltage = Td
         # meshgrid with mean lum and freq
-        #Return conditions -- a dict with all keywords matching visual_stimuli.ConstructStimulus
+        #Return conditions -- a dict with all keywords matching visual_stimuli_module.ConstructStimulus
         # conditions_to_meshgrid = ['contrast', 'mean', 'temporal_frequency']
         conditions_to_meshgrid = ['contrast', 'temporal_frequency']
 
@@ -171,7 +178,7 @@ class Experiment():
 
             filename = os.path.join(data_folder,'Response_' + conditions_idx[idx])
 
-            ret.run_cells(cell_index=example_gc, n_trials=n_trials, visualize=False, save_data=True, 
+            ret.run_cells(cell_index=example_gc, n_trials=n_trials, viz_module=False, save_data=True, 
                             spike_generator_model='poisson', return_monitor=False, filename=filename) # spike_generator_model='refractory' or 'poisson'
         
 
