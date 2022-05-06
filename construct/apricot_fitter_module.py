@@ -21,7 +21,7 @@ from matplotlib.patches import Ellipse
 from tqdm import tqdm
 
 # Local
-from viz.viz_module import Visualize
+from viz.viz_module import Viz
 from vision_math.vision_math_module import Mathematics
 
 # Builtin
@@ -291,7 +291,7 @@ class ApricotData:
             return mean_filter
 
 
-class ApricotFits(ApricotData, Visualize, Mathematics):
+class ApricotFits(ApricotData, Viz, Mathematics):
     """
     Methods for deriving spatial receptive field parameters from the apricot dataset (Field_2010)
     """

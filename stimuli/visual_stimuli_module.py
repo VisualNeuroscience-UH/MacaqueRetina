@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 # import skimage
 
 # Local
-from data_io.data_io_module import save_dict_to_hdf5, load_dict_from_hdf5, save_array_to_hdf5, load_array_from_hdf5
+from data_io.data_io_module import DataIO 
 
 # Builtin
 import os
@@ -633,12 +633,12 @@ class ConstructStimulus(VideoBaseClass):
         # save video to hdf5 file
         filename_out = f"{filename_root}.hdf5"
         full_path_out = os.path.join(path,filename_out)
-        save_array_to_hdf5(self.frames, full_path_out)
+        DataIO.save_array_to_hdf5(self.frames, full_path_out)
 
         # save options as metadata in the same format
         filename_out_options = f"{filename_root}_options.hdf5"
         full_path_out_options = os.path.join(path,filename_out_options)
-        save_dict_to_hdf5(self.options, full_path_out_options)
+        DataIO.save_dict_to_hdf5(self.options, full_path_out_options)
 
     def set_test_image(self):
         raise NotImplementedError

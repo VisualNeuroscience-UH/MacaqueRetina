@@ -18,12 +18,12 @@ import brian2.units as b2u
 # import neo
 # from neo.io import NixIO
 # import quantities as pq
-
+ 
 # Local
 import utilities as ut # Where is this coming from?
 from cxsystem2.core.tools import write_to_file, load_from_file
 from construct import apricot_fitter_module as apricot
-from viz.viz_module import Visualize
+from viz.viz_module import Viz
 from stimuli import visual_stimuli_module as vs
 from vision_math.vision_math_module import Mathematics
 
@@ -35,7 +35,7 @@ from copy import deepcopy
 import pdb
 
 
-class MosaicConstructor(Mathematics, Visualize):
+class MosaicConstructor(Mathematics, Viz):
     '''
     Create the ganglion cell mosaic.
     All spatial parameters are saved to the dataframe *gc_df*

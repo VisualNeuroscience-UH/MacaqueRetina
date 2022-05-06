@@ -16,10 +16,52 @@ import os
 import sys
 import pdb
 
-class Visualize:
+class Viz:
     '''
     Methods to viz_module the retina
     '''
+    cmap = "gist_earth"  # viridis or cividis would be best for color-blind
+    _properties_list = [
+        "path",
+        "output_folder",
+    ]
+
+    def __init__(self, context, data_io, ana, **kwargs) -> None:
+
+        self._context = context.set_context(self._properties_list)
+        self._data_io = data_io
+        self._ana = ana
+
+        for attr, value in kwargs.items():
+            setattr(self, attr, value)
+
+    @property
+    def context(self):
+        return self._context
+
+    @property
+    def data_io(self):
+        return self._data_io
+
+    @property
+    def ana(self):
+        return self._ana
+
+
+    def data_is_valid(self, data, accept_empty=False):
+
+        try:
+            data = data / data.get_best_unit()
+        except:
+            pass
+
+        if accept_empty == True:
+            is_valid = isinstance(data, np.ndarray)
+        else:
+            is_valid = isinstance(data, np.ndarray) and data.size > 0
+
+        return is_valid
+
 
     def show_gc_positions_and_density(self, rho, phi, gc_density_func_params):
         '''

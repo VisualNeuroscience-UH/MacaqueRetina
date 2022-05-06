@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 # Comput Neurosci
-import neo
+# import neo
 # import quantities as pq
 # from neo.io import NixIO
 # import elephant as el
@@ -24,6 +24,7 @@ import brian2.units as b2u
 
 # Local
 from cxsystem2.core.tools import write_to_file, load_from_file
+from analysis.analysis_base_module import AnalysisBase
 
 # Builtin
 import pdb
@@ -31,28 +32,41 @@ import pdb
 import os
 
 
-class ResponseAnalysis():
+class Analysis(AnalysisBase):
 
-    def __init__(self, path):
-        '''
-        '''
-        # Check if folder exists
-        fullpath = os.path.join(path)
-        assert os.path.isdir(fullpath), f'Did not find {fullpath}'
+    # self.context. attributes
+    _properties_list = [
+        "path",
+        "output_folder",
+        "input_filename",
+    ]
+    def __init__(self, context, data_io, **kwargs) -> None:
 
-        # Get filenames for path
-        file_prefix = 'Response'
-        file_extension = 'gz' # 'gz' , 'h5'
-        file_type = 'cxsystem' # 'cxsystem', 'nix'
-        filenames = []
-        with os.scandir(fullpath) as it:
-            for entry in it:
-                if  entry.name.startswith(file_prefix) and entry.name.endswith(file_extension):
-                    filenames.append(entry.name)
+        self._context = context.set_context(self._properties_list)
+        self._data_io = data_io
 
-        self.path = path
-        self.filenames = filenames
-        self.file_type = file_type
+        for attr, value in kwargs.items():
+            setattr(self, attr, value)
+
+        # # Get filenames for path
+        # file_prefix = 'Response'
+        # file_extension = 'gz' # 'gz' , 'h5'
+        # file_type = 'cxsystem' # 'cxsystem', 'nix'
+
+        # filenames_all_responses = self.data_io.listdir_loop(self.context.path, substring=file_prefix)
+        # filenames = [f for f in filenames_all_responses if f.endswith(file_extension)]
+
+        # self.filenames = filenames
+        # self.file_type = file_type
+
+    @property
+    def context(self):
+        return self._context
+
+    @property
+    def data_io(self):
+        return self._data_io
+
 
     def _show_rasterplot(self, spiketrain_list, title):
         for i, spiketrain in enumerate(spiketrain_list):
@@ -80,7 +94,6 @@ class ResponseAnalysis():
         plt.ylabel('Spike Train Index', fontsize=16)
         plt.gca().tick_params(axis='both', which='major', labelsize=14)
         plt.title(title)
-        # plt.show()
 
     def _get_spike_trains(self, fullpath):
         '''
@@ -117,17 +130,11 @@ class ResponseAnalysis():
 
         return spiketrains_df
 
-    # def _get_mean_spike_trains(self, spiketrains_df):
-
-    #     pdb.set_trace()
-    #     spiketrains_df.groupby(['trial']).mean()
-    #     return spiketrains_mean_df
-
     def contrast_respose(self):
         '''
         '''
         filenames = self.filenames
-        path = self.path
+        path = self.context.path
         
         '''
         TÄHÄN JÄIT: MODULARISOI RESPONSSIANALYYSI
@@ -187,9 +194,6 @@ class ResponseAnalysis():
         plt.show()
         csv_save_path = os.path.join(path + metadata_folder, 'contrast_df.csv')
         data_df.to_csv(csv_save_path)
-        # pdb.set_trace()
-
-        
 
     def amplitude_sensitivity(self):
         '''
@@ -222,7 +226,6 @@ class ResponseAnalysis():
         pass
 
 
-
 if __name__ == "__main__":
 
     root_path = r'C:\Users\Simo\Laskenta\SimuOut'
@@ -232,7 +235,7 @@ if __name__ == "__main__":
  
     # data_folder = cell_type + '_' + response_type.upper() + '_c12tf0'
     data_folder_path = os.path.join(root_path,cell_type + '_' + response_type.upper() + '_c13')
-    R = ResponseAnalysis(data_folder_path)
+    R = Analysis(data_folder_path)
     R.contrast_respose()
 
     

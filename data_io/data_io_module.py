@@ -1,83 +1,274 @@
-# Numerical
-import numpy as np
-
-# IO
-import h5py
-
 # Builtin
+from pathlib import Path
 import os
+import zlib
+import pickle
+import logging
 import pdb
 
+# io tools from common packages
+import scipy.io as sio
+import scipy.sparse as scprs
+import pandas as pd
+import h5py
 
-def save_dict_to_hdf5(dic, filename):
-    """
-    Save a dictionary to hdf5 file.
-    :param dic: dictionary to save
-    :param filename: hdf5 file name
-    """
-    with h5py.File(filename, 'w') as h5file:
-        _recursively_save_dict_contents_to_group(h5file, '/', dic)
+# io tools from cxsystem
+from cxsystem2.core.tools import write_to_file, load_from_file
 
-def _recursively_save_dict_contents_to_group(h5file, path, dic):
+# This package
+from data_io.data_io_base_module import DataIOBase
+from context.context_module import Context
 
-    for key, item in dic.items():
-        if isinstance(item, (np.ndarray, np.int64, np.float64, str, bytes, int, tuple, float)):
-            h5file[path + key] = item
-        elif isinstance(item, dict):
-            _recursively_save_dict_contents_to_group(h5file, path + key + '/', item)
-        elif item is None:
-            h5file[path + key] = ''
+
+class DataIO(DataIOBase):
+
+    # self.context. attributes
+    _properties_list = ["path", "input_folder", "output_folder"]
+
+    def __init__(self, context) -> None:
+
+        self.context = context.set_context(self._properties_list)
+
+        # Attach cxsystem2 methods
+        self.write_to_file = write_to_file
+        self.load_from_file = load_from_file
+
+        # Attach other methods/packages
+        self.savemat = sio.savemat
+        self.csr_matrix = scprs.csr_matrix
+
+    @property
+    def context(self):
+        return self._context
+
+    @context.setter
+    def context(self, value):
+        if isinstance(value, Context):
+            self._context = value
         else:
-            raise ValueError('Cannot save %s type'%type(item))
+            raise AttributeError(
+                "Trying to set improper context. Context must be a context object."
+            )
 
-def load_dict_from_hdf5(filename):
-    '''
-    Load a dictionary from hdf5 file.
-    :param filename: hdf5 file name
-    '''
-    with h5py.File(filename, 'r') as h5file:
-        return _recursively_load_dict_contents_from_group(h5file, '/')
+    def _check_cadidate_file(self, path, filename):
+        candidate_data_fullpath_filename = Path.joinpath(path, filename)
+        if candidate_data_fullpath_filename.is_file():
+            data_fullpath_filename = candidate_data_fullpath_filename
+            return data_fullpath_filename
+        else:
+            return None
 
-def _recursively_load_dict_contents_from_group(h5file, path):
+    def listdir_loop(self, path, substring=None, exclude_substring=None):
+        """
+        Find files and folders in path with key substring substring and exclusion substring exclude_substring
+        """
+        files = []
+        for f in Path.iterdir(path):
+            if substring is not None and exclude_substring is not None:
+                if (
+                    substring.lower() in f.as_posix().lower()
+                    and exclude_substring.lower() not in f.as_posix().lower()
+                ):
+                    files.append(f)
+            elif substring is not None and exclude_substring is None:
+                if substring.lower() in f.as_posix().lower():
+                    files.append(f)
+            elif substring is None and exclude_substring is not None:
+                if exclude_substring.lower() not in f.as_posix().lower():
+                    files.append(f)
+            else:
+                files.append(f)
 
-    ans = {}
-    for key, item in h5file[path].items():
-        if isinstance(item, h5py._hl.dataset.Dataset):
-            ans[key] = item.value
-        elif isinstance(item, h5py._hl.group.Group):
-            ans[key] = _recursively_load_dict_contents_from_group(h5file, path + key + '/')
-    return ans
+        paths = [Path.joinpath(path, basename) for basename in files]
 
-def save_array_to_hdf5(array, filename):
-    '''
-    Save a numpy array to hdf5 file.
-    :param array: numpy array to save
-    :param filename: hdf5 file name
-    '''
-    assert isinstance(array, np.ndarray), f'Cannot save {type(array)} type'
-    with h5py.File(filename, 'w') as hdf5_file_handle:
-        # highest compression as default     
-        dset = hdf5_file_handle.create_dataset("array", data=array, compression="gzip", compression_opts=6)     
+        return paths
 
-def load_array_from_hdf5(filename):
-    '''
-    Load a numpy array from hdf5 file.
-    :param filename: hdf5 file name
-    '''
+    def most_recent(self, path, substring=None, exclude_substring=None):
 
-    with h5py.File(filename, 'r') as hdf5_file_handle:
-       array = hdf5_file_handle['array'][...]
-    return array
-    
-if __name__ == '__main__':
+        paths = self.listdir_loop(path, substring, exclude_substring)
 
-    data = {'x': 'astring',
-            'y': np.arange(10),
-            'd': {'z': np.ones((2,3)),
-                  'b': b'bytestring'}}
-    print(data)
-    filename = 'test.h5'
-    save_dict_to_hdf5(data, filename)
-    dd = load_dict_from_hdf5(filename)
-    print(dd)
-    # should test for bad type
+        if not paths:
+            return None
+        else:
+            data_fullpath_filename = max(paths, key=os.path.getmtime)
+            return data_fullpath_filename
+
+    def parse_path(self, filename, substring=None, exclude_substring=None):
+        """
+        This function returns full path to either given filename or to most recently
+        updated file of given substring (a.k.a. containing key substring in filename).
+        Note that the substring can be timestamp.
+        """
+        data_fullpath_filename = None
+        path = self.context.path
+        input_folder = self.context.input_folder
+        output_folder = self.context.output_folder
+
+        if output_folder is not None:
+            output_path = Path.joinpath(path, output_folder)
+        else:
+            # Set current path if run separately from project
+            output_path = Path.joinpath(path, "./")
+        if input_folder is not None:
+            input_path = Path.joinpath(path, input_folder)
+        else:
+            input_path = Path.joinpath(path, "./")
+
+        # Check first for direct load in current directory. E.g. for direct ipython testing
+        if filename:
+            data_fullpath_filename = self._check_cadidate_file(Path("./"), filename)
+
+            # Next check direct load in output path, input path and project path in this order
+            if not data_fullpath_filename:
+                data_fullpath_filename = self._check_cadidate_file(
+                    output_path, filename
+                )
+            if not data_fullpath_filename:
+                data_fullpath_filename = self._check_cadidate_file(input_path, filename)
+            if not data_fullpath_filename:
+                data_fullpath_filename = self._check_cadidate_file(path, filename)
+
+        # Parse substring next in project/input and project paths
+        elif substring is not None:
+            # Parse output folder for given substring
+            data_fullpath_filename = self.most_recent(
+                output_path, substring=substring, exclude_substring=exclude_substring
+            )
+            if not data_fullpath_filename:
+                # Check for substring first in input folder
+                data_fullpath_filename = self.most_recent(
+                    input_path, substring=substring, exclude_substring=exclude_substring
+                )
+            if not data_fullpath_filename:
+                # Check for substring next in project folder
+                data_fullpath_filename = self.most_recent(
+                    path, substring=substring, exclude_substring=exclude_substring
+                )
+
+        assert (
+            data_fullpath_filename is not None
+        ), f"I Could not find file {filename}, aborting..."
+
+        return data_fullpath_filename
+
+    def get_data(
+        self,
+        filename=None,
+        substring=None,
+        exclude_substring=None,
+        return_filename=False,
+        full_path=None,
+    ):
+        """
+        Open requested file and get data.
+        :param filename: str, filename
+        :param substring: str, keyword in filename
+        :param exclude_substring: str, exclusion keyword, exclude_substring despite substring keyword in filename
+        """
+
+        if full_path is None:
+            if substring is not None:
+                substring = substring.lower()
+            # Explore which is the most recent file in path of substring and add full path to filename
+            data_fullpath_filename = self.parse_path(
+                filename, substring=substring, exclude_substring=exclude_substring
+            )
+        else:
+            if isinstance(full_path, str):
+                full_path = Path(full_path)
+            assert (
+                full_path.is_file()
+            ), f"Full path: {full_path} given, but such file does not exist, aborting..."
+            data_fullpath_filename = full_path
+
+        # Open file by extension type
+        filename_extension = data_fullpath_filename.suffix
+        if "gz" in filename_extension or "pkl" in filename_extension:
+            try:
+                fi = open(data_fullpath_filename, "rb")
+                data_pickle = zlib.decompress(fi.read())
+                data = pickle.loads(data_pickle)
+            except:
+                with open(data_fullpath_filename, "rb") as data_pickle:
+                    data = pickle.load(data_pickle)
+        elif "mat" in filename_extension:
+            data = {}
+            sio.loadmat(data_fullpath_filename, data)
+        elif "csv" in filename_extension:
+            data = pd.read_csv(data_fullpath_filename)
+            if "Unnamed: 0" in data.columns:
+                data = data.drop(["Unnamed: 0"], axis=1)
+        else:
+            raise TypeError("U r trying to input unknown filetype, aborting...")
+
+        print(f"Loaded file {data_fullpath_filename}")
+        # Check for existing loggers (python builtin, called from other modules, such as the run_script.py)
+        if logging.getLogger().hasHandlers():
+            logging.info(f"Loaded file {data_fullpath_filename}")
+
+        if return_filename is True:
+            return data, data_fullpath_filename
+        else:
+            return data
+
+
+    def save_dict_to_hdf5(self, dic, filename):
+        """
+        Save a dictionary to hdf5 file.
+        :param dic: dictionary to save
+        :param filename: hdf5 file name
+        """
+        with h5py.File(filename, 'w') as h5file:
+            self._recursively_save_dict_contents_to_group(h5file, '/', dic)
+
+    def _recursively_save_dict_contents_to_group(self, h5file, path, dic):
+
+        for key, item in dic.items():
+            if isinstance(item, (np.ndarray, np.int64, np.float64, str, bytes, int, tuple, float)):
+                h5file[path + key] = item
+            elif isinstance(item, dict):
+                self._recursively_save_dict_contents_to_group(h5file, path + key + '/', item)
+            elif item is None:
+                h5file[path + key] = ''
+            else:
+                raise ValueError('Cannot save %s type'%type(item))
+
+    def load_dict_from_hdf5(self, filename):
+        '''
+        Load a dictionary from hdf5 file.
+        :param filename: hdf5 file name
+        '''
+        with h5py.File(filename, 'r') as h5file:
+            return self._recursively_load_dict_contents_from_group(h5file, '/')
+
+    def _recursively_load_dict_contents_from_group(self, h5file, path):
+
+        ans = {}
+        for key, item in h5file[path].items():
+            if isinstance(item, h5py._hl.dataset.Dataset):
+                ans[key] = item.value
+            elif isinstance(item, h5py._hl.group.Group):
+                ans[key] = self._recursively_load_dict_contents_from_group(h5file, path + key + '/')
+        return ans
+
+    def save_array_to_hdf5(self, array, filename):
+        '''
+        Save a numpy array to hdf5 file.
+        :param array: numpy array to save
+        :param filename: hdf5 file name
+        '''
+        assert isinstance(array, np.ndarray), f'Cannot save {type(array)} type'
+        with h5py.File(filename, 'w') as hdf5_file_handle:
+            # highest compression as default     
+            dset = hdf5_file_handle.create_dataset("array", data=array, compression="gzip", compression_opts=6)     
+
+    def load_array_from_hdf5(self, filename):
+        '''
+        Load a numpy array from hdf5 file.
+        :param filename: hdf5 file name
+        '''
+
+        with h5py.File(filename, 'r') as hdf5_file_handle:
+            array = hdf5_file_handle['array'][...]
+        return array
+        
