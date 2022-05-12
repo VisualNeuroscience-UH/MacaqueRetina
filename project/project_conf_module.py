@@ -1,5 +1,6 @@
 # Numeric
 import pandas as pd
+import numpy as np
 
 # Visualization
 import matplotlib.pyplot as plt
@@ -14,7 +15,7 @@ import pdb
 # This computer git repos
 from project.project_manager_module import ProjectManager
 
-'''
+"""
 This is code for building macaque retinal filters corresponding to midget and parasol cells' responses.
 We keep modular code structure, to be able to add new features at later phase.
 
@@ -57,7 +58,7 @@ NOTE: If eccentricity stays under 20 deg, dendritic diameter data fitted up to 2
     Parasol dendritic field diameter: temporal retina 51.8 microm + ecc(mm) * 20.6 microm/mm,
     nasal retina; 115.5 microm + ecc(mm) * 6.97 microm/mm
 
-'''
+"""
 
 """
 Use keyword substring "file" in filenames, and "folder" in foldernames to assert that they are turned into pathlib objects. Path structure is assumed to be root_path/project/experiment/output_folder
@@ -77,7 +78,7 @@ param : parameter
 Main paths in different operating systems
 """
 if sys.platform == "linux":
-    root_path = "/opt3/Laskenta/Models" # pikkuveli
+    root_path = "/opt3/Laskenta/Models"  # pikkuveli
     # root_path = "/opt2/Laskenta_ssd/Models"  # isosisko
 elif sys.platform == "win32":
     root_path = r"C:\Users\Simo\Laskenta\Models"
@@ -86,7 +87,7 @@ elif sys.platform == "win32":
 """
 Project name
 """
-project = "Retina"  
+project = "Retina"
 
 """
 Current experiment
@@ -102,7 +103,7 @@ path = Path.joinpath(Path(root_path), Path(project), experiment)
 """
 Input context
 """
-input_folder = "in"
+input_folder = "../in"
 
 """
 Data context for single files and arrays. These midpoint and parameter strings are used only in this module.
@@ -110,6 +111,14 @@ Data context for single files and arrays. These midpoint and parameter strings a
 
 output_folder = "out"
 
+my_retina = {
+    "mosaic_file_name" : "parasol_on_single.csv",
+}
+
+stimulus_video_name = "tmp.avi"
+'''
+TÄHÄN JÄIT. OLIT TEKEMÄSSÄ IO MUUTOKSIA JA YLLÄ OLEVA AVI FILE EI TALLENNU
+'''
 
 
 profile = False
@@ -131,49 +140,75 @@ if __name__ == "__main__":
         output_folder=output_folder,
         project=project,
         experiment=experiment,
+        retina = my_retina,
     )
+
+
+
+    #################################
+    ### Get image ###
+    #################################
+
+    """
+    """
+    # PM.cones.sample_image(image_file_name="testi.jpg")
+    # PM.viz.show_cone_response(PM.cones.image, PM.cones.image_after_optics, PM.cones.cone_response)
 
     #################################
     ### Build retina ###
     #################################
 
-    '''
+    """
     Build and test your retina here, one gc type at a time. Temporal hemiretina of macaques.
-    '''
-    mosaic = PM.construct.MosaicConstructor(gc_type='parasol', response_type='on', ecc_limits=[4.8, 5.2],
-                               sector_limits=[-.4, .4], model_density=1.0, randomize_position=0.05)
-    
-    mosaic.build()
-    mosaic.save_mosaic('parasol_on_single.csv')
+    """
+    # mosaic = PM.construct.MosaicConstructor(
+    #     gc_type="parasol",
+    #     response_type="on",
+    #     ecc_limits=[4.8, 5.2],
+    #     sector_limits=[-0.4, 0.4],
+    #     model_density=1.0,
+    #     randomize_position=0.05,
+    # )
 
-    testmosaic = pd.read_csv('parasol_on_single.csv', index_col=0)
+    # mosaic.build()
+    # mosaic.save_mosaic("parasol_on_single.csv")
+
+    testmosaic = pd.read_csv("parasol_on_single.csv", index_col=0)
+
+    ret = PM.construct.FunctionalMosaic(
+        testmosaic,
+        "parasol",
+        "on",
+        stimulus_center=5 + 0j,
+        stimulus_width_pix=240,
+        stimulus_height_pix=240,
+    )
 
 
-    ret = PM.construct.FunctionalMosaic(testmosaic, 'parasol', 'on', stimulus_center=5+0j,
-                           stimulus_width_pix=240, stimulus_height_pix=240)
+    PM.stimulate.make_stimulus_video(
+        pattern="temporal_square_pattern",
+        stimulus_form="circular",
+        temporal_frequency=0.1,
+        spatial_frequency=1.0,
+        stimulus_position=(-0.06, 0.03),
+        duration_seconds=0.4,
+        image_width=240,
+        image_height=240,
+        stimulus_size=0.1,
+        contrast=0.99,
+        baseline_start_seconds=0.5,
+        baseline_end_seconds=0.5,
+        background=128,
+        mean=128,
+        phase_shift=0,
+        stimulus_video_name=stimulus_video_name, # If empty, does not save the video
+    )
 
-
-    '''
-    TÄHÄN JÄIT: VAIHTOEHTOINA ON NOUDATTAA SYSTEMTOOLS MALLIA JA TEHDÄ PM MANAGERI JOKA HALLITSEE KOMPLEKSISUUDEN
-    TAI SITTEN TEHDÄ TÄSSÄ OBJEKTEJA JA KUTSUA NIIDEN MENETELMIÄ. ÄKKISELTÄÄN JÄLKIMMÄINEN VAIKUTTAA SELKEÄMMÄLTÄ, MUTTA
-    JOSTAIN SYYSTÄ SIITÄ ST KOHDALLA LUOVUIT.
-    '''
-    
-    PM.stimulate.make_stimulus_video(pattern='temporal_square_pattern', stimulus_form='circular',
-                                temporal_frequency=0.1, spatial_frequency=1.0, stimulus_position=(-.06, 0.03),
-                                duration_seconds=.4, image_width=240, image_height=240,
-                                stimulus_size=.1, contrast=.99, baseline_start_seconds = 0.5,
-                                baseline_end_seconds = 0.5, background=128, mean=128, phase_shift=0)
-    # stim = PM.stimulate.ConstructStimulus(pattern='temporal_square_pattern', stimulus_form='circular',
-    #                             temporal_frequency=0.1, spatial_frequency=1.0, stimulus_position=(-.06, 0.03),
-    #                             duration_seconds=.4, image_width=240, image_height=240,
-    #                             stimulus_size=.1, contrast=.99, baseline_start_seconds = 0.5,
-    #                             baseline_end_seconds = 0.5, background=128, mean=128, phase_shift=0)  # np.pi+(np.pi/100)
-
-    PM.stimulate.save_to_file(filename='tmp')
+    exit()
 
     # ret.load_stimulus(grating)
-    ret.load_stimulus(stim)
+    # ret.load_stimulus(stim)
+    ret.load_stimulus(PM.stimulate)
 
     # # movie = vs.NaturalMovie('/home/henhok/nature4_orig35_fps100.avi', fps=100, pix_per_deg=60)
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)
@@ -186,21 +221,28 @@ if __name__ == "__main__":
     # ret.plot_local_michelson_contrast(0)
     # plt.show()
 
-    example_gc=2 # int or 'None'
+    example_gc = 2  # int or 'None'
     # ret.convolve_stimulus(example_gc, viz_module=True)
     # plt.show()
 
-    # ret.run_single_cell(example_gc, n_trials=100, viz_module=True, 
+    # ret.run_single_cell(example_gc, n_trials=100, viz_module=True,
     #                     spike_generator_model='poisson', save_example_data=True) # 'refractory'
     # plt.show(block = False)
 
-    filenames = [f'Response_foo_{x}' for x in np.arange(1)]
+    filenames = [f"Response_foo_{x}" for x in np.arange(1)]
 
     for filename in filenames:
 
-        ret.run_cells(cell_index=example_gc, n_trials=200, viz_module=True, save_data=False, 
-                        spike_generator_model='poisson', return_monitor=False, filename=filename)
-    # plt.show(block = False)
+        ret.run_cells(
+            cell_index=example_gc,
+            n_trials=5,
+            viz_module=True,
+            save_data=False,
+            spike_generator_model="poisson",
+            return_monitor=False,
+            filename=filename,
+        )
+    plt.show(block = False)
 
     # # ret.run_all_cells(viz_module=True, spike_generator_model='refractory', reload_last=False)
     # # plt.show(block = False)
@@ -211,9 +253,7 @@ if __name__ == "__main__":
     # plt.show(block = False)
 
     # # ret.show_analysis(filename='my_analysis', viz_module=True)
-    plt.show()
-
-
+    # plt.show()
 
     #################################
     ### Project files & Utilities ###
@@ -362,7 +402,6 @@ if __name__ == "__main__":
     ### Housekeeping ###. Do not comment out.
     """
     plt.show()
-
 
     if profile is True:
         profiler.disable()

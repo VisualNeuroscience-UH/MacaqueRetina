@@ -62,7 +62,6 @@ class Viz:
 
         return is_valid
 
-
     def show_gc_positions_and_density(self, rho, phi, gc_density_func_params):
         '''
         Show retina cell positions and receptive fields
@@ -238,3 +237,16 @@ class Viz:
                     xycoords='axes fraction', xy=(.5, .15), ha="left", color='k')
 
         plt.title('DF diam wrt ecc for {0} type, {1} dataset'.format(gc_type, dataset_name))
+
+    def show_cone_response(self, image, image_after_optics, cone_response):
+
+        fig, ax = plt.subplots(nrows=2, ncols=3)
+        axs = ax.ravel()
+        axs[0].hist(image.flatten(), 20)
+        axs[1].hist(image_after_optics.flatten(), 20)
+        axs[2].hist(cone_response.flatten(), 20)
+
+        axs[3].imshow(image, cmap='Greys')
+        axs[4].imshow(image_after_optics, cmap='Greys')
+        axs[5].imshow(cone_response, cmap='Greys')
+

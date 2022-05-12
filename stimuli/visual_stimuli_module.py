@@ -7,7 +7,7 @@ import colorednoise as cn
 # Data IO
 # import h5py
 import cv2
-from cv2 import VideoWriter, VideoWriter_fourcc
+# from cv2 import VideoWriter, VideoWriter_fourcc
 
 # Viz
 import matplotlib.pyplot as plt
@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 
 # Local
 from data_io.data_io_module import DataIO 
+from context.context_module import Context
 
 # Builtin
 import os
@@ -93,6 +94,7 @@ class VideoBaseClass(object):
 
         options["baseline_start_seconds"] = 0
         options["baseline_end_seconds"] = 0
+        options["stimulus_video_name"] = None
         
         self.options = options
 
@@ -230,27 +232,6 @@ class VideoBaseClass(object):
         self.frames = large_frames[marginal_height:-marginal_height, marginal_width:-marginal_width, :]
         # remove rounding error
         self.frames = self.frames[0:image_height, 0:image_width, :]
-
-    def _write_frames_to_videofile(self, filename, path=None):
-        '''Write frames to videofile
-        '''
-        # Init openCV VideoWriter
-        fourcc = VideoWriter_fourcc(*self.options["codec"])
-        if path is not None:
-            filename_out = os.path.join(path,'{0}.{1}'.format(filename, self.options["container"]))
-        else:
-            filename_out = './{0}.{1}'.format(filename, self.options["container"])
-        
-        # print(filename_out)
-        video = VideoWriter(filename_out, fourcc, float(self.options["fps"]),
-                            (self.options["image_width"], self.options["image_height"]),
-                            isColor=False)  # path, codec, fps, size. Note, the isColor the flag is currently supported on Windows only
-
-        # Write frames to videofile frame-by-frame
-        for index in np.arange(self.frames.shape[2]):
-            video.write(self.frames[:, :, index])
-
-        video.release()
 
     def _prepare_form(self, stimulus_size):
 
@@ -533,7 +514,6 @@ class ConstructStimulus(VideoBaseClass):
         return self._data_io
 
 
-
     def make_stimulus_video(self, **kwargs):
         '''
         Format: my_video_object.main(filename, keyword1=value1, keyword2=value2,...)
@@ -574,6 +554,7 @@ class ConstructStimulus(VideoBaseClass):
         For spatially_uniform_binary_noise, additional argument is 
         on_proportion: between 0 and 1, proportion of on-stimulus, default 0.5
         direction: 'increment' or 'decrement'
+        stimulus_video_name: name of the stimulus video
 
         TODO Below not implemented yet. 
         For natural_images, phase_scrambled_images, natural_video and phase_scrambled_video, 
@@ -583,7 +564,7 @@ class ConstructStimulus(VideoBaseClass):
         orientation: in degrees
 
         ------------------------
-        Output: stimulus video file
+        Output: saves the stimulus video file to output path if stimulus_video_name is not empty or None
         '''
 
 
@@ -631,6 +612,12 @@ class ConstructStimulus(VideoBaseClass):
         self.video_width_deg = self.video_width / self.pix_per_deg
         self.video_height_deg = self.video_height / self.pix_per_deg
 
+        stimulus_video = self
+
+        # Save video
+        self.data_io.save_stimulus_to_videofile(stimulus_video)
+
+
     def _create_frames(self, epoch__in_seconds):
         # Create frames for the requested duration in sec 
         frames = np.ones((self.options["image_height"], self.options["image_width"],
@@ -643,23 +630,6 @@ class ConstructStimulus(VideoBaseClass):
         stim_video_2d = np.reshape(self.video, (self.video_n_frames,
                                                 self.video_height * self.video_width)).T  # pixels as rows, time as cols
         return stim_video_2d
-
-    def save_to_file(self, filename):
-
-        # Test for fullpath, is path exist, separate, and drop to _write_frames_to_videofile method.
-        path, filename_root = os.path.split(filename)
-
-        self._write_frames_to_videofile(filename_root, path = path)
-
-        # save video to hdf5 file
-        filename_out = f"{filename_root}.hdf5"
-        full_path_out = os.path.join(path,filename_out)
-        self.data_io.save_array_to_hdf5(self.frames, full_path_out)
-
-        # save options as metadata in the same format
-        filename_out_options = f"{filename_root}_options.hdf5"
-        full_path_out_options = os.path.join(path,filename_out_options)
-        self.data_io.save_dict_to_hdf5(self.options, full_path_out_options)
 
     def set_test_image(self):
         raise NotImplementedError
@@ -709,13 +679,52 @@ class NaturalMovie(VideoBaseClass):
         cap.release()
 
 
-class SampleImage:
+class PhotoReceptor:
     '''
     This class gets one image at a time, and provides the cone response.
     After instantiation, the RGC group can get one frame at a time, and the system will give an impulse response.
     '''
 
-    def __init__(self, micrometers_per_pixel=10, image_resolution=(100, 100), temporal_resolution=1):
+
+    # self.context. attributes
+    _properties_list = ["path", "input_folder", "output_folder"]
+
+    def __init__(self, context, data_io) -> None:
+
+        self.context = context.set_context(self._properties_list)
+
+        self.data_io = data_io
+
+    @property
+    def context(self):
+        return self._context
+
+    @context.setter
+    def context(self, value):
+        if isinstance(value, Context):
+            self._context = value
+        else:
+            raise AttributeError(
+                "Trying to set improper context. Context must be a Context object."
+            )
+
+    @property
+    def data_io(self):
+        return self._data_io
+
+    @data_io.setter
+    def data_io(self, value):
+        if isinstance(value, DataIO):
+            self._data_io = value
+        else:
+            raise AttributeError(
+                "Trying to set improper data_io. data_io must be a DataIO object."
+            )
+
+    def sample_image(self, image_file_name=None, micrometers_per_pixel=10, image_resolution=(100, 100), temporal_resolution=1):
+
+        assert image_file_name is not None, "Please provide an image file name."
+
         '''
         Instantiate new stimulus.
         '''
@@ -724,20 +733,13 @@ class SampleImage:
         self.optical_aberration = 2 / 60  # unit is degree
         self.deg_per_mm = 1/0.220
 
-    def get_image(self, image_file_name='testi.jpg'):
+        self.image = self.data_io.get_data(image_file_name)
 
-        # Load stimulus
-        image = cv2.imread(image_file_name, 0)  # The 0-flag calls for grayscale. Comes in as uint8 type
+        self.blur_image()
+        self.aberrated_image2cone_response()
 
-        # Normalize image intensity to 0-1, if RGB value
-        if np.ptp(image) > 1:
-            scaled_image = np.float32(image / 255)
-        else:
-            scaled_image = np.float32(image)  # 16 bit to save space and memory
 
-        return scaled_image
-
-    def blur_image(self, image):
+    def blur_image(self):
         '''
         Gaussian smoothing from Navarro 1993: 2 arcmin FWHM under 20deg eccentricity.
         '''
@@ -751,11 +753,11 @@ class SampleImage:
 
         # Turn
         kernel_size = (5, 5)  # Dimensions of the smoothing kernel in pixels, centered in the pixel to be smoothed
-        image_after_optics = cv2.GaussianBlur(image, kernel_size, sigmaX=sigma_in_pixels)  # sigmaY = sigmaX
+        image_after_optics = cv2.GaussianBlur(self.image, kernel_size, sigmaX=sigma_in_pixels)  # sigmaY = sigmaX
 
-        return image_after_optics
+        self.image_after_optics = image_after_optics
 
-    def aberrated_image2cone_response(self, image):
+    def aberrated_image2cone_response(self):
 
         # Compressing nonlinearity. Parameters are manually scaled to give dynamic cone ouput.
         # Equation, data from Baylor_1987_JPhysiol
@@ -768,37 +770,13 @@ class SampleImage:
         response_range = np.ptp([cone_sensitivity_min, cone_sensitivity_max])
 
         # Scale
-        image_at_response_scale = image * response_range  # Image should be between 0 and 1
+        image_at_response_scale = self.image * response_range  # Image should be between 0 and 1
         cone_input = image_at_response_scale + cone_sensitivity_min
 
         # Cone nonlinearity
         cone_response = rm * (1 - np.exp(-k * cone_input))
 
-        return cone_response
-
-
-class Operator:
-    '''
-    Operate the generation and running of retina here
-    '''
-
-    def run_stimulus_sampling(sample_image_object, viz_module=False):
-        one_frame = sample_image_object.get_image()
-        one_frame_after_optics = sample_image_object.blur_image(one_frame)
-        cone_response = sample_image_object.aberrated_image2cone_response(one_frame_after_optics)
-
-        if viz_module:
-            fig, ax = plt.subplots(nrows=2, ncols=3)
-            axs = ax.ravel()
-            axs[0].hist(one_frame.flatten(), 20)
-            axs[1].hist(one_frame_after_optics.flatten(), 20)
-            axs[2].hist(cone_response.flatten(), 20)
-
-            axs[3].imshow(one_frame, cmap='Greys')
-            axs[4].imshow(one_frame_after_optics, cmap='Greys')
-            axs[5].imshow(cone_response, cmap='Greys')
-
-            plt.show()
+        self.cone_response = cone_response
 
 
 # if __name__ == "__main__":
@@ -816,6 +794,6 @@ class Operator:
     #                             baseline_end_seconds = 0.25, background=128, mean=128, phase_shift=0, 
     #                             on_proportion=0.05, direction='increment')
 
-    # stim.save_to_file(filename='temporal_square_pattern_increment')
+    # stim.save_stimulus_to_videofile(filename='temporal_square_pattern_increment')
 
    

@@ -14,6 +14,8 @@ import scipy.io as sio
 import scipy.sparse as scprs
 import pandas as pd
 import h5py
+import cv2
+# from cv2 import VideoWriter, VideoWriter_fourcc
 
 # io tools from cxsystem
 from cxsystem2.core.tools import write_to_file, load_from_file
@@ -201,6 +203,14 @@ class DataIO(DataIOBase):
             data = pd.read_csv(data_fullpath_filename)
             if "Unnamed: 0" in data.columns:
                 data = data.drop(["Unnamed: 0"], axis=1)
+        elif "jpg" in filename_extension or "png" in filename_extension:
+            image = cv2.imread(str(data_fullpath_filename), 0)  # The 0-flag calls for grayscale. Comes in as uint8 type
+
+            # Normalize image intensity to 0-1, if RGB value
+            if np.ptp(image) > 1:
+                data = np.float32(image / 255)
+            else:
+                data = np.float32(image)  # 16 bit to save space and memory
         else:
             raise TypeError("U r trying to input unknown filetype, aborting...")
 
@@ -215,11 +225,11 @@ class DataIO(DataIOBase):
             return data
 
 
-    def save_dict_to_hdf5(self, dic, filename):
+    def save_dict_to_hdf5(self, filename, dic):
         """
         Save a dictionary to hdf5 file.
-        :param dic: dictionary to save
         :param filename: hdf5 file name
+        :param dic: dictionary to save
         """
         with h5py.File(filename, 'w') as h5file:
             self._recursively_save_dict_contents_to_group(h5file, '/', dic)
@@ -254,7 +264,7 @@ class DataIO(DataIOBase):
                 ans[key] = self._recursively_load_dict_contents_from_group(h5file, path + key + '/')
         return ans
 
-    def save_array_to_hdf5(self, array, filename):
+    def save_array_to_hdf5(self, filename, array):
         '''
         Save a numpy array to hdf5 file.
         :param array: numpy array to save
@@ -274,4 +284,42 @@ class DataIO(DataIOBase):
         with h5py.File(filename, 'r') as hdf5_file_handle:
             array = hdf5_file_handle['array'][...]
         return array
-        
+    
+    def _write_frames_to_videofile(self, pl_fullpath_filename, stimulus):
+        '''Write frames to videofile
+        '''
+        # Init openCV VideoWriter
+        fourcc = cv2.VideoWriter_fourcc(*stimulus.options["codec"])
+        fullpath_filename = str(pl_fullpath_filename)
+        print(f"Saving video to {fullpath_filename}")
+        video = cv2.VideoWriter(fullpath_filename, fourcc, float(stimulus.options["fps"]),
+                            (stimulus.options["image_width"], stimulus.options["image_height"]),
+                            isColor=False)  # path, codec, fps, size. Note, the isColor the flag is currently supported on Windows only
+
+        # Write frames to videofile frame-by-frame
+        for index in np.arange(stimulus.frames.shape[2]):
+            video.write(stimulus.frames[:, :, index])
+
+        video.release()
+
+    def save_stimulus_to_videofile(self, stimulus):
+
+        filename = Path(stimulus.options["stimulus_video_name"])
+
+        filename_stem = filename.stem
+
+        parent_path = Path.joinpath(self.context.path, self.context.output_folder)
+        if not Path(parent_path).exists():
+            Path(parent_path).mkdir(parents=True)
+
+        fullpath_filename = Path.joinpath(parent_path, filename_stem)
+
+        self._write_frames_to_videofile(fullpath_filename, stimulus)
+
+        # save video to hdf5 file
+        full_path_out = f"{fullpath_filename}.hdf5"
+        self.save_array_to_hdf5(full_path_out, stimulus.frames)
+
+        # save options as metadata in the same format
+        full_path_out_options = f"{fullpath_filename}_options.hdf5"
+        self.save_dict_to_hdf5(full_path_out_options, stimulus.options)

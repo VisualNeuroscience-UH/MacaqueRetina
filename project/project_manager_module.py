@@ -6,7 +6,7 @@ from data_io.data_io_module import DataIO
 from analysis.analysis_module import Analysis
 from viz.viz_module import Viz
 import construct.macaque_retina_module as construct
-from stimuli.visual_stimuli_module import ConstructStimulus
+from stimuli.visual_stimuli_module import ConstructStimulus, PhotoReceptor
 
 # Builtin
 import pdb
@@ -53,6 +53,8 @@ class ProjectManager(ProjectBase, ProjectUtilities):
 
         stimulate = ConstructStimulus(context, data_io) 
         self.stimulate = stimulate
+
+        self.cones = PhotoReceptor(context, data_io)
 
         ana = Analysis(
             # Interfaces

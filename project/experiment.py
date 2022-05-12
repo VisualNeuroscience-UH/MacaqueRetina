@@ -170,7 +170,7 @@ class Experiment():
             self._replace_options(input_options)
             stim = vs.ConstructStimulus(**self.options)
 
-            stim.save_to_file(filename=os.path.join(data_folder,'Stim_' + conditions_idx[idx]))
+            stim.save_stimulus_to_videofile(filename=os.path.join(data_folder,'Stim_' + conditions_idx[idx]))
 
             ret.load_stimulus(stim)
 
