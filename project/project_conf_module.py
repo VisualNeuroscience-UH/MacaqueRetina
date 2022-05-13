@@ -44,7 +44,7 @@ Chichilnisky_2002_JNeurosci states that L-ON (parasol) cells have on average 21%
 He also shows that OFF cells have more nonlinear response to input, which is not implemented currently (a no-brainer to implement 
 if necessary).
 
-NOTE: bad cell indices hard coded from Chichilnisky apricot data. For another data set, viz_module fits, and change the bad cells.
+NOTE: bad cell indices hard coded from Chichilnisky apricot data. For another data set, visualize fits, and change the bad cells.
 NOTE: If eccentricity stays under 20 deg, dendritic diameter data fitted up to 25 deg only (better fit close to fovea)
 
 -center-surround response ratio (in vivo, anesthetized, recorded from LGN; Croner_1995_VisRes) PC: ; MC: ;
@@ -112,13 +112,17 @@ Data context for single files and arrays. These midpoint and parameter strings a
 output_folder = "out"
 
 my_retina = {
-    "mosaic_file_name" : "parasol_on_single.csv",
+    "mosaic_file": "parasol_on_single.csv",
 }
 
-stimulus_video_name = "tmp.avi"
-'''
-TÄHÄN JÄIT. OLIT TEKEMÄSSÄ IO MUUTOKSIA JA YLLÄ OLEVA AVI FILE EI TALLENNU
-'''
+my_stimuli = {
+    "stimulus_file": "testi.jpg",
+    "stimulus_type": "image",  # "image", "video" or "grating"
+    "gc_response_file": "my_gc_response",  # check extension
+}
+
+
+stimulus_video_name = "tmp"
 
 
 profile = False
@@ -140,10 +144,8 @@ if __name__ == "__main__":
         output_folder=output_folder,
         project=project,
         experiment=experiment,
-        retina = my_retina,
+        retina=my_retina,
     )
-
-
 
     #################################
     ### Get image ###
@@ -161,17 +163,17 @@ if __name__ == "__main__":
     """
     Build and test your retina here, one gc type at a time. Temporal hemiretina of macaques.
     """
-    # mosaic = PM.construct.MosaicConstructor(
-    #     gc_type="parasol",
-    #     response_type="on",
-    #     ecc_limits=[4.8, 5.2],
-    #     sector_limits=[-0.4, 0.4],
-    #     model_density=1.0,
-    #     randomize_position=0.05,
-    # )
+    mosaic = PM.construct.MosaicConstructor(
+        gc_type="parasol",
+        response_type="on",
+        ecc_limits=[4.8, 5.2],
+        sector_limits=[-0.4, 0.4],
+        model_density=1.0,
+        randomize_position=0.05,
+    )
 
-    # mosaic.build()
-    # mosaic.save_mosaic("parasol_on_single.csv")
+    mosaic.build()
+    mosaic.save_mosaic("parasol_on_single.csv")
 
     testmosaic = pd.read_csv("parasol_on_single.csv", index_col=0)
 
@@ -183,7 +185,6 @@ if __name__ == "__main__":
         stimulus_width_pix=240,
         stimulus_height_pix=240,
     )
-
 
     PM.stimulate.make_stimulus_video(
         pattern="temporal_square_pattern",
@@ -201,10 +202,8 @@ if __name__ == "__main__":
         background=128,
         mean=128,
         phase_shift=0,
-        stimulus_video_name=stimulus_video_name, # If empty, does not save the video
+        stimulus_video_name=stimulus_video_name,  # If empty, does not save the video
     )
-
-    exit()
 
     # ret.load_stimulus(grating)
     # ret.load_stimulus(stim)
@@ -222,12 +221,8 @@ if __name__ == "__main__":
     # plt.show()
 
     example_gc = 2  # int or 'None'
-    # ret.convolve_stimulus(example_gc, viz_module=True)
+    # ret.convolve_stimulus(example_gc, show_convolved_stimulus=True)
     # plt.show()
-
-    # ret.run_single_cell(example_gc, n_trials=100, viz_module=True,
-    #                     spike_generator_model='poisson', save_example_data=True) # 'refractory'
-    # plt.show(block = False)
 
     filenames = [f"Response_foo_{x}" for x in np.arange(1)]
 
@@ -236,15 +231,15 @@ if __name__ == "__main__":
         ret.run_cells(
             cell_index=example_gc,
             n_trials=5,
-            viz_module=True,
+            show_gc_response=True,
             save_data=False,
             spike_generator_model="poisson",
             return_monitor=False,
             filename=filename,
         )
-    plt.show(block = False)
+    plt.show(block=False)
 
-    # # ret.run_all_cells(viz_module=True, spike_generator_model='refractory', reload_last=False)
+    # # ret.run_all_cells(show_gc_response=True, spike_generator_model='refractory', reload_last=False)
     # # plt.show(block = False)
     # # ret.save_spikes_csv()
 
@@ -252,7 +247,6 @@ if __name__ == "__main__":
     # ret.show_single_gc_view(cell_index=example_gc, frame_number=21)
     # plt.show(block = False)
 
-    # # ret.show_analysis(filename='my_analysis', viz_module=True)
     # plt.show()
 
     #################################

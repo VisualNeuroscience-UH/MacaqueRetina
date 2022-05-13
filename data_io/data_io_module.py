@@ -290,7 +290,7 @@ class DataIO(DataIOBase):
         '''
         # Init openCV VideoWriter
         fourcc = cv2.VideoWriter_fourcc(*stimulus.options["codec"])
-        fullpath_filename = str(pl_fullpath_filename)
+        fullpath_filename = str(pl_fullpath_filename) 
         print(f"Saving video to {fullpath_filename}")
         video = cv2.VideoWriter(fullpath_filename, fourcc, float(stimulus.options["fps"]),
                             (stimulus.options["image_width"], stimulus.options["image_height"]),
@@ -307,12 +307,20 @@ class DataIO(DataIOBase):
         filename = Path(stimulus.options["stimulus_video_name"])
 
         filename_stem = filename.stem
+        filename_extension = filename.suffix
 
         parent_path = Path.joinpath(self.context.path, self.context.output_folder)
         if not Path(parent_path).exists():
             Path(parent_path).mkdir(parents=True)
 
-        fullpath_filename = Path.joinpath(parent_path, filename_stem)
+        if filename_extension in ['mp4', 'avi', 'mov']:
+            fullpath_filename = Path.joinpath(parent_path, filename_stem + filename_extension)
+        elif filename_extension == '':
+            fullpath_filename = Path.joinpath(parent_path, filename_stem + '.mp4')
+            print(f"Missing filename extension, saving video as .mp4")
+        else:
+            fullpath_filename = Path.joinpath(parent_path, filename_stem + '.mp4')
+            print(f"Extension {filename_extension} not supported, saving video as .mp4")
 
         self._write_frames_to_videofile(fullpath_filename, stimulus)
 

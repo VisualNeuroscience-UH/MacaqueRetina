@@ -277,7 +277,7 @@ class MosaicConstructor(Mathematics, Viz):
 
         return dendr_diam1, dendr_diam2
 
-    def fit_dendritic_diameter_vs_eccentricity(self, viz_module=False):
+    def fit_dendritic_diameter_vs_eccentricity(self, show_build_process=False):
         """
         Dendritic field diameter with respect to eccentricity. Linear and quadratic fit.
         Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
@@ -342,7 +342,7 @@ class MosaicConstructor(Mathematics, Viz):
                 "cube": polynomials[0],
             }
 
-        if viz_module:
+        if show_build_process:
             # self.show_dendritic_diameter_vs_eccentricity(gc_type, data_all_x, data_all_y,
             # dataset_name='All data cubic fit', intercept=polynomials[3], slope=polynomials[2], square=polynomials[1], cube=polynomials[0])
             self.show_dendritic_diameter_vs_eccentricity(
@@ -359,12 +359,12 @@ class MosaicConstructor(Mathematics, Viz):
     def densfunc(self, r, d0, beta):
         return d0 * (1 + beta * r) ** (-2)
 
-    def place_gc_units(self, gc_density_func_params, viz_module=False):
+    def place_gc_units(self, gc_density_func_params, show_build_process=False):
         """
         Place ganglion cell center positions to retina
 
         :param gc_density_func_params:
-        :param viz_module: True/False (default False)
+        :param show_build_process: True/False (default False)
 
         :returns matrix_eccentricity_randomized_all, matrix_orientation_surround_randomized_all
         """
@@ -538,14 +538,14 @@ class MosaicConstructor(Mathematics, Viz):
 
         # Visualize 2D retina with quality control for density
         # Pass the GC object to this guy, because the Visualize class is not inherited
-        if viz_module:
+        if show_build_process:
             self.show_gc_positions_and_density(
                 matrix_eccentricity_randomized_all,
                 matrix_polar_angle_randomized_all,
                 gc_density_func_params,
             )
 
-    def fit_spatial_statistics(self, viz_module=False):
+    def fit_spatial_statistics(self, show_build_process=False):
         """
         Collect spatial statistics from Chichilnisky receptive field data
         """
@@ -654,7 +654,7 @@ class MosaicConstructor(Mathematics, Viz):
         }
 
         # Quality control images
-        if viz_module:
+        if show_build_process:
             self.show_spatial_statistics(
                 ydata, spatial_statistics_dict, (x_model_fit, y_model_fit)
             )
@@ -666,7 +666,7 @@ class MosaicConstructor(Mathematics, Viz):
         self,
         spatial_statistics_dict,
         dendr_diam_vs_eccentricity_parameters_dict,
-        viz_module=False,
+        show_build_process=False,
     ):
         """
         Create spatial receptive fields to model cells.
@@ -718,7 +718,7 @@ class MosaicConstructor(Mathematics, Viz):
                 shape, loc, scale, n_cells, distribution
             )
         # Quality control images
-        if viz_module:
+        if show_build_process:
             self.show_spatial_statistics(gc_rf_models, spatial_statistics_dict)
 
         # Calculate RF diameter scaling factor for all ganglion cells
@@ -786,7 +786,7 @@ class MosaicConstructor(Mathematics, Viz):
             "positions_polar_angle"
         ]  # plus some noise here
 
-        if viz_module:
+        if show_build_process:
             # Quality control for diameter distribution. In micrometers.
             gc_diameters = self.area2circle_diameter(
                 self.ellipse2area(semi_xc, semi_yc)
@@ -814,13 +814,13 @@ class MosaicConstructor(Mathematics, Viz):
 
         # All ganglion cell spatial parameters are now saved to ganglion cell object dataframe gc_df
 
-    def fit_tonic_drives(self, viz_module=False):
+    def fit_tonic_drives(self, show_build_process=False):
         tonicdrive_array = np.array(
             self.all_fits_df.iloc[self.good_data_indices].tonicdrive
         )
         shape, loc, scale = stats.gamma.fit(tonicdrive_array)
 
-        if viz_module:
+        if show_build_process:
             x_min, x_max = stats.gamma.ppf(
                 [0.001, 0.999], a=shape, loc=loc, scale=scale
             )
@@ -833,7 +833,7 @@ class MosaicConstructor(Mathematics, Viz):
 
         return shape, loc, scale
 
-    def fit_temporal_statistics(self, viz_module=False):
+    def fit_temporal_statistics(self, show_build_process=False):
         temporal_filter_parameters = ["n", "p1", "p2", "tau1", "tau2"]
         distrib_params = np.zeros((len(temporal_filter_parameters), 3))
 
@@ -844,7 +844,7 @@ class MosaicConstructor(Mathematics, Viz):
             shape, loc, scale = stats.gamma.fit(param_array)
             distrib_params[i, :] = [shape, loc, scale]
 
-        if viz_module:
+        if show_build_process:
             plt.subplots(2, 3)
             plt.suptitle(self.gc_type + " " + self.response_type)
             for i, param_name in enumerate(temporal_filter_parameters):
@@ -940,7 +940,7 @@ class MosaicConstructor(Mathematics, Viz):
             rho, phi, gc_rf_models, surround_fixed=self.surround_fixed
         )
 
-    def build(self, viz_module=False):
+    def build(self, show_build_process=False):
         """
         Builds the receptive field mosaic
         :return:
@@ -950,23 +950,29 @@ class MosaicConstructor(Mathematics, Viz):
         gc_density_func_params = self.fit_gc_density_data()
 
         # Place ganglion cells to desired retina.
-        self.place_gc_units(gc_density_func_params, viz_module=viz_module)
+        self.place_gc_units(
+            gc_density_func_params, show_build_process=show_build_process
+        )
 
         # -- Second, endow cells with spatial receptive fields
         # Collect spatial statistics for receptive fields
-        spatial_statistics_dict = self.fit_spatial_statistics(viz_module=viz_module)
+        spatial_statistics_dict = self.fit_spatial_statistics(
+            show_build_process=show_build_process
+        )
 
         # Get fit parameters for dendritic field diameter with respect to eccentricity. Linear and quadratic fit.
         # Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
         dendr_diam_vs_eccentricity_parameters_dict = (
-            self.fit_dendritic_diameter_vs_eccentricity(viz_module=viz_module)
+            self.fit_dendritic_diameter_vs_eccentricity(
+                show_build_process=show_build_process
+            )
         )
 
         # Construct spatial receptive fields. Centers are saved in the object
         self.place_spatial_receptive_fields(
             spatial_statistics_dict,
             dendr_diam_vs_eccentricity_parameters_dict,
-            viz_module,
+            show_build_process,
         )
 
         # Scale center and surround amplitude so that Gaussian volume is preserved
@@ -990,7 +996,7 @@ class MosaicConstructor(Mathematics, Viz):
 
         print("Built RGC mosaic with %d cells" % n_rgc)
 
-        if viz_module is True:
+        if show_build_process is True:
             plt.show()
 
     def save_mosaic(self, filepath):
@@ -1158,12 +1164,12 @@ class FunctionalMosaic(Mathematics):
         # self.video_fps = self.stimulus_video.fps
         self.temporal_filter_len = int(self.data_filter_duration / (1000 / self.fps))
 
-    def load_stimulus(self, stimulus_video, viz_module=False):
+    def load_stimulus(self, stimulus_video, show_stim_with_gcs=False):
         """
         Loads stimulus video
 
         :param stimulus_video: VideoBaseClass, visual stimulus to project to the ganglion cell mosaic
-        :param viz_module: True/False, show 1 frame of stimulus in pixel and visual coordinate systems (default False)
+        :param show_stim_with_gcs: True/False, show 1 frame of stimulus in pixel and visual coordinate systems (default False)
         :return:
         """
 
@@ -1195,7 +1201,7 @@ class FunctionalMosaic(Mathematics):
             ):
                 self.gc_df.iloc[index] = 0.0  # all columns set as zero
 
-        if viz_module is True:
+        if show_stim_with_gcs is True:
             self.show_stimulus_with_gcs()
 
     def show_stimulus_with_gcs(self, frame_number=0, ax=None, example_gc=5):
@@ -1408,12 +1414,14 @@ class FunctionalMosaic(Mathematics):
     def _create_postspike_filter(self, cell_index):
         raise NotImplementedError
 
-    def create_spatiotemporal_filter(self, cell_index, viz_module=False):
+    def create_spatiotemporal_filter(
+        self, cell_index, show_spatiotemporal_filter=False
+    ):
         """
         Returns the outer product of the spatial and temporal filters
 
         :param cell_index: int
-        :param viz_module: bool
+        :param show_spatiotemporal_filter: bool
         :return:
         """
 
@@ -1427,7 +1435,7 @@ class FunctionalMosaic(Mathematics):
             spatial_filter_1d * temporal_filter
         )  # (Nx1) * (1xT) = NxT
 
-        if viz_module is True:
+        if show_spatiotemporal_filter is True:
             vmax = np.max(np.abs(spatial_filter))
             vmin = -vmax
 
@@ -1565,19 +1573,19 @@ class FunctionalMosaic(Mathematics):
 
         return firing_rate
 
-    def convolve_stimulus(self, cell_index, viz_module=False):
+    def convolve_stimulus(self, cell_index, show_convolved_stimulus=False):
         """
         Convolves the stimulus with the stimulus filter
 
         :param cell_index: int
-        :param viz_module: bool
+        :param show_convolved_stimulus: bool
         :return: array of length (stimulus timesteps)
         """
         # Get spatiotemporal filter
         spatiotemporal_filter = self.create_spatiotemporal_filter(
-            cell_index, viz_module=False
+            cell_index, show_spatiotemporal_filter=False
         )
-        # spatiotemporal_filter = self.create_spatiotemporal_filter(cell_index, viz_module=True)
+        # spatiotemporal_filter = self.create_spatiotemporal_filter(cell_index, show_spatiotemporal_filter=True)
 
         # Get cropped stimulus
         stimulus_cropped = self.get_cropped_video(cell_index, reshape=True)
@@ -1602,7 +1610,7 @@ class FunctionalMosaic(Mathematics):
 
         firing_rate = self._generator_to_firing_rate(generator_potential + tonic_drive)
 
-        if viz_module is True:
+        if show_convolved_stimulus is True:
 
             tvec = np.arange(0, len(generator_potential), 1) * video_dt
 
@@ -1629,7 +1637,7 @@ class FunctionalMosaic(Mathematics):
         generator_potential,
         video_dt,
         tvec_new,
-        viz_module=True,
+        show_gc_response=True,
     ):
 
         # Prepare data for manual visualization
@@ -1646,9 +1654,9 @@ class FunctionalMosaic(Mathematics):
             n_samples = n_cells
             sample_name = "Cell #"
         else:
-            viz_module = False
+            show_gc_response = False
             print(
-                "You attempted to viz_module gc activity, but you have either n_trials or n_cells must be 1, and the other > 1"
+                "You attempted to visualize gc activity, but you have either n_trials or n_cells must be 1, and the other > 1"
             )
 
         plt.subplots(2, 1, sharex=True)
@@ -1817,7 +1825,7 @@ class FunctionalMosaic(Mathematics):
         self,
         cell_index=None,
         n_trials=1,
-        viz_module=False,
+        show_gc_response=False,
         save_data=False,
         spike_generator_model="refractory",
         return_monitor=False,
@@ -1828,7 +1836,7 @@ class FunctionalMosaic(Mathematics):
 
         :param cell_index: int or None. If None, run all cells
         :param n_trials: int
-        :param viz_module: bool
+        :param show_gc_response: bool
         :param save_data: bool
         :param spike_generator_model: str, 'refractory' or 'poisson'
         :param return_monitor: bool, whether to return a raw Brian2 SpikeMonitor
@@ -1858,7 +1866,7 @@ class FunctionalMosaic(Mathematics):
         generator_potential = np.zeros([self.stimulus_video.video_n_frames, n_cells])
         for idx, this_cell in enumerate(cell_index):
             generator_potential[:, idx] = self.convolve_stimulus(
-                this_cell, viz_module=False
+                this_cell, show_convolved_stimulus=False
             )
 
         # exp_generator_potential = np.array(np.exp(generator_potential))
@@ -1948,22 +1956,22 @@ class FunctionalMosaic(Mathematics):
             )
 
         if save_data is True:
-            self._save_for_neo(
-                spikemons,
-                n_trials,
-                n_cells,
-                t_start,
-                t_end,
-                filename=filename,
-                analog_signal=interpolated_rates_array,
-                analog_step=poissongen_dt,
-            )
+            # self._save_for_neo(
+            #     spikemons,
+            #     n_trials,
+            #     n_cells,
+            #     t_start,
+            #     t_end,
+            #     filename=filename,
+            #     analog_signal=interpolated_rates_array,
+            #     analog_step=poissongen_dt,
+            # )
 
             self._save_for_cxsystem(
                 spikearrays, filename=filename, analog_signal=interpolated_rates_array
             )
 
-        if viz_module is True:
+        if show_gc_response is True:
             self._old_style_visualization_for_run_cells(
                 n_trials,
                 n_cells,
@@ -1981,13 +1989,16 @@ class FunctionalMosaic(Mathematics):
             return spiketrains, interpolated_rates_array.flatten()
 
     def run_all_cells(
-        self, spike_generator_model="refractory", save_data=False, viz_module=False
+        self,
+        spike_generator_model="refractory",
+        save_data=False,
+        show_gc_response=False,
     ):
 
         """
         Runs the LNP pipeline for all ganglion cells (legacy function)
 
-        :param viz_module: bool
+        :param show_gc_response: bool
         :param spike_generator_model: str, 'refractory' or 'poisson'
         :param save_data: bool
         :return:
@@ -1998,7 +2009,7 @@ class FunctionalMosaic(Mathematics):
             n_trials=1,
             spike_generator_model=spike_generator_model,
             save_data=save_data,
-            viz_module=viz_module,
+            show_gc_response=show_gc_response,
         )
 
     def save_spikes_csv(self, filename=None):
@@ -2048,112 +2059,4 @@ class FunctionalMosaic(Mathematics):
 
 
 # if __name__ == "__main__":
-#     '''
-#     Build and test your retina here, one gc type at a time. Temporal hemiretina of macaques.
-#     '''
-#     mosaic = MosaicConstructor(gc_type='parasol', response_type='on', ecc_limits=[4.8, 5.2],
-#                                sector_limits=[-.4, .4], model_density=1.0, randomize_position=0.05)
-
-#     mosaic.build()
-#     mosaic.save_mosaic('parasol_on_single.csv')
-
-#     testmosaic = pd.read_csv('parasol_on_single.csv', index_col=0)
-
-
-#     ret = FunctionalMosaic(testmosaic, 'parasol', 'on', stimulus_center=5+0j,
-#                            stimulus_width_pix=240, stimulus_height_pix=240)
-
-
-#     stim = vs.ConstructStimulus(pattern='temporal_square_pattern', stimulus_form='circular',
-#                                 temporal_frequency=0.1, spatial_frequency=1.0, stimulus_position=(-.06, 0.03),
-#                                 duration_seconds=.4, image_width=240, image_height=240,
-#                                 stimulus_size=.1, contrast=.99, baseline_start_seconds = 0.5,
-#                                 baseline_end_seconds = 0.5, background=128, mean=128, phase_shift=0)  # np.pi+(np.pi/100)
-
-#     stim.save_stimulus_to_videofile(filename='tmp')
-
-#     # ret.load_stimulus(grating)
-#     ret.load_stimulus(stim)
-
-#     # # movie = vs.NaturalMovie('/home/henhok/nature4_orig35_fps100.avi', fps=100, pix_per_deg=60)
-#     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)
-#     # ret.load_stimulus(movie)
-
-#     # ret.plot_midpoint_contrast(0)
-#     # plt.show()
-#     # ret.plot_local_rms_contrast(0)
-#     # plt.show()
-#     # ret.plot_local_michelson_contrast(0)
-#     # plt.show()
-
-#     example_gc=2 # int or 'None'
-#     # ret.convolve_stimulus(example_gc, viz_module=True)
-#     # plt.show()
-
-#     # ret.run_single_cell(example_gc, n_trials=100, viz_module=True,
-#     #                     spike_generator_model='poisson', save_example_data=True) # 'refractory'
-#     # plt.show(block = False)
-
-#     filenames = [f'Response_foo_{x}' for x in np.arange(1)]
-
-#     for filename in filenames:
-
-#         ret.run_cells(cell_index=example_gc, n_trials=200, viz_module=True, save_data=False,
-#                         spike_generator_model='poisson', return_monitor=False, filename=filename)
-#     # plt.show(block = False)
-
-#     # # ret.run_all_cells(viz_module=True, spike_generator_model='refractory', reload_last=False)
-#     # # plt.show(block = False)
-#     # # ret.save_spikes_csv()
-
-#     ret.show_stimulus_with_gcs(example_gc=example_gc, frame_number=51)
-#     # ret.show_single_gc_view(cell_index=example_gc, frame_number=21)
-#     # plt.show(block = False)
-
-#     # # ret.show_analysis(filename='my_analysis', viz_module=True)
-#     plt.show()
-
-# '''
-# This is code for building macaque retinal filters corresponding to midget and parasol cells' responses.
-# We keep modular code structure, to be able to add new features at later phase.
-
-# The cone photoreceptor sampling is approximated as achromatic (single) compressive cone response(Baylor_1987_JPhysiol).
-
-# Visual angle (A) in degrees from previous studies (Croner and Kaplan, 1995) was approksimated with relation 5 deg/mm.
-# This works fine up to 20 deg ecc, but underestimates the distance thereafter. If more peripheral representations are later
-# necessary, the millimeters should be calculates by inverting the inverting the relation
-# A = 0.1 + 4.21E + 0.038E^2 (Drasdo and Fowler, 1974; Dacey and Petersen, 1992)
-
-# We have extracted statistics of macaque ganglion cell receptive fields from literature and build continuous functions.
-
-# The density of many cell types is inversely proportional to dendritic field coverage,
-# suggesting constant coverage factor (Perry_1984_Neurosci, Wassle_1991_PhysRev).
-# Midget coverage factor is 1  (Dacey_1993_JNeurosci for humans; Wassle_1991_PhysRev, Lee_2010_ProgRetEyeRes).
-# Parasol coverage factor is 3-4 close to fovea (Grunert_1993_VisRes); 2-7 according to Perry_1984_Neurosci.
-# These include ON- and OFF-center cells, and perhaps other cell types.
-# It is likely that coverage factor is 1 for midget and parasol ON- and OFF-center cells each,
-# which is also in line with Doi_2012 JNeurosci, Field_2010_Nature
-
-# The spatiotemporal receptive fields for the four cell types (parasol & midget, ON & OFF) were modelled with double ellipsoid
-# difference-of-Gaussians model. The original spike triggered averaging RGC data in courtesy of Chichilnisky lab. The method is
-# described in Chichilnisky_2001_Network, Chichilnisky_2002_JNeurosci; Field_2010_Nature.
-
-# Chichilnisky_2002_JNeurosci states that L-ON (parasol) cells have on average 21% larger RFs than L-OFF cells.
-# He also shows that OFF cells have more nonlinear response to input, which is not implemented currently (a no-brainer to implement
-# if necessary).
-
-# NOTE: bad cell indices hard coded from Chichilnisky apricot data. For another data set, viz_module fits, and change the bad cells.
-# NOTE: If eccentricity stays under 20 deg, dendritic diameter data fitted up to 25 deg only (better fit close to fovea)
-
-# -center-surround response ratio (in vivo, anesthetized, recorded from LGN; Croner_1995_VisRes) PC: ; MC: ;
-# -Michelson contrast definition for sinusoidal gratings (Croner_1995_VisRes).
-# -optical quality probably poses no major limit to behaviorally measured spatial vision (Williams_1981_IOVS).
-# -spatial contrast sensitivity nonlinearity in the center subunits is omitted. This might reduce sensitivity to natural scenes Turner_2018_eLife.
-
-# -quality control: compare to Watanabe_1989_JCompNeurol
-#     -dendritic diameter scatter is on average (lower,upper quartile) 21.3% of the median diameter in the local area
-
-#     Parasol dendritic field diameter: temporal retina 51.8 microm + ecc(mm) * 20.6 microm/mm,
-#     nasal retina; 115.5 microm + ecc(mm) * 6.97 microm/mm
-
-# '''
+#     pass
