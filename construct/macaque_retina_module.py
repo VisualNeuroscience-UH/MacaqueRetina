@@ -23,10 +23,10 @@ import brian2.units as b2u
 # Local
 # import utilities as ut # Where is this coming from?
 from cxsystem2.core.tools import write_to_file, load_from_file
-from construct import apricot_fitter_module as apricot
+from construct.apricot_fitter_module import ApricotFits
 from viz.viz_module import Viz
-from stimuli import visual_stimuli_module as vs
-from vision_math.vision_math_module import Mathematics
+# from stimuli import visual_stimuli_module as vs
+from construct.construct_math_module import ConstructionMathematics
 
 # Builtin
 import sys
@@ -36,7 +36,7 @@ from copy import deepcopy
 import pdb
 
 
-class MosaicConstructor(Mathematics, Viz):
+class MosaicConstructor(ConstructionMathematics, Viz):
     """
     Create the ganglion cell mosaic.
     All spatial parameters are saved to the dataframe *gc_df*
@@ -160,7 +160,7 @@ class MosaicConstructor(Mathematics, Viz):
 
         # Make or read fits
         if fits_from_file is None:
-            self.all_fits_df = apricot.ApricotFits(gc_type, response_type).get_fits()
+            self.all_fits_df = ApricotFits(gc_type, response_type).get_fits()
         else:
             self.all_fits_df = pd.read_csv(
                 fits_from_file, header=0, index_col=0
@@ -174,7 +174,7 @@ class MosaicConstructor(Mathematics, Viz):
             range(self.n_cells_data), self.bad_data_indices
         )
 
-    def get_random_samples(self, shape, loc, scale, n_cells, distribution):
+    def _get_random_samples(self, shape, loc, scale, n_cells, distribution):
         """
         Create random samples from a model distribution.
 
@@ -212,12 +212,11 @@ class MosaicConstructor(Mathematics, Viz):
 
         return distribution_parameters
 
-    def read_gc_density_data(self):
+    def _read_gc_density_data(self):
         """
         Read re-digitized old literature data from mat files
         """
         digitized_figures_path = self.digitized_figures_path
-        pdb.set_trace()
         print("Reading density data from:", digitized_figures_path)
         gc_density = sio.loadmat(
             digitized_figures_path / "Perry_1984_Neurosci_GCdensity_c.mat",
@@ -229,14 +228,14 @@ class MosaicConstructor(Mathematics, Viz):
         )  # Cells are in thousands, thus the 1e3
         return cell_eccentricity, cell_density
 
-    def fit_gc_density_data(self):
+    def _fit_gc_density_data(self):
         """
         Fits a Gaussian to ganglion cell density (digitized data from Perry_1984).
 
         :returns a, x0, sigma, baseline (aka "gc_density_func_params")
         """
 
-        cell_eccentricity, cell_density = self.read_gc_density_data()
+        cell_eccentricity, cell_density = self._read_gc_density_data()
 
         # Gaussian + baseline fit initial values for fitting
         scale, mean, sigma, baseline0 = 1000, 0, 2, np.min(cell_density)
@@ -249,7 +248,7 @@ class MosaicConstructor(Mathematics, Viz):
 
         return popt  # = gc_density_func_params
 
-    def read_dendritic_fields_vs_eccentricity_data(self):
+    def _read_dendritic_fields_vs_eccentricity_data(self):
         """
         Read re-digitized old literature data from mat files
         """
@@ -278,7 +277,7 @@ class MosaicConstructor(Mathematics, Viz):
 
         return dendr_diam1, dendr_diam2
 
-    def fit_dendritic_diameter_vs_eccentricity(self, show_build_process=False):
+    def _fit_dendritic_diameter_vs_eccentricity(self, show_build_process=False):
         """
         Dendritic field diameter with respect to eccentricity. Linear and quadratic fit.
         Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
@@ -287,7 +286,7 @@ class MosaicConstructor(Mathematics, Viz):
         # Read dendritic field data and return linear fit with scipy.stats.linregress
         dendr_diam_parameters = {}
 
-        dendr_diam1, dendr_diam2 = self.read_dendritic_fields_vs_eccentricity_data()
+        dendr_diam1, dendr_diam2 = self._read_dendritic_fields_vs_eccentricity_data()
 
         # Parasol fit
         gc_type = self.gc_type
@@ -357,10 +356,10 @@ class MosaicConstructor(Mathematics, Viz):
 
         return dendr_diam_parameters
 
-    def densfunc(self, r, d0, beta):
+    def _densfunc(self, r, d0, beta):
         return d0 * (1 + beta * r) ** (-2)
 
-    def place_gc_units(self, gc_density_func_params, show_build_process=False):
+    def _place_gc_units(self, gc_density_func_params, show_build_process=False):
         """
         Place ganglion cell center positions to retina
 
@@ -428,7 +427,7 @@ class MosaicConstructor(Mathematics, Viz):
 
             # N cells for given ecc
             # my_gaussian_fit = self.gauss_plus_baseline(center_ecc, *gc_density_func_params)
-            my_gaussian_fit = self.densfunc(center_ecc, 5.32043939e05, 2.64289725)
+            my_gaussian_fit = self._densfunc(center_ecc, 5.32043939e05, 2.64289725)
             Ncells = sector_surface_area * my_gaussian_fit * self.gc_proportion
 
             # place cells in regular grid
@@ -546,7 +545,7 @@ class MosaicConstructor(Mathematics, Viz):
                 gc_density_func_params,
             )
 
-    def fit_spatial_statistics(self, show_build_process=False):
+    def _fit_spatial_statistics(self, show_build_process=False):
         """
         Collect spatial statistics from Chichilnisky receptive field data
         """
@@ -663,7 +662,7 @@ class MosaicConstructor(Mathematics, Viz):
         # Return stats for RF creation
         return spatial_statistics_dict
 
-    def place_spatial_receptive_fields(
+    def _place_spatial_receptive_fields(
         self,
         spatial_statistics_dict,
         dendr_diam_vs_eccentricity_parameters_dict,
@@ -673,6 +672,8 @@ class MosaicConstructor(Mathematics, Viz):
         Create spatial receptive fields to model cells.
         Starting from 2D difference-of-gaussian parameters:
         'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio', 'orientation_center'
+
+        Places all ganglion cell spatial parameters to ganglion cell object dataframe self.gc_df
         """
 
         # Get eccentricity data for all model cells
@@ -715,7 +716,7 @@ class MosaicConstructor(Mathematics, Viz):
             loc = spatial_statistics_dict[key]["loc"]
             scale = spatial_statistics_dict[key]["scale"]
             distribution = spatial_statistics_dict[key]["distribution"]
-            gc_rf_models[:, index] = self.get_random_samples(
+            gc_rf_models[:, index] = self._get_random_samples(
                 shape, loc, scale, n_cells, distribution
             )
         # Quality control images
@@ -734,22 +735,13 @@ class MosaicConstructor(Mathematics, Viz):
         """
         area_scaling_factors_coverage1 = np.zeros(area_of_ellipse.shape)
         for index, surface_area in enumerate(self.sector_surface_area_all):
-            # scaling_for_coverage_1 = (surface_area *1e6 ) / np.sum(area_of_rf[self.gc_df['eccentricity_group_index']==index])   # in micrometers2
             scaling_for_coverage_1 = (surface_area * 1e6) / np.sum(
                 area_of_ellipse[self.gc_df["eccentricity_group_index"] == index]
             )  # in micrometers2
 
-            # area_scaling_factors = area_of_rf / np.mean(area_of_ellipse)
             area_scaling_factors_coverage1[
                 self.gc_df["eccentricity_group_index"] == index
             ] = scaling_for_coverage_1
-
-        # area' = scaling factor * area
-        # area_of_ellipse' = scaling_factor * area_of_ellipse
-        # pi*a'*b' = scaling_factor * pi*a*b
-        # a and b are the semi-major and semi minor axis, like radius
-        # a'*a'*constant = scaling_factor * a * a * constant
-        # a'/a = sqrt(scaling_factor)
 
         # Apply scaling factors to semi_xc and semi_yc. Units are micrometers.
         # scale_random_distribution = 0.08  # Estimated by eye from Watanabe and Perry data. Normal distribution with scale_random_distribution 0.08 cover about 25% above and below the mean value
@@ -770,8 +762,7 @@ class MosaicConstructor(Mathematics, Viz):
             * gc_rf_models[:, 1]
             * random_normal_distribution2
         )
-        # semi_xc = np.sqrt(area_scaling_factors_coverage1) * gc_rf_models[:,0]
-        # semi_yc = np.sqrt(area_scaling_factors_coverage1) * gc_rf_models[:,1]
+
         # Scale from micrometers to millimeters and return to numpy matrix
         gc_rf_models[:, 0] = semi_xc / 1000
         gc_rf_models[:, 1] = semi_yc / 1000
@@ -813,9 +804,7 @@ class MosaicConstructor(Mathematics, Viz):
                 rho, phi, gc_rf_models, surround_fixed=self.surround_fixed
             )
 
-        # All ganglion cell spatial parameters are now saved to ganglion cell object dataframe gc_df
-
-    def fit_tonic_drives(self, show_build_process=False):
+    def _fit_tonic_drives(self, show_build_process=False):
         tonicdrive_array = np.array(
             self.all_fits_df.iloc[self.good_data_indices].tonicdrive
         )
@@ -834,7 +823,7 @@ class MosaicConstructor(Mathematics, Viz):
 
         return shape, loc, scale
 
-    def fit_temporal_statistics(self, show_build_process=False):
+    def _fit_temporal_statistics(self, show_build_process=False):
         temporal_filter_parameters = ["n", "p1", "p2", "tau1", "tau2"]
         distrib_params = np.zeros((len(temporal_filter_parameters), 3))
 
@@ -872,17 +861,17 @@ class MosaicConstructor(Mathematics, Viz):
             columns=["shape", "loc", "scale"],
         )
 
-    def create_temporal_filters(self, distrib_params_df, distribution="gamma"):
+    def _create_temporal_filters(self, distrib_params_df, distribution="gamma"):
 
         n_rgc = len(self.gc_df)
 
         for param_name, row in distrib_params_df.iterrows():
             shape, loc, scale = row
-            self.gc_df[param_name] = self.get_random_samples(
+            self.gc_df[param_name] = self._get_random_samples(
                 shape, loc, scale, n_rgc, distribution
             )
 
-    def scale_both_amplitudes(self):
+    def _scale_both_amplitudes(self):
         """
         Scale center and surround amplitudes so that the spatial RF volume is comparable to that of data.
         Second step of scaling is done before convolving with the stimulus.
@@ -911,14 +900,12 @@ class MosaicConstructor(Mathematics, Viz):
             amplitudec[i] = mean_center_sd**2 / (
                 self.gc_df.iloc[i].semi_xc * self.gc_df.iloc[i].semi_yc
             )
-            # amplitudes[i] = self.gc_df.iloc[i].amplitudes * (mean_surround_sd**2 / (self.gc_df.iloc[i].semi_xc * self.gc_df.iloc[i].semi_yc * self.gc_df.iloc[i].sur_ratio**2))
 
         data_rel_sur_amplitude = self.gc_df["amplitudes"]
         self.gc_df["amplitudec"] = amplitudec
         self.gc_df["amplitudes"] = amplitudec * data_rel_sur_amplitude
         self.gc_df["relative_sur_amplitude"] = (
-            self.gc_df["amplitudes"] / self.gc_df["amplitudec"]
-        )
+            self.gc_df["amplitudes"] / self.gc_df["amplitudec"])
 
     def visualize_mosaic(self):
         """
@@ -948,36 +935,36 @@ class MosaicConstructor(Mathematics, Viz):
         """
         # -- First, place the ganglion cell midpoints
         # Run GC density fit to data, get func_params. Data from Perry_1984_Neurosci
-        gc_density_func_params = self.fit_gc_density_data()
+        gc_density_func_params = self._fit_gc_density_data()
 
         # Place ganglion cells to desired retina.
-        self.place_gc_units(
+        self._place_gc_units(
             gc_density_func_params, show_build_process=show_build_process
         )
 
         # -- Second, endow cells with spatial receptive fields
         # Collect spatial statistics for receptive fields
-        spatial_statistics_dict = self.fit_spatial_statistics(
+        spatial_statistics_dict = self._fit_spatial_statistics(
             show_build_process=show_build_process
         )
 
         # Get fit parameters for dendritic field diameter with respect to eccentricity. Linear and quadratic fit.
         # Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
         dendr_diam_vs_eccentricity_parameters_dict = (
-            self.fit_dendritic_diameter_vs_eccentricity(
+            self._fit_dendritic_diameter_vs_eccentricity(
                 show_build_process=show_build_process
             )
         )
 
         # Construct spatial receptive fields. Centers are saved in the object
-        self.place_spatial_receptive_fields(
+        self._place_spatial_receptive_fields(
             spatial_statistics_dict,
             dendr_diam_vs_eccentricity_parameters_dict,
             show_build_process,
         )
 
         # Scale center and surround amplitude so that Gaussian volume is preserved
-        self.scale_both_amplitudes()  # TODO - what was the purpose of this?
+        self._scale_both_amplitudes()  # TODO - what was the purpose of this?
 
         # At this point the spatial receptive fields are ready.
         # The positions are in gc_eccentricity, gc_polar_angle, and the rf parameters in gc_rf_models
@@ -987,11 +974,11 @@ class MosaicConstructor(Mathematics, Viz):
         self.gc_df["rf_radius"] = np.sqrt(self.gc_df.semi_xc * self.gc_df.semi_yc)
 
         # Finally, get non-spatial parameters
-        temporal_statistics_df = self.fit_temporal_statistics()
-        self.create_temporal_filters(temporal_statistics_df)
+        temporal_statistics_df = self._fit_temporal_statistics()
+        self._create_temporal_filters(temporal_statistics_df)
 
-        td_shape, td_loc, td_scale = self.fit_tonic_drives()
-        self.gc_df["tonicdrive"] = self.get_random_samples(
+        td_shape, td_loc, td_scale = self._fit_tonic_drives()
+        self.gc_df["tonicdrive"] = self._get_random_samples(
             td_shape, td_loc, td_scale, n_rgc, "gamma"
         )
 
@@ -1005,7 +992,7 @@ class MosaicConstructor(Mathematics, Viz):
         self.gc_df.to_csv(filepath)
 
 
-class FunctionalMosaic(Mathematics):
+class FunctionalMosaic(ConstructionMathematics):
     def __init__(
         self,
         gc_dataframe,
@@ -1080,7 +1067,7 @@ class FunctionalMosaic(Mathematics):
         self.microm_per_pix = 0
         self.temporal_filter_len = 0
 
-        self.initialize_digital_sampling()
+        self._initialize_digital_sampling()
 
     def _vspace_to_pixspace(self, x, y):
         """
@@ -1103,7 +1090,218 @@ class FunctionalMosaic(Mathematics):
 
         return q, r
 
-    def get_extents_deg(self):
+    def _get_crop_pixels(self, cell_index):
+        """
+        Get pixel coordinates for stimulus crop that is the same size as the spatial filter
+
+        :param cell_index: int
+        :return:
+        """
+        gc = self.gc_df_pixspace.iloc[cell_index]
+        q_center = int(gc.q_pix)
+        r_center = int(gc.r_pix)
+
+        side_halflen = (
+            self.spatial_filter_sidelen - 1
+        ) // 2  # crops have width = height
+
+        qmin = q_center - side_halflen
+        qmax = q_center + side_halflen
+        rmin = r_center - side_halflen
+        rmax = r_center + side_halflen
+
+        return qmin, qmax, rmin, rmax
+
+    def _create_spatial_filter(self, cell_index):
+        """
+        Creates the spatial component of the spatiotemporal filter
+
+        :param cell_index: int
+        :return:
+        """
+
+        offset = 0.0
+        s = self.spatial_filter_sidelen
+
+        gc = self.gc_df_pixspace.iloc[cell_index]
+        qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
+
+        x_grid, y_grid = np.meshgrid(
+            np.arange(qmin, qmax + 1, 1), np.arange(rmin, rmax + 1, 1)
+        )
+
+        orientation_center = gc.orientation_center * (np.pi / 180)
+        spatial_kernel = self.DoG2D_fixed_surround(
+            (x_grid, y_grid),
+            gc.amplitudec,
+            gc.q_pix,
+            gc.r_pix,
+            gc.semi_xc,
+            gc.semi_yc,
+            orientation_center,
+            gc.amplitudes,
+            gc.sur_ratio,
+            offset,
+        )
+        spatial_kernel = np.reshape(spatial_kernel, (s, s))
+
+        # Scale the spatial filter so that its maximal gain is something reasonable
+        # TODO - how should you scale the kernel??
+        max_gain = np.max(np.abs(np.fft.fft2(spatial_kernel)))
+        # 5.3 here just to give exp(5.3) = 200 Hz max firing rate to sinusoids
+        spatial_kernel = (5.3 / max_gain) * spatial_kernel
+
+        return spatial_kernel
+
+    def _create_temporal_filter(self, cell_index):
+        """
+        Creates the temporal component of the spatiotemporal filter
+
+        :param cell_index: int
+        :return:
+        """
+
+        filter_params = self.gc_df.iloc[cell_index][["n", "p1", "p2", "tau1", "tau2"]]
+        if self.response_type == "off":
+            filter_params[1] = (-1) * filter_params[1]
+            filter_params[2] = (-1) * filter_params[2]
+
+        tvec = np.linspace(0, self.data_filter_duration, self.temporal_filter_len)
+        temporal_filter = self.diff_of_lowpass_filters(tvec, *filter_params)
+
+        # Scale the temporal filter so that its maximal gain is 1
+        # TODO - how should you scale the kernel??
+        max_gain = np.max(np.abs(np.fft.fft(temporal_filter)))
+        temporal_filter = (1 / max_gain) * temporal_filter
+
+        return temporal_filter
+
+    def _create_postspike_filter(self, cell_index):
+        raise NotImplementedError
+
+    def _generator_to_firing_rate(self, generator_potential):
+
+        # firing_rate = np.exp(generator_potential)
+        firing_rate = np.power(generator_potential, 2)
+
+        return firing_rate
+
+    def _old_style_visualization_for_run_cells(
+        self,
+        n_trials,
+        n_cells,
+        all_spiketrains,
+        exp_generator_potential,
+        duration,
+        generator_potential,
+        video_dt,
+        tvec_new,
+        show_gc_response=True,
+    ):
+
+        # Prepare data for manual visualization
+        if n_trials > 1 and n_cells == 1:
+            for_eventplot = np.array(all_spiketrains)
+            for_histogram = np.concatenate(all_spiketrains)
+            for_generatorplot = exp_generator_potential.flatten()
+            n_samples = n_trials
+            sample_name = "Trials"
+        elif n_trials == 1 and n_cells > 1:
+            for_eventplot = np.concatenate(all_spiketrains)
+            for_histogram = np.concatenate(all_spiketrains[0])
+            for_generatorplot = np.mean(exp_generator_potential, axis=1)
+            n_samples = n_cells
+            sample_name = "Cell #"
+        else:
+            show_gc_response = False
+            print(
+                "You attempted to visualize gc activity, but you have either n_trials or n_cells must be 1, and the other > 1"
+            )
+
+        plt.subplots(2, 1, sharex=True)
+        plt.subplot(211)
+        # plt.eventplot(spiketrains)
+        plt.eventplot(for_eventplot)
+        plt.xlim([0, duration / b2u.second])
+        # plt.ylabel('Trials')
+        plt.ylabel(sample_name)
+
+        plt.subplot(212)
+        # Plot the generator and the average firing rate
+        tvec = np.arange(0, len(generator_potential), 1) * video_dt
+        # plt.plot(tvec, exp_generator_potential.flatten(), label='Generator')
+        plt.plot(tvec, for_generatorplot, label="Generator")
+        plt.xlim([0, duration / b2u.second])
+
+        # Compute average firing rate over trials (should approximately follow generator)
+        hist_dt = 1 * b2u.ms
+        # n_bins = int((duration/hist_dt))
+        bin_edges = np.append(
+            tvec_new, [duration / b2u.second]
+        )  # Append the rightmost edge
+        # hist, _ = np.histogram(spiketrains_flat, bins=bin_edges)
+        hist, _ = np.histogram(for_histogram, bins=bin_edges)
+        # avg_fr = hist / n_trials / (hist_dt / b2u.second)
+        avg_fr = hist / n_samples / (hist_dt / b2u.second)
+
+        xsmooth = np.arange(-15, 15 + 1)
+        smoothing = stats.norm.pdf(xsmooth, scale=5)  # Gaussian smoothing with SD=5 ms
+        smoothed_avg_fr = np.convolve(smoothing, avg_fr, mode="same")
+
+        plt.plot(bin_edges[:-1], smoothed_avg_fr, label="Measured")
+        plt.ylabel("Firing rate (Hz)")
+        plt.xlabel("Time (s)")
+
+        plt.legend()
+
+    def _get_w_z_coords(self):
+        """
+        # Create w_coord, z_coord for cortical and visual coordinates, respectively
+        """
+        # Create w_coord, z_coord for cortical and visual coordinates, respectively
+        z_coord = self.gc_df["x_deg"].values + 1j * self.gc_df["y_deg"].values
+
+        # Macaque values
+        # a for macaques should be 0.3 - 0.9, Schwartz 1994 citing Wilson et al 1990 "The perception of form" in Visual perception: The neurophysiological foundations, Academic Press
+        # k has been pretty open.
+        # However, if we relate 1/M = (a/k) + (1/k) * E and M = (1/0.077) + (1/(0.082 * E)), we get
+        # Andrew's answer: k=1/.082, a=. 077/.082
+        a = 0.077 / 0.082  # ~ 0.94
+        k = 1 / 0.082  # ~ 12.2
+        w_coord = k * np.log(z_coord + a)
+
+        return w_coord, z_coord
+
+    def _save_for_cxsystem(self, spike_mons, filename=None, analog_signal=None):
+        # Save to current working dir
+        if filename is None:
+            save_path = os.path.join(os.getcwd(), "most_recent_spikes")
+        else:
+            save_path = os.path.join(os.getcwd(), filename)
+
+        self.output_file_extension = ".gz"
+
+        self.w_coord, self.z_coord = self._get_w_z_coords()
+
+        # Copied from CxSystem2\cxsystem2\core\stimuli.py The Stimuli class does not support reuse
+        print(" -  Saving spikes, rgc coordinates and analog signal (if not None)...")
+        self.generated_input_folder = save_path + self.output_file_extension
+        data_to_save = {}
+        for ii in range(len(spike_mons)):
+            data_to_save["spikes_" + str(ii)] = []
+            # data_to_save['spikes_' + str(ii)].append(spike_mons[ii].it[0].__array__())
+            # data_to_save['spikes_' + str(ii)].append(spike_mons[ii].it[1].__array__())
+            data_to_save["spikes_" + str(ii)].append(spike_mons[ii][0])
+            data_to_save["spikes_" + str(ii)].append(spike_mons[ii][1])
+        data_to_save["w_coord"] = self.w_coord
+        data_to_save["z_coord"] = self.z_coord
+
+        if analog_signal is not None:
+            data_to_save["analog_signal"] = analog_signal
+
+        write_to_file(save_path + self.output_file_extension, data_to_save)
+
+    def _get_extents_deg(self):
         """
         Get the stimulus/screen extents in degrees
 
@@ -1119,7 +1317,7 @@ class FunctionalMosaic(Mathematics):
 
         return a
 
-    def initialize_digital_sampling(self):
+    def _initialize_digital_sampling(self):
         """
         Endows RGCs with stimulus/pixel space coordinates
 
@@ -1165,6 +1363,35 @@ class FunctionalMosaic(Mathematics):
         # self.video_fps = self.stimulus_video.fps
         self.temporal_filter_len = int(self.data_filter_duration / (1000 / self.fps))
 
+    def _get_cropped_video(self, cell_index, contrast=True, reshape=False):
+        """
+        Crops the video to RGC surroundings
+
+        :param cell_index: int
+        :param reshape:
+        :return:
+        """
+
+        # TODO - RGCs that are near the border of the stimulus will fail (no problem if stim is large enough)
+
+        qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
+        stimulus_cropped = self.stimulus_video.frames[
+            rmin : rmax + 1, qmin : qmax + 1, :
+        ].copy()
+
+        # Scale stimulus pixel values from [0, 255] to [-1.0, 1.0]
+        # TODO - This is brutal and unphysiological, at least for natural movies
+        if contrast is True:
+            stimulus_cropped = stimulus_cropped / 127.5 - 1.0
+
+        if reshape is True:
+            s = self.spatial_filter_sidelen
+            n_frames = np.shape(self.stimulus_video.frames)[2]
+
+            stimulus_cropped = np.reshape(stimulus_cropped, (s**2, n_frames))
+
+        return stimulus_cropped
+
     def load_stimulus(self, stimulus_video, show_stim_with_gcs=False):
         """
         Loads stimulus video
@@ -1192,7 +1419,7 @@ class FunctionalMosaic(Mathematics):
         ), "Stimulus pixel values must be between 0 and 255"
 
         # Drop RGCs whose center is not inside the stimulus
-        xmin, xmax, ymin, ymax = self.get_extents_deg()
+        xmin, xmax, ymin, ymax = self._get_extents_deg()
         for index, gc in self.gc_df_pixspace.iterrows():
             if (
                 (gc.x_deg < xmin)
@@ -1310,92 +1537,6 @@ class FunctionalMosaic(Mathematics):
         plt.xticks([])
         plt.yticks([])
 
-    def _get_crop_pixels(self, cell_index):
-        """
-        Get pixel coordinates for stimulus crop that is the same size as the spatial filter
-
-        :param cell_index: int
-        :return:
-        """
-        gc = self.gc_df_pixspace.iloc[cell_index]
-        q_center = int(gc.q_pix)
-        r_center = int(gc.r_pix)
-
-        side_halflen = (
-            self.spatial_filter_sidelen - 1
-        ) // 2  # crops have width = height
-
-        qmin = q_center - side_halflen
-        qmax = q_center + side_halflen
-        rmin = r_center - side_halflen
-        rmax = r_center + side_halflen
-
-        return qmin, qmax, rmin, rmax
-
-    def _create_spatial_filter(self, cell_index):
-        """
-        Creates the spatial component of the spatiotemporal filter
-
-        :param cell_index: int
-        :return:
-        """
-
-        offset = 0.0
-        s = self.spatial_filter_sidelen
-
-        gc = self.gc_df_pixspace.iloc[cell_index]
-        qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
-
-        x_grid, y_grid = np.meshgrid(
-            np.arange(qmin, qmax + 1, 1), np.arange(rmin, rmax + 1, 1)
-        )
-
-        orientation_center = gc.orientation_center * (np.pi / 180)
-        spatial_kernel = self.DoG2D_fixed_surround(
-            (x_grid, y_grid),
-            gc.amplitudec,
-            gc.q_pix,
-            gc.r_pix,
-            gc.semi_xc,
-            gc.semi_yc,
-            orientation_center,
-            gc.amplitudes,
-            gc.sur_ratio,
-            offset,
-        )
-        spatial_kernel = np.reshape(spatial_kernel, (s, s))
-
-        # Scale the spatial filter so that its maximal gain is something reasonable
-        # TODO - how should you scale the kernel??
-        max_gain = np.max(np.abs(np.fft.fft2(spatial_kernel)))
-        # 5.3 here just to give exp(5.3) = 200 Hz max firing rate to sinusoids
-        spatial_kernel = (5.3 / max_gain) * spatial_kernel
-
-        return spatial_kernel
-
-    def _create_temporal_filter(self, cell_index):
-        """
-        Creates the temporal component of the spatiotemporal filter
-
-        :param cell_index: int
-        :return:
-        """
-
-        filter_params = self.gc_df.iloc[cell_index][["n", "p1", "p2", "tau1", "tau2"]]
-        if self.response_type == "off":
-            filter_params[1] = (-1) * filter_params[1]
-            filter_params[2] = (-1) * filter_params[2]
-
-        tvec = np.linspace(0, self.data_filter_duration, self.temporal_filter_len)
-        temporal_filter = self.diff_of_lowpass_filters(tvec, *filter_params)
-
-        # Scale the temporal filter so that its maximal gain is 1
-        # TODO - how should you scale the kernel??
-        max_gain = np.max(np.abs(np.fft.fft(temporal_filter)))
-        temporal_filter = (1 / max_gain) * temporal_filter
-
-        return temporal_filter
-
     def plot_tf_amplitude_response(self, cell_index, ax=None):
 
         ax = ax or plt.gca()
@@ -1411,9 +1552,6 @@ class FunctionalMosaic(Mathematics):
         plt.xlabel("Frequency (Hz)")
         plt.ylabel("Gain")
         ax.plot(freqs, amplitudes, ".")
-
-    def _create_postspike_filter(self, cell_index):
-        raise NotImplementedError
 
     def create_spatiotemporal_filter(
         self, cell_index, show_spatiotemporal_filter=False
@@ -1465,35 +1603,6 @@ class FunctionalMosaic(Mathematics):
 
         return spatiotemporal_filter
 
-    def get_cropped_video(self, cell_index, contrast=True, reshape=False):
-        """
-        Crops the video to RGC surroundings
-
-        :param cell_index: int
-        :param reshape:
-        :return:
-        """
-
-        # TODO - RGCs that are near the border of the stimulus will fail (no problem if stim is large enough)
-
-        qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
-        stimulus_cropped = self.stimulus_video.frames[
-            rmin : rmax + 1, qmin : qmax + 1, :
-        ].copy()
-
-        # Scale stimulus pixel values from [0, 255] to [-1.0, 1.0]
-        # TODO - This is brutal and unphysiological, at least for natural movies
-        if contrast is True:
-            stimulus_cropped = stimulus_cropped / 127.5 - 1.0
-
-        if reshape is True:
-            s = self.spatial_filter_sidelen
-            n_frames = np.shape(self.stimulus_video.frames)[2]
-
-            stimulus_cropped = np.reshape(stimulus_cropped, (s**2, n_frames))
-
-        return stimulus_cropped
-
     def plot_midpoint_contrast(self, cell_index, ax=None):
         """
         Plots the contrast in the mid-pixel of the stimulus cropped to RGC surroundings
@@ -1501,7 +1610,7 @@ class FunctionalMosaic(Mathematics):
         :param cell_index:
         :return:
         """
-        stimulus_cropped = self.get_cropped_video(cell_index)
+        stimulus_cropped = self._get_cropped_video(cell_index)
 
         midpoint_ix = (self.spatial_filter_sidelen - 1) // 2
         signal = stimulus_cropped[midpoint_ix, midpoint_ix, :]
@@ -1521,7 +1630,7 @@ class FunctionalMosaic(Mathematics):
         :param cell_index:
         :return:
         """
-        stimulus_cropped = self.get_cropped_video(
+        stimulus_cropped = self._get_cropped_video(
             cell_index, contrast=False
         )  # get stimulus intensities
         n_frames = self.stimulus_video.video_n_frames
@@ -1548,7 +1657,7 @@ class FunctionalMosaic(Mathematics):
         :param cell_index:
         :return:
         """
-        stimulus_cropped = self.get_cropped_video(
+        stimulus_cropped = self._get_cropped_video(
             cell_index, contrast=False
         )  # get stimulus intensities
         n_frames = self.stimulus_video.video_n_frames
@@ -1567,13 +1676,6 @@ class FunctionalMosaic(Mathematics):
         ax.plot(tvec, signal)
         ax.set_ylim([0, 1])
 
-    def _generator_to_firing_rate(self, generator_potential):
-
-        # firing_rate = np.exp(generator_potential)
-        firing_rate = np.power(generator_potential, 2)
-
-        return firing_rate
-
     def convolve_stimulus(self, cell_index, show_convolved_stimulus=False):
         """
         Convolves the stimulus with the stimulus filter
@@ -1589,7 +1691,7 @@ class FunctionalMosaic(Mathematics):
         # spatiotemporal_filter = self.create_spatiotemporal_filter(cell_index, show_spatiotemporal_filter=True)
 
         # Get cropped stimulus
-        stimulus_cropped = self.get_cropped_video(cell_index, reshape=True)
+        stimulus_cropped = self._get_cropped_video(cell_index, reshape=True)
 
         # Run convolution
         generator_potential = convolve(
@@ -1627,200 +1729,6 @@ class FunctionalMosaic(Mathematics):
 
         # Return the 1-dimensional generator potential
         return generator_potential + tonic_drive
-
-    def _old_style_visualization_for_run_cells(
-        self,
-        n_trials,
-        n_cells,
-        all_spiketrains,
-        exp_generator_potential,
-        duration,
-        generator_potential,
-        video_dt,
-        tvec_new,
-        show_gc_response=True,
-    ):
-
-        # Prepare data for manual visualization
-        if n_trials > 1 and n_cells == 1:
-            for_eventplot = np.array(all_spiketrains)
-            for_histogram = np.concatenate(all_spiketrains)
-            for_generatorplot = exp_generator_potential.flatten()
-            n_samples = n_trials
-            sample_name = "Trials"
-        elif n_trials == 1 and n_cells > 1:
-            for_eventplot = np.concatenate(all_spiketrains)
-            for_histogram = np.concatenate(all_spiketrains[0])
-            for_generatorplot = np.mean(exp_generator_potential, axis=1)
-            n_samples = n_cells
-            sample_name = "Cell #"
-        else:
-            show_gc_response = False
-            print(
-                "You attempted to visualize gc activity, but you have either n_trials or n_cells must be 1, and the other > 1"
-            )
-
-        plt.subplots(2, 1, sharex=True)
-        plt.subplot(211)
-        # plt.eventplot(spiketrains)
-        plt.eventplot(for_eventplot)
-        plt.xlim([0, duration / b2u.second])
-        # plt.ylabel('Trials')
-        plt.ylabel(sample_name)
-
-        plt.subplot(212)
-        # Plot the generator and the average firing rate
-        tvec = np.arange(0, len(generator_potential), 1) * video_dt
-        # plt.plot(tvec, exp_generator_potential.flatten(), label='Generator')
-        plt.plot(tvec, for_generatorplot, label="Generator")
-        plt.xlim([0, duration / b2u.second])
-
-        # Compute average firing rate over trials (should approximately follow generator)
-        hist_dt = 1 * b2u.ms
-        # n_bins = int((duration/hist_dt))
-        bin_edges = np.append(
-            tvec_new, [duration / b2u.second]
-        )  # Append the rightmost edge
-        # hist, _ = np.histogram(spiketrains_flat, bins=bin_edges)
-        hist, _ = np.histogram(for_histogram, bins=bin_edges)
-        # avg_fr = hist / n_trials / (hist_dt / b2u.second)
-        avg_fr = hist / n_samples / (hist_dt / b2u.second)
-
-        xsmooth = np.arange(-15, 15 + 1)
-        smoothing = stats.norm.pdf(xsmooth, scale=5)  # Gaussian smoothing with SD=5 ms
-        smoothed_avg_fr = np.convolve(smoothing, avg_fr, mode="same")
-
-        plt.plot(bin_edges[:-1], smoothed_avg_fr, label="Measured")
-        plt.ylabel("Firing rate (Hz)")
-        plt.xlabel("Time (s)")
-
-        plt.legend()
-
-        # if spike_generator_model=='refractory':
-        #     plt.subplots(2, 1, sharex=True)
-        #     plt.subplot(211)
-        #     plt.plot(   spiketrains[cell_index], np.ones(spiketrains[cell_index].shape) *
-        #                 np.mean(state_monitor.lambda_ttlast[cell_index]), 'g+')
-        #     # plt.plot(state_monitor.t, state_monitor.v[50])
-        #     plt.plot(state_monitor.t, state_monitor.lambda_ttlast[cell_index])
-
-        #     plt.xlim([0, duration / b2u.second])
-        #     plt.ylabel('lambda_ttlast')
-
-        #     plt.subplot(212)
-        #     # Plot the generator and the average firing rate
-        #     # plt.plot(state_monitor.t, state_monitor.ref[50])
-        #     plt.plot(state_monitor.t, state_monitor.w[cell_index])
-        #     plt.xlim([0, duration / b2u.second])
-        #     plt.ylabel('w')
-
-        #     plt.xlabel('Time (s)')
-
-    def _get_w_z_coords(self):
-        """
-        # Create w_coord, z_coord for cortical and visual coordinates, respectively
-        """
-        # Create w_coord, z_coord for cortical and visual coordinates, respectively
-        z_coord = self.gc_df["x_deg"].values + 1j * self.gc_df["y_deg"].values
-
-        # Macaque values
-        # a for macaques should be 0.3 - 0.9, Schwartz 1994 citing Wilson et al 1990 "The perception of form" in Visual perception: The neurophysiological foundations, Academic Press
-        # k has been pretty open.
-        # However, if we relate 1/M = (a/k) + (1/k) * E and M = (1/0.077) + (1/(0.082 * E)), we get
-        # Andrew's answer: k=1/.082, a=. 077/.082
-        a = 0.077 / 0.082  # ~ 0.94
-        k = 1 / 0.082  # ~ 12.2
-        w_coord = k * np.log(z_coord + a)
-
-        return w_coord, z_coord
-
-    def _save_for_cxsystem(self, spike_mons, filename=None, analog_signal=None):
-        # Save to current working dir
-        if filename is None:
-            save_path = os.path.join(os.getcwd(), "most_recent_spikes")
-        else:
-            save_path = os.path.join(os.getcwd(), filename)
-
-        self.output_file_extension = ".gz"
-
-        self.w_coord, self.z_coord = self._get_w_z_coords()
-
-        # Copied from CxSystem2\cxsystem2\core\stimuli.py The Stimuli class does not support reuse
-        print(" -  Saving spikes, rgc coordinates and analog signal (if not None)...")
-        self.generated_input_folder = save_path + self.output_file_extension
-        data_to_save = {}
-        for ii in range(len(spike_mons)):
-            data_to_save["spikes_" + str(ii)] = []
-            # data_to_save['spikes_' + str(ii)].append(spike_mons[ii].it[0].__array__())
-            # data_to_save['spikes_' + str(ii)].append(spike_mons[ii].it[1].__array__())
-            data_to_save["spikes_" + str(ii)].append(spike_mons[ii][0])
-            data_to_save["spikes_" + str(ii)].append(spike_mons[ii][1])
-        data_to_save["w_coord"] = self.w_coord
-        data_to_save["z_coord"] = self.z_coord
-
-        if analog_signal is not None:
-            data_to_save["analog_signal"] = analog_signal
-
-        write_to_file(save_path + self.output_file_extension, data_to_save)
-
-    # def _save_for_neo(self, spike_mons, n_trials, n_cells, t_start, t_end, filename=None, analog_signal=None, analog_step=None):
-
-    #     # Save to current working dir
-    #     if filename is None:
-    #         save_path = os.path.join(os.getcwd(),'most_recent_spikes_neo')
-    #     else:
-    #         save_path = os.path.join(os.getcwd(),filename)
-
-    #     self.output_file_extension = '.h5' # NEO
-
-    #     # Prep path
-    #     print(" -  Saving spikes, rgc coordinates and analog signal (if not None)...")
-    #     nix_fullpath = save_path + self.output_file_extension
-
-    #     # create a new file overwriting any existing content
-    #     nixfile = NixIO(filename=nix_fullpath, mode='ow') # modes 'ow' overwrite, 'rw' append?, 'ro' read only
-
-    #     self.w_coord, self.z_coord = self._get_w_z_coords()
-    #     # pdb.set_trace()
-    #     # Prep Neo
-    #     # Create Neo Block to contain all generated data
-    #     block = neo.Block(name=filename)
-
-    #     # # Create multiple Segments corresponding to trials
-    #     # block.segments = [neo.Segment(index=i) for i in range(n_trials)]
-    #     # Create one ChannelIndex (analog channels)
-    #     block.channel_indexes = [neo.ChannelIndex(name='C%d' % i, index=i) for i in range(n_cells)]
-    #     # Attach one Units (cells) to each ChannelIndex
-    #     for idx, channel_idx in enumerate(block.channel_indexes):
-    #         channel_idx.units = [neo.Unit('U%d' % i) for i in range(1)]
-    #         channel_idx.index = np.array([idx])
-
-    #     # Save spikes
-    #     for idx2, channel_index in enumerate(block.channel_indexes):
-    #         for idx, spike_monitor in zip(range(n_trials), spike_mons):
-    #             spikes = spike_monitor.spike_trains()[idx2]
-    #             train = neo.SpikeTrain( spikes,
-    #                                     t_end[idx],
-    #                                     t_start=t_start[idx],
-    #                                     units='sec')
-    #             train.name=f'Unit {idx2}, trial {idx}'
-    #             # seg.spiketrains.append(train)
-    #             channel_index.units[0].spiketrains.append(train)
-
-    #         if analog_signal is not None:
-    #             stepsize = (analog_step / b2u.second) * pq.s
-    #             analog_sigarr = neo.AnalogSignal(   analog_signal[:,idx2],
-    #                                             units="Hz",
-    #                                             t_start=t_start[idx],
-    #                                             sampling_period=stepsize)
-    #             channel_index.analogsignals.append(analog_sigarr)
-
-    #     # save nix to file
-    #     nixfile.write_block(block)
-
-    #     # close file
-    #     nixfile.close()
-    #     # pdb.set_trace()
 
     def run_cells(
         self,

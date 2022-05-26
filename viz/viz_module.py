@@ -142,7 +142,6 @@ class Viz:
                     fill=False,
                 )
                 ax.add_artist(e1)
-        # e2=ellipse((popt[np.array([1,2])]),popt[7]*popt[3],popt[7]*popt[4],-popt[5]*180/np.pi,edgecolor='w', linewidth=2, fill=False, linestyle='--')
 
         ax.axis("equal")
         ax.legend()
