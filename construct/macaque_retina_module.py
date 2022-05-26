@@ -80,7 +80,7 @@ class MosaicConstructor(Mathematics, Viz):
         proportion_of_parasol_gc_type = 0.08
         proportion_of_midget_gc_type = 0.64
 
-        # Proportion of ON and OFF response type cells, assuming ON rf diameter = 1.2 x OFF rf diamter, and
+        # Proportion of ON and OFF response type cells, assuming ON rf diameter = 1.2 x OFF rf diameter, and
         # coverage factor =1; Chichilnisky_2002_JNeurosci
         proportion_of_ON_response_type = 0.40
         proportion_of_OFF_response_type = 0.60
@@ -216,7 +216,8 @@ class MosaicConstructor(Mathematics, Viz):
         """
         Read re-digitized old literature data from mat files
         """
-        digitized_figures_path = MosaicConstructor.digitized_figures_path
+        digitized_figures_path = self.digitized_figures_path
+        pdb.set_trace()
         print("Reading density data from:", digitized_figures_path)
         gc_density = sio.loadmat(
             digitized_figures_path / "Perry_1984_Neurosci_GCdensity_c.mat",
@@ -252,7 +253,7 @@ class MosaicConstructor(Mathematics, Viz):
         """
         Read re-digitized old literature data from mat files
         """
-        digitized_figures_path = MosaicConstructor.digitized_figures_path
+        digitized_figures_path = self.digitized_figures_path
 
         if self.gc_type == "parasol":
             dendr_diam1 = sio.loadmat(
@@ -1729,7 +1730,7 @@ class FunctionalMosaic(Mathematics):
         # Andrew's answer: k=1/.082, a=. 077/.082
         a = 0.077 / 0.082  # ~ 0.94
         k = 1 / 0.082  # ~ 12.2
-        w_coord = k * log(z_coord + a)
+        w_coord = k * np.log(z_coord + a)
 
         return w_coord, z_coord
 
@@ -1921,7 +1922,7 @@ class FunctionalMosaic(Mathematics):
             net = b2.Network(neuron_group, spike_monitor)
 
         elif spike_generator_model == "poisson":
-            # Create Brian PoissonGroup (inefficient implementation but nevermind)
+            # Create Brian PoissonGroup (inefficient implementation but never mind)
             poisson_group = b2.PoissonGroup(n_cells, rates="inst_rates(t, i)")
             spike_monitor = b2.SpikeMonitor(poisson_group)
             net = b2.Network(poisson_group, spike_monitor)

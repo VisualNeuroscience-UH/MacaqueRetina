@@ -16,33 +16,20 @@ import pdb
 from project.project_manager_module import ProjectManager
 
 """
-This is code for building macaque retinal filters corresponding to midget and parasol cells' responses.
-We keep modular code structure, to be able to add new features at later phase.
+This is code for building macaque retinal filters corresponding to midget and parasol cell responses. We keep modular code structure, to be able to add new features at later phase.
 
 The cone photoreceptor sampling is approximated as achromatic (single) compressive cone response(Baylor_1987_JPhysiol).
 
-Visual angle (A) in degrees from previous studies (Croner and Kaplan, 1995) was approksimated with relation 5 deg/mm.
-This works fine up to 20 deg ecc, but underestimates the distance thereafter. If more peripheral representations are later
-necessary, the millimeters should be calculates by inverting the inverting the relation 
-A = 0.1 + 4.21E + 0.038E^2 (Drasdo and Fowler, 1974; Dacey and Petersen, 1992)
+Visual angle (A) in degrees from previous studies (Croner and Kaplan, 1995) was approximated with relation 5 deg/mm. This works fine up to 20 deg ecc, but underestimates the distance thereafter. If more peripheral representations are later necessary, the millimeters should be calculates by inverting the relation 
+A = 0.1 + 4.21E + 0.038E^2 (Drasdo and Fowler, 1974; Dacey and Petersen, 1992). Current implementation uses one deg = 220um (Perry et al 1985). One mm retina is ~4.55 deg visual field.
 
 We have extracted statistics of macaque ganglion cell receptive fields from literature and build continuous functions.
 
-The density of many cell types is inversely proportional to dendritic field coverage, 
-suggesting constant coverage factor (Perry_1984_Neurosci, Wassle_1991_PhysRev).
-Midget coverage factor is 1  (Dacey_1993_JNeurosci for humans; Wassle_1991_PhysRev, Lee_2010_ProgRetEyeRes).
-Parasol coverage factor is 3-4 close to fovea (Grunert_1993_VisRes); 2-7 according to Perry_1984_Neurosci.
-These include ON- and OFF-center cells, and perhaps other cell types.
-It is likely that coverage factor is 1 for midget and parasol ON- and OFF-center cells each, 
-which is also in line with Doi_2012 JNeurosci, Field_2010_Nature
+The density of many cell types is inversely proportional to dendritic field coverage, suggesting constant coverage factor (Perry_1984_Neurosci, Wassle_1991_PhysRev). Midget coverage factor is 1  (Dacey_1993_JNeurosci for humans; Wassle_1991_PhysRev, Lee_2010_ProgRetEyeRes). Parasol coverage factor is 3-4 close to fovea (Grunert_1993_VisRes); 2-7 according to Perry_1984_Neurosci. These include ON- and OFF-center cells, and perhaps other cell types. It is likely that coverage factor is 1 for midget and parasol ON- and OFF-center cells each, which is also in line with Doi_2012 JNeurosci, Field_2010_Nature
 
-The spatiotemporal receptive fields for the four cell types (parasol & midget, ON & OFF) were modelled with double ellipsoid
-difference-of-Gaussians model. The original spike triggered averaging RGC data in courtesy of Chichilnisky lab. The method is
-described in Chichilnisky_2001_Network, Chichilnisky_2002_JNeurosci; Field_2010_Nature.
+The spatiotemporal receptive fields for the four cell types (parasol & midget, ON & OFF) were modelled with double ellipsoid difference-of-Gaussians model. The original spike triggered averaging RGC data in courtesy of Chichilnisky lab. The method is described in Chichilnisky_2001_Network, Chichilnisky_2002_JNeurosci Field_2010_Nature.
 
-Chichilnisky_2002_JNeurosci states that L-ON (parasol) cells have on average 21% larger RFs than L-OFF cells. 
-He also shows that OFF cells have more nonlinear response to input, which is not implemented currently (a no-brainer to implement 
-if necessary).
+Chichilnisky_2002_JNeurosci states that L-ON (parasol) cells have on average 21% larger RFs than L-OFF cells. He also shows that OFF cells have more nonlinear response to input, which is not implemented currently (a no-brainer to implement if necessary).
 
 NOTE: bad cell indices hard coded from Chichilnisky apricot data. For another data set, visualize fits, and change the bad cells.
 NOTE: If eccentricity stays under 20 deg, dendritic diameter data fitted up to 25 deg only (better fit close to fovea)
@@ -55,13 +42,12 @@ NOTE: If eccentricity stays under 20 deg, dendritic diameter data fitted up to 2
 -quality control: compare to Watanabe_1989_JCompNeurol
     -dendritic diameter scatter is on average (lower,upper quartile) 21.3% of the median diameter in the local area
 
-    Parasol dendritic field diameter: temporal retina 51.8 microm + ecc(mm) * 20.6 microm/mm,
-    nasal retina; 115.5 microm + ecc(mm) * 6.97 microm/mm
+    Parasol dendritic field diameter: temporal retina 51.8 microm + ecc(mm) * 20.6 microm/mm, nasal retina; 115.5 microm + ecc(mm) * 6.97 microm/mm
 
 """
 
 """
-Use keyword substring "file" in filenames, and "folder" in foldernames to assert that they are turned into pathlib objects. Path structure is assumed to be root_path/project/experiment/output_folder
+Use keyword substring "file" in filenames, and "folder" in folder names to assert that they are turned into pathlib objects. Path structure is assumed to be root_path/project/experiment/output_folder
 
 Abbreviations:
 ana : analysis
