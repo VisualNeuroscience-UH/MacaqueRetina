@@ -149,7 +149,7 @@ if __name__ == "__main__":
     """
     Build and test your retina here, one gc type at a time. Temporal hemiretina of macaques.
     """
-    mosaic = PM.construct.MosaicConstructor(
+    PM.mosaic_constructor.initialize(
         gc_type="parasol",
         response_type="on",
         ecc_limits=[4.8, 5.2],
@@ -158,12 +158,12 @@ if __name__ == "__main__":
         randomize_position=0.05,
     )
 
-    mosaic.build()
-    mosaic.save_mosaic("parasol_on_single.csv")
+    PM.mosaic_constructor.build(show_build_process=False)
+    PM.mosaic_constructor.save_mosaic("parasol_on_single.csv")
 
     testmosaic = pd.read_csv("parasol_on_single.csv", index_col=0)
 
-    ret = PM.construct.FunctionalMosaic(
+    PM.functional_mosaic.initialize(
         testmosaic,
         "parasol",
         "on",
@@ -193,7 +193,7 @@ if __name__ == "__main__":
 
     # ret.load_stimulus(grating)
     # ret.load_stimulus(stim)
-    ret.load_stimulus(PM.stimulate)
+    PM.functional_mosaic.load_stimulus(PM.stimulate)
 
     # # movie = vs.NaturalMovie('/home/henhok/nature4_orig35_fps100.avi', fps=100, pix_per_deg=60)
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)
@@ -214,14 +214,14 @@ if __name__ == "__main__":
 
     for filename in filenames:
 
-        ret.run_cells(
+        PM.functional_mosaic.run_cells(
             cell_index=example_gc,
             n_trials=5,
-            show_gc_response=True,
             save_data=False,
             spike_generator_model="poisson",
             return_monitor=False,
             filename=filename,
+            show_gc_response=True,
         )
     plt.show(block=False)
 
@@ -229,7 +229,7 @@ if __name__ == "__main__":
     # # plt.show(block = False)
     # # ret.save_spikes_csv()
 
-    ret.show_stimulus_with_gcs(example_gc=example_gc, frame_number=51)
+    PM.functional_mosaic.viz.show_stimulus_with_gcs(example_gc=example_gc, frame_number=51)
     # ret.show_single_gc_view(cell_index=example_gc, frame_number=21)
     # plt.show(block = False)
 

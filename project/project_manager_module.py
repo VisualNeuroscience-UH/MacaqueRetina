@@ -5,7 +5,7 @@ from context.context_module import Context
 from data_io.data_io_module import DataIO
 from analysis.analysis_module import Analysis
 from viz.viz_module import Viz
-import construct.macaque_retina_module as construct
+from  construct.macaque_retina_module import MosaicConstructor, FunctionalMosaic
 from stimuli.visual_stimuli_module import ConstructStimulus, PhotoReceptor
 
 # Builtin
@@ -14,6 +14,7 @@ import time
 import shlex
 import subprocess
 from types import ModuleType
+from copy import deepcopy
 
 
 # Analysis
@@ -21,11 +22,35 @@ import pandas as pd
 
 
 """
-Module on project-specific data analysis.
-This configures analysis. 
-Specific methods are called at the bottom after the if __name__=='__main__':
+Module on retina generation management
 
-Simo Vanni 2021
+We use dependency injection to make the code more modular and easier to test.
+It means that during construction here at the manager level, we can inject
+an object instance to constructor of a "client". Thus the constructed "client" is holding the injected
+object instance.
+
+Sometimes the injected object instance need access to it's client's attributes.
+Client object injection means that we inject the client object self BACK into the
+injected object. This is a bit of a hack, but it allows access to client attributes.
+When using the client object, it is called as "self.client_object.[attribute]".
+Note that it also creates a recursion client.injected_object.client_object.injected_object...
+
+Jösses. Leveät pinnat olisivat eksplisiittisempiä ja irroittaisivat takaisinkytkennän.
+Toisaalta kun meillä on MosaicConstructor ja FunctionalMosaic instanssit, niin
+niitä voi käyttää client_object attribuutin kautta.
+Yksi vaihtoehto olisi periä Viz ja kutsua suoraan self.menetelmää. Mutta tämä on
+tiivis kytkentä ja vaikeampi testata.
+Jos Viz halutaan irti, niin leveät pinnat taitaa olla ainoa järkevä vaihtoehto.
+Viz voisi sisältää luokkia, tyyliin ContructorViz, StimulusViz, ResponseViz
+
+Sit meil on data_io, context ja ana injisoituina, mutta ihan käyttämättä.
+Big road to nowhere...
+
+Aamupäivällä lisäsin pilkun, ja iltapäivällä otin sen pois...
+
+ARVAA JÄITKÖ TÄHÄN?
+
+Simo Vanni 2022
 """
 
 
@@ -48,8 +73,8 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         data_io = DataIO(context)
         self.data_io = data_io
 
-        # Monkey-patching macaque retina construct module
-        self.construct = construct
+        # # Monkey-patching macaque retina construct module
+        # self.construct = construct
 
         stimulate = ConstructStimulus(context, data_io) 
         self.stimulate = stimulate
@@ -68,7 +93,7 @@ class ProjectManager(ProjectBase, ProjectUtilities):
 
         self.ana = ana
         
-        self.viz = Viz(
+        viz = Viz(
             # Interfaces
             context,
             data_io,
@@ -77,6 +102,15 @@ class ProjectManager(ProjectBase, ProjectUtilities):
             # Methods, which are needed also elsewhere
             round_to_n_significant=self.round_to_n_significant,
         )
+
+        self.viz = viz
+
+        # Constructor for macaque retina mosaic. For client object injection, 
+        # we need deep copy of viz to avoid masking of the instances from distinct classes
+        self.mosaic_constructor = MosaicConstructor(context, data_io, deepcopy(viz))
+        self.functional_mosaic = FunctionalMosaic(context, data_io, deepcopy(viz))
+
+
 
     @property
     def context(self):
@@ -105,16 +139,29 @@ class ProjectManager(ProjectBase, ProjectUtilities):
             )
 
     @property
-    def construct(self):
-        return self._construct
+    def mosaic_constructor(self):
+        return self._mosaic_constructor
 
-    @construct.setter
-    def construct(self, value):
-        if isinstance(value, ModuleType):
-            self._construct = value
+    @mosaic_constructor.setter
+    def mosaic_constructor(self, value):
+        if isinstance(value, MosaicConstructor):
+            self._mosaic_constructor = value
         else:
             raise AttributeError(
-                "Trying to set improper construct. Construct must be a macaque_retina_module."
+                "Trying to set improper mosaic_constructor. mosaic_constructor must be a MosaicConstructor instance."
+            )
+
+    @property
+    def functional_mosaic(self):
+        return self._functional_mosaic
+
+    @functional_mosaic.setter
+    def functional_mosaic(self, value):
+        if isinstance(value, FunctionalMosaic):
+            self._functional_mosaic = value
+        else:
+            raise AttributeError(
+                "Trying to set improper functional_mosaic. functional_mosaic must be a FunctionalMosaic instance."
             )
 
 # if __name__=='__main__':

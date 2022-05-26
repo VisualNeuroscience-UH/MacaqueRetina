@@ -7,9 +7,12 @@ import pandas as pd
 
 # import cv2
 
+# Comput Neurosci
+import brian2.units as b2u
+
 # Viz
 import matplotlib.pyplot as plt
-from matplotlib.patches import Ellipse as ellipse
+from matplotlib.patches import Ellipse
 from tqdm import tqdm
 
 # Builtin
@@ -70,10 +73,10 @@ class Viz:
         """
 
         # to cartesian
-        xcoord, ycoord = self.pol2cart(rho, phi)
-        # xcoord,ycoord = FitFunctionsAndMath.pol2cart(matrix_eccentricity, matrix_orientation_surround)
+        xcoord, ycoord = self.client_object.pol2cart(rho, phi)
+
         fig, ax = plt.subplots(nrows=2, ncols=1)
-        ax[0].plot(xcoord.flatten(), ycoord.flatten(), "b.", label=self.gc_type)
+        ax[0].plot(xcoord.flatten(), ycoord.flatten(), "b.", label=self.client_object.gc_type)
         ax[0].axis("equal")
         ax[0].legend()
         ax[0].set_title("Cartesian retina")
@@ -84,43 +87,40 @@ class Viz:
         nbins = 50
         # Fit for published data
         edge_ecc = np.linspace(np.min(rho), np.max(rho), nbins)
-        my_gaussian_fit = self.gauss_plus_baseline(edge_ecc, *gc_density_func_params)
-        my_gaussian_fit_current_GC = my_gaussian_fit * self.gc_proportion
+        my_gaussian_fit = self.client_object.gauss_plus_baseline(edge_ecc, *gc_density_func_params)
+        my_gaussian_fit_current_GC = my_gaussian_fit * self.client_object.gc_proportion
         ax[1].plot(edge_ecc, my_gaussian_fit_current_GC, "r")
 
         # Density of model cells
         index = np.all(
             [
-                phi > np.min(self.theta),
-                phi < np.max(self.theta),
-                rho > np.min(self.eccentricity_in_mm),
-                rho < np.max(self.eccentricity_in_mm),
+                phi > np.min(self.client_object.theta),
+                phi < np.max(self.client_object.theta),
+                rho > np.min(self.client_object.eccentricity_in_mm),
+                rho < np.max(self.client_object.eccentricity_in_mm),
             ],
             axis=0,
         )  # Index only cells within original requested theta
         hist, bin_edges = np.histogram(rho[index], nbins)
         center_ecc = bin_edges[:-1] + ((bin_edges[1:] - bin_edges[:-1]) / 2)
-        area_for_each_bin = self.sector2area(
-            bin_edges[1:], np.ptp(self.theta)
-        ) - self.sector2area(
-            bin_edges[:-1], np.ptp(self.theta)
+        area_for_each_bin = self.client_object.sector2area(
+            bin_edges[1:], np.ptp(self.client_object.theta)
+        ) - self.client_object.sector2area(
+            bin_edges[:-1], np.ptp(self.client_object.theta)
         )  # in mm2. Vector length len(edge_ecc) - 1.
         # Cells/area
         model_cell_density = hist / area_for_each_bin  # in cells/mm2
         ax[1].plot(center_ecc, model_cell_density, "b.")
 
-    def show_gc_receptive_fields(self, rho, phi, gc_rf_models, surround_fixed=0):
+    def show_gc_receptive_fields(self, xcoord, ycoord,gc_rf_models, surround_fixed=False):
         """
         Show retina cell positions and receptive fields. Note that this is slow if you have a large patch.
         """
 
-        # to cartesian
-        xcoord, ycoord = self.pol2cart(rho, phi)
-
         fig, ax = plt.subplots(nrows=1, ncols=1)
-        ax.plot(xcoord.flatten(), ycoord.flatten(), "b.", label=self.gc_type)
+        ax.plot(xcoord.flatten(), ycoord.flatten(), "b.", label=self.client_object.gc_type)
 
-        if self.surround_fixed:
+        if surround_fixed:
             # gc_rf_models parameters:'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio', 'orientation_center'
             # Ellipse parameters: Ellipse(xy, width, height, angle=0, **kwargs). Only possible one at the time, unfortunately.
             for index in np.arange(len(xcoord)):
@@ -132,7 +132,7 @@ class Viz:
                 angle_in_deg = gc_rf_models[index, 5]  # Orientation
                 diameter_xc = semi_xc * 2
                 diameter_yc = semi_yc * 2
-                e1 = ellipse(
+                e1 = Ellipse(
                     (ellipse_center_x, ellipse_center_y),
                     diameter_xc,
                     diameter_yc,
@@ -187,7 +187,7 @@ class Viz:
 
                 if model_function == "gamma":
                     ax.annotate(
-                        s="shape = {0:.2f}\nloc = {1:.2f}\nscale = {2:.2f}".format(
+                        "shape = {0:.2f}\nloc = {1:.2f}\nscale = {2:.2f}".format(
                             shape, loc, scale
                         ),
                         xy=(0.6, 0.4),
@@ -199,7 +199,7 @@ class Viz:
                 elif model_function == "beta":
                     a_parameter, b_parameter = shape[0], shape[1]
                     ax.annotate(
-                        s="a = {0:.2f}\nb = {1:.2f}\nloc = {2:.2f}\nscale = {3:.2f}".format(
+                        "a = {0:.2f}\nb = {1:.2f}\nloc = {2:.2f}\nscale = {3:.2f}".format(
                             a_parameter, b_parameter, loc, scale
                         ),
                         xy=(0.6, 0.4),
@@ -231,7 +231,7 @@ class Viz:
             data_all_x.sort()
             ax2.plot(data_all_x, intercept + slope * data_all_x, "b-")
             ax2.annotate(
-                s="\nr={0:.2g},\np={1:.2g}".format(r, p),
+                "\nr={0:.2g},\np={1:.2g}".format(r, p),
                 xy=(0.8, 0.4),
                 xycoords="axes fraction",
             )
@@ -251,7 +251,7 @@ class Viz:
         pass
 
     def show_dendritic_diameter_vs_eccentricity(
-        self, gc_type, dataset_x, dataset_y, polynomials, dataset_name=""
+        self, dataset_x, dataset_y, polynomials, dataset_name=""
     ):
 
         fig, ax = plt.subplots(nrows=1, ncols=1)
@@ -315,7 +315,7 @@ class Viz:
                 )
 
         plt.title(
-            "DF diam wrt ecc for {0} type, {1} dataset".format(gc_type, dataset_name)
+            "DF diam wrt ecc for {0} type, {1} dataset".format(self.client_object.gc_type, dataset_name)
         )
 
     def show_cone_response(self, image, image_after_optics, cone_response):
@@ -329,3 +329,484 @@ class Viz:
         axs[3].imshow(image, cmap="Greys")
         axs[4].imshow(image_after_optics, cmap="Greys")
         axs[5].imshow(cone_response, cmap="Greys")
+
+    def visualize_mosaic(self):
+        """
+        Plots the full ganglion cell mosaic
+
+        :return:
+        """
+        rho = self.gc_df["positions_eccentricity"].values
+        phi = self.gc_df["positions_polar_angle"].values
+
+        gc_rf_models = np.zeros((len(self.gc_df), 6))
+        gc_rf_models[:, 0] = self.gc_df["semi_xc"]
+        gc_rf_models[:, 1] = self.gc_df["semi_yc"]
+        gc_rf_models[:, 2] = self.gc_df["xy_aspect_ratio"]
+        gc_rf_models[:, 3] = self.gc_df["amplitudes"]
+        gc_rf_models[:, 4] = self.gc_df["sur_ratio"]
+        gc_rf_models[:, 5] = self.gc_df["orientation_center"]
+
+        self.show_gc_receptive_fields(
+            rho, phi, gc_rf_models, surround_fixed=self.surround_fixed
+        )
+
+    def show_stimulus_with_gcs(self, frame_number=0, ax=None, example_gc=5):
+        """
+        Plots the 1SD ellipses of the RGC mosaic
+
+        :param frame_number: int
+        :param ax: matplotlib Axes object
+        :return:
+        """
+
+        fig = plt.figure()
+        ax = ax or plt.gca()
+        ax.imshow(self.client_object.stimulus_video.frames[:, :, frame_number], vmin=0, vmax=255)
+        ax = plt.gca()
+
+        for index, gc in self.client_object.gc_df_pixspace.iterrows():
+            # When in pixel coordinates, positive value in Ellipse angle is clockwise. Thus minus here.
+            # Note that Ellipse angle is in degrees.
+            # Width and height in Ellipse are diameters, thus x2.
+            if index == example_gc:
+                facecolor = "yellow"
+            else:
+                facecolor = "None"
+
+            circ = Ellipse(
+                (gc.q_pix, gc.r_pix),
+                width=2 * gc.semi_xc,
+                height=2 * gc.semi_yc,
+                angle=gc.orientation_center * (-1),
+                edgecolor="blue",
+                facecolor=facecolor,
+            )
+            ax.add_patch(circ)
+
+        # Annotate
+        # Get y tics in pixels
+        locs, labels = plt.yticks()
+
+        # Remove tick marks outside stimulus
+        locs = locs[locs < self.client_object.stimulus_height_pix]
+        # locs=locs[locs>=0] # Including zero seems to shift center at least in deg
+        locs = locs[locs > 0]
+
+        # Set left y tick labels (pixels)
+        left_y_labels = locs.astype(int)
+        # plt.yticks(ticks=locs, labels=left_y_labels)
+        plt.yticks(ticks=locs)
+        ax.set_ylabel("pix")
+
+        # Set x tick labels (degrees)
+        xlocs = locs - np.mean(locs)
+        down_x_labels = np.round(xlocs / self.client_object.pix_per_deg, decimals=2) + np.real(
+            self.client_object.stimulus_center
+        )
+        plt.xticks(ticks=locs, labels=down_x_labels)
+        ax.set_xlabel("deg")
+
+        # Set right y tick labels (mm)
+        ax2 = ax.twinx()  # instantiate a second axes that shares the same x-axis
+        ax2.tick_params(axis="y")
+        right_y_labels = np.round(
+            (locs / self.client_object.pix_per_deg) / self.client_object.deg_per_mm, decimals=2
+        )
+        plt.yticks(ticks=locs, labels=right_y_labels)
+        ax2.set_ylabel("mm")
+
+        fig.tight_layout()
+
+    def show_single_gc_view(self, cell_index, frame_number=0, ax=None):
+        """
+        Plots the stimulus frame cropped to RGC surroundings
+
+        :param cell_index: int
+        :param frame_number: int
+        :param ax: matplotlib Axes object
+        :return:
+        """
+        ax = ax or plt.gca()
+
+        gc = self.gc_df_pixspace.iloc[cell_index]
+        qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
+
+        # Show stimulus frame cropped to RGC surroundings & overlay 1SD center RF on top of that
+        ax.imshow(
+            self.stimulus_video.frames[:, :, frame_number],
+            cmap=self.cmap_stim,
+            vmin=0,
+            vmax=255,
+        )
+        ax.set_xlim([qmin, qmax])
+        ax.set_ylim([rmax, rmin])
+
+        # When in pixel coordinates, positive value in Ellipse angle is clockwise. Thus minus here.
+        # Note that Ellipse angle is in degrees.
+        # Width and height in Ellipse are diameters, thus x2.
+        circ = Ellipse(
+            (gc.q_pix, gc.r_pix),
+            width=2 * gc.semi_xc,
+            height=2 * gc.semi_yc,
+            angle=gc.orientation_center * (-1),
+            edgecolor="white",
+            facecolor="yellow",
+        )
+        ax.add_patch(circ)
+        plt.xticks([])
+        plt.yticks([])
+
+    def plot_tf_amplitude_response(self, cell_index, ax=None):
+
+        ax = ax or plt.gca()
+
+        tf = self._create_temporal_filter(cell_index)
+        ft_tf = np.fft.fft(tf)
+        timestep = self.data_filter_duration / len(tf) / 1000  # in seconds
+        freqs = np.fft.fftfreq(tf.size, d=timestep)
+        amplitudes = np.abs(ft_tf)
+
+        ax.set_xscale("log")
+        ax.set_xlim([0.1, 100])
+        plt.xlabel("Frequency (Hz)")
+        plt.ylabel("Gain")
+        ax.plot(freqs, amplitudes, ".")
+
+    def plot_midpoint_contrast(self, cell_index, ax=None):
+        """
+        Plots the contrast in the mid-pixel of the stimulus cropped to RGC surroundings
+
+        :param cell_index:
+        :return:
+        """
+        stimulus_cropped = self._get_cropped_video(cell_index)
+
+        midpoint_ix = (self.spatial_filter_sidelen - 1) // 2
+        signal = stimulus_cropped[midpoint_ix, midpoint_ix, :]
+
+        video_dt = (1 / self.stimulus_video.fps) * b2u.second
+        tvec = np.arange(0, len(signal)) * video_dt
+
+        ax = ax or plt.gca()
+        ax.plot(tvec, signal)
+        ax.set_ylim([-1, 1])
+
+    def plot_local_rms_contrast(self, cell_index, ax=None):
+        """
+        Plots local RMS contrast in the stimulus cropped to RGC surroundings.
+        Note that is just a frame-by-frame computation, no averaging here
+
+        :param cell_index:
+        :return:
+        """
+        stimulus_cropped = self._get_cropped_video(
+            cell_index, contrast=False
+        )  # get stimulus intensities
+        n_frames = self.stimulus_video.video_n_frames
+        s = self.spatial_filter_sidelen
+        signal = np.zeros(n_frames)
+
+        for t in range(n_frames):
+            frame_mean = np.mean(stimulus_cropped[:, :, t])
+            squared_sum = np.sum((stimulus_cropped[:, :, t] - frame_mean) ** 2)
+            signal[t] = np.sqrt(1 / (frame_mean**2 * b2u.s**2) * squared_sum)
+
+        video_dt = (1 / self.stimulus_video.fps) * b2u.second
+        tvec = np.arange(0, len(signal)) * video_dt
+
+        ax = ax or plt.gca()
+        ax.plot(tvec, signal)
+        ax.set_ylim([0, 1])
+
+    def plot_local_michelson_contrast(self, cell_index, ax=None):
+        """
+        Plots local RMS contrast in the stimulus cropped to RGC surroundings.
+        Note that is just a frame-by-frame computation, no averaging here
+
+        :param cell_index:
+        :return:
+        """
+        stimulus_cropped = self._get_cropped_video(
+            cell_index, contrast=False
+        )  # get stimulus intensities
+        n_frames = self.stimulus_video.video_n_frames
+        s = self.spatial_filter_sidelen
+        signal = np.zeros(n_frames)
+
+        for t in range(n_frames):
+            frame_min = np.min(stimulus_cropped[:, :, t])
+            frame_max = np.max(stimulus_cropped[:, :, t])
+            signal[t] = (frame_max - frame_min) / (frame_max + frame_min)
+
+        video_dt = (1 / self.stimulus_video.fps) * b2u.second
+        tvec = np.arange(0, len(signal)) * video_dt
+
+        ax = ax or plt.gca()
+        ax.plot(tvec, signal)
+        ax.set_ylim([0, 1])
+
+    def show_temporal_filter_response(
+        self,
+        xdata,
+        ydata,
+        xdata_finer,
+        diff_of_lowpass,
+        gc_type,
+        response_type,
+        cell_ix,
+    ):
+        plt.scatter(xdata, ydata)
+        plt.plot(
+            xdata_finer,
+            diff_of_lowpass,
+            c="grey",
+        )
+        plt.title("%s %s, cell ix %d" % (gc_type, response_type, cell_ix))
+
+    def show_spatial_filter_response(
+        self,
+        data_all_viable_cells,
+        cell_index,
+        data_array,
+        x_grid,
+        y_grid,
+        surround_model,
+        pixel_array_shape_x,
+        pixel_array_shape_y,
+    ):
+        imshow_cmap = "bwr"
+        ellipse_edgecolor = "black"
+
+        popt = data_all_viable_cells[cell_index, :]
+
+        fig, (ax1, ax2) = plt.subplots(figsize=(8, 3), ncols=2)
+        plt.suptitle(
+            "celltype={0}, responsetype={1}, cell N:o {2}".format(
+                self.gc_type, self.response_type, str(cell_index)
+            ),
+            fontsize=10,
+        )
+        cen = ax1.imshow(
+            data_array,
+            vmin=-0.1,
+            vmax=0.4,
+            cmap=imshow_cmap,
+            origin="bottom",
+            extent=(x_grid.min(), x_grid.max(), y_grid.min(), y_grid.max()),
+        )
+        fig.colorbar(cen, ax=ax1)
+
+        # # Ellipses for DoG2D_fixed_surround
+
+        if surround_model == 1:
+            data_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
+
+            e1 = Ellipse(
+                (popt[np.array([1, 2])]),
+                popt[3],
+                popt[4],
+                -popt[5] * 180 / np.pi,
+                edgecolor=ellipse_edgecolor,
+                linewidth=2,
+                fill=False,
+            )
+            e2 = Ellipse(
+                (popt[np.array([1, 2])]),
+                popt[7] * popt[3],
+                popt[7] * popt[4],
+                -popt[5] * 180 / np.pi,
+                edgecolor=ellipse_edgecolor,
+                linewidth=2,
+                fill=False,
+                linestyle="--",
+            )
+            print(
+                popt[0],
+                popt[np.array([1, 2])],
+                popt[3],
+                popt[4],
+                -popt[5] * 180 / np.pi,
+            )
+            print(popt[6], "sur_ratio=", popt[7], "offset=", popt[8])
+        else:
+            data_fitted = self.DoG2D_independent_surround((x_grid, y_grid), *popt)
+            e1 = Ellipse(
+                (popt[np.array([1, 2])]),
+                popt[3],
+                popt[4],
+                -popt[5] * 180 / np.pi,
+                edgecolor=ellipse_edgecolor,
+                linewidth=2,
+                fill=False,
+            )
+            e2 = Ellipse(
+                (popt[np.array([7, 8])]),
+                popt[9],
+                popt[10],
+                -popt[11] * 180 / np.pi,
+                edgecolor=ellipse_edgecolor,
+                linewidth=2,
+                fill=False,
+                linestyle="--",
+            )
+            print(
+                popt[0],
+                popt[np.array([1, 2])],
+                popt[3],
+                popt[4],
+                -popt[5] * 180 / np.pi,
+            )
+            print(
+                popt[6],
+                popt[np.array([7, 8])],
+                popt[9],
+                popt[10],
+                -popt[11] * 180 / np.pi,
+            )
+
+        print("\n")
+
+        ax1.add_artist(e1)
+        ax1.add_artist(e2)
+
+        sur = ax2.imshow(
+            data_fitted.reshape(pixel_array_shape_y, pixel_array_shape_x),
+            vmin=-0.1,
+            vmax=0.4,
+            cmap=imshow_cmap,
+            origin="bottom",
+        )
+        fig.colorbar(sur, ax=ax2)
+
+    def show_tonic_drives(self, xs, pdf, tonicdrive_array, title):
+        plt.plot(xs, pdf)
+        plt.hist(tonicdrive_array, density=True)
+        plt.title(title)
+        plt.xlabel("Tonic drive (a.u.)")
+
+    def show_temporal_statistics(
+        self,
+        temporal_filter_parameters,
+        distrib_params,
+    ):
+        plt.subplots(2, 3)
+        plt.suptitle(self.client_object.gc_type + " " + self.client_object.response_type)
+        for i, param_name in enumerate(temporal_filter_parameters):
+            plt.subplot(2, 3, i + 1)
+            ax = plt.gca()
+            shape, loc, scale = distrib_params[i, :]
+            param_array = np.array(self.client_object.all_fits_df.iloc[self.client_object.good_data_indices][param_name])
+
+            x_min, x_max = stats.gamma.ppf(
+                [0.001, 0.999], a=shape, loc=loc, scale=scale
+            )
+            xs = np.linspace(x_min, x_max, 100)
+            pdf = stats.gamma.pdf(xs, a=shape, loc=loc, scale=scale)
+            ax.plot(xs, pdf)
+            ax.hist(param_array, density=True)
+            ax.set_title(param_name)
+
+    def old_style_visualization_for_run_cells(
+        self,
+        n_trials,
+        n_cells,
+        all_spiketrains,
+        exp_generator_potential,
+        duration,
+        generator_potential,
+        video_dt,
+        tvec_new,
+    ):
+
+        # Prepare data for manual visualization
+        if n_trials > 1 and n_cells == 1:
+            for_eventplot = np.array(all_spiketrains)
+            for_histogram = np.concatenate(all_spiketrains)
+            for_generatorplot = exp_generator_potential.flatten()
+            n_samples = n_trials
+            sample_name = "Trials"
+        elif n_trials == 1 and n_cells > 1:
+            for_eventplot = np.concatenate(all_spiketrains)
+            for_histogram = np.concatenate(all_spiketrains[0])
+            for_generatorplot = np.mean(exp_generator_potential, axis=1)
+            n_samples = n_cells
+            sample_name = "Cell #"
+        else:
+            show_gc_response = False
+            print(
+                "You attempted to visualize gc activity, but you have either n_trials or n_cells must be 1, and the other > 1"
+            )
+
+        plt.subplots(2, 1, sharex=True)
+        plt.subplot(211)
+        # plt.eventplot(spiketrains)
+        plt.eventplot(for_eventplot)
+        plt.xlim([0, duration / b2u.second])
+        # plt.ylabel('Trials')
+        plt.ylabel(sample_name)
+
+        plt.subplot(212)
+        # Plot the generator and the average firing rate
+        tvec = np.arange(0, len(generator_potential), 1) * video_dt
+        # plt.plot(tvec, exp_generator_potential.flatten(), label='Generator')
+        plt.plot(tvec, for_generatorplot, label="Generator")
+        plt.xlim([0, duration / b2u.second])
+
+        # Compute average firing rate over trials (should approximately follow generator)
+        hist_dt = 1 * b2u.ms
+        # n_bins = int((duration/hist_dt))
+        bin_edges = np.append(
+            tvec_new, [duration / b2u.second]
+        )  # Append the rightmost edge
+        # hist, _ = np.histogram(spiketrains_flat, bins=bin_edges)
+        hist, _ = np.histogram(for_histogram, bins=bin_edges)
+        # avg_fr = hist / n_trials / (hist_dt / b2u.second)
+        avg_fr = hist / n_samples / (hist_dt / b2u.second)
+
+        xsmooth = np.arange(-15, 15 + 1)
+        smoothing = stats.norm.pdf(xsmooth, scale=5)  # Gaussian smoothing with SD=5 ms
+        smoothed_avg_fr = np.convolve(smoothing, avg_fr, mode="same")
+
+        plt.plot(bin_edges[:-1], smoothed_avg_fr, label="Measured")
+        plt.ylabel("Firing rate (Hz)")
+        plt.xlabel("Time (s)")
+
+        plt.legend()
+
+    def show_spatiotemporal_filter(
+        self,
+        spatial_filter,
+        cell_index,
+        temporal_filter,
+    ):
+
+        vmax = np.max(np.abs(spatial_filter))
+        vmin = -vmax
+
+        plt.subplots(1, 2, figsize=(10, 4))
+        plt.suptitle(self.client_object.gc_type + " " + self.client_object.response_type + " / cell ix " + str(cell_index))
+        plt.subplot(121)
+        plt.imshow(spatial_filter, cmap=self.client_object.cmap_spatial_filter, vmin=vmin, vmax=vmax)
+        plt.colorbar()
+
+        plt.subplot(122)
+        plt.plot(range(self.client_object.temporal_filter_len), np.flip(temporal_filter))
+
+        plt.tight_layout()
+
+    def show_convolved_stimulus(
+        generator_potential, video_dt, tonic_drive, firing_rate
+    ):
+
+        tvec = np.arange(0, len(generator_potential), 1) * video_dt
+
+        plt.subplots(2, 1, sharex=True)
+        plt.subplot(211)
+        plt.plot(tvec, generator_potential + tonic_drive)
+        plt.ylabel("Generator [a.u.]")
+
+        plt.subplot(212)
+        plt.plot(tvec, firing_rate)
+        plt.xlabel("Time (s)]")
+        plt.ylabel("Firing rate (Hz)]")

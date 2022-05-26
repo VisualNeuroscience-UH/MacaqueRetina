@@ -23,15 +23,6 @@ class ProjectBase(metaclass = ABCMeta):
     def data_io(self, value):
         pass
 
-    @property
-    @abstractmethod
-    def construct(self):
-        pass
-
-    @data_io.setter
-    @abstractmethod
-    def construct(self, value):
-        pass
 
 
 

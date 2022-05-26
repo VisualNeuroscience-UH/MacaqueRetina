@@ -245,7 +245,7 @@ class ApricotData:
         )
 
 
-class ApricotFits(ApricotData, Viz, ConstructionMathematics):
+class ApricotFits(ApricotData, ConstructionMathematics):
     """
     Methods for deriving spatial receptive field parameters from the apricot dataset (Field_2010)
     """
@@ -283,14 +283,11 @@ class ApricotFits(ApricotData, Viz, ConstructionMathematics):
             [0, 0, 0, 0.1, 3],
             [np.inf, 10, 10, 3, 6],
         )  # bounds when time points are 0...14
-        # bounds = ([0, 0, 0, 0.1, 12*8.5],
-        #           [np.inf, 10, 10, 12*8.5, 400])  # bounds when time points are in milliseconds
 
         fitted_parameters = np.zeros((self.n_cells, len(parameter_names)))
         error_array = np.zeros(self.n_cells)
         max_error = -0.1
 
-        # xdata = np.arange(data_n_samples) * (1/data_fps) * 1000  # time points in milliseconds
         xdata = np.arange(15)
         xdata_finer = np.linspace(0, max(xdata), 100)
 
@@ -312,16 +309,8 @@ class ApricotFits(ApricotData, Viz, ConstructionMathematics):
                 continue
 
             if show_temporal_filter_response:
-                plt.scatter(xdata, ydata)
-                plt.plot(
-                    xdata_finer,
-                    self.diff_of_lowpass_filters(xdata_finer, *popt),
-                    c="grey",
-                )
-                plt.title(
-                    "%s %s, cell ix %d" % (self.gc_type, self.response_type, cell_ix)
-                )
-                plt.show()
+                diff_of_lowpass = self.diff_of_lowpass_filters(xdata_finer, *popt)
+                self.viz.show_temporal_filter_response(xdata, ydata, xdata_finer, diff_of_lowpass, self.gc_type, self.response_type, cell_ix)
 
         parameters_df = pd.DataFrame(fitted_parameters, columns=parameter_names)
         # Convert taus to milliseconds
@@ -333,9 +322,9 @@ class ApricotFits(ApricotData, Viz, ConstructionMathematics):
 
     def _fit_spatial_filters(
         self,
-        show_spatial_filter_response=False,
         surround_model=1,
         semi_x_always_major=True,
+        show_spatial_filter_response=False,
     ):
         """
         Fits a function consisting of the difference of two 2-dimensional elliptical Gaussian functions to
@@ -369,11 +358,6 @@ class ApricotFits(ApricotData, Viz, ConstructionMathematics):
         x_grid, y_grid = np.meshgrid(x_position_indices, y_position_indices)
 
         all_viable_cells = np.setdiff1d(np.arange(n_cells), bad_data_indices)
-
-        # Create an empty matrix to collect fitted RFs
-        # parameter_names = ['amplitudec', 'xoc', 'yoc', 'semi_xc', 'semi_yc', 'orientation_center', 'amplitudes',
-        #                    'xos', 'yos', 'semi_xs', 'semi_ys', 'orientation_surround', 'offset']
-        # data_all_viable_cells = np.zeros(np.array([n_cells, len(parameter_names)]))
 
         if surround_model == 1:
             parameter_names = [
@@ -433,11 +417,8 @@ class ApricotFits(ApricotData, Viz, ConstructionMathematics):
 
             # Set initial guess for fitting
             if surround_model == 1:
-                # Build initial guess for (amplitudec, xoc, yoc, semi_xc, semi_yc, orientation_center,
-                #                          amplitudes, sur_ratio, offset)
+                # Build initial guess for (amplitudec, xoc, yoc, semi_xc, semi_yc, orientation_center, amplitudes, sur_ratio, offset)
                 p0 = np.array([1, 7, 7, 3, 3, center_rotation_angle, 0.1, 3, 0])
-                # boundaries=(np.array([.999, -np.inf, -np.inf, 0, 0, -2*np.pi, 0, 1, -np.inf]),
-                # np.array([1, np.inf, np.inf, np.inf, np.inf, 2*np.pi, 1, np.inf, np.inf]))
                 boundaries = (
                     np.array([0.999, -np.inf, -np.inf, 0, 0, 0, 0, 1, 0]),
                     np.array(
@@ -582,7 +563,6 @@ class ApricotFits(ApricotData, Viz, ConstructionMathematics):
             # Normalized mean square error
             # Defn per https://se.mathworks.com/help/ident/ref/goodnessoffit.html without 1 - ...
             # 0 = perfect fit, infty = bad fit
-            # fit_error = np.sqrt(np.sum(fit_deviations**2)/(np.sum((data_mean - data_array)**2)))
 
             # MSE
             fit_error = np.sum(fit_deviations**2) / (13 * 13)
@@ -598,115 +578,9 @@ class ApricotFits(ApricotData, Viz, ConstructionMathematics):
 
             # Visualize fits with data
             if show_spatial_filter_response:
-                # data_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
-                imshow_cmap = "bwr"
-                ellipse_edgecolor = "black"
-
-                popt = data_all_viable_cells[cell_index, :]
-
-                fig, (ax1, ax2) = plt.subplots(figsize=(8, 3), ncols=2)
-                plt.suptitle(
-                    "celltype={0}, responsetype={1}, cell N:o {2}".format(
-                        self.gc_type, self.response_type, str(cell_index)
-                    ),
-                    fontsize=10,
-                )
-                cen = ax1.imshow(
-                    data_array,
-                    vmin=-0.1,
-                    vmax=0.4,
-                    cmap=imshow_cmap,
-                    origin="bottom",
-                    extent=(x_grid.min(), x_grid.max(), y_grid.min(), y_grid.max()),
-                )
-                fig.colorbar(cen, ax=ax1)
-
-                # # Ellipses for DoG2D_fixed_surround
-
-                if surround_model == 1:
-                    data_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
-                    # matplotlib.patches.Ellipse(xy, width, height, angle=0, **kwargs)
-                    e1 = Ellipse(
-                        (popt[np.array([1, 2])]),
-                        popt[3],
-                        popt[4],
-                        -popt[5] * 180 / np.pi,
-                        edgecolor=ellipse_edgecolor,
-                        linewidth=2,
-                        fill=False,
-                    )
-                    e2 = Ellipse(
-                        (popt[np.array([1, 2])]),
-                        popt[7] * popt[3],
-                        popt[7] * popt[4],
-                        -popt[5] * 180 / np.pi,
-                        edgecolor=ellipse_edgecolor,
-                        linewidth=2,
-                        fill=False,
-                        linestyle="--",
-                    )
-                    print(
-                        popt[0],
-                        popt[np.array([1, 2])],
-                        popt[3],
-                        popt[4],
-                        -popt[5] * 180 / np.pi,
-                    )
-                    print(popt[6], "sur_ratio=", popt[7], "offset=", popt[8])
-                else:
-                    data_fitted = self.DoG2D_independent_surround(
-                        (x_grid, y_grid), *popt
-                    )
-                    e1 = Ellipse(
-                        (popt[np.array([1, 2])]),
-                        popt[3],
-                        popt[4],
-                        -popt[5] * 180 / np.pi,
-                        edgecolor=ellipse_edgecolor,
-                        linewidth=2,
-                        fill=False,
-                    )
-                    e2 = Ellipse(
-                        (popt[np.array([7, 8])]),
-                        popt[9],
-                        popt[10],
-                        -popt[11] * 180 / np.pi,
-                        edgecolor=ellipse_edgecolor,
-                        linewidth=2,
-                        fill=False,
-                        linestyle="--",
-                    )
-                    print(
-                        popt[0],
-                        popt[np.array([1, 2])],
-                        popt[3],
-                        popt[4],
-                        -popt[5] * 180 / np.pi,
-                    )
-                    print(
-                        popt[6],
-                        popt[np.array([7, 8])],
-                        popt[9],
-                        popt[10],
-                        -popt[11] * 180 / np.pi,
-                    )
-
-                print("\n")
-
-                ax1.add_artist(e1)
-                ax1.add_artist(e2)
-
-                sur = ax2.imshow(
-                    data_fitted.reshape(pixel_array_shape_y, pixel_array_shape_x),
-                    vmin=-0.1,
-                    vmax=0.4,
-                    cmap=imshow_cmap,
-                    origin="bottom",
-                )
-                fig.colorbar(sur, ax=ax2)
-
-                plt.show()
-            # FOR loop ends here
+                self.viz.show_spatial_filter_response(self,data_all_viable_cells, cell_index, data_array, x_grid, y_grid, surround_model, pixel_array_shape_x, pixel_array_shape_y)
+                
+        # FOR loop ends here
 
         # Finally build a dataframe of the fitted parameters
         fits_df = pd.DataFrame(data_all_viable_cells, columns=parameter_names)
@@ -736,9 +610,9 @@ class ApricotFits(ApricotData, Viz, ConstructionMathematics):
 
     def _fit_all(self):
         spatial_fits = self._fit_spatial_filters(
-            show_spatial_filter_response=False,
             surround_model=1,
             semi_x_always_major=True,
+            show_spatial_filter_response=False,
         )
         spatial_filter_sums = self.compute_spatial_filter_sums()
 
