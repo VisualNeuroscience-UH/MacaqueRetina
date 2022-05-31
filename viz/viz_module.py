@@ -72,159 +72,171 @@ class Viz:
     # ApricotFits visualization
     def show_temporal_filter_response(
         self,
-        xdata,
-        ydata,
-        xdata_finer,
-        diff_of_lowpass,
-        gc_type,
-        response_type,
-        cell_ix,
+        mosaic,
     ):
         '''
-        ApricotFits call.
+        Show temporal filter response for each cell.
         '''
+        temporal_filters_to_show = mosaic.temporal_filters_to_show
+        xdata = temporal_filters_to_show['xdata']
+        xdata_finer = temporal_filters_to_show['xdata_finer']
+        title = temporal_filters_to_show['title']
         
-        plt.scatter(xdata, ydata)
-        plt.plot(
-            xdata_finer,
-            diff_of_lowpass,
-            c="grey",
-        )
-        plt.title("%s %s, cell ix %d" % (gc_type, response_type, cell_ix))
+        
+        # get cell_ixs
+        cell_ixs_list = [ci for ci in temporal_filters_to_show.keys() if ci.startswith('cell_ix_')]
+
+        for this_cell_ix in cell_ixs_list:
+            ydata = temporal_filters_to_show[f'{this_cell_ix}']['ydata']
+            y_fit = temporal_filters_to_show[f'{this_cell_ix}']['y_fit']
+            plt.scatter(xdata, ydata)
+            plt.plot(
+                xdata_finer,
+                y_fit,
+                c="grey",
+            )
+        
+        N_cells = len(cell_ixs_list)
+        plt.title(f'{title} ({N_cells} cells)')
 
     def show_spatial_filter_response(
         self,
-        data_all_viable_cells,
-        cell_index,
-        data_array,
-        x_grid,
-        y_grid,
-        surround_model,
-        pixel_array_shape_x,
-        pixel_array_shape_y,
-    ):
+        mosaic):
+        
+        spatial_filters_to_show  = mosaic.spatial_filters_to_show
 
-        '''
-        ApricotFits call.
-        '''
+        data_all_viable_cells = spatial_filters_to_show['data_all_viable_cells']
+        x_grid = spatial_filters_to_show['x_grid']
+        y_grid = spatial_filters_to_show['y_grid']
+        surround_model = spatial_filters_to_show['surround_model']
+        pixel_array_shape_x = spatial_filters_to_show['pixel_array_shape_x']
+        pixel_array_shape_y = spatial_filters_to_show['pixel_array_shape_y']
 
-        imshow_cmap = "bwr"
-        ellipse_edgecolor = "black"
+        # get cell_ixs
+        cell_ixs_list = [ci for ci in spatial_filters_to_show.keys() if ci.startswith('cell_ix_')]
 
-        popt = data_all_viable_cells[cell_index, :]
+        for this_cell_ix in cell_ixs_list:
+            imshow_cmap = "bwr"
+            ellipse_edgecolor = "black"
 
-        fig, (ax1, ax2) = plt.subplots(figsize=(8, 3), ncols=2)
-        plt.suptitle(
-            "celltype={0}, responsetype={1}, cell N:o {2}".format(
-                self.gc_type, self.response_type, str(cell_index)
-            ),
-            fontsize=10,
-        )
-        cen = ax1.imshow(
-            data_array,
-            vmin=-0.1,
-            vmax=0.4,
-            cmap=imshow_cmap,
-            origin="bottom",
-            extent=(x_grid.min(), x_grid.max(), y_grid.min(), y_grid.max()),
-        )
-        fig.colorbar(cen, ax=ax1)
+            this_cell_ix_numerical = int(this_cell_ix.split('_')[-1])
+            popt = data_all_viable_cells[this_cell_ix_numerical, :]
+            data_array = spatial_filters_to_show[this_cell_ix]['data_array']
+            suptitle = spatial_filters_to_show[this_cell_ix]['suptitle']
 
-        # # Ellipses for DoG2D_fixed_surround
-
-        if surround_model == 1:
-            data_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
-
-            e1 = Ellipse(
-                (popt[np.array([1, 2])]),
-                popt[3],
-                popt[4],
-                -popt[5] * 180 / np.pi,
-                edgecolor=ellipse_edgecolor,
-                linewidth=2,
-                fill=False,
+            fig, (ax1, ax2) = plt.subplots(figsize=(8, 3), ncols=2)
+            plt.suptitle(suptitle, fontsize=10,)
+            cen = ax1.imshow(
+                data_array,
+                vmin=-0.1,
+                vmax=0.4,
+                cmap=imshow_cmap,
+                origin="lower",
+                extent=(x_grid.min(), x_grid.max(), y_grid.min(), y_grid.max()),
             )
-            e2 = Ellipse(
-                (popt[np.array([1, 2])]),
-                popt[7] * popt[3],
-                popt[7] * popt[4],
-                -popt[5] * 180 / np.pi,
-                edgecolor=ellipse_edgecolor,
-                linewidth=2,
-                fill=False,
-                linestyle="--",
-            )
-            print(
-                popt[0],
-                popt[np.array([1, 2])],
-                popt[3],
-                popt[4],
-                -popt[5] * 180 / np.pi,
-            )
-            print(popt[6], "sur_ratio=", popt[7], "offset=", popt[8])
-        else:
-            data_fitted = self.DoG2D_independent_surround((x_grid, y_grid), *popt)
-            e1 = Ellipse(
-                (popt[np.array([1, 2])]),
-                popt[3],
-                popt[4],
-                -popt[5] * 180 / np.pi,
-                edgecolor=ellipse_edgecolor,
-                linewidth=2,
-                fill=False,
-            )
-            e2 = Ellipse(
-                (popt[np.array([7, 8])]),
-                popt[9],
-                popt[10],
-                -popt[11] * 180 / np.pi,
-                edgecolor=ellipse_edgecolor,
-                linewidth=2,
-                fill=False,
-                linestyle="--",
-            )
-            print(
-                popt[0],
-                popt[np.array([1, 2])],
-                popt[3],
-                popt[4],
-                -popt[5] * 180 / np.pi,
-            )
-            print(
-                popt[6],
-                popt[np.array([7, 8])],
-                popt[9],
-                popt[10],
-                -popt[11] * 180 / np.pi,
-            )
+            fig.colorbar(cen, ax=ax1)
 
-        print("\n")
+            # # Ellipses for DoG2D_fixed_surround
 
-        ax1.add_artist(e1)
-        ax1.add_artist(e2)
+            if surround_model == 1:
+                # xy_tuple, amplitudec, xoc, yoc, semi_xc, semi_yc, orientation_center, amplitudes, sur_ratio, offset
+                data_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
 
-        sur = ax2.imshow(
-            data_fitted.reshape(pixel_array_shape_y, pixel_array_shape_x),
-            vmin=-0.1,
-            vmax=0.4,
-            cmap=imshow_cmap,
-            origin="bottom",
-        )
-        fig.colorbar(sur, ax=ax2)
+                e1 = Ellipse(
+                    (popt[np.array([1, 2])]),
+                    popt[3],
+                    popt[4],
+                    -popt[5] * 180 / np.pi,
+                    edgecolor=ellipse_edgecolor,
+                    linewidth=2,
+                    fill=False,
+                )
+                e2 = Ellipse(
+                    (popt[np.array([1, 2])]),
+                    popt[7] * popt[3],
+                    popt[7] * popt[4],
+                    -popt[5] * 180 / np.pi,
+                    edgecolor=ellipse_edgecolor,
+                    linewidth=2,
+                    fill=False,
+                    linestyle="--",
+                )
+                print(
+                    popt[0],
+                    popt[np.array([1, 2])],
+                    popt[3],
+                    popt[4],
+                    -popt[5] * 180 / np.pi,
+                )
+                print(popt[6], "sur_ratio=", popt[7], "offset=", popt[8])
+            else:
+                data_fitted = self.DoG2D_independent_surround((x_grid, y_grid), *popt)
+                e1 = Ellipse(
+                    (popt[np.array([1, 2])]),
+                    popt[3],
+                    popt[4],
+                    -popt[5] * 180 / np.pi,
+                    edgecolor=ellipse_edgecolor,
+                    linewidth=2,
+                    fill=False,
+                )
+                e2 = Ellipse(
+                    (popt[np.array([7, 8])]),
+                    popt[9],
+                    popt[10],
+                    -popt[11] * 180 / np.pi,
+                    edgecolor=ellipse_edgecolor,
+                    linewidth=2,
+                    fill=False,
+                    linestyle="--",
+                )
+                print(
+                    popt[0],
+                    popt[np.array([1, 2])],
+                    popt[3],
+                    popt[4],
+                    -popt[5] * 180 / np.pi,
+                )
+                print(
+                    popt[6],
+                    popt[np.array([7, 8])],
+                    popt[9],
+                    popt[10],
+                    -popt[11] * 180 / np.pi,
+                )
+
+            print("\n")
+
+            ax1.add_artist(e1)
+            ax1.add_artist(e2)
+
+            sur = ax2.imshow(
+                data_fitted.reshape(pixel_array_shape_y, pixel_array_shape_x),
+                vmin=-0.1,
+                vmax=0.4,
+                cmap=imshow_cmap,
+                origin="lower",
+            )
+            fig.colorbar(sur, ax=ax2)
+            plt.show()
 
     # ConstructRetina visualization
-    def show_gc_positions_and_density(self, rho, phi, gc_density_func_params):
+    def show_gc_positions_and_density(self, mosaic):
         """
         Show retina cell positions and receptive fields
 
         ConstructRetina call.
         """
 
+        rho = mosaic.gc_df['positions_eccentricity'].to_numpy()
+        phi = mosaic.gc_df['positions_polar_angle'].to_numpy()
+        gc_density_func_params = mosaic.gc_density_func_params
+
         # to cartesian
-        xcoord, ycoord = self.client_object.pol2cart(rho, phi)
+        xcoord, ycoord = self.pol2cart(rho, phi)
 
         fig, ax = plt.subplots(nrows=2, ncols=1)
-        ax[0].plot(xcoord.flatten(), ycoord.flatten(), "b.", label=self.client_object.gc_type)
+        ax[0].plot(xcoord.flatten(), ycoord.flatten(), "b.", label=mosaic.gc_type)
         ax[0].axis("equal")
         ax[0].legend()
         ax[0].set_title("Cartesian retina")
@@ -235,69 +247,30 @@ class Viz:
         nbins = 50
         # Fit for published data
         edge_ecc = np.linspace(np.min(rho), np.max(rho), nbins)
-        my_gaussian_fit = self.client_object.gauss_plus_baseline(edge_ecc, *gc_density_func_params)
-        my_gaussian_fit_current_GC = my_gaussian_fit * self.client_object.gc_proportion
+        my_gaussian_fit = self.gauss_plus_baseline(edge_ecc, *gc_density_func_params)
+        my_gaussian_fit_current_GC = my_gaussian_fit * mosaic.gc_proportion
         ax[1].plot(edge_ecc, my_gaussian_fit_current_GC, "r")
 
         # Density of model cells
         index = np.all(
             [
-                phi > np.min(self.client_object.theta),
-                phi < np.max(self.client_object.theta),
-                rho > np.min(self.client_object.eccentricity_in_mm),
-                rho < np.max(self.client_object.eccentricity_in_mm),
+                phi > np.min(mosaic.theta),
+                phi < np.max(mosaic.theta),
+                rho > np.min(mosaic.eccentricity_in_mm),
+                rho < np.max(mosaic.eccentricity_in_mm),
             ],
             axis=0,
         )  # Index only cells within original requested theta
         hist, bin_edges = np.histogram(rho[index], nbins)
         center_ecc = bin_edges[:-1] + ((bin_edges[1:] - bin_edges[:-1]) / 2)
-        area_for_each_bin = self.client_object.sector2area(
-            bin_edges[1:], np.ptp(self.client_object.theta)
-        ) - self.client_object.sector2area(
-            bin_edges[:-1], np.ptp(self.client_object.theta)
+        area_for_each_bin = self.sector2area(
+            bin_edges[1:], np.ptp(mosaic.theta)
+        ) - self.sector2area(
+            bin_edges[:-1], np.ptp(mosaic.theta)
         )  # in mm2. Vector length len(edge_ecc) - 1.
         # Cells/area
         model_cell_density = hist / area_for_each_bin  # in cells/mm2
         ax[1].plot(center_ecc, model_cell_density, "b.")
-
-    def show_gc_receptive_fields(self, xcoord, ycoord,gc_rf_models, surround_fixed=False):
-        """
-        Show retina cell positions and receptive fields. Note that this is slow if you have a large patch.
-
-        ConstructRetina call.
-        """
-
-        fig, ax = plt.subplots(nrows=1, ncols=1)
-        ax.plot(xcoord.flatten(), ycoord.flatten(), "b.", label=self.client_object.gc_type)
-
-        if surround_fixed:
-            # gc_rf_models parameters:'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio', 'orientation_center'
-            # Ellipse parameters: Ellipse(xy, width, height, angle=0, **kwargs). Only possible one at the time, unfortunately.
-            for index in np.arange(len(xcoord)):
-                ellipse_center_x = xcoord[index]
-                ellipse_center_y = ycoord[index]
-                semi_xc = gc_rf_models[index, 0]
-                semi_yc = gc_rf_models[index, 1]
-                # angle_in_radians = gc_rf_models[index, 5]  # Orientation
-                angle_in_deg = gc_rf_models[index, 5]  # Orientation
-                diameter_xc = semi_xc * 2
-                diameter_yc = semi_yc * 2
-                e1 = Ellipse(
-                    (ellipse_center_x, ellipse_center_y),
-                    diameter_xc,
-                    diameter_yc,
-                    angle_in_deg,
-                    edgecolor="b",
-                    linewidth=0.5,
-                    fill=False,
-                )
-                ax.add_artist(e1)
-
-        ax.axis("equal")
-        ax.legend()
-        ax.set_title("Cartesian retina")
-        ax.set_xlabel("Eccentricity (mm)")
-        ax.set_ylabel("Elevation (mm)")
 
     def show_spatial_statistics(
         self, ydata, spatial_statistics_dict, model_fit_data=None
@@ -464,28 +437,60 @@ class Viz:
             "DF diam wrt ecc for {0} type, {1} dataset".format(self.client_object.gc_type, dataset_name)
         )
 
-    def visualize_mosaic(self):
+    def visualize_mosaic(self, mosaic):
         """
-        Plots the full ganglion cell mosaic
+        Plots the full ganglion cell mosaic. Note that this is slow if you have a large patch.
 
         ConstructRetina call.
 
         :return:
         """
-        rho = self.gc_df["positions_eccentricity"].values
-        phi = self.gc_df["positions_polar_angle"].values
 
-        gc_rf_models = np.zeros((len(self.gc_df), 6))
-        gc_rf_models[:, 0] = self.gc_df["semi_xc"]
-        gc_rf_models[:, 1] = self.gc_df["semi_yc"]
-        gc_rf_models[:, 2] = self.gc_df["xy_aspect_ratio"]
-        gc_rf_models[:, 3] = self.gc_df["amplitudes"]
-        gc_rf_models[:, 4] = self.gc_df["sur_ratio"]
-        gc_rf_models[:, 5] = self.gc_df["orientation_center"]
+        rho = mosaic.gc_df["positions_eccentricity"].to_numpy()
+        phi = mosaic.gc_df["positions_polar_angle"].to_numpy()
 
-        self.show_gc_receptive_fields(
-            rho, phi, gc_rf_models, surround_fixed=self.surround_fixed
-        )
+        gc_rf_models = np.zeros((len(mosaic.gc_df), 6))
+        gc_rf_models[:, 0] = mosaic.gc_df["semi_xc"]
+        gc_rf_models[:, 1] = mosaic.gc_df["semi_yc"]
+        gc_rf_models[:, 2] = mosaic.gc_df["xy_aspect_ratio"]
+        gc_rf_models[:, 3] = mosaic.gc_df["amplitudes"]
+        gc_rf_models[:, 4] = mosaic.gc_df["sur_ratio"]
+        gc_rf_models[:, 5] = mosaic.gc_df["orientation_center"]
+
+        # to cartesian
+        xcoord, ycoord = self.pol2cart(rho, phi)
+
+        fig, ax = plt.subplots(nrows=1, ncols=1)
+        ax.plot(xcoord.flatten(), ycoord.flatten(), "b.", label = mosaic.gc_type)
+
+        if mosaic.surround_fixed:
+            # gc_rf_models parameters:'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio', 'orientation_center'
+            # Ellipse parameters: Ellipse(xy, width, height, angle=0, **kwargs). Only possible one at the time, unfortunately.
+            for index in np.arange(len(xcoord)):
+                ellipse_center_x = xcoord[index]
+                ellipse_center_y = ycoord[index]
+                semi_xc = gc_rf_models[index, 0]
+                semi_yc = gc_rf_models[index, 1]
+                # angle_in_radians = gc_rf_models[index, 5]  # Orientation
+                angle_in_deg = gc_rf_models[index, 5]  # Orientation
+                diameter_xc = semi_xc * 2
+                diameter_yc = semi_yc * 2
+                e1 = Ellipse(
+                    (ellipse_center_x, ellipse_center_y),
+                    diameter_xc,
+                    diameter_yc,
+                    angle_in_deg,
+                    edgecolor="b",
+                    linewidth=0.5,
+                    fill=False,
+                )
+                ax.add_artist(e1)
+
+        ax.axis("equal")
+        ax.legend()
+        ax.set_title("Cartesian retina")
+        ax.set_xlabel("Eccentricity (mm)")
+        ax.set_ylabel("Elevation (mm)")
 
     def show_temporal_statistics(
         self,
@@ -521,6 +526,20 @@ class Viz:
         plt.hist(tonicdrive_array, density=True)
         plt.title(title)
         plt.xlabel("Tonic drive (a.u.)")
+
+    def show_build_process(self, mosaic, show_all_spatial_fits=False):
+        '''
+        
+        '''
+        
+        # If show_all_spatial_fits is true, show the spatial fits
+        if show_all_spatial_fits is True:
+            self.show_spatial_filter_response(mosaic)
+            return
+
+        self.show_temporal_filter_response(mosaic)
+        self.visualize_mosaic(mosaic)
+   
 
     # WorkingRetina visualization
     def show_stimulus_with_gcs(self, frame_number=0, ax=None, example_gc=5):

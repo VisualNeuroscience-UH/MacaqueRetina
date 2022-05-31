@@ -45,7 +45,7 @@ class ConstructRetina(RetinaMath):
 
         self._context = context.set_context(self._properties_list)
         self._data_io = data_io
-        viz.client_object = self # injecting client object pointer into viz object
+        # viz.client_object = self  # injecting client object pointer into viz object
         self._viz = viz
 
     @property
@@ -175,7 +175,11 @@ class ConstructRetina(RetinaMath):
         # Make or read fits
         if fits_from_file is None:
             # init and call -- only connection to apricot_fitter_module
-            self.all_fits_df = ApricotFits(gc_type, response_type).get_fits()
+            (
+                self.all_fits_df,
+                self.temporal_filters_to_show,
+                self.spatial_filters_to_show,
+            ) = ApricotFits(gc_type, response_type).get_fits()
         else:
             self.all_fits_df = pd.read_csv(
                 fits_from_file, header=0, index_col=0
@@ -437,8 +441,8 @@ class ConstructRetina(RetinaMath):
             )  # collect sector area for each ecc step
 
             # N cells for given ecc
-            # my_gaussian_fit = self.gauss_plus_baseline(center_ecc, *gc_density_func_params)
-            my_gaussian_fit = self._densfunc(center_ecc, 5.32043939e05, 2.64289725)
+            # my_gaussian_fit = self.gauss_plus_baseline(center_ecc, *gc_density_func_params) # leads to div by zero
+            my_gaussian_fit = self._densfunc(center_ecc, 5.32043939e05, 2.64289725) # deactivated SV 220531
             Ncells = sector_surface_area * my_gaussian_fit * self.gc_proportion
 
             # place cells in regular grid
@@ -547,14 +551,8 @@ class ConstructRetina(RetinaMath):
         self.gc_df["eccentricity_group_index"] = gc_eccentricity_group_index.astype(int)
         self.sector_surface_area_all = np.asarray(sector_surface_area_all)
 
-        # Visualize 2D retina with quality control for density
-        # Pass the GC object to this guy, because the Visualize class is not inherited
-        if show_build_process:
-            self.viz.show_gc_positions_and_density(
-                matrix_eccentricity_randomized_all,
-                matrix_polar_angle_randomized_all,
-                gc_density_func_params,
-            )
+        # Pass the GC object to self, because the Viz class is not inherited
+        self.gc_density_func_params = gc_density_func_params
 
     def _fit_spatial_statistics(self, show_build_process=False):
         """
@@ -804,13 +802,6 @@ class ConstructRetina(RetinaMath):
                 dataset_name="All data {0} fit".format(dendr_diam_model),
             )
 
-            rho = self.gc_df["positions_eccentricity"].values
-            phi = self.gc_df["positions_polar_angle"].values
-
-            self.viz.show_gc_receptive_fields(
-                rho, phi, gc_rf_models, surround_fixed=self.surround_fixed
-            )
-
     def _fit_tonic_drives(self, show_build_process=False):
         tonicdrive_array = np.array(
             self.all_fits_df.iloc[self.good_data_indices].tonicdrive
@@ -944,15 +935,22 @@ class ConstructRetina(RetinaMath):
         self.gc_df["rf_radius"] = np.sqrt(self.gc_df.semi_xc * self.gc_df.semi_yc)
 
         # Finally, get non-spatial parameters
-        temporal_statistics_df = self._fit_temporal_statistics(show_build_process=show_build_process)
+        temporal_statistics_df = self._fit_temporal_statistics(
+            show_build_process=show_build_process
+        )
         self._create_temporal_filters(temporal_statistics_df)
 
-        td_shape, td_loc, td_scale = self._fit_tonic_drives(show_build_process=show_build_process)
+        td_shape, td_loc, td_scale = self._fit_tonic_drives(
+            show_build_process=show_build_process
+        )
         self.gc_df["tonicdrive"] = self._get_random_samples(
             td_shape, td_loc, td_scale, n_rgc, "gamma"
         )
 
         print("Built RGC mosaic with %d cells" % n_rgc)
+
+        # Return object for visualization
+        return self
 
     def save_mosaic(self, filepath):
         print("Saving model mosaic to %s" % filepath)
@@ -969,7 +967,7 @@ class WorkingRetina(RetinaMath):
 
         self._context = context.set_context(self._properties_list)
         self._data_io = data_io
-        viz.client_object = self # injecting client object pointer into viz object
+        # viz.client_object = self  # injecting client object pointer into viz object
         self._viz = viz
 
     @property

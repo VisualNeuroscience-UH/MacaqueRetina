@@ -149,7 +149,9 @@ if __name__ == "__main__":
     """
     Build and test your retina here, one gc type at a time. Temporal hemiretina of macaques.
     """
-    PM.mosaic_constructor.initialize(
+    show_build_process=True
+    
+    PM.construct_retina.initialize(
         gc_type="parasol",
         response_type="on",
         ecc_limits=[4.8, 5.2],
@@ -158,12 +160,24 @@ if __name__ == "__main__":
         randomize_position=0.05,
     )
 
-    PM.mosaic_constructor.build(show_build_process=False)
-    PM.mosaic_constructor.save_mosaic("parasol_on_single.csv")
+    mosaic = PM.construct_retina.build()
+
+    if show_build_process is True:
+        PM.viz.show_build_process(mosaic, show_all_spatial_fits=False)
+    
+    plt.show(block=False)
+    
+    pdb.set_trace()
+    '''
+    TÄHÄN JÄIT. KOLME METODIA TEHTY VIZ LUOKAAN, KS show_build_process.
+    '''
+    
+    
+    PM.construct_retina.save_mosaic("parasol_on_single.csv")
 
     testmosaic = pd.read_csv("parasol_on_single.csv", index_col=0)
 
-    PM.functional_mosaic.initialize(
+    PM.working_retina.initialize(
         testmosaic,
         "parasol",
         "on",
@@ -193,7 +207,7 @@ if __name__ == "__main__":
 
     # ret.load_stimulus(grating)
     # ret.load_stimulus(stim)
-    PM.functional_mosaic.load_stimulus(PM.stimulate)
+    PM.working_retina.load_stimulus(PM.stimulate)
 
     # # movie = vs.NaturalMovie('/home/henhok/nature4_orig35_fps100.avi', fps=100, pix_per_deg=60)
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)
@@ -214,7 +228,7 @@ if __name__ == "__main__":
 
     for filename in filenames:
 
-        PM.functional_mosaic.run_cells(
+        PM.working_retina.run_cells(
             cell_index=example_gc,
             n_trials=5,
             save_data=False,
@@ -229,7 +243,7 @@ if __name__ == "__main__":
     # # plt.show(block = False)
     # # ret.save_spikes_csv()
 
-    PM.functional_mosaic.viz.show_stimulus_with_gcs(example_gc=example_gc, frame_number=51)
+    PM.working_retina.viz.show_stimulus_with_gcs(example_gc=example_gc, frame_number=51)
     # ret.show_single_gc_view(cell_index=example_gc, frame_number=21)
     # plt.show(block = False)
 

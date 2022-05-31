@@ -6,6 +6,7 @@ from data_io.data_io_module import DataIO
 from analysis.analysis_module import Analysis
 from viz.viz_module import Viz
 from  construct.macaque_retina_module import ConstructRetina, WorkingRetina
+from construct.construct_math_module import RetinaMath
 from stimuli.visual_stimuli_module import ConstructStimulus, PhotoReceptor
 
 # Builtin
@@ -72,6 +73,8 @@ class ProjectManager(ProjectBase, ProjectUtilities):
 
         self.ana = ana
         
+        retina_math = RetinaMath()
+        
         viz = Viz(
             # Interfaces
             context,
@@ -79,15 +82,22 @@ class ProjectManager(ProjectBase, ProjectUtilities):
             ana,
             # Dictionaries
             # Methods, which are needed also elsewhere
-            round_to_n_significant=self.round_to_n_significant,
+            round_to_n_significant = self.round_to_n_significant,
+            DoG2D_fixed_surround = retina_math.DoG2D_fixed_surround,
+            DoG2D_independent_surround = retina_math.DoG2D_independent_surround,
+            pol2cart = retina_math.pol2cart,
+            gauss_plus_baseline = retina_math.gauss_plus_baseline,
+            sector2area = retina_math.sector2area,
         )
 
         self.viz = viz
 
-        # Constructor for macaque retina mosaic. For client object injection, 
-        # we need deep copy of viz to avoid masking of the instances from distinct classes
-        self.mosaic_constructor = ConstructRetina(context, data_io, deepcopy(viz))
-        self.functional_mosaic = WorkingRetina(context, data_io, deepcopy(viz))
+        # # Constructor for macaque retina mosaic. For client object injection, 
+        # # we need deep copy of viz to avoid masking of the instances from distinct classes
+        # self.construct_retina = ConstructRetina(context, data_io, deepcopy(viz))
+        # self.working_retina = WorkingRetina(context, data_io, deepcopy(viz))
+        self.construct_retina = ConstructRetina(context, data_io, viz)
+        self.working_retina = WorkingRetina(context, data_io, viz)
 
 
 
@@ -118,29 +128,29 @@ class ProjectManager(ProjectBase, ProjectUtilities):
             )
 
     @property
-    def mosaic_constructor(self):
+    def construct_retina(self):
         return self._mosaic_constructor
 
-    @mosaic_constructor.setter
-    def mosaic_constructor(self, value):
+    @construct_retina.setter
+    def construct_retina(self, value):
         if isinstance(value, ConstructRetina):
             self._mosaic_constructor = value
         else:
             raise AttributeError(
-                "Trying to set improper mosaic_constructor. mosaic_constructor must be a ConstructRetina instance."
+                "Trying to set improper construct_retina. construct_retina must be a ConstructRetina instance."
             )
 
     @property
-    def functional_mosaic(self):
+    def working_retina(self):
         return self._functional_mosaic
 
-    @functional_mosaic.setter
-    def functional_mosaic(self, value):
+    @working_retina.setter
+    def working_retina(self, value):
         if isinstance(value, WorkingRetina):
             self._functional_mosaic = value
         else:
             raise AttributeError(
-                "Trying to set improper functional_mosaic. functional_mosaic must be a WorkingRetina instance."
+                "Trying to set improper working_retina. working_retina must be a WorkingRetina instance."
             )
 
 # if __name__=='__main__':

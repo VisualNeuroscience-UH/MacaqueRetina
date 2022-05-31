@@ -1,4 +1,4 @@
-''' 
+""" 
 These classes fit spike-triggered average (STA) data from retinal ganglion cells (RGC) to functions expressed as the difference of two 2-dimensional elliptical Gaussians (DoG, Difference of Gaussians).
 
 The derived parameters are used to create artificial RGC mosaics and receptive fields (RFs).
@@ -6,7 +6,7 @@ The derived parameters are used to create artificial RGC mosaics and receptive f
 Data courtesy of The Chichilnisky Lab <http://med.stanford.edu/chichilnisky.html>
 Data paper: Field GD et al. (2010). Nature 467(7316):673-7.
 Only low resolution spatial RF maps are used here.
-'''
+"""
 
 # Numerical
 import numpy as np
@@ -256,17 +256,15 @@ class ApricotFits(ApricotData, RetinaMath):
         if _fit_all is True:
             self._fit_all()
 
-    def _fit_temporal_filters(
-        self, normalize_before_fit=False, show_temporal_filter_response=False
-    ):
+    def _fit_temporal_filters(self, normalize_before_fit=False):
         """
         Fits each temporal filter to a function consisting of the difference of two
         cascades of lowpass filters. This follows Chichilnisky&Kalmar 2002 JNeurosci.
 
-        :param show_temporal_filter_response:
-        :return:
+        :return dataframe: concatenated parameters_df, error_df 
+        :set self.temporal_filters_to_show: dict of temporal filters to show with viz
         """
-        # shape (n_cells, 15); 15 time points @ 30 Hz
+        # shape (n_cells, 15); 15 time points @ 30 Hz (500 ms)
         if normalize_before_fit is True:
             temporal_filters = self.read_temporal_filter_data(
                 flip_negs=True, normalize=True
@@ -290,6 +288,11 @@ class ApricotFits(ApricotData, RetinaMath):
 
         xdata = np.arange(15)
         xdata_finer = np.linspace(0, max(xdata), 100)
+        temporal_filters_to_show = {
+            "xdata": xdata,
+            "xdata_finer": xdata_finer,
+            "title": f"{self.gc_type}_{self.response_type}",
+        }
 
         for cell_ix in tqdm(good_indices, desc="Fitting temporal filters"):
             ydata = temporal_filters[cell_ix, :]
@@ -308,9 +311,10 @@ class ApricotFits(ApricotData, RetinaMath):
                 error_array[cell_ix] = max_error
                 continue
 
-            if show_temporal_filter_response:
-                diff_of_lowpass = self.diff_of_lowpass_filters(xdata_finer, *popt)
-                self.viz.show_temporal_filter_response(xdata, ydata, xdata_finer, diff_of_lowpass, self.gc_type, self.response_type, cell_ix)
+            temporal_filters_to_show[f"cell_ix_{cell_ix}"] = {
+                "ydata": ydata,
+                "y_fit": self.diff_of_lowpass_filters(xdata_finer, *popt),
+            }
 
         parameters_df = pd.DataFrame(fitted_parameters, columns=parameter_names)
         # Convert taus to milliseconds
@@ -318,6 +322,10 @@ class ApricotFits(ApricotData, RetinaMath):
         parameters_df["tau2"] = parameters_df["tau2"] * (1 / data_fps) * 1000
 
         error_df = pd.DataFrame(error_array, columns=["temporalfit_mse"])
+
+        # For visualization in separate viz module
+        self.temporal_filters_to_show = temporal_filters_to_show
+
         return pd.concat([parameters_df, error_df], axis=1)
 
     def _fit_spatial_filters(
@@ -397,6 +405,14 @@ class ApricotFits(ApricotData, RetinaMath):
         # Create error & other arrays
         error_all_viable_cells = np.zeros((n_cells, 1))
         dog_filtersum_array = np.zeros((n_cells, 4))
+
+        spatial_filters_to_show = {
+            'x_grid' : x_grid,
+            'y_grid' : y_grid,
+            'surround_model' : surround_model,
+            'pixel_array_shape_x' : pixel_array_shape_x,
+            'pixel_array_shape_y' : pixel_array_shape_y,
+        }
 
         # GO THROUGH ALL CELLS
         print(("Fitting DoG model, surround is {0}".format(surround_status)))
@@ -576,11 +592,15 @@ class ApricotFits(ApricotData, RetinaMath):
             dog_filtersum_array[cell_index, 2] = np.sum(data_fitted)
             dog_filtersum_array[cell_index, 3] = np.sum(data_array[data_array > 0])
 
-            # Visualize fits with data
-            if show_spatial_filter_response:
-                self.viz.show_spatial_filter_response(self,data_all_viable_cells, cell_index, data_array, x_grid, y_grid, surround_model, pixel_array_shape_x, pixel_array_shape_y)
-                
+            # For visualization
+            spatial_filters_to_show[f"cell_ix_{cell_index}"] = {
+                "data_array": data_array,
+                "suptitle": f"celltype={self.gc_type}, responsetype={self.response_type}, cell_ix={cell_index}",
+            }
+
+
         # FOR loop ends here
+        spatial_filters_to_show['data_all_viable_cells'] = data_all_viable_cells
 
         # Finally build a dataframe of the fitted parameters
         fits_df = pd.DataFrame(data_all_viable_cells, columns=parameter_names)
@@ -602,6 +622,9 @@ class ApricotFits(ApricotData, RetinaMath):
         for i in self.bad_data_indices:
             good_indices[i] = 0
         good_indices_df = pd.DataFrame(good_indices, columns=["good_filter_data"])
+
+        # Save for later visualization
+        self.spatial_filters_to_show = spatial_filters_to_show
 
         return pd.concat(
             [fits_df, aspect_ratios_df, dog_filtersum_df, error_df, good_indices_df],
@@ -632,10 +655,9 @@ class ApricotFits(ApricotData, RetinaMath):
             ],
             axis=1,
         )
-        pass
 
     def get_fits(self):
-        return self.all_fits
+        return self.all_fits, self.temporal_filters_to_show, self.spatial_filters_to_show
 
     def save(self, filepath):
         self.all_fits.to_csv(filepath)
@@ -643,5 +665,5 @@ class ApricotFits(ApricotData, RetinaMath):
 
 # if __name__ == '__main__':
 
-# a = ApricotFits('parasol', 'on')
-# a._fit_temporal_filters(show_temporal_filter_response=True, normalize_before_fit=True)
+#     a = ApricotFits('parasol', 'on')
+#     a._fit_temporal_filters(show_temporal_filter_response=True, normalize_before_fit=True)

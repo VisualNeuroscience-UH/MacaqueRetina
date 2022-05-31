@@ -5,12 +5,19 @@ from scipy.stats import norm
 # Viz
 import matplotlib.pyplot as plt
 
+# BUiltin
+import pdb
+
 
 class RetinaMath:
     '''
     Constructor fit functions to read in data and provide continuous functions
     '''
 
+    # Need object instance of this class at ProjectManager
+    def __init__(self) -> None:
+        pass
+    
     # MosaicConstruction methods
     def gauss_plus_baseline(self, x, a, x0, sigma, baseline):  # To fit GC density
         '''
