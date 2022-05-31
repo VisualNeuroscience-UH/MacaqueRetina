@@ -23,7 +23,7 @@ from tqdm import tqdm
 
 # Local
 from viz.viz_module import Viz
-from construct.construct_math_module import ConstructionMathematics
+from construct.construct_math_module import RetinaMath
 
 # Builtin
 import sys
@@ -245,7 +245,7 @@ class ApricotData:
         )
 
 
-class ApricotFits(ApricotData, ConstructionMathematics):
+class ApricotFits(ApricotData, RetinaMath):
     """
     Methods for deriving spatial receptive field parameters from the apricot dataset (Field_2010)
     """

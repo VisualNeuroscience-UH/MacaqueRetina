@@ -17,7 +17,7 @@ import brian2.units as b2u
 # Local
 from cxsystem2.core.tools import write_to_file, load_from_file
 from construct.apricot_fitter_module import ApricotFits
-from construct.construct_math_module import ConstructionMathematics
+from construct.construct_math_module import RetinaMath
 
 # Builtin
 import sys
@@ -27,7 +27,7 @@ from copy import deepcopy
 import pdb
 
 
-class MosaicConstructor(ConstructionMathematics):
+class ConstructRetina(RetinaMath):
     """
     Create the ganglion cell mosaic.
     All spatial parameters are saved to the dataframe *gc_df*
@@ -959,7 +959,7 @@ class MosaicConstructor(ConstructionMathematics):
         self.gc_df.to_csv(filepath)
 
 
-class FunctionalMosaic(ConstructionMathematics):
+class WorkingRetina(RetinaMath):
     _properties_list = [
         "path",
         "output_folder",

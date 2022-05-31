@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 # Local
 # import utilities as ut
 # from system_utilities import SystemUtilities as ut
-from construct.macaque_retina_module import MosaicConstructor, FunctionalMosaic
+from construct.macaque_retina_module import ConstructRetina, WorkingRetina
 
 # Builtin
 import os
@@ -190,7 +190,7 @@ class AnalogInput():
         assert Nx != 0, 'N units not set, aborting...'
 
         # Get gc mosaic
-        mosaic = MosaicConstructor(gc_type='parasol', response_type='on', ecc_limits=[4.8, 5.2],
+        mosaic = ConstructRetina(gc_type='parasol', response_type='on', ecc_limits=[4.8, 5.2],
                                     sector_limits=[-.4, .4], model_density=1.0, randomize_position=0.05)
 
         mosaic.build()
@@ -199,9 +199,9 @@ class AnalogInput():
 
         testmosaic = pd.read_csv('deneve_test_mosaic.csv', index_col=0)
 
-        ret = FunctionalMosaic(testmosaic, 'parasol', 'on', stimulus_center=5+0j,
+        ret = WorkingRetina(testmosaic, 'parasol', 'on', stimulus_center=5+0j,
                                    stimulus_width_pix=240, stimulus_height_pix=240)
-        w_coord, z_coord = FunctionalMosaic._get_w_z_coords(ret)
+        w_coord, z_coord = WorkingRetina._get_w_z_coords(ret)
 
         # Get random sample sized N_units, assert for too small sample
 

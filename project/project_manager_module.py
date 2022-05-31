@@ -5,7 +5,7 @@ from context.context_module import Context
 from data_io.data_io_module import DataIO
 from analysis.analysis_module import Analysis
 from viz.viz_module import Viz
-from  construct.macaque_retina_module import MosaicConstructor, FunctionalMosaic
+from  construct.macaque_retina_module import ConstructRetina, WorkingRetina
 from stimuli.visual_stimuli_module import ConstructStimulus, PhotoReceptor
 
 # Builtin
@@ -22,33 +22,12 @@ import pandas as pd
 
 
 """
-Module on retina generation management
+Module on retina management
 
 We use dependency injection to make the code more modular and easier to test.
 It means that during construction here at the manager level, we can inject
 an object instance to constructor of a "client". Thus the constructed "client" is holding the injected
 object instance.
-
-Sometimes the injected object instance need access to it's client's attributes.
-Client object injection means that we inject the client object self BACK into the
-injected object. This is a bit of a hack, but it allows access to client attributes.
-When using the client object, it is called as "self.client_object.[attribute]".
-Note that it also creates a recursion client.injected_object.client_object.injected_object...
-
-Jösses. Leveät pinnat olisivat eksplisiittisempiä ja irroittaisivat takaisinkytkennän.
-Toisaalta kun meillä on MosaicConstructor ja FunctionalMosaic instanssit, niin
-niitä voi käyttää client_object attribuutin kautta.
-Yksi vaihtoehto olisi periä Viz ja kutsua suoraan self.menetelmää. Mutta tämä on
-tiivis kytkentä ja vaikeampi testata.
-Jos Viz halutaan irti, niin leveät pinnat taitaa olla ainoa järkevä vaihtoehto.
-Viz voisi sisältää luokkia, tyyliin ContructorViz, StimulusViz, ResponseViz
-
-Sit meil on data_io, context ja ana injisoituina, mutta ihan käyttämättä.
-Big road to nowhere...
-
-Aamupäivällä lisäsin pilkun, ja iltapäivällä otin sen pois...
-
-ARVAA JÄITKÖ TÄHÄN?
 
 Simo Vanni 2022
 """
@@ -107,8 +86,8 @@ class ProjectManager(ProjectBase, ProjectUtilities):
 
         # Constructor for macaque retina mosaic. For client object injection, 
         # we need deep copy of viz to avoid masking of the instances from distinct classes
-        self.mosaic_constructor = MosaicConstructor(context, data_io, deepcopy(viz))
-        self.functional_mosaic = FunctionalMosaic(context, data_io, deepcopy(viz))
+        self.mosaic_constructor = ConstructRetina(context, data_io, deepcopy(viz))
+        self.functional_mosaic = WorkingRetina(context, data_io, deepcopy(viz))
 
 
 
@@ -144,11 +123,11 @@ class ProjectManager(ProjectBase, ProjectUtilities):
 
     @mosaic_constructor.setter
     def mosaic_constructor(self, value):
-        if isinstance(value, MosaicConstructor):
+        if isinstance(value, ConstructRetina):
             self._mosaic_constructor = value
         else:
             raise AttributeError(
-                "Trying to set improper mosaic_constructor. mosaic_constructor must be a MosaicConstructor instance."
+                "Trying to set improper mosaic_constructor. mosaic_constructor must be a ConstructRetina instance."
             )
 
     @property
@@ -157,11 +136,11 @@ class ProjectManager(ProjectBase, ProjectUtilities):
 
     @functional_mosaic.setter
     def functional_mosaic(self, value):
-        if isinstance(value, FunctionalMosaic):
+        if isinstance(value, WorkingRetina):
             self._functional_mosaic = value
         else:
             raise AttributeError(
-                "Trying to set improper functional_mosaic. functional_mosaic must be a FunctionalMosaic instance."
+                "Trying to set improper functional_mosaic. functional_mosaic must be a WorkingRetina instance."
             )
 
 # if __name__=='__main__':

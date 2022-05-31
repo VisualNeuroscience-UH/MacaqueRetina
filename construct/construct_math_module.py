@@ -6,17 +6,37 @@ from scipy.stats import norm
 import matplotlib.pyplot as plt
 
 
-class ConstructionMathematics:
+class RetinaMath:
     '''
     Constructor fit functions to read in data and provide continuous functions
     '''
 
+    # MosaicConstruction methods
     def gauss_plus_baseline(self, x, a, x0, sigma, baseline):  # To fit GC density
         '''
         Function for Gaussian distribution with a baseline value. For optimization.
         '''
         return a * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2)) + baseline
 
+    def sector2area(self, radius, angle):  # Calculate sector area. Angle in deg, radius in mm
+        pi = np.pi
+        assert angle < 360, "Angle not possible, should be <360"
+
+        # Calculating area of the sector
+        sector_surface_area = (pi * (radius ** 2)) * (angle / 360)  # in mm2
+        return sector_surface_area
+
+    def area2circle_diameter(self, area_of_rf):
+        diameter = np.sqrt(area_of_rf / np.pi) * 2
+
+        return diameter
+
+    def ellipse2area(self, sigma_x, sigma_y):
+        area_of_ellipse = np.pi * sigma_x * sigma_y
+
+        return area_of_ellipse
+
+    # WorkingRetina methods
     def pol2cart(self, radius, phi, deg=True):
         """
         Converts polar coordinates to Cartesian coordinates
@@ -36,6 +56,7 @@ class ConstructionMathematics:
         y = radius * np.sin(theta)
         return (x, y)
 
+    # ApricotFits method
     def DoG2D_independent_surround(self, xy_tuple, amplitudec, xoc, yoc, semi_xc, semi_yc, orientation_center,
                                    amplitudes, xos, yos, semi_xs, semi_ys, orientation_surround, offset):
         '''
@@ -66,6 +87,11 @@ class ConstructionMathematics:
 
         return model_fit.ravel()
 
+    def lowpass(self, t, n, p, tau):
+        y = p * (t / tau) ** (n) * np.exp(-n * (t / tau - 1))
+        return y
+
+    # ApricotFits & WorkingRetina method
     def DoG2D_fixed_surround(self, xy_tuple, amplitudec, xoc, yoc, semi_xc, semi_yc, orientation_center, amplitudes,
                              sur_ratio, offset):
         '''
@@ -97,47 +123,13 @@ class ConstructionMathematics:
 
         return model_fit.ravel()
 
-    def DoG2D_fixed_double_surround(self, xy_tuple, xoc, yoc, semi_xc, semi_yc, orientation_center, amplitudes):
-        """
-        DoG model with the angle of orientation and center positions identical and diameter of the surround
-        twice that of the center.
-        """
-
-        raise NotImplementedError
-
-    def sector2area(self, radius, angle):  # Calculate sector area. Angle in deg, radius in mm
-        pi = np.pi
-        assert angle < 360, "Angle not possible, should be <360"
-
-        # Calculating area of the sector
-        sector_surface_area = (pi * (radius ** 2)) * (angle / 360)  # in mm2
-        return sector_surface_area
-
-    def circle_diameter2area(self, diameter):
-        area_of_rf = np.pi * (diameter / 2) ** 2
-
-        return area_of_rf
-
-    def area2circle_diameter(self, area_of_rf):
-        diameter = np.sqrt(area_of_rf / np.pi) * 2
-
-        return diameter
-
-    def ellipse2area(self, sigma_x, sigma_y):
-        area_of_ellipse = np.pi * sigma_x * sigma_y
-
-        return area_of_ellipse
-
-    def lowpass(self, t, n, p, tau):
-        y = p * (t / tau) ** (n) * np.exp(-n * (t / tau - 1))
-        return y
-
     def diff_of_lowpass_filters(self, t, n, p1, p2, tau1, tau2):
         # From Chichilnisky & Kalmar JNeurosci 2002
         y = self.lowpass(t, n, p1, tau1) - self.lowpass(t, n, p2, tau2)
         return y
 
-    def generator2firing(self, generator=0, viz_module=True):
+    # Not in use
+    def generator2firing(self, generator=0, show_generator_vs_fr=True):
         '''
         Generator potential to firing rate by cumulative normal distribution
         From Chichilnisky_2002_JNeurosci: 
@@ -151,7 +143,7 @@ class ConstructionMathematics:
         slope=1 # slope, demo 1
         half_height=1 # at what generator signal is half-height, demo 0
         firing_freq = max_firing_rate * norm.cdf(generator, loc=half_height, scale=slope)
-        if viz_module==True:
+        if show_generator_vs_fr==True:
             generator=np.linspace(-3,3,num=200)
             firing_freq = max_firing_rate * norm.cdf(generator, loc=half_height, scale=slope)
             plt.plot(generator,firing_freq);plt.show()

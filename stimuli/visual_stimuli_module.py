@@ -14,8 +14,6 @@ import cv2
 # Viz
 import matplotlib.pyplot as plt
 
-# import skimage
-
 # Local
 from data_io.data_io_module import DataIO
 from context.context_module import Context
@@ -143,39 +141,6 @@ class VideoBaseClass(object):
 
         # Final offset
         frames = frames + Lmin
-
-        # # Scale to final range
-        # frames = frames * contrast * intensity_max
-
-        # # Scale mean
-        # # Shift to 0
-        # raw_mean_value  = np.mean(self.options["raw_intensity"])
-        # raw_mean_value = raw_mean_value - raw_min_value
-        # # Scale to 1
-        # raw_mean_value = raw_mean_value / raw_peak_to_peak
-        # # Scale to final range
-        # scaled_mean_value = raw_mean_value * contrast * intensity_max
-
-        # intensity_shift_to_mean =  self.options["mean"] - scaled_mean_value
-
-        # # Shift to final values
-        # frames = frames + intensity_shift_to_mean
-
-        # # Henri's version
-        # # Scale to correct intensity scale
-        # # such that intensity is modulated around mean background light = intensity_max/2
-        # raw_intensity_scale = np.ptp(self.frames)
-        # self.frames = (self.frames * (2/raw_intensity_scale) - 1.0) * contrast * (intensity_max/2)
-        # self.frames = self.frames + (intensity_max/2)
-
-        # # Simo's old version
-        # # Scale to correct intensity scale
-        # pedestal = self.options["pedestal"]  # This is the pedestal of final dynamic range
-        # final_dynamic_range = (pedestal, intensity_max)
-        # final_scale = np.ptp(final_dynamic_range)
-        # self.frames = self.frames * (final_scale / raw_intensity_scale) * contrast
-        # # Shift to pedestal
-        # self.frames = self.frames + pedestal
 
         # Round result to avoid unnecessary errors
         frames = np.round(frames, 1)
@@ -791,6 +756,10 @@ class PhotoReceptor:
     """
     This class gets one image at a time, and provides the cone response.
     After instantiation, the RGC group can get one frame at a time, and the system will give an impulse response.
+
+    This is not necessary for GC transfer function, it is not used in Chichilnisky_2002_JNeurosci Field_2010_Nature.
+    Instead, they focus the pattern directly on isolated cone mosaic.
+    Nevertheless, it may be useful for comparison of image input with and w/o  explicit photoreceptor.
     """
 
     # self.context. attributes

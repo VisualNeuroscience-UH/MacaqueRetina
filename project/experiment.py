@@ -11,7 +11,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Local
-from construct.macaque_retina_module import MosaicConstructor, FunctionalMosaic
+from construct.macaque_retina_module import ConstructRetina, WorkingRetina
 from stimuli import visual_stimuli_module as vs
 from cxsystem2.core.tools import write_to_file, load_from_file
 
@@ -273,9 +273,9 @@ if __name__ == "__main__":
     # Get retina
     testmosaic = pd.read_csv(f"{cell_type}_{response_type}_single.csv", index_col=0)
 
-    # ret = FunctionalMosaic(testmosaic, cell_type, response_type, stimulus_center=5.03-0.01j,
+    # ret = WorkingRetina(testmosaic, cell_type, response_type, stimulus_center=5.03-0.01j,
     #                        stimulus_width_pix=240, stimulus_height_pix=240)
-    ret = FunctionalMosaic(
+    ret = WorkingRetina(
         testmosaic,
         cell_type,
         response_type,

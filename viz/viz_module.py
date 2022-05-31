@@ -24,6 +24,8 @@ import pdb
 class Viz:
     """
     Methods to viz_module the retina
+
+    Some methods import object instance as call parameter (ConstructRetina, WorkingRetina, etc). 
     """
 
     cmap = "gist_earth"  # viridis or cividis would be best for color-blind
@@ -67,485 +69,7 @@ class Viz:
 
         return is_valid
 
-    def show_gc_positions_and_density(self, rho, phi, gc_density_func_params):
-        """
-        Show retina cell positions and receptive fields
-        """
-
-        # to cartesian
-        xcoord, ycoord = self.client_object.pol2cart(rho, phi)
-
-        fig, ax = plt.subplots(nrows=2, ncols=1)
-        ax[0].plot(xcoord.flatten(), ycoord.flatten(), "b.", label=self.client_object.gc_type)
-        ax[0].axis("equal")
-        ax[0].legend()
-        ax[0].set_title("Cartesian retina")
-        ax[0].set_xlabel("Eccentricity (mm)")
-        ax[0].set_ylabel("Elevation (mm)")
-
-        # quality control for density.
-        nbins = 50
-        # Fit for published data
-        edge_ecc = np.linspace(np.min(rho), np.max(rho), nbins)
-        my_gaussian_fit = self.client_object.gauss_plus_baseline(edge_ecc, *gc_density_func_params)
-        my_gaussian_fit_current_GC = my_gaussian_fit * self.client_object.gc_proportion
-        ax[1].plot(edge_ecc, my_gaussian_fit_current_GC, "r")
-
-        # Density of model cells
-        index = np.all(
-            [
-                phi > np.min(self.client_object.theta),
-                phi < np.max(self.client_object.theta),
-                rho > np.min(self.client_object.eccentricity_in_mm),
-                rho < np.max(self.client_object.eccentricity_in_mm),
-            ],
-            axis=0,
-        )  # Index only cells within original requested theta
-        hist, bin_edges = np.histogram(rho[index], nbins)
-        center_ecc = bin_edges[:-1] + ((bin_edges[1:] - bin_edges[:-1]) / 2)
-        area_for_each_bin = self.client_object.sector2area(
-            bin_edges[1:], np.ptp(self.client_object.theta)
-        ) - self.client_object.sector2area(
-            bin_edges[:-1], np.ptp(self.client_object.theta)
-        )  # in mm2. Vector length len(edge_ecc) - 1.
-        # Cells/area
-        model_cell_density = hist / area_for_each_bin  # in cells/mm2
-        ax[1].plot(center_ecc, model_cell_density, "b.")
-
-    def show_gc_receptive_fields(self, xcoord, ycoord,gc_rf_models, surround_fixed=False):
-        """
-        Show retina cell positions and receptive fields. Note that this is slow if you have a large patch.
-        """
-
-        fig, ax = plt.subplots(nrows=1, ncols=1)
-        ax.plot(xcoord.flatten(), ycoord.flatten(), "b.", label=self.client_object.gc_type)
-
-        if surround_fixed:
-            # gc_rf_models parameters:'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio', 'orientation_center'
-            # Ellipse parameters: Ellipse(xy, width, height, angle=0, **kwargs). Only possible one at the time, unfortunately.
-            for index in np.arange(len(xcoord)):
-                ellipse_center_x = xcoord[index]
-                ellipse_center_y = ycoord[index]
-                semi_xc = gc_rf_models[index, 0]
-                semi_yc = gc_rf_models[index, 1]
-                # angle_in_radians = gc_rf_models[index, 5]  # Orientation
-                angle_in_deg = gc_rf_models[index, 5]  # Orientation
-                diameter_xc = semi_xc * 2
-                diameter_yc = semi_yc * 2
-                e1 = Ellipse(
-                    (ellipse_center_x, ellipse_center_y),
-                    diameter_xc,
-                    diameter_yc,
-                    angle_in_deg,
-                    edgecolor="b",
-                    linewidth=0.5,
-                    fill=False,
-                )
-                ax.add_artist(e1)
-
-        ax.axis("equal")
-        ax.legend()
-        ax.set_title("Cartesian retina")
-        ax.set_xlabel("Eccentricity (mm)")
-        ax.set_ylabel("Elevation (mm)")
-
-    def show_spatial_statistics(
-        self, ydata, spatial_statistics_dict, model_fit_data=None
-    ):
-        """
-        Show histograms of receptive field parameters
-        """
-
-        distributions = [key for key in spatial_statistics_dict.keys()]
-        n_distributions = len(spatial_statistics_dict)
-
-        # plot the distributions and fits.
-        fig, axes = plt.subplots(2, 3, figsize=(13, 4))
-        axes = axes.flatten()
-        for index in np.arange(n_distributions):
-            ax = axes[index]
-
-            bin_values, foo, foo2 = ax.hist(ydata[:, index], bins=20, density=True)
-
-            if model_fit_data != None:  # Assumes tuple of arrays, see below
-                x_model_fit, y_model_fit = model_fit_data[0], model_fit_data[1]
-                ax.plot(
-                    x_model_fit[:, index],
-                    y_model_fit[:, index],
-                    "r-",
-                    linewidth=6,
-                    alpha=0.6,
-                )
-
-                spatial_statistics_dict[distributions[index]]
-                shape = spatial_statistics_dict[distributions[index]]["shape"]
-                loc = spatial_statistics_dict[distributions[index]]["loc"]
-                scale = spatial_statistics_dict[distributions[index]]["scale"]
-                model_function = spatial_statistics_dict[distributions[index]][
-                    "distribution"
-                ]
-
-                if model_function == "gamma":
-                    ax.annotate(
-                        "shape = {0:.2f}\nloc = {1:.2f}\nscale = {2:.2f}".format(
-                            shape, loc, scale
-                        ),
-                        xy=(0.6, 0.4),
-                        xycoords="axes fraction",
-                    )
-                    ax.set_title(
-                        "{0} fit for {1}".format(model_function, distributions[index])
-                    )
-                elif model_function == "beta":
-                    a_parameter, b_parameter = shape[0], shape[1]
-                    ax.annotate(
-                        "a = {0:.2f}\nb = {1:.2f}\nloc = {2:.2f}\nscale = {3:.2f}".format(
-                            a_parameter, b_parameter, loc, scale
-                        ),
-                        xy=(0.6, 0.4),
-                        xycoords="axes fraction",
-                    )
-                    ax.set_title(
-                        "{0} fit for {1}".format(model_function, distributions[index])
-                    )
-
-                # Rescale y axis if model fit goes high. Shows histogram better
-                if y_model_fit[:, index].max() > 1.5 * bin_values.max():
-                    ax.set_ylim([ax.get_ylim()[0], 1.1 * bin_values.max()])
-
-        # Check correlations
-        # distributions = ['semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio', 'orientation_center']
-        fig2, axes2 = plt.subplots(2, 3, figsize=(13, 4))
-        axes2 = axes2.flatten()
-        ref_index = 1
-        for index in np.arange(n_distributions):
-            ax2 = axes2[index]
-            data_all_x = ydata[:, ref_index]
-            data_all_y = ydata[:, index]
-
-            r, p = stats.pearsonr(data_all_x, data_all_y)
-            slope, intercept, r_value, p_value, std_err = stats.linregress(
-                data_all_x, data_all_y
-            )
-            ax2.plot(data_all_x, data_all_y, ".")
-            data_all_x.sort()
-            ax2.plot(data_all_x, intercept + slope * data_all_x, "b-")
-            ax2.annotate(
-                "\nr={0:.2g},\np={1:.2g}".format(r, p),
-                xy=(0.8, 0.4),
-                xycoords="axes fraction",
-            )
-            ax2.set_title(
-                "Correlation between {0} and {1}".format(
-                    distributions[ref_index], distributions[index]
-                )
-            )
-
-        # Save correlation figure
-        # folder_name = 'Korrelaatiot\Midget_OFF'
-        # save4save = os.getcwd()
-        # os.chdir(folder_name)
-        # plt.savefig('Corr_{0}.png'.format(distributions[ref_index]),format='png')
-        # os.chdir(save4save)
-
-        pass
-
-    def show_dendritic_diameter_vs_eccentricity(
-        self, dataset_x, dataset_y, polynomials, dataset_name=""
-    ):
-
-        fig, ax = plt.subplots(nrows=1, ncols=1)
-        ax.plot(dataset_x, dataset_y, ".")
-
-        if dataset_name:
-            if (
-                len(polynomials) == 2
-            ):  # check if only two parameters, ie intercept and slope
-                intercept = polynomials[1]
-                slope = polynomials[0]
-                ax.plot(dataset_x, intercept + slope * dataset_x, "k--")
-                ax.annotate(
-                    "{0} : \ny={1:.1f} + {2:.1f}x".format(
-                        dataset_name, intercept, slope
-                    ),
-                    xycoords="axes fraction",
-                    xy=(0.5, 0.15),
-                    ha="left",
-                    color="k",
-                )
-            elif len(polynomials) == 3:
-                intercept = polynomials[2]
-                slope = polynomials[1]
-                square = polynomials[0]
-                ax.plot(
-                    dataset_x,
-                    intercept + slope * dataset_x + square * dataset_x**2,
-                    "k--",
-                )
-                ax.annotate(
-                    "{0}: \ny={1:.1f} + {2:.1f}x + {3:.1f}x^2".format(
-                        dataset_name, intercept, slope, square
-                    ),
-                    xycoords="axes fraction",
-                    xy=(0.5, 0.15),
-                    ha="left",
-                    color="k",
-                )
-            elif len(polynomials) == 4:
-                intercept = polynomials[3]
-                slope = polynomials[2]
-                square = polynomials[1]
-                cube = polynomials[0]
-                ax.plot(
-                    dataset_x,
-                    intercept
-                    + slope * dataset_x
-                    + square * dataset_x**2
-                    + cube * dataset_x**3,
-                    "k--",
-                )
-                ax.annotate(
-                    "{0}: \ny={1:.1f} + {2:.1f}x + {3:.1f}x^2 + {4:.1f}x^3".format(
-                        dataset_name, intercept, slope, square, cube
-                    ),
-                    xycoords="axes fraction",
-                    xy=(0.5, 0.15),
-                    ha="left",
-                    color="k",
-                )
-
-        plt.title(
-            "DF diam wrt ecc for {0} type, {1} dataset".format(self.client_object.gc_type, dataset_name)
-        )
-
-    def show_cone_response(self, image, image_after_optics, cone_response):
-
-        fig, ax = plt.subplots(nrows=2, ncols=3)
-        axs = ax.ravel()
-        axs[0].hist(image.flatten(), 20)
-        axs[1].hist(image_after_optics.flatten(), 20)
-        axs[2].hist(cone_response.flatten(), 20)
-
-        axs[3].imshow(image, cmap="Greys")
-        axs[4].imshow(image_after_optics, cmap="Greys")
-        axs[5].imshow(cone_response, cmap="Greys")
-
-    def visualize_mosaic(self):
-        """
-        Plots the full ganglion cell mosaic
-
-        :return:
-        """
-        rho = self.gc_df["positions_eccentricity"].values
-        phi = self.gc_df["positions_polar_angle"].values
-
-        gc_rf_models = np.zeros((len(self.gc_df), 6))
-        gc_rf_models[:, 0] = self.gc_df["semi_xc"]
-        gc_rf_models[:, 1] = self.gc_df["semi_yc"]
-        gc_rf_models[:, 2] = self.gc_df["xy_aspect_ratio"]
-        gc_rf_models[:, 3] = self.gc_df["amplitudes"]
-        gc_rf_models[:, 4] = self.gc_df["sur_ratio"]
-        gc_rf_models[:, 5] = self.gc_df["orientation_center"]
-
-        self.show_gc_receptive_fields(
-            rho, phi, gc_rf_models, surround_fixed=self.surround_fixed
-        )
-
-    def show_stimulus_with_gcs(self, frame_number=0, ax=None, example_gc=5):
-        """
-        Plots the 1SD ellipses of the RGC mosaic
-
-        :param frame_number: int
-        :param ax: matplotlib Axes object
-        :return:
-        """
-
-        fig = plt.figure()
-        ax = ax or plt.gca()
-        ax.imshow(self.client_object.stimulus_video.frames[:, :, frame_number], vmin=0, vmax=255)
-        ax = plt.gca()
-
-        for index, gc in self.client_object.gc_df_pixspace.iterrows():
-            # When in pixel coordinates, positive value in Ellipse angle is clockwise. Thus minus here.
-            # Note that Ellipse angle is in degrees.
-            # Width and height in Ellipse are diameters, thus x2.
-            if index == example_gc:
-                facecolor = "yellow"
-            else:
-                facecolor = "None"
-
-            circ = Ellipse(
-                (gc.q_pix, gc.r_pix),
-                width=2 * gc.semi_xc,
-                height=2 * gc.semi_yc,
-                angle=gc.orientation_center * (-1),
-                edgecolor="blue",
-                facecolor=facecolor,
-            )
-            ax.add_patch(circ)
-
-        # Annotate
-        # Get y tics in pixels
-        locs, labels = plt.yticks()
-
-        # Remove tick marks outside stimulus
-        locs = locs[locs < self.client_object.stimulus_height_pix]
-        # locs=locs[locs>=0] # Including zero seems to shift center at least in deg
-        locs = locs[locs > 0]
-
-        # Set left y tick labels (pixels)
-        left_y_labels = locs.astype(int)
-        # plt.yticks(ticks=locs, labels=left_y_labels)
-        plt.yticks(ticks=locs)
-        ax.set_ylabel("pix")
-
-        # Set x tick labels (degrees)
-        xlocs = locs - np.mean(locs)
-        down_x_labels = np.round(xlocs / self.client_object.pix_per_deg, decimals=2) + np.real(
-            self.client_object.stimulus_center
-        )
-        plt.xticks(ticks=locs, labels=down_x_labels)
-        ax.set_xlabel("deg")
-
-        # Set right y tick labels (mm)
-        ax2 = ax.twinx()  # instantiate a second axes that shares the same x-axis
-        ax2.tick_params(axis="y")
-        right_y_labels = np.round(
-            (locs / self.client_object.pix_per_deg) / self.client_object.deg_per_mm, decimals=2
-        )
-        plt.yticks(ticks=locs, labels=right_y_labels)
-        ax2.set_ylabel("mm")
-
-        fig.tight_layout()
-
-    def show_single_gc_view(self, cell_index, frame_number=0, ax=None):
-        """
-        Plots the stimulus frame cropped to RGC surroundings
-
-        :param cell_index: int
-        :param frame_number: int
-        :param ax: matplotlib Axes object
-        :return:
-        """
-        ax = ax or plt.gca()
-
-        gc = self.gc_df_pixspace.iloc[cell_index]
-        qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
-
-        # Show stimulus frame cropped to RGC surroundings & overlay 1SD center RF on top of that
-        ax.imshow(
-            self.stimulus_video.frames[:, :, frame_number],
-            cmap=self.cmap_stim,
-            vmin=0,
-            vmax=255,
-        )
-        ax.set_xlim([qmin, qmax])
-        ax.set_ylim([rmax, rmin])
-
-        # When in pixel coordinates, positive value in Ellipse angle is clockwise. Thus minus here.
-        # Note that Ellipse angle is in degrees.
-        # Width and height in Ellipse are diameters, thus x2.
-        circ = Ellipse(
-            (gc.q_pix, gc.r_pix),
-            width=2 * gc.semi_xc,
-            height=2 * gc.semi_yc,
-            angle=gc.orientation_center * (-1),
-            edgecolor="white",
-            facecolor="yellow",
-        )
-        ax.add_patch(circ)
-        plt.xticks([])
-        plt.yticks([])
-
-    def plot_tf_amplitude_response(self, cell_index, ax=None):
-
-        ax = ax or plt.gca()
-
-        tf = self._create_temporal_filter(cell_index)
-        ft_tf = np.fft.fft(tf)
-        timestep = self.data_filter_duration / len(tf) / 1000  # in seconds
-        freqs = np.fft.fftfreq(tf.size, d=timestep)
-        amplitudes = np.abs(ft_tf)
-
-        ax.set_xscale("log")
-        ax.set_xlim([0.1, 100])
-        plt.xlabel("Frequency (Hz)")
-        plt.ylabel("Gain")
-        ax.plot(freqs, amplitudes, ".")
-
-    def plot_midpoint_contrast(self, cell_index, ax=None):
-        """
-        Plots the contrast in the mid-pixel of the stimulus cropped to RGC surroundings
-
-        :param cell_index:
-        :return:
-        """
-        stimulus_cropped = self._get_cropped_video(cell_index)
-
-        midpoint_ix = (self.spatial_filter_sidelen - 1) // 2
-        signal = stimulus_cropped[midpoint_ix, midpoint_ix, :]
-
-        video_dt = (1 / self.stimulus_video.fps) * b2u.second
-        tvec = np.arange(0, len(signal)) * video_dt
-
-        ax = ax or plt.gca()
-        ax.plot(tvec, signal)
-        ax.set_ylim([-1, 1])
-
-    def plot_local_rms_contrast(self, cell_index, ax=None):
-        """
-        Plots local RMS contrast in the stimulus cropped to RGC surroundings.
-        Note that is just a frame-by-frame computation, no averaging here
-
-        :param cell_index:
-        :return:
-        """
-        stimulus_cropped = self._get_cropped_video(
-            cell_index, contrast=False
-        )  # get stimulus intensities
-        n_frames = self.stimulus_video.video_n_frames
-        s = self.spatial_filter_sidelen
-        signal = np.zeros(n_frames)
-
-        for t in range(n_frames):
-            frame_mean = np.mean(stimulus_cropped[:, :, t])
-            squared_sum = np.sum((stimulus_cropped[:, :, t] - frame_mean) ** 2)
-            signal[t] = np.sqrt(1 / (frame_mean**2 * b2u.s**2) * squared_sum)
-
-        video_dt = (1 / self.stimulus_video.fps) * b2u.second
-        tvec = np.arange(0, len(signal)) * video_dt
-
-        ax = ax or plt.gca()
-        ax.plot(tvec, signal)
-        ax.set_ylim([0, 1])
-
-    def plot_local_michelson_contrast(self, cell_index, ax=None):
-        """
-        Plots local RMS contrast in the stimulus cropped to RGC surroundings.
-        Note that is just a frame-by-frame computation, no averaging here
-
-        :param cell_index:
-        :return:
-        """
-        stimulus_cropped = self._get_cropped_video(
-            cell_index, contrast=False
-        )  # get stimulus intensities
-        n_frames = self.stimulus_video.video_n_frames
-        s = self.spatial_filter_sidelen
-        signal = np.zeros(n_frames)
-
-        for t in range(n_frames):
-            frame_min = np.min(stimulus_cropped[:, :, t])
-            frame_max = np.max(stimulus_cropped[:, :, t])
-            signal[t] = (frame_max - frame_min) / (frame_max + frame_min)
-
-        video_dt = (1 / self.stimulus_video.fps) * b2u.second
-        tvec = np.arange(0, len(signal)) * video_dt
-
-        ax = ax or plt.gca()
-        ax.plot(tvec, signal)
-        ax.set_ylim([0, 1])
-
+    # ApricotFits visualization
     def show_temporal_filter_response(
         self,
         xdata,
@@ -556,6 +80,10 @@ class Viz:
         response_type,
         cell_ix,
     ):
+        '''
+        ApricotFits call.
+        '''
+        
         plt.scatter(xdata, ydata)
         plt.plot(
             xdata_finer,
@@ -575,6 +103,11 @@ class Viz:
         pixel_array_shape_x,
         pixel_array_shape_y,
     ):
+
+        '''
+        ApricotFits call.
+        '''
+
         imshow_cmap = "bwr"
         ellipse_edgecolor = "black"
 
@@ -679,17 +212,290 @@ class Viz:
         )
         fig.colorbar(sur, ax=ax2)
 
-    def show_tonic_drives(self, xs, pdf, tonicdrive_array, title):
-        plt.plot(xs, pdf)
-        plt.hist(tonicdrive_array, density=True)
-        plt.title(title)
-        plt.xlabel("Tonic drive (a.u.)")
+    # ConstructRetina visualization
+    def show_gc_positions_and_density(self, rho, phi, gc_density_func_params):
+        """
+        Show retina cell positions and receptive fields
+
+        ConstructRetina call.
+        """
+
+        # to cartesian
+        xcoord, ycoord = self.client_object.pol2cart(rho, phi)
+
+        fig, ax = plt.subplots(nrows=2, ncols=1)
+        ax[0].plot(xcoord.flatten(), ycoord.flatten(), "b.", label=self.client_object.gc_type)
+        ax[0].axis("equal")
+        ax[0].legend()
+        ax[0].set_title("Cartesian retina")
+        ax[0].set_xlabel("Eccentricity (mm)")
+        ax[0].set_ylabel("Elevation (mm)")
+
+        # quality control for density.
+        nbins = 50
+        # Fit for published data
+        edge_ecc = np.linspace(np.min(rho), np.max(rho), nbins)
+        my_gaussian_fit = self.client_object.gauss_plus_baseline(edge_ecc, *gc_density_func_params)
+        my_gaussian_fit_current_GC = my_gaussian_fit * self.client_object.gc_proportion
+        ax[1].plot(edge_ecc, my_gaussian_fit_current_GC, "r")
+
+        # Density of model cells
+        index = np.all(
+            [
+                phi > np.min(self.client_object.theta),
+                phi < np.max(self.client_object.theta),
+                rho > np.min(self.client_object.eccentricity_in_mm),
+                rho < np.max(self.client_object.eccentricity_in_mm),
+            ],
+            axis=0,
+        )  # Index only cells within original requested theta
+        hist, bin_edges = np.histogram(rho[index], nbins)
+        center_ecc = bin_edges[:-1] + ((bin_edges[1:] - bin_edges[:-1]) / 2)
+        area_for_each_bin = self.client_object.sector2area(
+            bin_edges[1:], np.ptp(self.client_object.theta)
+        ) - self.client_object.sector2area(
+            bin_edges[:-1], np.ptp(self.client_object.theta)
+        )  # in mm2. Vector length len(edge_ecc) - 1.
+        # Cells/area
+        model_cell_density = hist / area_for_each_bin  # in cells/mm2
+        ax[1].plot(center_ecc, model_cell_density, "b.")
+
+    def show_gc_receptive_fields(self, xcoord, ycoord,gc_rf_models, surround_fixed=False):
+        """
+        Show retina cell positions and receptive fields. Note that this is slow if you have a large patch.
+
+        ConstructRetina call.
+        """
+
+        fig, ax = plt.subplots(nrows=1, ncols=1)
+        ax.plot(xcoord.flatten(), ycoord.flatten(), "b.", label=self.client_object.gc_type)
+
+        if surround_fixed:
+            # gc_rf_models parameters:'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio', 'orientation_center'
+            # Ellipse parameters: Ellipse(xy, width, height, angle=0, **kwargs). Only possible one at the time, unfortunately.
+            for index in np.arange(len(xcoord)):
+                ellipse_center_x = xcoord[index]
+                ellipse_center_y = ycoord[index]
+                semi_xc = gc_rf_models[index, 0]
+                semi_yc = gc_rf_models[index, 1]
+                # angle_in_radians = gc_rf_models[index, 5]  # Orientation
+                angle_in_deg = gc_rf_models[index, 5]  # Orientation
+                diameter_xc = semi_xc * 2
+                diameter_yc = semi_yc * 2
+                e1 = Ellipse(
+                    (ellipse_center_x, ellipse_center_y),
+                    diameter_xc,
+                    diameter_yc,
+                    angle_in_deg,
+                    edgecolor="b",
+                    linewidth=0.5,
+                    fill=False,
+                )
+                ax.add_artist(e1)
+
+        ax.axis("equal")
+        ax.legend()
+        ax.set_title("Cartesian retina")
+        ax.set_xlabel("Eccentricity (mm)")
+        ax.set_ylabel("Elevation (mm)")
+
+    def show_spatial_statistics(
+        self, ydata, spatial_statistics_dict, model_fit_data=None
+    ):
+        """
+        Show histograms of receptive field parameters
+
+        ConstructRetina call.
+        """
+
+        distributions = [key for key in spatial_statistics_dict.keys()]
+        n_distributions = len(spatial_statistics_dict)
+
+        # plot the distributions and fits.
+        fig, axes = plt.subplots(2, 3, figsize=(13, 4))
+        axes = axes.flatten()
+        for index in np.arange(n_distributions):
+            ax = axes[index]
+
+            bin_values, foo, foo2 = ax.hist(ydata[:, index], bins=20, density=True)
+
+            if model_fit_data != None:  # Assumes tuple of arrays, see below
+                x_model_fit, y_model_fit = model_fit_data[0], model_fit_data[1]
+                ax.plot(
+                    x_model_fit[:, index],
+                    y_model_fit[:, index],
+                    "r-",
+                    linewidth=6,
+                    alpha=0.6,
+                )
+
+                spatial_statistics_dict[distributions[index]]
+                shape = spatial_statistics_dict[distributions[index]]["shape"]
+                loc = spatial_statistics_dict[distributions[index]]["loc"]
+                scale = spatial_statistics_dict[distributions[index]]["scale"]
+                model_function = spatial_statistics_dict[distributions[index]][
+                    "distribution"
+                ]
+
+                if model_function == "gamma":
+                    ax.annotate(
+                        "shape = {0:.2f}\nloc = {1:.2f}\nscale = {2:.2f}".format(
+                            shape, loc, scale
+                        ),
+                        xy=(0.6, 0.4),
+                        xycoords="axes fraction",
+                    )
+                    ax.set_title(
+                        "{0} fit for {1}".format(model_function, distributions[index])
+                    )
+                elif model_function == "beta":
+                    a_parameter, b_parameter = shape[0], shape[1]
+                    ax.annotate(
+                        "a = {0:.2f}\nb = {1:.2f}\nloc = {2:.2f}\nscale = {3:.2f}".format(
+                            a_parameter, b_parameter, loc, scale
+                        ),
+                        xy=(0.6, 0.4),
+                        xycoords="axes fraction",
+                    )
+                    ax.set_title(
+                        "{0} fit for {1}".format(model_function, distributions[index])
+                    )
+
+                # Rescale y axis if model fit goes high. Shows histogram better
+                if y_model_fit[:, index].max() > 1.5 * bin_values.max():
+                    ax.set_ylim([ax.get_ylim()[0], 1.1 * bin_values.max()])
+
+        # Check correlations
+        # distributions = ['semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio', 'orientation_center']
+        fig2, axes2 = plt.subplots(2, 3, figsize=(13, 4))
+        axes2 = axes2.flatten()
+        ref_index = 1
+        for index in np.arange(n_distributions):
+            ax2 = axes2[index]
+            data_all_x = ydata[:, ref_index]
+            data_all_y = ydata[:, index]
+
+            r, p = stats.pearsonr(data_all_x, data_all_y)
+            slope, intercept, r_value, p_value, std_err = stats.linregress(
+                data_all_x, data_all_y
+            )
+            ax2.plot(data_all_x, data_all_y, ".")
+            data_all_x.sort()
+            ax2.plot(data_all_x, intercept + slope * data_all_x, "b-")
+            ax2.annotate(
+                "\nr={0:.2g},\np={1:.2g}".format(r, p),
+                xy=(0.8, 0.4),
+                xycoords="axes fraction",
+            )
+            ax2.set_title(
+                "Correlation between {0} and {1}".format(
+                    distributions[ref_index], distributions[index]
+                )
+            )
+
+    def show_dendritic_diameter_vs_eccentricity(
+        self, dataset_x, dataset_y, polynomials, dataset_name=""
+    ):
+        '''
+        ConstructRetina call.
+        '''
+
+        fig, ax = plt.subplots(nrows=1, ncols=1)
+        ax.plot(dataset_x, dataset_y, ".")
+
+        if dataset_name:
+            if (
+                len(polynomials) == 2
+            ):  # check if only two parameters, ie intercept and slope
+                intercept = polynomials[1]
+                slope = polynomials[0]
+                ax.plot(dataset_x, intercept + slope * dataset_x, "k--")
+                ax.annotate(
+                    "{0} : \ny={1:.1f} + {2:.1f}x".format(
+                        dataset_name, intercept, slope
+                    ),
+                    xycoords="axes fraction",
+                    xy=(0.5, 0.15),
+                    ha="left",
+                    color="k",
+                )
+            elif len(polynomials) == 3:
+                intercept = polynomials[2]
+                slope = polynomials[1]
+                square = polynomials[0]
+                ax.plot(
+                    dataset_x,
+                    intercept + slope * dataset_x + square * dataset_x**2,
+                    "k--",
+                )
+                ax.annotate(
+                    "{0}: \ny={1:.1f} + {2:.1f}x + {3:.1f}x^2".format(
+                        dataset_name, intercept, slope, square
+                    ),
+                    xycoords="axes fraction",
+                    xy=(0.5, 0.15),
+                    ha="left",
+                    color="k",
+                )
+            elif len(polynomials) == 4:
+                intercept = polynomials[3]
+                slope = polynomials[2]
+                square = polynomials[1]
+                cube = polynomials[0]
+                ax.plot(
+                    dataset_x,
+                    intercept
+                    + slope * dataset_x
+                    + square * dataset_x**2
+                    + cube * dataset_x**3,
+                    "k--",
+                )
+                ax.annotate(
+                    "{0}: \ny={1:.1f} + {2:.1f}x + {3:.1f}x^2 + {4:.1f}x^3".format(
+                        dataset_name, intercept, slope, square, cube
+                    ),
+                    xycoords="axes fraction",
+                    xy=(0.5, 0.15),
+                    ha="left",
+                    color="k",
+                )
+
+        plt.title(
+            "DF diam wrt ecc for {0} type, {1} dataset".format(self.client_object.gc_type, dataset_name)
+        )
+
+    def visualize_mosaic(self):
+        """
+        Plots the full ganglion cell mosaic
+
+        ConstructRetina call.
+
+        :return:
+        """
+        rho = self.gc_df["positions_eccentricity"].values
+        phi = self.gc_df["positions_polar_angle"].values
+
+        gc_rf_models = np.zeros((len(self.gc_df), 6))
+        gc_rf_models[:, 0] = self.gc_df["semi_xc"]
+        gc_rf_models[:, 1] = self.gc_df["semi_yc"]
+        gc_rf_models[:, 2] = self.gc_df["xy_aspect_ratio"]
+        gc_rf_models[:, 3] = self.gc_df["amplitudes"]
+        gc_rf_models[:, 4] = self.gc_df["sur_ratio"]
+        gc_rf_models[:, 5] = self.gc_df["orientation_center"]
+
+        self.show_gc_receptive_fields(
+            rho, phi, gc_rf_models, surround_fixed=self.surround_fixed
+        )
 
     def show_temporal_statistics(
         self,
         temporal_filter_parameters,
         distrib_params,
     ):
+        '''
+        ConstructRetina call.
+        '''
+        
         plt.subplots(2, 3)
         plt.suptitle(self.client_object.gc_type + " " + self.client_object.response_type)
         for i, param_name in enumerate(temporal_filter_parameters):
@@ -707,6 +513,224 @@ class Viz:
             ax.hist(param_array, density=True)
             ax.set_title(param_name)
 
+    def show_tonic_drives(self, xs, pdf, tonicdrive_array, title):
+        '''
+        ConstructRetina call.
+        '''
+        plt.plot(xs, pdf)
+        plt.hist(tonicdrive_array, density=True)
+        plt.title(title)
+        plt.xlabel("Tonic drive (a.u.)")
+
+    # WorkingRetina visualization
+    def show_stimulus_with_gcs(self, frame_number=0, ax=None, example_gc=5):
+        """
+        Plots the 1SD ellipses of the RGC mosaic
+
+        WorkingRetina call.
+
+        :param frame_number: int
+        :param ax: matplotlib Axes object
+        :return:
+        """
+
+        fig = plt.figure()
+        ax = ax or plt.gca()
+        ax.imshow(self.client_object.stimulus_video.frames[:, :, frame_number], vmin=0, vmax=255)
+        ax = plt.gca()
+
+        for index, gc in self.client_object.gc_df_pixspace.iterrows():
+            # When in pixel coordinates, positive value in Ellipse angle is clockwise. Thus minus here.
+            # Note that Ellipse angle is in degrees.
+            # Width and height in Ellipse are diameters, thus x2.
+            if index == example_gc:
+                facecolor = "yellow"
+            else:
+                facecolor = "None"
+
+            circ = Ellipse(
+                (gc.q_pix, gc.r_pix),
+                width=2 * gc.semi_xc,
+                height=2 * gc.semi_yc,
+                angle=gc.orientation_center * (-1),
+                edgecolor="blue",
+                facecolor=facecolor,
+            )
+            ax.add_patch(circ)
+
+        # Annotate
+        # Get y tics in pixels
+        locs, labels = plt.yticks()
+
+        # Remove tick marks outside stimulus
+        locs = locs[locs < self.client_object.stimulus_height_pix]
+        # locs=locs[locs>=0] # Including zero seems to shift center at least in deg
+        locs = locs[locs > 0]
+
+        # Set left y tick labels (pixels)
+        left_y_labels = locs.astype(int)
+        # plt.yticks(ticks=locs, labels=left_y_labels)
+        plt.yticks(ticks=locs)
+        ax.set_ylabel("pix")
+
+        # Set x tick labels (degrees)
+        xlocs = locs - np.mean(locs)
+        down_x_labels = np.round(xlocs / self.client_object.pix_per_deg, decimals=2) + np.real(
+            self.client_object.stimulus_center
+        )
+        plt.xticks(ticks=locs, labels=down_x_labels)
+        ax.set_xlabel("deg")
+
+        # Set right y tick labels (mm)
+        ax2 = ax.twinx()  # instantiate a second axes that shares the same x-axis
+        ax2.tick_params(axis="y")
+        right_y_labels = np.round(
+            (locs / self.client_object.pix_per_deg) / self.client_object.deg_per_mm, decimals=2
+        )
+        plt.yticks(ticks=locs, labels=right_y_labels)
+        ax2.set_ylabel("mm")
+
+        fig.tight_layout()
+
+    def show_single_gc_view(self, cell_index, frame_number=0, ax=None):
+        """
+        Plots the stimulus frame cropped to RGC surroundings
+
+        WorkingRetina call.
+
+        :param cell_index: int
+        :param frame_number: int
+        :param ax: matplotlib Axes object
+        :return:
+        """
+        ax = ax or plt.gca()
+
+        gc = self.gc_df_pixspace.iloc[cell_index]
+        qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
+
+        # Show stimulus frame cropped to RGC surroundings & overlay 1SD center RF on top of that
+        ax.imshow(
+            self.stimulus_video.frames[:, :, frame_number],
+            cmap=self.cmap_stim,
+            vmin=0,
+            vmax=255,
+        )
+        ax.set_xlim([qmin, qmax])
+        ax.set_ylim([rmax, rmin])
+
+        # When in pixel coordinates, positive value in Ellipse angle is clockwise. Thus minus here.
+        # Note that Ellipse angle is in degrees.
+        # Width and height in Ellipse are diameters, thus x2.
+        circ = Ellipse(
+            (gc.q_pix, gc.r_pix),
+            width=2 * gc.semi_xc,
+            height=2 * gc.semi_yc,
+            angle=gc.orientation_center * (-1),
+            edgecolor="white",
+            facecolor="yellow",
+        )
+        ax.add_patch(circ)
+        plt.xticks([])
+        plt.yticks([])
+
+    def plot_tf_amplitude_response(self, cell_index, ax=None):
+        '''
+        WorkingRetina call.
+        '''
+
+        ax = ax or plt.gca()
+
+        tf = self._create_temporal_filter(cell_index)
+        ft_tf = np.fft.fft(tf)
+        timestep = self.data_filter_duration / len(tf) / 1000  # in seconds
+        freqs = np.fft.fftfreq(tf.size, d=timestep)
+        amplitudes = np.abs(ft_tf)
+
+        ax.set_xscale("log")
+        ax.set_xlim([0.1, 100])
+        plt.xlabel("Frequency (Hz)")
+        plt.ylabel("Gain")
+        ax.plot(freqs, amplitudes, ".")
+
+    def plot_midpoint_contrast(self, cell_index, ax=None):
+        """
+        Plots the contrast in the mid-pixel of the stimulus cropped to RGC surroundings
+
+        WorkingRetina call.
+
+        :param cell_index:
+        :return:
+        """
+        stimulus_cropped = self._get_cropped_video(cell_index)
+
+        midpoint_ix = (self.spatial_filter_sidelen - 1) // 2
+        signal = stimulus_cropped[midpoint_ix, midpoint_ix, :]
+
+        video_dt = (1 / self.stimulus_video.fps) * b2u.second
+        tvec = np.arange(0, len(signal)) * video_dt
+
+        ax = ax or plt.gca()
+        ax.plot(tvec, signal)
+        ax.set_ylim([-1, 1])
+
+    def plot_local_rms_contrast(self, cell_index, ax=None):
+        """
+        Plots local RMS contrast in the stimulus cropped to RGC surroundings.
+        Note that is just a frame-by-frame computation, no averaging here
+
+        WorkingRetina call.
+
+        :param cell_index:
+        :return:
+        """
+        stimulus_cropped = self._get_cropped_video(
+            cell_index, contrast=False
+        )  # get stimulus intensities
+        n_frames = self.stimulus_video.video_n_frames
+        s = self.spatial_filter_sidelen
+        signal = np.zeros(n_frames)
+
+        for t in range(n_frames):
+            frame_mean = np.mean(stimulus_cropped[:, :, t])
+            squared_sum = np.sum((stimulus_cropped[:, :, t] - frame_mean) ** 2)
+            signal[t] = np.sqrt(1 / (frame_mean**2 * b2u.s**2) * squared_sum)
+
+        video_dt = (1 / self.stimulus_video.fps) * b2u.second
+        tvec = np.arange(0, len(signal)) * video_dt
+
+        ax = ax or plt.gca()
+        ax.plot(tvec, signal)
+        ax.set_ylim([0, 1])
+
+    def plot_local_michelson_contrast(self, cell_index, ax=None):
+        """
+        Plots local RMS contrast in the stimulus cropped to RGC surroundings.
+        Note that is just a frame-by-frame computation, no averaging here
+
+        WorkingRetina call.
+
+        :param cell_index:
+        :return:
+        """
+        stimulus_cropped = self._get_cropped_video(
+            cell_index, contrast=False
+        )  # get stimulus intensities
+        n_frames = self.stimulus_video.video_n_frames
+        s = self.spatial_filter_sidelen
+        signal = np.zeros(n_frames)
+
+        for t in range(n_frames):
+            frame_min = np.min(stimulus_cropped[:, :, t])
+            frame_max = np.max(stimulus_cropped[:, :, t])
+            signal[t] = (frame_max - frame_min) / (frame_max + frame_min)
+
+        video_dt = (1 / self.stimulus_video.fps) * b2u.second
+        tvec = np.arange(0, len(signal)) * video_dt
+
+        ax = ax or plt.gca()
+        ax.plot(tvec, signal)
+        ax.set_ylim([0, 1])
+
     def old_style_visualization_for_run_cells(
         self,
         n_trials,
@@ -718,7 +742,9 @@ class Viz:
         video_dt,
         tvec_new,
     ):
-
+        '''
+        WorkingRetina call.
+        '''
         # Prepare data for manual visualization
         if n_trials > 1 and n_cells == 1:
             for_eventplot = np.array(all_spiketrains)
@@ -780,6 +806,9 @@ class Viz:
         cell_index,
         temporal_filter,
     ):
+        '''
+        WorkingRetina call.
+        '''
 
         vmax = np.max(np.abs(spatial_filter))
         vmin = -vmax
@@ -799,6 +828,10 @@ class Viz:
         generator_potential, video_dt, tonic_drive, firing_rate
     ):
 
+        '''
+        WorkingRetina call.
+        '''
+
         tvec = np.arange(0, len(generator_potential), 1) * video_dt
 
         plt.subplots(2, 1, sharex=True)
@@ -810,3 +843,19 @@ class Viz:
         plt.plot(tvec, firing_rate)
         plt.xlabel("Time (s)]")
         plt.ylabel("Firing rate (Hz)]")
+
+    # PhotoReceptor visualization
+    def show_cone_response(self, image, image_after_optics, cone_response):
+        '''
+        PhotoReceptor call.
+        '''
+        fig, ax = plt.subplots(nrows=2, ncols=3)
+        axs = ax.ravel()
+        axs[0].hist(image.flatten(), 20)
+        axs[1].hist(image_after_optics.flatten(), 20)
+        axs[2].hist(cone_response.flatten(), 20)
+
+        axs[3].imshow(image, cmap="Greys")
+        axs[4].imshow(image_after_optics, cmap="Greys")
+        axs[5].imshow(cone_response, cmap="Greys")
+
