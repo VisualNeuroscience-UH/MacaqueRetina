@@ -296,7 +296,7 @@ class ConstructRetina(RetinaMath):
 
         return dendr_diam1, dendr_diam2
 
-    def _fit_dendritic_diameter_vs_eccentricity(self, show_build_process=False):
+    def _fit_dendritic_diameter_vs_eccentricity(self):
         """
         Dendritic field diameter with respect to eccentricity. Linear and quadratic fit.
         Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
@@ -376,7 +376,6 @@ class ConstructRetina(RetinaMath):
         self,
         spatial_statistics_dict,
         dendr_diam_vs_eccentricity_parameters_dict,
-        show_build_process=False,
     ):
         """
         Create spatial receptive fields to model cells.
@@ -387,7 +386,6 @@ class ConstructRetina(RetinaMath):
         """
 
         # Get eccentricity data for all model cells
-        # gc_eccentricity = self.gc_positions_eccentricity
         gc_eccentricity = self.gc_df["positions_eccentricity"].values
 
         # Get rf diameter vs eccentricity
@@ -485,25 +483,10 @@ class ConstructRetina(RetinaMath):
             "positions_polar_angle"
         ]  # plus some noise here
 
-        if show_build_process:
-            # Quality control for diameter distribution. In micrometers.
-            gc_diameters = self.area2circle_diameter(
-                self.ellipse2area(semi_xc, semi_yc)
-            )
-
-            polynomials = np.polyfit(gc_eccentricity, gc_diameters, polynomial_order)
-
-            self.viz.show_dendrite_diam_vs_ecc(
-                gc_eccentricity,
-                gc_diameters,
-                polynomials,
-                dataset_name="All data {0} fit".format(dendr_diam_model),
-            )
-
     def _densfunc(self, r, d0, beta):
         return d0 * (1 + beta * r) ** (-2)
 
-    def _place_gc_units(self, gc_density_func_params, show_build_process=False):
+    def _place_gc_units(self, gc_density_func_params):
         """
         Place ganglion cell center positions to retina
 
@@ -677,7 +660,7 @@ class ConstructRetina(RetinaMath):
         # Pass the GC object to self, because the Viz class is not inherited
         self.gc_density_func_params = gc_density_func_params
 
-    def _fit_spatial_statistics(self, show_build_process=False):
+    def _fit_spatial_statistics(self):
         """
         Collect spatial statistics from Chichilnisky receptive field data
         """
@@ -794,7 +777,7 @@ class ConstructRetina(RetinaMath):
         # Return stats for RF creation
         return spatial_statistics_dict
 
-    def _fit_tonic_drives(self, show_build_process=False):
+    def _fit_tonic_drives(self):
         tonicdrive_array = np.array(
             self.all_fits_df.iloc[self.good_data_indices].tonicdrive
         )
@@ -816,7 +799,7 @@ class ConstructRetina(RetinaMath):
 
         return shape, loc, scale
 
-    def _fit_temporal_statistics(self, show_build_process=False):
+    def _fit_temporal_statistics(self):
         temporal_filter_parameters = ["n", "p1", "p2", "tau1", "tau2"]
         distrib_params = np.zeros((len(temporal_filter_parameters), 3))
 
@@ -889,7 +872,7 @@ class ConstructRetina(RetinaMath):
             self.gc_df["amplitudes"] / self.gc_df["amplitudec"]
         )
 
-    def build(self, show_build_process=False):
+    def build(self):
         """
         Builds the receptive field mosaic
         :return:
@@ -1035,10 +1018,6 @@ class WorkingRetina(RetinaMath):
             ["positions_eccentricity", "positions_polar_angle"], axis=1
         )
 
-        # Some settings related to plotting
-        self.cmap_stim = "gray"
-        self.cmap_spatial_filter = "bwr"
-
         # Simulated data
         self.simulated_spiketrains = []
 
@@ -1165,12 +1144,8 @@ class WorkingRetina(RetinaMath):
 
         return temporal_filter
 
-    def _create_postspike_filter(self, cell_index):
-        raise NotImplementedError
-
     def _generator_to_firing_rate(self, generator_potential):
 
-        # firing_rate = np.exp(generator_potential)
         firing_rate = np.power(generator_potential, 2)
 
         return firing_rate
@@ -1186,7 +1161,7 @@ class WorkingRetina(RetinaMath):
         # a for macaques should be 0.3 - 0.9, Schwartz 1994 citing Wilson et al 1990 "The perception of form" in Visual perception: The neurophysiological foundations, Academic Press
         # k has been pretty open.
         # However, if we relate 1/M = (a/k) + (1/k) * E and M = (1/0.077) + (1/(0.082 * E)), we get
-        # Andrew's answer: k=1/.082, a=. 077/.082
+        # Andrew James, personal communication: k=1/.082, a=. 077/.082
         a = 0.077 / 0.082  # ~ 0.94
         k = 1 / 0.082  # ~ 12.2
         w_coord = k * np.log(z_coord + a)
@@ -1304,21 +1279,23 @@ class WorkingRetina(RetinaMath):
         # TODO - This is brutal and unphysiological, at least for natural movies
         if contrast is True:
             stimulus_cropped = stimulus_cropped / 127.5 - 1.0
+        else:
+            # unsigned int will overflow when frame_max + frame_min >= 256
+            stimulus_cropped = stimulus_cropped.astype(np.int16)
 
         if reshape is True:
-            s = self.spatial_filter_sidelen
+            sidelen = self.spatial_filter_sidelen
             n_frames = np.shape(self.stimulus_video.frames)[2]
 
-            stimulus_cropped = np.reshape(stimulus_cropped, (s**2, n_frames))
+            stimulus_cropped = np.reshape(stimulus_cropped, (sidelen**2, n_frames))
 
         return stimulus_cropped
 
-    def load_stimulus(self, stimulus_video, show_stim_with_gcs=False):
+    def load_stimulus(self, stimulus_video):
         """
         Loads stimulus video
 
         :param stimulus_video: VideoBaseClass, visual stimulus to project to the ganglion cell mosaic
-        :param show_stim_with_gcs: True/False, show 1 frame of stimulus in pixel and visual coordinate systems (default False)
         :return:
         """
 
@@ -1350,17 +1327,11 @@ class WorkingRetina(RetinaMath):
             ):
                 self.gc_df.iloc[index] = 0.0  # all columns set as zero
 
-        if show_stim_with_gcs is True:
-            self.viz.show_stimulus_with_gcs()
-
-    def create_spatiotemporal_filter(
-        self, cell_index, show_spatiotemporal_filter=False
-    ):
+    def create_spatiotemporal_filter(self, cell_index, called_from_loop=False):
         """
         Returns the outer product of the spatial and temporal filters
 
         :param cell_index: int
-        :param show_spatiotemporal_filter: bool
         :return:
         """
 
@@ -1374,27 +1345,25 @@ class WorkingRetina(RetinaMath):
             spatial_filter_1d * temporal_filter
         )  # (Nx1) * (1xT) = NxT
 
-        if show_spatiotemporal_filter is True:
-            self.viz.show_spatiotemporal_filter(
-                spatial_filter,
-                cell_index,
-                temporal_filter,
-            )
-
+        if called_from_loop is False:
+            self.spatiotemporal_filter_to_show = {
+                "spatial_filter": spatial_filter,
+                "temporal_filter": temporal_filter,
+                "cell_index": cell_index,
+            }
+ 
         return spatiotemporal_filter
 
-    def convolve_stimulus(self, cell_index, show_convolved_stimulus=False):
+    def convolve_stimulus(self, cell_index, called_from_loop=False):
         """
         Convolves the stimulus with the stimulus filter
 
         :param cell_index: int
-        :param show_convolved_stimulus: bool
         :return: array of length (stimulus timesteps)
         """
         # Get spatiotemporal filter
         spatiotemporal_filter = self.create_spatiotemporal_filter(
-            cell_index, show_spatiotemporal_filter=False
-        )
+            cell_index, called_from_loop=called_from_loop)
 
         # Get cropped stimulus
         stimulus_cropped = self._get_cropped_video(cell_index, reshape=True)
@@ -1410,7 +1379,7 @@ class WorkingRetina(RetinaMath):
         video_dt = (1 / self.stimulus_video.fps) * b2u.second
         n_padding = int(
             self.data_filter_duration * b2u.ms / video_dt - 1
-        )  # constant 49, comes from Apricot dataset. This might not be correct for short stimulus. Check SV 13.10.2020
+        )  
         generator_potential = np.pad(
             generator_potential, (n_padding, 0), mode="constant", constant_values=0
         )
@@ -1419,10 +1388,15 @@ class WorkingRetina(RetinaMath):
 
         firing_rate = self._generator_to_firing_rate(generator_potential + tonic_drive)
 
-        if show_convolved_stimulus is True:
-            self.viz.show_convolved_stimulus(
-                generator_potential, video_dt, tonic_drive, firing_rate
-            )
+        if called_from_loop is False:
+            self.convolved_stimulus_to_show = {
+                "generator_potential": generator_potential,
+                "cell_index": cell_index,
+                "video_dt": video_dt,
+                "tonic_drive": tonic_drive,
+                "firing_rate": firing_rate,
+            }
+
 
         # Return the 1-dimensional generator potential
         return generator_potential + tonic_drive
@@ -1435,7 +1409,6 @@ class WorkingRetina(RetinaMath):
         spike_generator_model="refractory",
         return_monitor=False,
         filename=None,
-        show_gc_response=False,
     ):
         """
         Runs the LNP pipeline for a single ganglion cell (spiking by Brian2)
@@ -1472,7 +1445,7 @@ class WorkingRetina(RetinaMath):
         generator_potential = np.zeros([self.stimulus_video.video_n_frames, n_cells])
         for idx, this_cell in enumerate(cell_index):
             generator_potential[:, idx] = self.convolve_stimulus(
-                this_cell, show_convolved_stimulus=False
+                this_cell, called_from_loop=True
             )
 
         # exp_generator_potential = np.array(np.exp(generator_potential))
@@ -1566,17 +1539,19 @@ class WorkingRetina(RetinaMath):
                 spikearrays, filename=filename, analog_signal=interpolated_rates_array
             )
 
-        if show_gc_response is True:
-            self.viz.old_style_visualization_for_run_cells(
-                n_trials,
-                n_cells,
-                all_spiketrains,
-                exp_generator_potential,
-                duration,
-                generator_potential,
-                video_dt,
-                tvec_new,
-            )
+        # For save_spikes_csv. Only 1st trial is saved.
+        self.simulated_spiketrains = all_spiketrains[0]
+
+        self.gc_responses_to_show = {
+            "n_trials" : n_trials,
+            "n_cells" : n_cells,
+            "all_spiketrains" : all_spiketrains,
+            "exp_generator_potential" : exp_generator_potential,
+            "duration" : duration,
+            "generator_potential" : generator_potential,
+            "video_dt" : video_dt,
+            "tvec_new" : tvec_new,
+        }
 
         if return_monitor is True:
             return spike_monitor
@@ -1587,13 +1562,11 @@ class WorkingRetina(RetinaMath):
         self,
         spike_generator_model="refractory",
         save_data=False,
-        show_gc_response=False,
     ):
 
         """
         Runs the LNP pipeline for all ganglion cells (legacy function)
 
-        :param show_gc_response: bool
         :param spike_generator_model: str, 'refractory' or 'poisson'
         :param save_data: bool
         :return:
@@ -1604,7 +1577,6 @@ class WorkingRetina(RetinaMath):
             n_trials=1,
             spike_generator_model=spike_generator_model,
             save_data=save_data,
-            show_gc_response=show_gc_response,
         )
 
     def save_spikes_csv(self, filename=None):

@@ -43,6 +43,10 @@ class Viz:
         for attr, value in kwargs.items():
             setattr(self, attr, value)
 
+        # Some settings related to plotting
+        self.cmap_stim = "gray"
+        self.cmap_spatial_filter = "bwr"
+
     @property
     def context(self):
         return self._context
@@ -561,7 +565,6 @@ class Viz:
 
     # WorkingRetina visualization
     def show_stimulus_with_gcs(self, retina, frame_number=0, ax=None, example_gc=5):
-    # def show_stimulus_with_gcs(self, frame_number=0, ax=None, example_gc=5):
         """
         Plots the 1SD ellipses of the RGC mosaic
 
@@ -572,14 +575,19 @@ class Viz:
         :return:
         """
 
-        pdb.set_trace()
+        stimulus_video = retina.stimulus_video
+        gc_df_pixspace = retina.gc_df_pixspace
+        stimulus_height_pix = retina.stimulus_height_pix
+        pix_per_deg = retina.pix_per_deg
+        deg_per_mm = retina.deg_per_mm
+        stimulus_center = retina.stimulus_center
 
         fig = plt.figure()
         ax = ax or plt.gca()
-        ax.imshow(self.client_object.stimulus_video.frames[:, :, frame_number], vmin=0, vmax=255)
+        ax.imshow(stimulus_video.frames[:, :, frame_number], vmin=0, vmax=255)
         ax = plt.gca()
 
-        for index, gc in self.client_object.gc_df_pixspace.iterrows():
+        for index, gc in gc_df_pixspace.iterrows():
             # When in pixel coordinates, positive value in Ellipse angle is clockwise. Thus minus here.
             # Note that Ellipse angle is in degrees.
             # Width and height in Ellipse are diameters, thus x2.
@@ -603,7 +611,7 @@ class Viz:
         locs, labels = plt.yticks()
 
         # Remove tick marks outside stimulus
-        locs = locs[locs < self.client_object.stimulus_height_pix]
+        locs = locs[locs < stimulus_height_pix]
         # locs=locs[locs>=0] # Including zero seems to shift center at least in deg
         locs = locs[locs > 0]
 
@@ -615,8 +623,8 @@ class Viz:
 
         # Set x tick labels (degrees)
         xlocs = locs - np.mean(locs)
-        down_x_labels = np.round(xlocs / self.client_object.pix_per_deg, decimals=2) + np.real(
-            self.client_object.stimulus_center
+        down_x_labels = np.round(xlocs / pix_per_deg, decimals=2) + np.real(
+            stimulus_center
         )
         plt.xticks(ticks=locs, labels=down_x_labels)
         ax.set_xlabel("deg")
@@ -625,14 +633,14 @@ class Viz:
         ax2 = ax.twinx()  # instantiate a second axes that shares the same x-axis
         ax2.tick_params(axis="y")
         right_y_labels = np.round(
-            (locs / self.client_object.pix_per_deg) / self.client_object.deg_per_mm, decimals=2
+            (locs / pix_per_deg) / deg_per_mm, decimals=2
         )
         plt.yticks(ticks=locs, labels=right_y_labels)
         ax2.set_ylabel("mm")
 
         fig.tight_layout()
 
-    def show_single_gc_view(self, cell_index, frame_number=0, ax=None):
+    def show_single_gc_view(self, retina, cell_index, frame_number=0, ax=None):
         """
         Plots the stimulus frame cropped to RGC surroundings
 
@@ -643,14 +651,18 @@ class Viz:
         :param ax: matplotlib Axes object
         :return:
         """
+
+        stimulus_video = retina.stimulus_video
+        gc_df_pixspace = retina.gc_df_pixspace
+        qmin, qmax, rmin, rmax = retina._get_crop_pixels(cell_index)
+
         ax = ax or plt.gca()
 
-        gc = self.gc_df_pixspace.iloc[cell_index]
-        qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
+        gc = gc_df_pixspace.iloc[cell_index]
 
         # Show stimulus frame cropped to RGC surroundings & overlay 1SD center RF on top of that
         ax.imshow(
-            self.stimulus_video.frames[:, :, frame_number],
+            stimulus_video.frames[:, :, frame_number],
             cmap=self.cmap_stim,
             vmin=0,
             vmax=255,
@@ -673,16 +685,17 @@ class Viz:
         plt.xticks([])
         plt.yticks([])
 
-    def plot_tf_amplitude_response(self, cell_index, ax=None):
+    def plot_tf_amplitude_response(self, retina, cell_index, ax=None):
         '''
         WorkingRetina call.
         '''
+        tf = retina._create_temporal_filter(cell_index)
+        data_filter_duration = retina.data_filter_duration
 
         ax = ax or plt.gca()
 
-        tf = self._create_temporal_filter(cell_index)
         ft_tf = np.fft.fft(tf)
-        timestep = self.data_filter_duration / len(tf) / 1000  # in seconds
+        timestep = data_filter_duration / len(tf) / 1000  # in seconds
         freqs = np.fft.fftfreq(tf.size, d=timestep)
         amplitudes = np.abs(ft_tf)
 
@@ -692,7 +705,7 @@ class Viz:
         plt.ylabel("Gain")
         ax.plot(freqs, amplitudes, ".")
 
-    def plot_midpoint_contrast(self, cell_index, ax=None):
+    def plot_midpoint_contrast(self, retina, cell_index, ax=None):
         """
         Plots the contrast in the mid-pixel of the stimulus cropped to RGC surroundings
 
@@ -701,19 +714,21 @@ class Viz:
         :param cell_index:
         :return:
         """
-        stimulus_cropped = self._get_cropped_video(cell_index)
+        stimulus_cropped = retina._get_cropped_video(cell_index)
+        spatial_filter_sidelen = retina.spatial_filter_sidelen
+        stimulus_video = retina.stimulus_video
 
-        midpoint_ix = (self.spatial_filter_sidelen - 1) // 2
+        midpoint_ix = (spatial_filter_sidelen - 1) // 2
         signal = stimulus_cropped[midpoint_ix, midpoint_ix, :]
 
-        video_dt = (1 / self.stimulus_video.fps) * b2u.second
+        video_dt = (1 / stimulus_video.fps) * b2u.second
         tvec = np.arange(0, len(signal)) * video_dt
 
         ax = ax or plt.gca()
         ax.plot(tvec, signal)
         ax.set_ylim([-1, 1])
 
-    def plot_local_rms_contrast(self, cell_index, ax=None):
+    def plot_local_rms_contrast(self, retina, cell_index, ax=None):
         """
         Plots local RMS contrast in the stimulus cropped to RGC surroundings.
         Note that is just a frame-by-frame computation, no averaging here
@@ -723,26 +738,29 @@ class Viz:
         :param cell_index:
         :return:
         """
-        stimulus_cropped = self._get_cropped_video(
-            cell_index, contrast=False
-        )  # get stimulus intensities
-        n_frames = self.stimulus_video.video_n_frames
-        s = self.spatial_filter_sidelen
+        # get stimulus intensities
+        stimulus_cropped = retina._get_cropped_video(
+            cell_index, contrast=False) 
+        stimulus_video = retina.stimulus_video
+        spatial_filter_sidelen = retina.spatial_filter_sidelen
+        
+        n_frames = stimulus_video.video_n_frames
+        sidelen = spatial_filter_sidelen
         signal = np.zeros(n_frames)
 
         for t in range(n_frames):
             frame_mean = np.mean(stimulus_cropped[:, :, t])
             squared_sum = np.sum((stimulus_cropped[:, :, t] - frame_mean) ** 2)
-            signal[t] = np.sqrt(1 / (frame_mean**2 * b2u.s**2) * squared_sum)
+            signal[t] = np.sqrt(1 / (frame_mean**2 * sidelen**2) * squared_sum)
 
-        video_dt = (1 / self.stimulus_video.fps) * b2u.second
+        video_dt = (1 / stimulus_video.fps) * b2u.second
         tvec = np.arange(0, len(signal)) * video_dt
 
         ax = ax or plt.gca()
         ax.plot(tvec, signal)
         ax.set_ylim([0, 1])
 
-    def plot_local_michelson_contrast(self, cell_index, ax=None):
+    def plot_local_michelson_contrast(self, retina, cell_index, ax=None):
         """
         Plots local RMS contrast in the stimulus cropped to RGC surroundings.
         Note that is just a frame-by-frame computation, no averaging here
@@ -752,39 +770,40 @@ class Viz:
         :param cell_index:
         :return:
         """
-        stimulus_cropped = self._get_cropped_video(
-            cell_index, contrast=False
-        )  # get stimulus intensities
-        n_frames = self.stimulus_video.video_n_frames
-        s = self.spatial_filter_sidelen
+        # get stimulus intensities
+        stimulus_cropped = retina._get_cropped_video(
+            cell_index, contrast=False)  
+        stimulus_video = retina.stimulus_video
+
+        n_frames = stimulus_video.video_n_frames
         signal = np.zeros(n_frames)
 
+        # unsigned int will overflow when frame_max + frame_min = 256
+        stimulus_cropped = stimulus_cropped.astype(np.int16)
         for t in range(n_frames):
             frame_min = np.min(stimulus_cropped[:, :, t])
             frame_max = np.max(stimulus_cropped[:, :, t])
             signal[t] = (frame_max - frame_min) / (frame_max + frame_min)
 
-        video_dt = (1 / self.stimulus_video.fps) * b2u.second
+        video_dt = (1 / stimulus_video.fps) * b2u.second
         tvec = np.arange(0, len(signal)) * video_dt
-
         ax = ax or plt.gca()
         ax.plot(tvec, signal)
         ax.set_ylim([0, 1])
 
-    def old_style_visualization_for_run_cells(
-        self,
-        n_trials,
-        n_cells,
-        all_spiketrains,
-        exp_generator_potential,
-        duration,
-        generator_potential,
-        video_dt,
-        tvec_new,
-    ):
+    def show_gc_responses(self, retina):
         '''
         WorkingRetina call.
         '''
+        n_trials = retina.gc_responses_to_show["n_trials"]
+        n_cells = retina.gc_responses_to_show["n_cells"]
+        all_spiketrains = retina.gc_responses_to_show["all_spiketrains"]
+        exp_generator_potential = retina.gc_responses_to_show["exp_generator_potential"]
+        duration = retina.gc_responses_to_show["duration"]
+        generator_potential = retina.gc_responses_to_show["generator_potential"]
+        video_dt = retina.gc_responses_to_show["video_dt"]
+        tvec_new = retina.gc_responses_to_show["tvec_new"]        
+
         # Prepare data for manual visualization
         if n_trials > 1 and n_cells == 1:
             for_eventplot = np.array(all_spiketrains)
@@ -799,7 +818,6 @@ class Viz:
             n_samples = n_cells
             sample_name = "Cell #"
         else:
-            show_gc_response = False
             print(
                 "You attempted to visualize gc activity, but you have either n_trials or n_cells must be 1, and the other > 1"
             )
@@ -841,36 +859,45 @@ class Viz:
         plt.legend()
 
     def show_spatiotemporal_filter(
-        self,
-        spatial_filter,
-        cell_index,
-        temporal_filter,
-    ):
+        self, retina):
+
         '''
         WorkingRetina call.
         '''
+
+        spatial_filter = retina.spatiotemporal_filter_to_show["spatial_filter"]
+        cell_index = retina.spatiotemporal_filter_to_show["cell_index"]
+        temporal_filter = retina.spatiotemporal_filter_to_show["temporal_filter"]
+        gc_type = retina.gc_type
+        response_type = retina.response_type
+        temporal_filter_len = retina.temporal_filter_len
 
         vmax = np.max(np.abs(spatial_filter))
         vmin = -vmax
 
         plt.subplots(1, 2, figsize=(10, 4))
-        plt.suptitle(self.client_object.gc_type + " " + self.client_object.response_type + " / cell ix " + str(cell_index))
+        plt.suptitle(gc_type + " " + response_type + " / cell ix " + str(cell_index))
         plt.subplot(121)
-        plt.imshow(spatial_filter, cmap=self.client_object.cmap_spatial_filter, vmin=vmin, vmax=vmax)
+        plt.imshow(spatial_filter, cmap=self.cmap_spatial_filter, vmin=vmin, vmax=vmax)
         plt.colorbar()
 
         plt.subplot(122)
-        plt.plot(range(self.client_object.temporal_filter_len), np.flip(temporal_filter))
+        plt.plot(range(temporal_filter_len), np.flip(temporal_filter))
 
         plt.tight_layout()
 
-    def show_convolved_stimulus(
-        generator_potential, video_dt, tonic_drive, firing_rate
-    ):
-
+    def show_convolved_stimulus(self, retina):
         '''
         WorkingRetina call.
         '''
+
+        cell_index = retina.convolved_stimulus_to_show["cell_index"]
+        generator_potential = retina.convolved_stimulus_to_show["generator_potential"]
+        video_dt = retina.convolved_stimulus_to_show["video_dt"]
+        tonic_drive = retina.convolved_stimulus_to_show["tonic_drive"]
+        firing_rate = retina.convolved_stimulus_to_show["firing_rate"]
+        gc_type = retina.gc_type
+        response_type = retina.response_type
 
         tvec = np.arange(0, len(generator_potential), 1) * video_dt
 
@@ -878,6 +905,8 @@ class Viz:
         plt.subplot(211)
         plt.plot(tvec, generator_potential + tonic_drive)
         plt.ylabel("Generator [a.u.]")
+
+        plt.title(gc_type + " " + response_type + " / cell ix " + str(cell_index))
 
         plt.subplot(212)
         plt.plot(tvec, firing_rate)

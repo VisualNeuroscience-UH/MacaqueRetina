@@ -178,6 +178,10 @@ if __name__ == "__main__":
         stimulus_height_pix=240,
     )
 
+    #################################
+    ### Create stimulus ###
+    #################################
+
     PM.stimulate.make_stimulus_video(
         pattern="temporal_square_pattern",
         stimulus_form="circular",
@@ -197,49 +201,74 @@ if __name__ == "__main__":
         stimulus_video_name=stimulus_video_name,  # If empty, does not save the video
     )
 
-    # ret.load_stimulus(grating)
-    # ret.load_stimulus(stim)
+    #################################
+    ### Load stimulus to get working retina ###
+    #################################
+
     PM.working_retina.load_stimulus(PM.stimulate)
 
     # # movie = vs.NaturalMovie('/home/henhok/nature4_orig35_fps100.avi', fps=100, pix_per_deg=60)
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)
     # ret.load_stimulus(movie)
 
-    # ret.plot_midpoint_contrast(0)
-    # plt.show()
-    # ret.plot_local_rms_contrast(0)
-    # plt.show()
-    # ret.plot_local_michelson_contrast(0)
-    # plt.show()
+    #################################
+    ### Show single ganglion cell response ###
+    #################################
 
-    example_gc = 2  # int or 'None'
-    # ret.convolve_stimulus(example_gc, show_convolved_stimulus=True)
-    # plt.show()
+    # example_gc = 2  # int or 'None'
+    # PM.working_retina.convolve_stimulus(example_gc)
 
-    filenames = [f"Response_foo_{x}" for x in np.arange(1)]
+    # PM.viz.show_spatiotemporal_filter(PM.working_retina)
+    # PM.viz.show_convolved_stimulus(PM.working_retina)
 
-    for filename in filenames:
 
-        PM.working_retina.run_cells(
-            cell_index=example_gc,
-            n_trials=5,
-            save_data=False,
-            spike_generator_model="poisson",
-            return_monitor=False,
-            filename=filename,
-            show_gc_response=True,
-        )
-    plt.show(block=False)
+    # filenames = [f"Response_foo_{x}" for x in np.arange(1)]
 
-    # # ret.run_all_cells(show_gc_response=True, spike_generator_model='refractory', reload_last=False)
-    # # plt.show(block = False)
-    # # ret.save_spikes_csv()
+    #################################
+    ### Run multiple trials for single cell ###
+    #################################
 
-    PM.working_retina.viz.show_stimulus_with_gcs(example_gc=example_gc, frame_number=51)
-    # ret.show_single_gc_view(cell_index=example_gc, frame_number=21)
-    # plt.show(block = False)
+    # for filename in filenames:
 
-    # plt.show()
+    #     PM.working_retina.run_cells(
+    #         cell_index=example_gc,
+    #         n_trials=5,
+    #         save_data=False,
+    #         spike_generator_model="poisson",
+    #         return_monitor=False,
+    #         filename=filename,
+    #     )
+
+    # PM.viz.show_gc_responses(PM.working_retina)
+
+    # PM.viz.show_stimulus_with_gcs(PM.working_retina, example_gc=example_gc, frame_number=51)
+
+    # PM.viz.show_single_gc_view(PM.working_retina, cell_index=example_gc, frame_number=21)
+
+    # PM.viz.plot_tf_amplitude_response(PM.working_retina, example_gc)
+
+    # PM.viz.plot_midpoint_contrast(PM.working_retina, example_gc)
+    # plt.show(block=False)
+
+    # PM.viz.plot_local_rms_contrast(PM.working_retina, example_gc)
+    # plt.show(block=False)
+
+    # PM.viz.plot_local_michelson_contrast(PM.working_retina, example_gc)
+    # plt.show(block=False)
+
+
+    #################################
+    ### Run all cells ###
+    #################################
+
+    PM.working_retina.run_all_cells(spike_generator_model='poisson',save_data=False)
+
+    PM.working_retina.save_spikes_csv(filename='testi_spikes.csv')
+    PM.working_retina.save_structure_csv(filename='testi_structure.csv')
+
+
+
+    plt.show()
 
     #################################
     ### Project files & Utilities ###
