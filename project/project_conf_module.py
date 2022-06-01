@@ -80,36 +80,76 @@ Current experiment
 """
 experiment = "test"  # "test"
 
-"""
-### Housekeeping ###. Do not comment out.
-"""
-path = Path.joinpath(Path(root_path), Path(project), experiment)
-
 
 """
 Input context
+Stimulus images and videos
 """
 input_folder = "../in"
 
+git_repo_root = Path(r'C:\Users\Simo\Laskenta\Git_Repos\MacaqueRetina_Git')
+construct_apricot_folder = git_repo_root.joinpath(r"construct\apricot")
+construct_digitized_folder = git_repo_root.joinpath(r"construct\digitized_figures")
+
 """
-Data context for single files and arrays. These midpoint and parameter strings are used only in this module.
+Data context for output. 
 """
 
 output_folder = "out"
 
+"""
+### Housekeeping ###. Do not comment out.
+"""
+root_path = Path(root_path)
+path = Path.joinpath(root_path, Path(project), experiment)
+
+
+# Proportion from all ganglion cells. Density of all ganglion cells is given later as a function of ecc from literature.
+proportion_of_parasol_gc_type = 0.08
+proportion_of_midget_gc_type = 0.64
+
+# Proportion of ON and OFF response type cells, assuming ON rf diameter = 1.2 x OFF rf diameter, and
+# coverage factor =1; Chichilnisky_2002_JNeurosci
+proportion_of_ON_response_type = 0.40
+proportion_of_OFF_response_type = 0.60
+
+
 my_retina = {
-    "mosaic_file": "parasol_on_single.csv",
+    "gc_type" : "parasol",
+    "response_type" : "on",
+    "ecc_limits" : [4.8, 5.2],
+    "sector_limits" : [-0.4, 0.4],
+    "model_density" : 1.0,
+    "randomize_position" : 0.05,
+    "proportion_of_parasol_gc_type" : proportion_of_parasol_gc_type,
+    "proportion_of_midget_gc_type" : proportion_of_midget_gc_type,
+    "proportion_of_ON_response_type" : proportion_of_ON_response_type,
+    "proportion_of_OFF_response_type" : proportion_of_OFF_response_type,
+    "mosaic_file_name": "parasol_on_single.csv",
 }
+
+# Perry_1985_VisRes; 0.223 um/deg in the fovea, 169 um/deg at 90 deg ecc
+deg_per_mm = 1 / 0.220
 
 my_stimuli = {
     "stimulus_file": "testi.jpg",
     "stimulus_type": "image",  # "image", "video" or "grating"
     "gc_response_file": "my_gc_response",  # check extension
+    "stimulus_center": 5 + 0j,
+    "stimulus_width_pix": 240,
+    "stimulus_height_pix": 240,
+    "pix_per_deg": 60,
+    "fps": 100,
+    "deg_per_mm": deg_per_mm,
 }
 
 
 stimulus_video_name = "tmp"
 
+'''
+TÄHÄN JÄIT. INPUT JA OUTPUT POLKUSYSTEEMI KÄYTTÖÖN. STIMULUS YM PARAMETRIEN NOSTO TÄHÄN.
+KOODISTA KOVAKOODATTUJA PARAMETREJÄ TÄHÄN NÄKYVIIN.
+'''
 
 profile = False
 
@@ -130,7 +170,8 @@ if __name__ == "__main__":
         output_folder=output_folder,
         project=project,
         experiment=experiment,
-        retina=my_retina,
+        my_retina=my_retina,
+        my_stimuli=my_stimuli,
     )
 
     #################################
@@ -151,32 +192,16 @@ if __name__ == "__main__":
     """
     show_build_process=False
     
-    PM.construct_retina.initialize(
-        gc_type="parasol",
-        response_type="on",
-        ecc_limits=[4.8, 5.2],
-        sector_limits=[-0.4, 0.4],
-        model_density=1.0,
-        randomize_position=0.05,
-    )
+    PM.construct_retina.initialize()
 
     mosaic = PM.construct_retina.build()
 
     if show_build_process is True:
         PM.viz.show_build_process(mosaic, show_all_spatial_fits=False)
     
-    PM.construct_retina.save_mosaic("parasol_on_single.csv")
+    PM.construct_retina.save_mosaic()
 
-    testmosaic = pd.read_csv("parasol_on_single.csv", index_col=0)
-
-    PM.working_retina.initialize(
-        testmosaic,
-        "parasol",
-        "on",
-        stimulus_center=5 + 0j,
-        stimulus_width_pix=240,
-        stimulus_height_pix=240,
-    )
+    PM.working_retina.initialize()
 
     #################################
     ### Create stimulus ###
@@ -227,21 +252,21 @@ if __name__ == "__main__":
     ### Run multiple trials for single cell ###
     #################################
     
-    # filenames = [f"Response_foo_{x}" for x in np.arange(1)]
+    filenames = [f"Response_foo_{x}" for x in np.arange(1)]
 
-    # example_gc = 2  # int or 'None'
-    # for filename in filenames:
+    example_gc = 2  # int or 'None'
+    for filename in filenames:
 
-    #     PM.working_retina.run_cells(
-    #         cell_index=example_gc,
-    #         n_trials=5,
-    #         save_data=False,
-    #         spike_generator_model="poisson",
-    #         return_monitor=False,
-    #         filename=filename,
-    #     )
+        PM.working_retina.run_cells(
+            cell_index=example_gc,
+            n_trials=5,
+            save_data=False,
+            spike_generator_model="poisson",
+            return_monitor=False,
+            filename=filename,
+        )
 
-    # PM.viz.show_gc_responses(PM.working_retina)
+    PM.viz.show_gc_responses(PM.working_retina)
 
     # PM.viz.show_stimulus_with_gcs(PM.working_retina, example_gc=example_gc, frame_number=51)
 

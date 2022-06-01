@@ -1,4 +1,5 @@
 # Numerical
+from fileinput import filename
 import numpy as np
 import scipy.optimize as opt
 import scipy.io as sio
@@ -39,6 +40,7 @@ class ConstructRetina(RetinaMath):
     _properties_list = [
         "path",
         "output_folder",
+        "my_retina",
     ]
 
     def __init__(self, context, data_io, viz) -> None:
@@ -60,26 +62,27 @@ class ConstructRetina(RetinaMath):
     def viz(self):
         return self._viz
 
-    def initialize(
-        self,
-        gc_type,
-        response_type,
-        ecc_limits,
-        sector_limits,
-        fits_from_file=None,
-        model_density=1.0,
-        randomize_position=0.7,
-    ):
+    def initialize(self, fits_from_file=None):
+
         """
         Initialize the ganglion cell mosaic
 
-        :param gc_type: 'parasol' or 'midget'
-        :param response_type: 'ON' or 'OFF'
-        :param ecc_limits: [float, float], both in degrees
-        :param sector_limits: [float, float], both in degrees
-        :param model_density: float, arbitrary unit. Use to scale the desired number of cells.
-        :param randomize_position: float, arbitrary unit. Use to scale the amount of randomization.
+        :param gc_typegc_type: 'parasol' or 'midget'
+        :param fits_from_file: path to a file containing the fits
         """
+
+        my_retina = self.context.my_retina
+        gc_type=my_retina["gc_type"]
+        response_type=my_retina["response_type"]
+        ecc_limits=my_retina["ecc_limits"]
+        sector_limits=my_retina["sector_limits"]
+        model_density=my_retina["model_density"]
+        randomize_position=my_retina["randomize_position"]
+
+        proportion_of_parasol_gc_type = my_retina["proportion_of_parasol_gc_type"]
+        proportion_of_midget_gc_type = my_retina["proportion_of_midget_gc_type"]
+        proportion_of_ON_response_type = my_retina["proportion_of_ON_response_type"]
+        proportion_of_OFF_response_type = my_retina["proportion_of_OFF_response_type"]
 
         # Assertions
         assert (
@@ -89,15 +92,6 @@ class ConstructRetina(RetinaMath):
             isinstance(sector_limits, list) and len(sector_limits) == 2
         ), "Wrong type or length of theta, aborting"
         assert model_density <= 1.0, "Density should be <=1.0, aborting"
-
-        # Proportion from all ganglion cells. Density of all ganglion cells is given later as a function of ecc from literature.
-        proportion_of_parasol_gc_type = 0.08
-        proportion_of_midget_gc_type = 0.64
-
-        # Proportion of ON and OFF response type cells, assuming ON rf diameter = 1.2 x OFF rf diameter, and
-        # coverage factor =1; Chichilnisky_2002_JNeurosci
-        proportion_of_ON_response_type = 0.40
-        proportion_of_OFF_response_type = 0.60
 
         # GC type specifications self.gc_proportion
         gc_type = gc_type.lower()
@@ -921,7 +915,14 @@ class ConstructRetina(RetinaMath):
         # Return object for visualization
         return self
 
-    def save_mosaic(self, filepath):
+    def save_mosaic(self, filename=None):
+        
+        output_folder = self.context.output_folder
+        if filename is None:
+            filepath = output_folder.joinpath(self.context.my_retina["mosaic_file_name"])
+        else:
+            filepath = output_folder.joinpath(filename)
+
         print("Saving model mosaic to %s" % filepath)
         self.gc_df.to_csv(filepath)
 
@@ -930,6 +931,8 @@ class WorkingRetina(RetinaMath):
     _properties_list = [
         "path",
         "output_folder",
+        "my_retina",
+        "my_stimuli",
     ]
 
     def __init__(self, context, data_io, viz) -> None:
@@ -951,27 +954,22 @@ class WorkingRetina(RetinaMath):
     def viz(self):
         return self._viz
 
-    def initialize(
-        self,
-        gc_dataframe,
-        gc_type,
-        response_type,
-        stimulus_center=5 + 0j,
-        stimulus_width_pix=240,
-        stimulus_height_pix=240,
-        pix_per_deg=60,
-        fps=100,
-    ):
+    def initialize(self):
         """
 
         :param gc_dataframe: Ganglion cell parameters; positions are retinal coordinates; positions_eccentricity in mm, positions_polar_angle in degrees
         """
-        self.gc_type = gc_type
-        self.response_type = response_type
 
-        self.deg_per_mm = (
-            1 / 0.220
-        )  # Perry_1985_VisRes; 0.223 um/deg in the fovea, 169 um/deg at 90 deg ecc
+        gc_dataframe = self.data_io.get_data(filename=self.context.my_retina["mosaic_file_name"])
+        self.gc_type = self.context.my_retina["gc_type"]
+        self.response_type = self.context.my_retina["response_type"]
+
+        stimulus_center = self.context.my_stimuli["stimulus_center"]
+        stimulus_width_pix = self.context.my_stimuli["stimulus_width_pix"]
+        stimulus_height_pix = self.context.my_stimuli["stimulus_height_pix"]
+        pix_per_deg = self.context.my_stimuli["pix_per_deg"]
+        fps = self.context.my_stimuli["fps"]
+        self.deg_per_mm = self.context.my_stimuli["deg_per_mm"]
 
         # Metadata for Apricot dataset
         self.data_microm_per_pixel = 60
