@@ -12,21 +12,16 @@ Only low resolution spatial RF maps are used here.
 import numpy as np
 import scipy.optimize as opt
 import scipy.io as sio
-from scipy.stats import norm, skewnorm, gamma
 from scipy.optimize import curve_fit
 import pandas as pd
 
 # Viz
-import matplotlib.pyplot as plt
-from matplotlib.patches import Ellipse
 from tqdm import tqdm
 
 # Local
-from viz.viz_module import Viz
 from construct.construct_math_module import RetinaMath
 
 # Builtin
-import sys
 from pathlib import Path
 import pdb
 
@@ -78,8 +73,7 @@ class ApricotData:
             self.filename_nonspatial = "mosaicGLM_apricot_OFFMidget-1-mat.mat"
 
         else:
-            print("Unknown cell type or response type, aborting")
-            sys.exit()
+            raise NotImplementedError("Unknown cell type or response type, aborting")
 
         filepath = retina_data_path / self.filename_nonspatial
         raw_data = sio.loadmat(filepath)  # , squeeze_me=True)

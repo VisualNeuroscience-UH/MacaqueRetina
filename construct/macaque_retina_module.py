@@ -363,11 +363,11 @@ class ConstructRetina(RetinaMath):
 
         dataset_name = f"All data {dendr_diam_model} fit"
         self.dendrite_diam_vs_ecc_to_show = {
-            "data_all_x" : data_all_x,
-            "data_all_y" : data_all_y,
-            "polynomials" : polynomials,
-            "dataset_name" : dataset_name,
-            "title" : f"DF diam wrt ecc for {self.gc_type} type, {dataset_name} dataset"
+            "data_all_x": data_all_x,
+            "data_all_y": data_all_y,
+            "polynomials": polynomials,
+            "dataset_name": dataset_name,
+            "title": f"DF diam wrt ecc for {self.gc_type} type, {dataset_name} dataset",
         }
 
         return dendr_diam_parameters
@@ -783,18 +783,16 @@ class ConstructRetina(RetinaMath):
         )
         shape, loc, scale = stats.gamma.fit(tonicdrive_array)
 
-        x_min, x_max = stats.gamma.ppf(
-            [0.001, 0.999], a=shape, loc=loc, scale=scale
-        )
+        x_min, x_max = stats.gamma.ppf([0.001, 0.999], a=shape, loc=loc, scale=scale)
         xs = np.linspace(x_min, x_max, 100)
         pdf = stats.gamma.pdf(xs, a=shape, loc=loc, scale=scale)
         title = self.gc_type + " " + self.response_type
 
         self.tonic_drives_to_show = {
-            "xs" : xs,
-            "pdf" : pdf,
-            "tonicdrive_array" : tonicdrive_array,
-            "title" : title,
+            "xs": xs,
+            "pdf": pdf,
+            "tonicdrive_array": tonicdrive_array,
+            "title": title,
         }
 
         return shape, loc, scale
@@ -813,10 +811,9 @@ class ConstructRetina(RetinaMath):
         self.temp_stat_to_show = {
             "temporal_filter_parameters": temporal_filter_parameters,
             "distrib_params": distrib_params,
-            "suptitle" : self.gc_type + " " + self.response_type,
-            "all_fits_df" : self.all_fits_df,
-            "good_data_indices" : self.good_data_indices,
-
+            "suptitle": self.gc_type + " " + self.response_type,
+            "all_fits_df": self.all_fits_df,
+            "good_data_indices": self.good_data_indices,
         }
 
         return pd.DataFrame(
@@ -882,29 +879,22 @@ class ConstructRetina(RetinaMath):
         gc_density_func_params = self._fit_gc_density_data()
 
         # Place ganglion cells to desired retina.
-        self._place_gc_units(
-            gc_density_func_params, show_build_process=show_build_process
-        )
+        self._place_gc_units(gc_density_func_params)
 
         # -- Second, endow cells with spatial receptive fields
         # Collect spatial statistics for receptive fields
-        spatial_statistics_dict = self._fit_spatial_statistics(
-            show_build_process=show_build_process
-        )
+        spatial_statistics_dict = self._fit_spatial_statistics()
 
         # Get fit parameters for dendritic field diameter with respect to eccentricity. Linear and quadratic fit.
         # Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
         dendr_diam_vs_eccentricity_parameters_dict = (
-            self._fit_dendritic_diameter_vs_eccentricity(
-                show_build_process=show_build_process
-            )
+            self._fit_dendritic_diameter_vs_eccentricity()
         )
 
         # Construct spatial receptive fields. Centers are saved in the object
         self._place_spatial_receptive_fields(
             spatial_statistics_dict,
             dendr_diam_vs_eccentricity_parameters_dict,
-            show_build_process=show_build_process,
         )
 
         # Scale center and surround amplitude so that Gaussian volume is preserved
@@ -918,14 +908,10 @@ class ConstructRetina(RetinaMath):
         self.gc_df["rf_radius"] = np.sqrt(self.gc_df.semi_xc * self.gc_df.semi_yc)
 
         # Finally, get non-spatial parameters
-        temporal_statistics_df = self._fit_temporal_statistics(
-            show_build_process=show_build_process
-        )
+        temporal_statistics_df = self._fit_temporal_statistics()
         self._create_temporal_filters(temporal_statistics_df)
 
-        td_shape, td_loc, td_scale = self._fit_tonic_drives(
-            show_build_process=show_build_process
-        )
+        td_shape, td_loc, td_scale = self._fit_tonic_drives()
         self.gc_df["tonicdrive"] = self._get_random_samples(
             td_shape, td_loc, td_scale, n_rgc, "gamma"
         )
@@ -1351,7 +1337,7 @@ class WorkingRetina(RetinaMath):
                 "temporal_filter": temporal_filter,
                 "cell_index": cell_index,
             }
- 
+
         return spatiotemporal_filter
 
     def convolve_stimulus(self, cell_index, called_from_loop=False):
@@ -1363,7 +1349,8 @@ class WorkingRetina(RetinaMath):
         """
         # Get spatiotemporal filter
         spatiotemporal_filter = self.create_spatiotemporal_filter(
-            cell_index, called_from_loop=called_from_loop)
+            cell_index, called_from_loop=called_from_loop
+        )
 
         # Get cropped stimulus
         stimulus_cropped = self._get_cropped_video(cell_index, reshape=True)
@@ -1377,9 +1364,7 @@ class WorkingRetina(RetinaMath):
         # Add some padding to the beginning so that stimulus time and generator potential time match
         # (First time steps of stimulus are not convolved)
         video_dt = (1 / self.stimulus_video.fps) * b2u.second
-        n_padding = int(
-            self.data_filter_duration * b2u.ms / video_dt - 1
-        )  
+        n_padding = int(self.data_filter_duration * b2u.ms / video_dt - 1)
         generator_potential = np.pad(
             generator_potential, (n_padding, 0), mode="constant", constant_values=0
         )
@@ -1396,7 +1381,6 @@ class WorkingRetina(RetinaMath):
                 "tonic_drive": tonic_drive,
                 "firing_rate": firing_rate,
             }
-
 
         # Return the 1-dimensional generator potential
         return generator_potential + tonic_drive
@@ -1543,14 +1527,14 @@ class WorkingRetina(RetinaMath):
         self.simulated_spiketrains = all_spiketrains[0]
 
         self.gc_responses_to_show = {
-            "n_trials" : n_trials,
-            "n_cells" : n_cells,
-            "all_spiketrains" : all_spiketrains,
-            "exp_generator_potential" : exp_generator_potential,
-            "duration" : duration,
-            "generator_potential" : generator_potential,
-            "video_dt" : video_dt,
-            "tvec_new" : tvec_new,
+            "n_trials": n_trials,
+            "n_cells": n_cells,
+            "all_spiketrains": all_spiketrains,
+            "exp_generator_potential": exp_generator_potential,
+            "duration": duration,
+            "generator_potential": generator_potential,
+            "video_dt": video_dt,
+            "tvec_new": tvec_new,
         }
 
         if return_monitor is True:

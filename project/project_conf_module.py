@@ -149,23 +149,23 @@ if __name__ == "__main__":
     """
     Build and test your retina here, one gc type at a time. Temporal hemiretina of macaques.
     """
-    # show_build_process=False
+    show_build_process=False
     
-    # PM.construct_retina.initialize(
-    #     gc_type="parasol",
-    #     response_type="on",
-    #     ecc_limits=[4.8, 5.2],
-    #     sector_limits=[-0.4, 0.4],
-    #     model_density=1.0,
-    #     randomize_position=0.05,
-    # )
+    PM.construct_retina.initialize(
+        gc_type="parasol",
+        response_type="on",
+        ecc_limits=[4.8, 5.2],
+        sector_limits=[-0.4, 0.4],
+        model_density=1.0,
+        randomize_position=0.05,
+    )
 
-    # mosaic = PM.construct_retina.build()
+    mosaic = PM.construct_retina.build()
 
-    # if show_build_process is True:
-    #     PM.viz.show_build_process(mosaic, show_all_spatial_fits=False)
+    if show_build_process is True:
+        PM.viz.show_build_process(mosaic, show_all_spatial_fits=False)
     
-    # PM.construct_retina.save_mosaic("parasol_on_single.csv")
+    PM.construct_retina.save_mosaic("parasol_on_single.csv")
 
     testmosaic = pd.read_csv("parasol_on_single.csv", index_col=0)
 
@@ -222,12 +222,14 @@ if __name__ == "__main__":
     # PM.viz.show_convolved_stimulus(PM.working_retina)
 
 
-    # filenames = [f"Response_foo_{x}" for x in np.arange(1)]
 
     #################################
     ### Run multiple trials for single cell ###
     #################################
+    
+    # filenames = [f"Response_foo_{x}" for x in np.arange(1)]
 
+    # example_gc = 2  # int or 'None'
     # for filename in filenames:
 
     #     PM.working_retina.run_cells(
@@ -261,10 +263,10 @@ if __name__ == "__main__":
     ### Run all cells ###
     #################################
 
-    PM.working_retina.run_all_cells(spike_generator_model='poisson',save_data=False)
+    # PM.working_retina.run_all_cells(spike_generator_model='poisson',save_data=False)
 
-    PM.working_retina.save_spikes_csv(filename='testi_spikes.csv')
-    PM.working_retina.save_structure_csv(filename='testi_structure.csv')
+    # PM.working_retina.save_spikes_csv(filename='testi_spikes.csv')
+    # PM.working_retina.save_structure_csv(filename='testi_structure.csv')
 
 
 
