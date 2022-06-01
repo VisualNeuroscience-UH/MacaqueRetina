@@ -69,6 +69,7 @@ class Viz:
 
         return is_valid
 
+
     # ApricotFits visualization
     def show_temporal_filter_response(
         self,
@@ -220,6 +221,7 @@ class Viz:
             fig.colorbar(sur, ax=ax2)
             plt.show()
 
+
     # ConstructRetina visualization
     def show_gc_positions_and_density(self, mosaic):
         """
@@ -272,14 +274,70 @@ class Viz:
         model_cell_density = hist / area_for_each_bin  # in cells/mm2
         ax[1].plot(center_ecc, model_cell_density, "b.")
 
-    def show_spatial_statistics(
-        self, ydata, spatial_statistics_dict, model_fit_data=None
-    ):
+    def visualize_mosaic(self, mosaic):
+        """
+        Plots the full ganglion cell mosaic. Note that this is slow if you have a large patch.
+
+        ConstructRetina call.
+
+        :return:
+        """
+
+        rho = mosaic.gc_df["positions_eccentricity"].to_numpy()
+        phi = mosaic.gc_df["positions_polar_angle"].to_numpy()
+
+        gc_rf_models = np.zeros((len(mosaic.gc_df), 6))
+        gc_rf_models[:, 0] = mosaic.gc_df["semi_xc"]
+        gc_rf_models[:, 1] = mosaic.gc_df["semi_yc"]
+        gc_rf_models[:, 2] = mosaic.gc_df["xy_aspect_ratio"]
+        gc_rf_models[:, 3] = mosaic.gc_df["amplitudes"]
+        gc_rf_models[:, 4] = mosaic.gc_df["sur_ratio"]
+        gc_rf_models[:, 5] = mosaic.gc_df["orientation_center"]
+
+        # to cartesian
+        xcoord, ycoord = self.pol2cart(rho, phi)
+
+        fig, ax = plt.subplots(nrows=1, ncols=1)
+        ax.plot(xcoord.flatten(), ycoord.flatten(), "b.", label = mosaic.gc_type)
+
+        if mosaic.surround_fixed:
+            # gc_rf_models parameters:'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio', 'orientation_center'
+            # Ellipse parameters: Ellipse(xy, width, height, angle=0, **kwargs). Only possible one at the time, unfortunately.
+            for index in np.arange(len(xcoord)):
+                ellipse_center_x = xcoord[index]
+                ellipse_center_y = ycoord[index]
+                semi_xc = gc_rf_models[index, 0]
+                semi_yc = gc_rf_models[index, 1]
+                # angle_in_radians = gc_rf_models[index, 5]  # Orientation
+                angle_in_deg = gc_rf_models[index, 5]  # Orientation
+                diameter_xc = semi_xc * 2
+                diameter_yc = semi_yc * 2
+                e1 = Ellipse(
+                    (ellipse_center_x, ellipse_center_y),
+                    diameter_xc,
+                    diameter_yc,
+                    angle_in_deg,
+                    edgecolor="b",
+                    linewidth=0.5,
+                    fill=False,
+                )
+                ax.add_artist(e1)
+
+        ax.axis("equal")
+        ax.legend()
+        ax.set_title("Cartesian retina")
+        ax.set_xlabel("Eccentricity (mm)")
+        ax.set_ylabel("Elevation (mm)")
+
+    def show_spatial_statistics(self, mosaic):
         """
         Show histograms of receptive field parameters
 
         ConstructRetina call.
         """
+        ydata = mosaic.spatial_statistics_to_show["ydata"]
+        spatial_statistics_dict = mosaic.spatial_statistics_to_show["spatial_statistics_dict"]
+        model_fit_data = mosaic.spatial_statistics_to_show["model_fit_data"]
 
         distributions = [key for key in spatial_statistics_dict.keys()]
         n_distributions = len(spatial_statistics_dict)
@@ -366,15 +424,18 @@ class Viz:
                 )
             )
 
-    def show_dendritic_diameter_vs_eccentricity(
-        self, dataset_x, dataset_y, polynomials, dataset_name=""
-    ):
+    def show_dendrite_diam_vs_ecc(self, mosaic):
         '''
         ConstructRetina call.
         '''
+        data_all_x = mosaic.dendrite_diam_vs_ecc_to_show["data_all_x"]
+        data_all_y = mosaic.dendrite_diam_vs_ecc_to_show["data_all_y"]
+        polynomials = mosaic.dendrite_diam_vs_ecc_to_show["polynomials"]
+        dataset_name = mosaic.dendrite_diam_vs_ecc_to_show["dataset_name"]
+        title = mosaic.dendrite_diam_vs_ecc_to_show["title"]
 
         fig, ax = plt.subplots(nrows=1, ncols=1)
-        ax.plot(dataset_x, dataset_y, ".")
+        ax.plot(data_all_x, data_all_y, ".")
 
         if dataset_name:
             if (
@@ -382,7 +443,7 @@ class Viz:
             ):  # check if only two parameters, ie intercept and slope
                 intercept = polynomials[1]
                 slope = polynomials[0]
-                ax.plot(dataset_x, intercept + slope * dataset_x, "k--")
+                ax.plot(data_all_x, intercept + slope * data_all_x, "k--")
                 ax.annotate(
                     "{0} : \ny={1:.1f} + {2:.1f}x".format(
                         dataset_name, intercept, slope
@@ -397,8 +458,8 @@ class Viz:
                 slope = polynomials[1]
                 square = polynomials[0]
                 ax.plot(
-                    dataset_x,
-                    intercept + slope * dataset_x + square * dataset_x**2,
+                    data_all_x,
+                    intercept + slope * data_all_x + square * data_all_x**2,
                     "k--",
                 )
                 ax.annotate(
@@ -416,11 +477,11 @@ class Viz:
                 square = polynomials[1]
                 cube = polynomials[0]
                 ax.plot(
-                    dataset_x,
+                    data_all_x,
                     intercept
-                    + slope * dataset_x
-                    + square * dataset_x**2
-                    + cube * dataset_x**3,
+                    + slope * data_all_x
+                    + square * data_all_x**2
+                    + cube * data_all_x**3,
                     "k--",
                 )
                 ax.annotate(
@@ -433,81 +494,27 @@ class Viz:
                     color="k",
                 )
 
-        plt.title(
-            "DF diam wrt ecc for {0} type, {1} dataset".format(self.client_object.gc_type, dataset_name)
-        )
+        plt.title(title)
 
-    def visualize_mosaic(self, mosaic):
-        """
-        Plots the full ganglion cell mosaic. Note that this is slow if you have a large patch.
-
-        ConstructRetina call.
-
-        :return:
-        """
-
-        rho = mosaic.gc_df["positions_eccentricity"].to_numpy()
-        phi = mosaic.gc_df["positions_polar_angle"].to_numpy()
-
-        gc_rf_models = np.zeros((len(mosaic.gc_df), 6))
-        gc_rf_models[:, 0] = mosaic.gc_df["semi_xc"]
-        gc_rf_models[:, 1] = mosaic.gc_df["semi_yc"]
-        gc_rf_models[:, 2] = mosaic.gc_df["xy_aspect_ratio"]
-        gc_rf_models[:, 3] = mosaic.gc_df["amplitudes"]
-        gc_rf_models[:, 4] = mosaic.gc_df["sur_ratio"]
-        gc_rf_models[:, 5] = mosaic.gc_df["orientation_center"]
-
-        # to cartesian
-        xcoord, ycoord = self.pol2cart(rho, phi)
-
-        fig, ax = plt.subplots(nrows=1, ncols=1)
-        ax.plot(xcoord.flatten(), ycoord.flatten(), "b.", label = mosaic.gc_type)
-
-        if mosaic.surround_fixed:
-            # gc_rf_models parameters:'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio', 'orientation_center'
-            # Ellipse parameters: Ellipse(xy, width, height, angle=0, **kwargs). Only possible one at the time, unfortunately.
-            for index in np.arange(len(xcoord)):
-                ellipse_center_x = xcoord[index]
-                ellipse_center_y = ycoord[index]
-                semi_xc = gc_rf_models[index, 0]
-                semi_yc = gc_rf_models[index, 1]
-                # angle_in_radians = gc_rf_models[index, 5]  # Orientation
-                angle_in_deg = gc_rf_models[index, 5]  # Orientation
-                diameter_xc = semi_xc * 2
-                diameter_yc = semi_yc * 2
-                e1 = Ellipse(
-                    (ellipse_center_x, ellipse_center_y),
-                    diameter_xc,
-                    diameter_yc,
-                    angle_in_deg,
-                    edgecolor="b",
-                    linewidth=0.5,
-                    fill=False,
-                )
-                ax.add_artist(e1)
-
-        ax.axis("equal")
-        ax.legend()
-        ax.set_title("Cartesian retina")
-        ax.set_xlabel("Eccentricity (mm)")
-        ax.set_ylabel("Elevation (mm)")
-
-    def show_temporal_statistics(
-        self,
-        temporal_filter_parameters,
-        distrib_params,
-    ):
+    def show_temp_stat(self, mosaic):
         '''
+        Show the temporal statistics of the mosaic.
         ConstructRetina call.
         '''
+
+        temporal_filter_parameters = mosaic.temp_stat_to_show["temporal_filter_parameters"]
+        distrib_params = mosaic.temp_stat_to_show["distrib_params"]
+        suptitle = mosaic.temp_stat_to_show["suptitle"]   
+        all_fits_df = mosaic.temp_stat_to_show["all_fits_df"]
+        good_data_indices = mosaic.temp_stat_to_show["good_data_indices"]
         
         plt.subplots(2, 3)
-        plt.suptitle(self.client_object.gc_type + " " + self.client_object.response_type)
+        plt.suptitle(suptitle)
         for i, param_name in enumerate(temporal_filter_parameters):
             plt.subplot(2, 3, i + 1)
             ax = plt.gca()
             shape, loc, scale = distrib_params[i, :]
-            param_array = np.array(self.client_object.all_fits_df.iloc[self.client_object.good_data_indices][param_name])
+            param_array = np.array(all_fits_df.iloc[good_data_indices][param_name])
 
             x_min, x_max = stats.gamma.ppf(
                 [0.001, 0.999], a=shape, loc=loc, scale=scale
@@ -518,10 +525,15 @@ class Viz:
             ax.hist(param_array, density=True)
             ax.set_title(param_name)
 
-    def show_tonic_drives(self, xs, pdf, tonicdrive_array, title):
+    def show_tonic_drives(self, mosaic):
         '''
         ConstructRetina call.
         '''
+        xs = mosaic.tonic_drives_to_show["xs"]
+        pdf = mosaic.tonic_drives_to_show["pdf"]
+        tonicdrive_array = mosaic.tonic_drives_to_show["tonicdrive_array"]
+        title = mosaic.tonic_drives_to_show["title"]
+
         plt.plot(xs, pdf)
         plt.hist(tonicdrive_array, density=True)
         plt.title(title)
@@ -538,11 +550,18 @@ class Viz:
             return
 
         self.show_temporal_filter_response(mosaic)
+
+        self.show_gc_positions_and_density(mosaic) 
         self.visualize_mosaic(mosaic)
-   
+        self.show_spatial_statistics(mosaic)
+        self.show_dendrite_diam_vs_ecc(mosaic)
+        self.show_temp_stat(mosaic)
+        self.show_tonic_drives(mosaic)
+
 
     # WorkingRetina visualization
-    def show_stimulus_with_gcs(self, frame_number=0, ax=None, example_gc=5):
+    def show_stimulus_with_gcs(self, retina, frame_number=0, ax=None, example_gc=5):
+    # def show_stimulus_with_gcs(self, frame_number=0, ax=None, example_gc=5):
         """
         Plots the 1SD ellipses of the RGC mosaic
 
@@ -552,6 +571,8 @@ class Viz:
         :param ax: matplotlib Axes object
         :return:
         """
+
+        pdb.set_trace()
 
         fig = plt.figure()
         ax = ax or plt.gca()

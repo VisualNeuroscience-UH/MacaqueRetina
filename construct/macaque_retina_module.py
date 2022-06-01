@@ -361,15 +361,144 @@ class ConstructRetina(RetinaMath):
                 "cube": polynomials[0],
             }
 
+        dataset_name = f"All data {dendr_diam_model} fit"
+        self.dendrite_diam_vs_ecc_to_show = {
+            "data_all_x" : data_all_x,
+            "data_all_y" : data_all_y,
+            "polynomials" : polynomials,
+            "dataset_name" : dataset_name,
+            "title" : f"DF diam wrt ecc for {self.gc_type} type, {dataset_name} dataset"
+        }
+
+        return dendr_diam_parameters
+
+    def _place_spatial_receptive_fields(
+        self,
+        spatial_statistics_dict,
+        dendr_diam_vs_eccentricity_parameters_dict,
+        show_build_process=False,
+    ):
+        """
+        Create spatial receptive fields to model cells.
+        Starting from 2D difference-of-gaussian parameters:
+        'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio', 'orientation_center'
+
+        Places all ganglion cell spatial parameters to ganglion cell object dataframe self.gc_df
+        """
+
+        # Get eccentricity data for all model cells
+        # gc_eccentricity = self.gc_positions_eccentricity
+        gc_eccentricity = self.gc_df["positions_eccentricity"].values
+
+        # Get rf diameter vs eccentricity
+        dendr_diam_model = self.dendr_diam_model  # from __init__ method
+        dict_key = "{0}_{1}".format(self.gc_type, dendr_diam_model)
+        diam_fit_params = dendr_diam_vs_eccentricity_parameters_dict[dict_key]
+
+        if dendr_diam_model == "linear":
+            gc_diameters = (
+                diam_fit_params["intercept"]
+                + diam_fit_params["slope"] * gc_eccentricity
+            )  # Units are micrometers
+            polynomial_order = 1
+        elif dendr_diam_model == "quadratic":
+            gc_diameters = (
+                diam_fit_params["intercept"]
+                + diam_fit_params["slope"] * gc_eccentricity
+                + diam_fit_params["square"] * gc_eccentricity**2
+            )
+            polynomial_order = 2
+        elif dendr_diam_model == "cubic":
+            gc_diameters = (
+                diam_fit_params["intercept"]
+                + diam_fit_params["slope"] * gc_eccentricity
+                + diam_fit_params["square"] * gc_eccentricity**2
+                + diam_fit_params["cube"] * gc_eccentricity**3
+            )
+            polynomial_order = 3
+
+        # Set parameters for all cells
+        n_cells = len(gc_eccentricity)
+        n_parameters = len(spatial_statistics_dict.keys())
+        gc_rf_models = np.zeros((n_cells, n_parameters))
+        for index, key in enumerate(spatial_statistics_dict.keys()):
+            shape = spatial_statistics_dict[key]["shape"]
+            loc = spatial_statistics_dict[key]["loc"]
+            scale = spatial_statistics_dict[key]["scale"]
+            distribution = spatial_statistics_dict[key]["distribution"]
+            gc_rf_models[:, index] = self._get_random_samples(
+                shape, loc, scale, n_cells, distribution
+            )
+
+        # Calculate RF diameter scaling factor for all ganglion cells
+        # Area of RF = Scaling_factor * Random_factor * Area of ellipse(semi_xc,semi_yc), solve Scaling_factor.
+        area_of_ellipse = self.ellipse2area(
+            gc_rf_models[:, 0], gc_rf_models[:, 1]
+        )  # Units are pixels for the Chichilnisky data
+
+        """
+        The area_of_rf contains area for all model units. Its sum must fill the whole area (coverage factor = 1).
+        We do it separately for each ecc sector, step by step, to keep coverage factor at 1 despite changing gc density with ecc
+        """
+        area_scaling_factors_coverage1 = np.zeros(area_of_ellipse.shape)
+        for index, surface_area in enumerate(self.sector_surface_area_all):
+            scaling_for_coverage_1 = (surface_area * 1e6) / np.sum(
+                area_of_ellipse[self.gc_df["eccentricity_group_index"] == index]
+            )  # in micrometers2
+
+            area_scaling_factors_coverage1[
+                self.gc_df["eccentricity_group_index"] == index
+            ] = scaling_for_coverage_1
+
+        # Apply scaling factors to semi_xc and semi_yc. Units are micrometers.
+        # scale_random_distribution = 0.08  # Estimated by eye from Watanabe and Perry data. Normal distribution with scale_random_distribution 0.08 cover about 25% above and below the mean value
+        scale_random_distribution = 0.001
+        random_normal_distribution1 = 1 + np.random.normal(
+            scale=scale_random_distribution, size=n_cells
+        )
+        semi_xc = (
+            np.sqrt(area_scaling_factors_coverage1)
+            * gc_rf_models[:, 0]
+            * random_normal_distribution1
+        )
+        random_normal_distribution2 = 1 + np.random.normal(
+            scale=scale_random_distribution, size=n_cells
+        )  # second randomization
+        semi_yc = (
+            np.sqrt(area_scaling_factors_coverage1)
+            * gc_rf_models[:, 1]
+            * random_normal_distribution2
+        )
+
+        # Scale from micrometers to millimeters and return to numpy matrix
+        gc_rf_models[:, 0] = semi_xc / 1000
+        gc_rf_models[:, 1] = semi_yc / 1000
+
+        # Save to ganglion cell dataframe. Keep it explicit to avoid unknown complexity
+        self.gc_df["semi_xc"] = gc_rf_models[:, 0]
+        self.gc_df["semi_yc"] = gc_rf_models[:, 1]
+        self.gc_df["xy_aspect_ratio"] = gc_rf_models[:, 2]
+        self.gc_df["amplitudes"] = gc_rf_models[:, 3]
+        self.gc_df["sur_ratio"] = gc_rf_models[:, 4]
+        # self.gc_df['orientation_center'] = gc_rf_models[:, 5]
+        self.gc_df["orientation_center"] = self.gc_df[
+            "positions_polar_angle"
+        ]  # plus some noise here
+
         if show_build_process:
-            self.viz.show_dendritic_diameter_vs_eccentricity(
-                data_all_x,
-                data_all_y,
+            # Quality control for diameter distribution. In micrometers.
+            gc_diameters = self.area2circle_diameter(
+                self.ellipse2area(semi_xc, semi_yc)
+            )
+
+            polynomials = np.polyfit(gc_eccentricity, gc_diameters, polynomial_order)
+
+            self.viz.show_dendrite_diam_vs_ecc(
+                gc_eccentricity,
+                gc_diameters,
                 polynomials,
                 dataset_name="All data {0} fit".format(dendr_diam_model),
             )
-
-        return dendr_diam_parameters
 
     def _densfunc(self, r, d0, beta):
         return d0 * (1 + beta * r) ** (-2)
@@ -442,7 +571,9 @@ class ConstructRetina(RetinaMath):
 
             # N cells for given ecc
             # my_gaussian_fit = self.gauss_plus_baseline(center_ecc, *gc_density_func_params) # leads to div by zero
-            my_gaussian_fit = self._densfunc(center_ecc, 5.32043939e05, 2.64289725) # deactivated SV 220531
+            my_gaussian_fit = self._densfunc(
+                center_ecc, 5.32043939e05, 2.64289725
+            )  # deactivated SV 220531
             Ncells = sector_surface_area * my_gaussian_fit * self.gc_proportion
 
             # place cells in regular grid
@@ -498,14 +629,6 @@ class ConstructRetina(RetinaMath):
                 angle / (2 * n_segments_arc)
             )  # shift half the inter-cell angle
 
-            # Randomize with respect to spacing
-            # Randomization using uniform distribution [-0.5, 0.5]
-            # matrix_polar_angle_randomized = matrix_polar_angle + theta_segment_angle * randomize_position \
-            #                                 * (np.random.rand(matrix_polar_angle.shape[0],
-            #                                                   matrix_polar_angle.shape[1]) - 0.5)
-            # matrix_eccentricity_randomized = matrix_eccentricity + radius_segment_length * randomize_position \
-            #                                  * (np.random.rand(matrix_eccentricity.shape[0],
-            #                                                    matrix_eccentricity.shape[1]) - 0.5)
             # Randomization using normal distribution
             matrix_polar_angle_randomized = (
                 matrix_polar_angle
@@ -662,145 +785,14 @@ class ConstructRetina(RetinaMath):
             "distribution": "beta",
         }
 
-        # Quality control images
-        if show_build_process:
-            self.viz.show_spatial_statistics(
-                ydata, spatial_statistics_dict, (x_model_fit, y_model_fit)
-            )
+        self.spatial_statistics_to_show = {
+            "ydata": ydata,
+            "spatial_statistics_dict": spatial_statistics_dict,
+            "model_fit_data": (x_model_fit, y_model_fit),
+        }
 
         # Return stats for RF creation
         return spatial_statistics_dict
-
-    def _place_spatial_receptive_fields(
-        self,
-        spatial_statistics_dict,
-        dendr_diam_vs_eccentricity_parameters_dict,
-        show_build_process=False,
-    ):
-        """
-        Create spatial receptive fields to model cells.
-        Starting from 2D difference-of-gaussian parameters:
-        'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio', 'orientation_center'
-
-        Places all ganglion cell spatial parameters to ganglion cell object dataframe self.gc_df
-        """
-
-        # Get eccentricity data for all model cells
-        # gc_eccentricity = self.gc_positions_eccentricity
-        gc_eccentricity = self.gc_df["positions_eccentricity"].values
-
-        # Get rf diameter vs eccentricity
-        dendr_diam_model = self.dendr_diam_model  # from __init__ method
-        dict_key = "{0}_{1}".format(self.gc_type, dendr_diam_model)
-        diam_fit_params = dendr_diam_vs_eccentricity_parameters_dict[dict_key]
-
-        if dendr_diam_model == "linear":
-            gc_diameters = (
-                diam_fit_params["intercept"]
-                + diam_fit_params["slope"] * gc_eccentricity
-            )  # Units are micrometers
-            polynomial_order = 1
-        elif dendr_diam_model == "quadratic":
-            gc_diameters = (
-                diam_fit_params["intercept"]
-                + diam_fit_params["slope"] * gc_eccentricity
-                + diam_fit_params["square"] * gc_eccentricity**2
-            )
-            polynomial_order = 2
-        elif dendr_diam_model == "cubic":
-            gc_diameters = (
-                diam_fit_params["intercept"]
-                + diam_fit_params["slope"] * gc_eccentricity
-                + diam_fit_params["square"] * gc_eccentricity**2
-                + diam_fit_params["cube"] * gc_eccentricity**3
-            )
-            polynomial_order = 3
-
-        # Set parameters for all cells
-        n_cells = len(gc_eccentricity)
-        n_parameters = len(spatial_statistics_dict.keys())
-        gc_rf_models = np.zeros((n_cells, n_parameters))
-        for index, key in enumerate(spatial_statistics_dict.keys()):
-            shape = spatial_statistics_dict[key]["shape"]
-            loc = spatial_statistics_dict[key]["loc"]
-            scale = spatial_statistics_dict[key]["scale"]
-            distribution = spatial_statistics_dict[key]["distribution"]
-            gc_rf_models[:, index] = self._get_random_samples(
-                shape, loc, scale, n_cells, distribution
-            )
-        # Quality control images
-        if show_build_process:
-            self.viz.show_spatial_statistics(gc_rf_models, spatial_statistics_dict)
-
-        # Calculate RF diameter scaling factor for all ganglion cells
-        # Area of RF = Scaling_factor * Random_factor * Area of ellipse(semi_xc,semi_yc), solve Scaling_factor.
-        area_of_ellipse = self.ellipse2area(
-            gc_rf_models[:, 0], gc_rf_models[:, 1]
-        )  # Units are pixels for the Chichilnisky data
-
-        """
-        The area_of_rf contains area for all model units. Its sum must fill the whole area (coverage factor = 1).
-        We do it separately for each ecc sector, step by step, to keep coverage factor at 1 despite changing gc density with ecc
-        """
-        area_scaling_factors_coverage1 = np.zeros(area_of_ellipse.shape)
-        for index, surface_area in enumerate(self.sector_surface_area_all):
-            scaling_for_coverage_1 = (surface_area * 1e6) / np.sum(
-                area_of_ellipse[self.gc_df["eccentricity_group_index"] == index]
-            )  # in micrometers2
-
-            area_scaling_factors_coverage1[
-                self.gc_df["eccentricity_group_index"] == index
-            ] = scaling_for_coverage_1
-
-        # Apply scaling factors to semi_xc and semi_yc. Units are micrometers.
-        # scale_random_distribution = 0.08  # Estimated by eye from Watanabe and Perry data. Normal distribution with scale_random_distribution 0.08 cover about 25% above and below the mean value
-        scale_random_distribution = 0.001
-        random_normal_distribution1 = 1 + np.random.normal(
-            scale=scale_random_distribution, size=n_cells
-        )
-        semi_xc = (
-            np.sqrt(area_scaling_factors_coverage1)
-            * gc_rf_models[:, 0]
-            * random_normal_distribution1
-        )
-        random_normal_distribution2 = 1 + np.random.normal(
-            scale=scale_random_distribution, size=n_cells
-        )  # second randomization
-        semi_yc = (
-            np.sqrt(area_scaling_factors_coverage1)
-            * gc_rf_models[:, 1]
-            * random_normal_distribution2
-        )
-
-        # Scale from micrometers to millimeters and return to numpy matrix
-        gc_rf_models[:, 0] = semi_xc / 1000
-        gc_rf_models[:, 1] = semi_yc / 1000
-
-        # Save to ganglion cell dataframe. Keep it explicit to avoid unknown complexity
-        self.gc_df["semi_xc"] = gc_rf_models[:, 0]
-        self.gc_df["semi_yc"] = gc_rf_models[:, 1]
-        self.gc_df["xy_aspect_ratio"] = gc_rf_models[:, 2]
-        self.gc_df["amplitudes"] = gc_rf_models[:, 3]
-        self.gc_df["sur_ratio"] = gc_rf_models[:, 4]
-        # self.gc_df['orientation_center'] = gc_rf_models[:, 5]
-        self.gc_df["orientation_center"] = self.gc_df[
-            "positions_polar_angle"
-        ]  # plus some noise here
-
-        if show_build_process:
-            # Quality control for diameter distribution. In micrometers.
-            gc_diameters = self.area2circle_diameter(
-                self.ellipse2area(semi_xc, semi_yc)
-            )
-
-            polynomials = np.polyfit(gc_eccentricity, gc_diameters, polynomial_order)
-
-            self.viz.show_dendritic_diameter_vs_eccentricity(
-                gc_eccentricity,
-                gc_diameters,
-                polynomials,
-                dataset_name="All data {0} fit".format(dendr_diam_model),
-            )
 
     def _fit_tonic_drives(self, show_build_process=False):
         tonicdrive_array = np.array(
@@ -808,14 +800,19 @@ class ConstructRetina(RetinaMath):
         )
         shape, loc, scale = stats.gamma.fit(tonicdrive_array)
 
-        if show_build_process:
-            x_min, x_max = stats.gamma.ppf(
-                [0.001, 0.999], a=shape, loc=loc, scale=scale
-            )
-            xs = np.linspace(x_min, x_max, 100)
-            pdf = stats.gamma.pdf(xs, a=shape, loc=loc, scale=scale)
-            title = self.gc_type + " " + self.response_type
-            self.viz.show_tonic_drives(xs, pdf, tonicdrive_array, title)
+        x_min, x_max = stats.gamma.ppf(
+            [0.001, 0.999], a=shape, loc=loc, scale=scale
+        )
+        xs = np.linspace(x_min, x_max, 100)
+        pdf = stats.gamma.pdf(xs, a=shape, loc=loc, scale=scale)
+        title = self.gc_type + " " + self.response_type
+
+        self.tonic_drives_to_show = {
+            "xs" : xs,
+            "pdf" : pdf,
+            "tonicdrive_array" : tonicdrive_array,
+            "title" : title,
+        }
 
         return shape, loc, scale
 
@@ -830,11 +827,14 @@ class ConstructRetina(RetinaMath):
             shape, loc, scale = stats.gamma.fit(param_array)
             distrib_params[i, :] = [shape, loc, scale]
 
-        if show_build_process:
-            self.viz.show_temporal_statistics(
-                temporal_filter_parameters,
-                distrib_params,
-            )
+        self.temp_stat_to_show = {
+            "temporal_filter_parameters": temporal_filter_parameters,
+            "distrib_params": distrib_params,
+            "suptitle" : self.gc_type + " " + self.response_type,
+            "all_fits_df" : self.all_fits_df,
+            "good_data_indices" : self.good_data_indices,
+
+        }
 
         return pd.DataFrame(
             distrib_params,

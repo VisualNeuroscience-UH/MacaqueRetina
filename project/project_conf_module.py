@@ -149,31 +149,23 @@ if __name__ == "__main__":
     """
     Build and test your retina here, one gc type at a time. Temporal hemiretina of macaques.
     """
-    show_build_process=True
+    # show_build_process=False
     
-    PM.construct_retina.initialize(
-        gc_type="parasol",
-        response_type="on",
-        ecc_limits=[4.8, 5.2],
-        sector_limits=[-0.4, 0.4],
-        model_density=1.0,
-        randomize_position=0.05,
-    )
+    # PM.construct_retina.initialize(
+    #     gc_type="parasol",
+    #     response_type="on",
+    #     ecc_limits=[4.8, 5.2],
+    #     sector_limits=[-0.4, 0.4],
+    #     model_density=1.0,
+    #     randomize_position=0.05,
+    # )
 
-    mosaic = PM.construct_retina.build()
+    # mosaic = PM.construct_retina.build()
 
-    if show_build_process is True:
-        PM.viz.show_build_process(mosaic, show_all_spatial_fits=False)
+    # if show_build_process is True:
+    #     PM.viz.show_build_process(mosaic, show_all_spatial_fits=False)
     
-    plt.show(block=False)
-    
-    pdb.set_trace()
-    '''
-    TÄHÄN JÄIT. KOLME METODIA TEHTY VIZ LUOKAAN, KS show_build_process.
-    '''
-    
-    
-    PM.construct_retina.save_mosaic("parasol_on_single.csv")
+    # PM.construct_retina.save_mosaic("parasol_on_single.csv")
 
     testmosaic = pd.read_csv("parasol_on_single.csv", index_col=0)
 
