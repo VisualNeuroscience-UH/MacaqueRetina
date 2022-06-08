@@ -1138,19 +1138,13 @@ class WorkingRetina(RetinaMath):
         return w_coord, z_coord
 
     def _save_for_cxsystem(self, spike_mons, filename=None, analog_signal=None):
-        # Save to current working dir
-        if filename is None:
-            save_path = os.path.join(os.getcwd(), "most_recent_spikes")
-        else:
-            save_path = os.path.join(os.getcwd(), filename)
 
-        self.output_file_extension = ".gz"
 
         self.w_coord, self.z_coord = self._get_w_z_coords()
 
         # Copied from CxSystem2\cxsystem2\core\stimuli.py The Stimuli class does not support reuse
         print(" -  Saving spikes, rgc coordinates and analog signal (if not None)...")
-        self.generated_input_folder = save_path + self.output_file_extension
+
         data_to_save = {}
         for ii in range(len(spike_mons)):
             data_to_save["spikes_" + str(ii)] = []
@@ -1164,7 +1158,14 @@ class WorkingRetina(RetinaMath):
         if analog_signal is not None:
             data_to_save["analog_signal"] = analog_signal
 
-        write_to_file(save_path + self.output_file_extension, data_to_save)
+        if filename is None:
+            save_path = self.context.output_folder.joinpath("most_recent_spikes")
+        else:
+            save_path = self.context.output_folder.joinpath(filename)
+        self.output_file_extension = ".gz"
+
+        filename_full = Path(str(save_path) + self.output_file_extension)
+        self.data_io.write_to_file(filename_full, data_to_save)
 
     def _get_extents_deg(self):
         """
@@ -1389,6 +1390,8 @@ class WorkingRetina(RetinaMath):
         :param filename: str
         :return:
         """
+
+        # pdb.set_trace()
         # Save spike generation model
         self.spike_generator_model = spike_generator_model
 
@@ -1467,7 +1470,7 @@ class WorkingRetina(RetinaMath):
             net = b2.Network(neuron_group, spike_monitor)
 
         elif spike_generator_model == "poisson":
-            # Create Brian PoissonGroup (inefficient implementation but never mind)
+            # Create Brian PoissonGroup
             poisson_group = b2.PoissonGroup(n_cells, rates="inst_rates(t, i)")
             spike_monitor = b2.SpikeMonitor(poisson_group)
             net = b2.Network(poisson_group, spike_monitor)

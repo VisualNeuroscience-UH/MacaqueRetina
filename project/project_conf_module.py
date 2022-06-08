@@ -107,14 +107,15 @@ my_retina = {
     "model_density" : 1.0,
     "randomize_position" : 0.05,
     "stimulus_center": 5 + 0j,
+    "gc_response_file": "my_gc_response",  # check extension
 }
 
+# TÄHÄN JÄIT. RAKENNA TÄHÄN RUN CELLS TIEDOT JA PARAMETRIT. TAI SITTEN ERILLINEN OBJEKTI.
 
 my_stimulus_metadata = {
     "stimulus_file": "testi.jpg",
     "stimulus_type": "image",  # "image", "video" or "grating"
-    "gc_response_file": "my_gc_response",  # check extension
-    "stimulus_video_name": "tmp",
+    "stimulus_video_name": "tmp2",
 }
 
 """
@@ -158,8 +159,8 @@ stimulus_video_name: name of the stimulus video
 
 my_stimulus_options = {
     #Shared btw stimulus and working_retina
-    "image_width": 140, 
-    "image_height": 140,
+    "image_width": 240, 
+    "image_height": 240,
     "pix_per_deg": 60, 
     "fps": 100,
     # stimulus only
@@ -169,8 +170,6 @@ my_stimulus_options = {
     "spatial_frequency" : 1.0,
     "stimulus_position" : (-0.06, 0.03), # center_deg
     "duration_seconds" : 0.4,
-    "image_width" : 140, # stimulus_width_pix
-    "image_height" : 140, # stimulus_height_pix
     "stimulus_size" : 0.1,
     "contrast" : 0.99,
     "baseline_start_seconds" : 0.5,
@@ -178,7 +177,6 @@ my_stimulus_options = {
     "background" : 128,
     "mean" : 128,
     "phase_shift" : 0,
-    "stimulus_video_name" : "tmp",  # If empty, does not save the video => MOVE TO METADATA
 }
 
 
@@ -237,7 +235,10 @@ if __name__ == "__main__":
         profiler.enable()
 
     """
-    ### Housekeeping ###. Do not comment out.
+    Housekeeping. Do not comment out.
+
+    All ProjectManager input parameters go to context.
+    Init methods ask for these parameters by _properties_list class attribute.
     """
     PM = ProjectManager(
         path=path,
@@ -294,11 +295,11 @@ if __name__ == "__main__":
     ### Load stimulus to get working retina ###
     #################################
 
-    PM.working_retina.load_stimulus(PM.stimulate)
+    PM.working_retina.load_stimulus(PM.stimulate) # => METADATA
 
-    # # movie = vs.NaturalMovie('/home/henhok/nature4_orig35_fps100.avi', fps=100, pix_per_deg=60)
-    # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)
-    # ret.load_stimulus(movie)
+    # # movie = vs.NaturalMovie('/home/henhok/nature4_orig35_fps100.avi', fps=100, pix_per_deg=60)# => METADATA
+    # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
+    # ret.load_stimulus(movie)# => METADATA
 
     #################################
     ### Show single ganglion cell response ###
@@ -316,15 +317,15 @@ if __name__ == "__main__":
     ### Run multiple trials for single cell ###
     #################################
     
-    filenames = [f"Response_foo_{x}" for x in range(1)]
+    filenames = [f"Response_foo_{x:02}" for x in range(3)]
 
     example_gc = 2  # int or 'None'
     for filename in filenames:
 
         PM.working_retina.run_cells(
             cell_index=example_gc,
-            n_trials=5,
-            save_data=False,
+            n_trials=10,
+            save_data=True,
             spike_generator_model="poisson",
             return_monitor=False,
             filename=filename,
@@ -352,10 +353,11 @@ if __name__ == "__main__":
     ### Run all cells ###
     #################################
 
-    PM.working_retina.run_all_cells(spike_generator_model='poisson',save_data=False)
+    # PM.working_retina.run_all_cells(spike_generator_model='poisson',save_data=False)
+    # PM.viz.show_gc_responses(PM.working_retina)
 
-    PM.working_retina.save_spikes_csv(filename='testi_spikes.csv')
-    PM.working_retina.save_structure_csv(filename='testi_structure.csv')
+    # PM.working_retina.save_spikes_csv(filename='testi_spikes.csv') # => METADATA
+    # PM.working_retina.save_structure_csv(filename='testi_structure.csv') # => METADATA
 
 
 

@@ -675,7 +675,7 @@ class ConstructStimulus(VideoBaseClass):
         stimulus_video = self
 
         # Save video
-        stimulus_video_name = Path(self.options["stimulus_video_name"])
+        stimulus_video_name = Path(self.context.my_stimulus_metadata["stimulus_video_name"])
         self.data_io.save_stimulus_to_videofile(stimulus_video_name, stimulus_video)
 
     def _create_frames(self, epoch__in_seconds):
