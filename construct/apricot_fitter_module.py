@@ -22,13 +22,7 @@ from tqdm import tqdm
 from construct.construct_math_module import RetinaMath
 
 # Builtin
-from pathlib import Path
 import pdb
-
-
-repo_path = Path(__file__).parent
-retina_data_path = repo_path / "apricot"
-digitized_figures_path = repo_path / "digitized_figures"
 
 
 class ApricotData:
@@ -36,7 +30,9 @@ class ApricotData:
     Read data from external mat files.
     """
 
-    def __init__(self, gc_type, response_type):
+    def __init__(self, apricot_data_folder, gc_type, response_type):
+        
+        self.apricot_data_folder = apricot_data_folder
         gc_type = gc_type.lower()
         response_type = response_type.lower()
         self.gc_type = gc_type
@@ -75,8 +71,10 @@ class ApricotData:
         else:
             raise NotImplementedError("Unknown cell type or response type, aborting")
 
-        filepath = retina_data_path / self.filename_nonspatial
+        filepath = self.apricot_data_folder / self.filename_nonspatial
+        
         raw_data = sio.loadmat(filepath)  # , squeeze_me=True)
+        
         self.data = raw_data["mosaicGLM"][0]
         self.n_cells = len(self.data)
         self.inverted_data_indices = self._get_inverted_indices()
@@ -127,7 +125,7 @@ class ApricotData:
     # Called from ApricotFits
     def read_spatial_filter_data(self):
 
-        filepath = retina_data_path / self.spatial_filename
+        filepath = self.apricot_data_folder / self.spatial_filename
         gc_spatial_data = sio.loadmat(filepath, variable_names=["c", "stafit"])
         gc_spatial_data_array = gc_spatial_data["c"]
         initial_center_values = gc_spatial_data["stafit"]
@@ -244,9 +242,9 @@ class ApricotFits(ApricotData, RetinaMath):
     Methods for deriving spatial receptive field parameters from the apricot dataset (Field_2010)
     """
 
-    def __init__(self, gc_type, response_type, _fit_all=True):
+    def __init__(self, apricot_data_folder, gc_type, response_type, _fit_all=True):
 
-        super().__init__(gc_type, response_type)
+        super().__init__(apricot_data_folder, gc_type, response_type)
         if _fit_all is True:
             self._fit_all()
 

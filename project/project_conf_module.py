@@ -1,15 +1,9 @@
-# Numeric
-import pandas as pd
-import numpy as np
-
 # Visualization
 import matplotlib.pyplot as plt
 
 # Builtin
 from pathlib import Path
 import sys
-from math import nan
-from itertools import islice
 import pdb
 
 # This computer git repos
@@ -31,7 +25,8 @@ The spatiotemporal receptive fields for the four cell types (parasol & midget, O
 
 Chichilnisky_2002_JNeurosci states that L-ON (parasol) cells have on average 21% larger RFs than L-OFF cells. He also shows that OFF cells have more nonlinear response to input, which is not implemented currently (a no-brainer to implement if necessary).
 
-NOTE: bad cell indices hard coded from Chichilnisky apricot data. For another data set, visualize fits, and change the bad cells.
+NOTE: bad cell indices and metadata hard coded from Chichilnisky apricot data at apricot_fitter_module ApricotData class. 
+For another data set change metadata, visualize fits and change the bad cells.
 NOTE: If eccentricity stays under 20 deg, dendritic diameter data fitted up to 25 deg only (better fit close to fovea)
 
 -center-surround response ratio (in vivo, anesthetized, recorded from LGN; Croner_1995_VisRes) PC: ; MC: ;
@@ -85,11 +80,11 @@ experiment = "test"  # "test"
 Input context
 Stimulus images and videos
 """
-input_folder = "../in"
+input_folder = "../in" # input figs, videos
 
 git_repo_root = Path(r'C:\Users\Simo\Laskenta\Git_Repos\MacaqueRetina_Git')
-construct_apricot_folder = git_repo_root.joinpath(r"construct\apricot")
-construct_digitized_folder = git_repo_root.joinpath(r"construct\digitized_figures")
+apricot_data_folder = git_repo_root.joinpath(r"construct\apricot_data")
+literature_data_folder = git_repo_root.joinpath(r"construct\literature_data")
 
 """
 Data context for output. 
@@ -114,6 +109,10 @@ proportion_of_ON_response_type = 0.40
 proportion_of_OFF_response_type = 0.60
 
 
+# Perry_1985_VisRes; 0.223 um/deg in the fovea, 169 um/deg at 90 deg ecc
+# One mm retina is ~4.55 deg visual field.
+deg_per_mm = 1 / 0.223
+
 my_retina = {
     "gc_type" : "parasol",
     "response_type" : "on",
@@ -126,10 +125,22 @@ my_retina = {
     "proportion_of_ON_response_type" : proportion_of_ON_response_type,
     "proportion_of_OFF_response_type" : proportion_of_OFF_response_type,
     "mosaic_file_name": "parasol_on_single.csv",
+    "deg_per_mm" : deg_per_mm,
 }
 
-# Perry_1985_VisRes; 0.223 um/deg in the fovea, 169 um/deg at 90 deg ecc
-deg_per_mm = 1 / 0.220
+
+
+# Define digitized literature data files for gc density and dendritic diameters.
+# Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
+
+gc_density_file = literature_data_folder / "Perry_1984_Neurosci_GCdensity_c.mat"
+if my_retina["gc_type"] == "parasol":
+    dendr_diam1_file = literature_data_folder / "Perry_1984_Neurosci_ParasolDendrDiam_c.mat"
+    dendr_diam2_file = literature_data_folder / "Watanabe_1989_JCompNeurol_GCDendrDiam_parasol_c.mat"
+elif my_retina["gc_type"] == "midget":
+    dendr_diam1_file = literature_data_folder / "Perry_1984_Neurosci_MidgetDendrDiam_c.mat"
+    dendr_diam2_file = literature_data_folder / "Watanabe_1989_JCompNeurol_GCDendrDiam_midget_c.mat"
+
 
 my_stimuli = {
     "stimulus_file": "testi.jpg",
@@ -140,7 +151,6 @@ my_stimuli = {
     "stimulus_height_pix": 240,
     "pix_per_deg": 60,
     "fps": 100,
-    "deg_per_mm": deg_per_mm,
 }
 
 
@@ -148,7 +158,6 @@ stimulus_video_name = "tmp"
 
 '''
 TÄHÄN JÄIT. INPUT JA OUTPUT POLKUSYSTEEMI KÄYTTÖÖN. STIMULUS YM PARAMETRIEN NOSTO TÄHÄN.
-KOODISTA KOVAKOODATTUJA PARAMETREJÄ TÄHÄN NÄKYVIIN.
 '''
 
 profile = False
@@ -172,6 +181,11 @@ if __name__ == "__main__":
         experiment=experiment,
         my_retina=my_retina,
         my_stimuli=my_stimuli,
+        apricot_data_folder=apricot_data_folder,
+        literature_data_folder=literature_data_folder,
+        dendr_diam1_file=dendr_diam1_file,
+        dendr_diam2_file=dendr_diam2_file,
+        gc_density_file=gc_density_file
     )
 
     #################################
@@ -194,13 +208,15 @@ if __name__ == "__main__":
     
     PM.construct_retina.initialize()
 
-    mosaic = PM.construct_retina.build()
+    PM.construct_retina.build()
 
     if show_build_process is True:
-        PM.viz.show_build_process(mosaic, show_all_spatial_fits=False)
+        # show_all_spatial_fits displays the numerous spatial fits
+        PM.viz.show_build_process(PM.construct_retina, show_all_spatial_fits=False)
     
     PM.construct_retina.save_mosaic()
 
+    # Reads the mosaic file from my_retina["mosaic_file_name"].
     PM.working_retina.initialize()
 
     #################################
@@ -252,7 +268,7 @@ if __name__ == "__main__":
     ### Run multiple trials for single cell ###
     #################################
     
-    filenames = [f"Response_foo_{x}" for x in np.arange(1)]
+    filenames = [f"Response_foo_{x}" for x in range(1)]
 
     example_gc = 2  # int or 'None'
     for filename in filenames:
@@ -288,10 +304,10 @@ if __name__ == "__main__":
     ### Run all cells ###
     #################################
 
-    # PM.working_retina.run_all_cells(spike_generator_model='poisson',save_data=False)
+    PM.working_retina.run_all_cells(spike_generator_model='poisson',save_data=False)
 
-    # PM.working_retina.save_spikes_csv(filename='testi_spikes.csv')
-    # PM.working_retina.save_structure_csv(filename='testi_structure.csv')
+    PM.working_retina.save_spikes_csv(filename='testi_spikes.csv')
+    PM.working_retina.save_structure_csv(filename='testi_structure.csv')
 
 
 

@@ -93,9 +93,6 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         self.viz = viz
 
         # # Constructor for macaque retina mosaic. For client object injection, 
-        # # we need deep copy of viz to avoid masking of the instances from distinct classes
-        # self.construct_retina = ConstructRetina(context, data_io, deepcopy(viz))
-        # self.working_retina = WorkingRetina(context, data_io, deepcopy(viz))
         self.construct_retina = ConstructRetina(context, data_io, viz)
         self.working_retina = WorkingRetina(context, data_io, viz)
 

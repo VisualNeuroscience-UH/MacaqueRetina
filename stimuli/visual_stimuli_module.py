@@ -763,7 +763,7 @@ class PhotoReceptor:
     """
 
     # self.context. attributes
-    _properties_list = ["path", "input_folder", "output_folder"]
+    _properties_list = ["path", "input_folder", "output_folder", "deg_per_mm"]
 
     def __init__(self, context, data_io) -> None:
 
@@ -813,7 +813,6 @@ class PhotoReceptor:
         self.millimeters_per_pixel = micrometers_per_pixel / 1000  # Turn to millimeters
         self.temporal_resolution = temporal_resolution
         self.optical_aberration = 2 / 60  # unit is degree
-        self.deg_per_mm = 1 / 0.220
 
         self.image = self.data_io.get_data(image_file_name)
 
@@ -829,7 +828,7 @@ class PhotoReceptor:
         sigma_in_degrees = self.optical_aberration / (2 * np.sqrt(2 * np.log(2)))
 
         # Turn Gaussian function with defined sigma in degrees to pixel space
-        sigma_in_mm = sigma_in_degrees / self.deg_per_mm
+        sigma_in_mm = sigma_in_degrees / self.context.deg_per_mm
         sigma_in_pixels = (
             sigma_in_mm / self.millimeters_per_pixel
         )  # This is small, 0.28 pixels for 10 microm/pixel resolution

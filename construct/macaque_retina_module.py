@@ -34,20 +34,22 @@ class ConstructRetina(RetinaMath):
     All spatial parameters are saved to the dataframe *gc_df*
     """
 
-    repo_path = Path(__file__).parent.parents[0]
-    digitized_figures_path = repo_path / "construct/digitized_figures"
-
     _properties_list = [
         "path",
         "output_folder",
+        "input_folder",
         "my_retina",
+        "apricot_data_folder",
+        "literature_data_folder",
+        "dendr_diam1_file",
+        "dendr_diam2_file",
+        "gc_density_file",
     ]
 
     def __init__(self, context, data_io, viz) -> None:
 
         self._context = context.set_context(self._properties_list)
         self._data_io = data_io
-        # viz.client_object = self  # injecting client object pointer into viz object
         self._viz = viz
 
     @property
@@ -67,17 +69,18 @@ class ConstructRetina(RetinaMath):
         """
         Initialize the ganglion cell mosaic
 
-        :param gc_typegc_type: 'parasol' or 'midget'
+        :param gc_type: 'parasol' or 'midget'
         :param fits_from_file: path to a file containing the fits
         """
 
         my_retina = self.context.my_retina
-        gc_type=my_retina["gc_type"]
-        response_type=my_retina["response_type"]
-        ecc_limits=my_retina["ecc_limits"]
-        sector_limits=my_retina["sector_limits"]
-        model_density=my_retina["model_density"]
-        randomize_position=my_retina["randomize_position"]
+        gc_type = my_retina["gc_type"]
+        response_type = my_retina["response_type"]
+        ecc_limits = my_retina["ecc_limits"]
+        sector_limits = my_retina["sector_limits"]
+        model_density = my_retina["model_density"]
+        randomize_position = my_retina["randomize_position"]
+        self.deg_per_mm = my_retina["deg_per_mm"]
 
         proportion_of_parasol_gc_type = my_retina["proportion_of_parasol_gc_type"]
         proportion_of_midget_gc_type = my_retina["proportion_of_midget_gc_type"]
@@ -127,9 +130,6 @@ class ConstructRetina(RetinaMath):
         self.gc_type = gc_type
         self.response_type = response_type
 
-        self.deg_per_mm = (
-            1 / 0.220
-        )  # Turn deg2mm retina. One deg = 220um (Perry et al 1985). One mm retina is ~4.55 deg visual field.
         self.eccentricity = ecc_limits
         self.eccentricity_in_mm = np.asarray(
             [r / self.deg_per_mm for r in ecc_limits]
@@ -173,7 +173,9 @@ class ConstructRetina(RetinaMath):
                 self.all_fits_df,
                 self.temporal_filters_to_show,
                 self.spatial_filters_to_show,
-            ) = ApricotFits(gc_type, response_type).get_fits()
+            ) = ApricotFits(
+                self.context.apricot_data_folder, gc_type, response_type
+            ).get_fits()
         else:
             self.all_fits_df = pd.read_csv(
                 fits_from_file, header=0, index_col=0
@@ -229,10 +231,10 @@ class ConstructRetina(RetinaMath):
         """
         Read re-digitized old literature data from mat files
         """
-        digitized_figures_path = self.digitized_figures_path
-        print("Reading density data from:", digitized_figures_path)
+
+        print("Reading density data from:", self.context.gc_density_file)
         gc_density = sio.loadmat(
-            digitized_figures_path / "Perry_1984_Neurosci_GCdensity_c.mat",
+            self.context.gc_density_file,
             variable_names=["Xdata", "Ydata"],
         )
         cell_eccentricity = np.squeeze(gc_density["Xdata"])
@@ -261,45 +263,20 @@ class ConstructRetina(RetinaMath):
 
         return popt  # = gc_density_func_params
 
-    def _read_dendritic_fields_vs_eccentricity_data(self):
-        """
-        Read re-digitized old literature data from mat files
-        """
-        digitized_figures_path = self.digitized_figures_path
-
-        if self.gc_type == "parasol":
-            dendr_diam1 = sio.loadmat(
-                digitized_figures_path / "Perry_1984_Neurosci_ParasolDendrDiam_c.mat",
-                variable_names=["Xdata", "Ydata"],
-            )
-            dendr_diam2 = sio.loadmat(
-                digitized_figures_path
-                / "Watanabe_1989_JCompNeurol_GCDendrDiam_parasol_c.mat",
-                variable_names=["Xdata", "Ydata"],
-            )
-        elif self.gc_type == "midget":
-            dendr_diam1 = sio.loadmat(
-                digitized_figures_path / "Perry_1984_Neurosci_MidgetDendrDiam_c.mat",
-                variable_names=["Xdata", "Ydata"],
-            )
-            dendr_diam2 = sio.loadmat(
-                digitized_figures_path
-                / "Watanabe_1989_JCompNeurol_GCDendrDiam_midget_c.mat",
-                variable_names=["Xdata", "Ydata"],
-            )
-
-        return dendr_diam1, dendr_diam2
-
     def _fit_dendritic_diameter_vs_eccentricity(self):
         """
         Dendritic field diameter with respect to eccentricity. Linear and quadratic fit.
-        Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
         """
 
         # Read dendritic field data and return linear fit with scipy.stats.linregress
         dendr_diam_parameters = {}
 
-        dendr_diam1, dendr_diam2 = self._read_dendritic_fields_vs_eccentricity_data()
+        dendr_diam1 = sio.loadmat(
+            self.context.dendr_diam1_file, variable_names=["Xdata", "Ydata"]
+        )
+        dendr_diam2 = sio.loadmat(
+            self.context.dendr_diam2_file, variable_names=["Xdata", "Ydata"]
+        )
 
         # Parasol fit
         gc_type = self.gc_type
@@ -912,14 +889,14 @@ class ConstructRetina(RetinaMath):
 
         print("Built RGC mosaic with %d cells" % n_rgc)
 
-        # Return object for visualization
-        return self
 
     def save_mosaic(self, filename=None):
-        
+
         output_folder = self.context.output_folder
         if filename is None:
-            filepath = output_folder.joinpath(self.context.my_retina["mosaic_file_name"])
+            filepath = output_folder.joinpath(
+                self.context.my_retina["mosaic_file_name"]
+            )
         else:
             filepath = output_folder.joinpath(filename)
 
@@ -960,16 +937,18 @@ class WorkingRetina(RetinaMath):
         :param gc_dataframe: Ganglion cell parameters; positions are retinal coordinates; positions_eccentricity in mm, positions_polar_angle in degrees
         """
 
-        gc_dataframe = self.data_io.get_data(filename=self.context.my_retina["mosaic_file_name"])
+        gc_dataframe = self.data_io.get_data(
+            filename=self.context.my_retina["mosaic_file_name"]
+        )
         self.gc_type = self.context.my_retina["gc_type"]
         self.response_type = self.context.my_retina["response_type"]
+        self.deg_per_mm = self.context.my_retina["deg_per_mm"]
 
         stimulus_center = self.context.my_stimuli["stimulus_center"]
         stimulus_width_pix = self.context.my_stimuli["stimulus_width_pix"]
         stimulus_height_pix = self.context.my_stimuli["stimulus_height_pix"]
         pix_per_deg = self.context.my_stimuli["pix_per_deg"]
         fps = self.context.my_stimuli["fps"]
-        self.deg_per_mm = self.context.my_stimuli["deg_per_mm"]
 
         # Metadata for Apricot dataset
         self.data_microm_per_pixel = 60
@@ -1577,6 +1556,8 @@ class WorkingRetina(RetinaMath):
         if filename is None:
             filename = self.gc_type + "_" + self.response_type + "_spikes.csv"
 
+        filename_full = self.context.output_folder.joinpath(filename)
+
         spikes_df = pd.DataFrame(columns=["cell_index", "spike_time"])
         for cell_index in range(len(self.gc_df)):
             spiketrain = self.simulated_spiketrains[cell_index]
@@ -1589,7 +1570,7 @@ class WorkingRetina(RetinaMath):
 
         spikes_df["cell_index"] = spikes_df["cell_index"].astype(int)
         spikes_df = spikes_df.sort_values(by="spike_time")
-        spikes_df.to_csv(filename, index=False, header=False)
+        spikes_df.to_csv(filename_full, index=False, header=False)
 
     def save_structure_csv(self, filename=None):
         """
@@ -1601,10 +1582,12 @@ class WorkingRetina(RetinaMath):
         if filename is None:
             filename = self.gc_type + "_" + self.response_type + "_structure.csv"
 
+        filename_full = self.context.output_folder.joinpath(filename)
+
         rgc_coords = self.gc_df[["x_deg", "y_deg"]].copy()
         rgc_coords["z_deg"] = 0.0
 
-        rgc_coords.to_csv(filename, header=False, index=False)
+        rgc_coords.to_csv(filename_full, header=False, index=False)
 
 
 # if __name__ == "__main__":

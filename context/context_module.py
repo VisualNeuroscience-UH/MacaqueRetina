@@ -18,11 +18,12 @@ class Context(ContextBase):
 
         self.validated_properties = self._validate_properties(all_properties)
 
-    def set_context(self, _properties_list=[]):
+    def set_context(self, _properties_list=None):
         '''
          Each module orders object_instance.context.property name from context by calling set_context(). Empty list provides all properties.
          '''
-        
+        if _properties_list is None:
+            _properties_list = []
         
         if isinstance(_properties_list,list):
             pass

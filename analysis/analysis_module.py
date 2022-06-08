@@ -137,7 +137,7 @@ class Analysis(AnalysisBase):
         path = self.context.path
         
         '''
-        TÄHÄN JÄIT: MODULARISOI RESPONSSIANALYYSI
+        AIEMPI TÄHÄN JÄIT: MODULARISOI RESPONSSIANALYYSI
         MINIMOI ASIAT JOTKA TÄYTYY VAAN TIETÄÄ
         MAKSIMOI ASIAT JOTKA NÄKYVÄT YHDELLÄ SILMÄYKSELLÄ
         PSEUDOCODE
