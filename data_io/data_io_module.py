@@ -303,9 +303,7 @@ class DataIO(DataIOBase):
 
         video.release()
 
-    def save_stimulus_to_videofile(self, stimulus):
-
-        filename = Path(stimulus.options["stimulus_video_name"])
+    def save_stimulus_to_videofile(self, filename, stimulus):
 
         filename_stem = filename.stem
         filename_extension = filename.suffix

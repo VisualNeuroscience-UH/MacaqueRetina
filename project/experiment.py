@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 # Local
 from construct.macaque_retina_module import ConstructRetina, WorkingRetina
-from stimuli import visual_stimuli_module as vs
+from stimuli import visual_stimulus_module as vs
 from cxsystem2.core.tools import write_to_file, load_from_file
 
 # Builtin
@@ -117,7 +117,7 @@ class Experiment:
 
         # Calculate voltage values, assuming voltage = Td
         # meshgrid with mean lum and freq
-        # Return conditions -- a dict with all keywords matching visual_stimuli_module.ConstructStimulus
+        # Return conditions -- a dict with all keywords matching visual_stimulus_module.ConstructStimulus
         # conditions_to_meshgrid = ['contrast', 'mean', 'temporal_frequency']
         conditions_to_meshgrid = ["contrast", "temporal_frequency"]
 

@@ -7,7 +7,7 @@ from analysis.analysis_module import Analysis
 from viz.viz_module import Viz
 from  construct.macaque_retina_module import ConstructRetina, WorkingRetina
 from construct.construct_math_module import RetinaMath
-from stimuli.visual_stimuli_module import ConstructStimulus, PhotoReceptor
+from stimuli.visual_stimulus_module import ConstructStimulus, PhotoReceptor
 
 # Builtin
 import pdb
@@ -53,9 +53,6 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         data_io = DataIO(context)
         self.data_io = data_io
 
-        # # Monkey-patching macaque retina construct module
-        # self.construct = construct
-
         stimulate = ConstructStimulus(context, data_io) 
         self.stimulate = stimulate
 
@@ -92,7 +89,6 @@ class ProjectManager(ProjectBase, ProjectUtilities):
 
         self.viz = viz
 
-        # # Constructor for macaque retina mosaic. For client object injection, 
         self.construct_retina = ConstructRetina(context, data_io, viz)
         self.working_retina = WorkingRetina(context, data_io, viz)
 

@@ -27,6 +27,7 @@ Chichilnisky_2002_JNeurosci states that L-ON (parasol) cells have on average 21%
 
 NOTE: bad cell indices and metadata hard coded from Chichilnisky apricot data at apricot_fitter_module ApricotData class. 
 For another data set change metadata, visualize fits and change the bad cells.
+NOTE: Visual stimulus video default options are hard coded at visual_stimulus_module.VideoBaseClass class.
 NOTE: If eccentricity stays under 20 deg, dendritic diameter data fitted up to 25 deg only (better fit close to fovea)
 
 -center-surround response ratio (in vivo, anesthetized, recorded from LGN; Croner_1995_VisRes) PC: ; MC: ;
@@ -64,6 +65,8 @@ if sys.platform == "linux":
 elif sys.platform == "win32":
     root_path = r"C:\Users\Simo\Laskenta\Models"
 
+git_repo_root = Path(r'C:\Users\Simo\Laskenta\Git_Repos\MacaqueRetina_Git')
+
 
 """
 Project name
@@ -82,9 +85,6 @@ Stimulus images and videos
 """
 input_folder = "../in" # input figs, videos
 
-git_repo_root = Path(r'C:\Users\Simo\Laskenta\Git_Repos\MacaqueRetina_Git')
-apricot_data_folder = git_repo_root.joinpath(r"construct\apricot_data")
-literature_data_folder = git_repo_root.joinpath(r"construct\literature_data")
 
 """
 Data context for output. 
@@ -99,6 +99,93 @@ root_path = Path(root_path)
 path = Path.joinpath(root_path, Path(project), experiment)
 
 
+my_retina = {
+    "gc_type" : "parasol",
+    "response_type" : "on",
+    "ecc_limits" : [4.8, 5.2],
+    "sector_limits" : [-0.4, 0.4],
+    "model_density" : 1.0,
+    "randomize_position" : 0.05,
+    "stimulus_center": 5 + 0j,
+}
+
+
+my_stimulus_metadata = {
+    "stimulus_file": "testi.jpg",
+    "stimulus_type": "image",  # "image", "video" or "grating"
+    "gc_response_file": "my_gc_response",  # check extension
+    "stimulus_video_name": "tmp",
+}
+
+"""
+Valid stimulus_options include (override visual_stimulus_module.VideoBaseClass):
+
+image_width: in pixels
+image_height: in pixels
+container: file format to export
+codec: compression format
+fps: frames per second
+duration_seconds: stimulus duration
+baseline_start_seconds: midgray at the beginning
+baseline_end_seconds: midgray at the end
+pattern:
+    'sine_grating'; 'square_grating'; 'colored_temporal_noise'; 'white_gaussian_noise';
+    'natural_images'; 'phase_scrambled_images'; 'natural_video'; 'phase_scrambled_video';
+    'temporal_sine_pattern'; 'temporal_square_pattern'; 'spatially_uniform_binary_noise'
+stimulus_form: 'circular'; 'rectangular'; 'annulus'
+stimulus_position: in degrees, (0,0) is the center.
+stimulus_size: In degrees. Radius for circle and annulus, half-width for rectangle.
+contrast: between 0 and 1
+mean: mean stimulus intensity between 0, 256
+
+Note if mean + ((contrast * max(intensity)) / 2) exceed 255 or if
+        mean - ((contrast * max(intensity)) / 2) go below 0
+        the stimulus generation fails
+
+For sine_grating and square_grating, additional arguments are:
+spatial_frequency: in cycles per degree
+temporal_frequency: in Hz
+orientation: in degrees
+
+For all temporal and spatial gratings, additional argument is
+phase_shift: between 0 and 2pi
+
+For spatially_uniform_binary_noise, additional argument is
+on_proportion: between 0 and 1, proportion of on-stimulus, default 0.5
+direction: 'increment' or 'decrement'
+stimulus_video_name: name of the stimulus video
+"""
+
+my_stimulus_options = {
+    #Shared btw stimulus and working_retina
+    "image_width": 140, 
+    "image_height": 140,
+    "pix_per_deg": 60, 
+    "fps": 100,
+    # stimulus only
+    "pattern" : "temporal_square_pattern",
+    "stimulus_form" : "circular",
+    "temporal_frequency" : 0.1,
+    "spatial_frequency" : 1.0,
+    "stimulus_position" : (-0.06, 0.03), # center_deg
+    "duration_seconds" : 0.4,
+    "image_width" : 140, # stimulus_width_pix
+    "image_height" : 140, # stimulus_height_pix
+    "stimulus_size" : 0.1,
+    "contrast" : 0.99,
+    "baseline_start_seconds" : 0.5,
+    "baseline_end_seconds" : 0.5,
+    "background" : 128,
+    "mean" : 128,
+    "phase_shift" : 0,
+    "stimulus_video_name" : "tmp",  # If empty, does not save the video => MOVE TO METADATA
+}
+
+
+''''
+Semi-constant variables
+'''
+
 # Proportion from all ganglion cells. Density of all ganglion cells is given later as a function of ecc from literature.
 proportion_of_parasol_gc_type = 0.08
 proportion_of_midget_gc_type = 0.64
@@ -108,18 +195,11 @@ proportion_of_midget_gc_type = 0.64
 proportion_of_ON_response_type = 0.40
 proportion_of_OFF_response_type = 0.60
 
-
 # Perry_1985_VisRes; 0.223 um/deg in the fovea, 169 um/deg at 90 deg ecc
 # One mm retina is ~4.55 deg visual field.
 deg_per_mm = 1 / 0.223
 
-my_retina = {
-    "gc_type" : "parasol",
-    "response_type" : "on",
-    "ecc_limits" : [4.8, 5.2],
-    "sector_limits" : [-0.4, 0.4],
-    "model_density" : 1.0,
-    "randomize_position" : 0.05,
+my_retina_append = {
     "proportion_of_parasol_gc_type" : proportion_of_parasol_gc_type,
     "proportion_of_midget_gc_type" : proportion_of_midget_gc_type,
     "proportion_of_ON_response_type" : proportion_of_ON_response_type,
@@ -128,7 +208,10 @@ my_retina = {
     "deg_per_mm" : deg_per_mm,
 }
 
+my_retina.update(my_retina_append)
 
+apricot_data_folder = git_repo_root.joinpath(r"construct\apricot_data")
+literature_data_folder = git_repo_root.joinpath(r"construct\literature_data")
 
 # Define digitized literature data files for gc density and dendritic diameters.
 # Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
@@ -142,23 +225,6 @@ elif my_retina["gc_type"] == "midget":
     dendr_diam2_file = literature_data_folder / "Watanabe_1989_JCompNeurol_GCDendrDiam_midget_c.mat"
 
 
-my_stimuli = {
-    "stimulus_file": "testi.jpg",
-    "stimulus_type": "image",  # "image", "video" or "grating"
-    "gc_response_file": "my_gc_response",  # check extension
-    "stimulus_center": 5 + 0j,
-    "stimulus_width_pix": 240,
-    "stimulus_height_pix": 240,
-    "pix_per_deg": 60,
-    "fps": 100,
-}
-
-
-stimulus_video_name = "tmp"
-
-'''
-TÄHÄN JÄIT. INPUT JA OUTPUT POLKUSYSTEEMI KÄYTTÖÖN. STIMULUS YM PARAMETRIEN NOSTO TÄHÄN.
-'''
 
 profile = False
 
@@ -180,7 +246,8 @@ if __name__ == "__main__":
         project=project,
         experiment=experiment,
         my_retina=my_retina,
-        my_stimuli=my_stimuli,
+        my_stimulus_metadata=my_stimulus_metadata,
+        my_stimulus_options=my_stimulus_options,
         apricot_data_folder=apricot_data_folder,
         literature_data_folder=literature_data_folder,
         dendr_diam1_file=dendr_diam1_file,
@@ -204,43 +271,24 @@ if __name__ == "__main__":
     """
     Build and test your retina here, one gc type at a time. Temporal hemiretina of macaques.
     """
-    show_build_process=False
     
     PM.construct_retina.initialize()
 
     PM.construct_retina.build()
 
-    if show_build_process is True:
-        # show_all_spatial_fits displays the numerous spatial fits
-        PM.viz.show_build_process(PM.construct_retina, show_all_spatial_fits=False)
-    
     PM.construct_retina.save_mosaic()
 
-    # Reads the mosaic file from my_retina["mosaic_file_name"].
+    # PM.construct_retina.show_build_process()
+
+    # Reads the mosaic file from my_retina["mosaic_file_name"] at output_folder.
     PM.working_retina.initialize()
 
     #################################
     ### Create stimulus ###
     #################################
 
-    PM.stimulate.make_stimulus_video(
-        pattern="temporal_square_pattern",
-        stimulus_form="circular",
-        temporal_frequency=0.1,
-        spatial_frequency=1.0,
-        stimulus_position=(-0.06, 0.03),
-        duration_seconds=0.4,
-        image_width=240,
-        image_height=240,
-        stimulus_size=0.1,
-        contrast=0.99,
-        baseline_start_seconds=0.5,
-        baseline_end_seconds=0.5,
-        background=128,
-        mean=128,
-        phase_shift=0,
-        stimulus_video_name=stimulus_video_name,  # If empty, does not save the video
-    )
+    # options are defined in my_stimulus_options
+    PM.stimulate.make_stimulus_video()
 
     #################################
     ### Load stimulus to get working retina ###

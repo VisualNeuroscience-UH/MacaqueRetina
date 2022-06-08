@@ -545,7 +545,7 @@ class Viz:
 
     def show_build_process(self, mosaic, show_all_spatial_fits=False):
         '''
-        
+        Visualize retina mosaic build process.
         '''
         
         # If show_all_spatial_fits is true, show the spatial fits
@@ -912,6 +912,7 @@ class Viz:
         plt.plot(tvec, firing_rate)
         plt.xlabel("Time (s)]")
         plt.ylabel("Firing rate (Hz)]")
+
 
     # PhotoReceptor visualization
     def show_cone_response(self, image, image_after_optics, cone_response):

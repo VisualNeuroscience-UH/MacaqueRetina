@@ -889,7 +889,6 @@ class ConstructRetina(RetinaMath):
 
         print("Built RGC mosaic with %d cells" % n_rgc)
 
-
     def save_mosaic(self, filename=None):
 
         output_folder = self.context.output_folder
@@ -903,13 +902,20 @@ class ConstructRetina(RetinaMath):
         print("Saving model mosaic to %s" % filepath)
         self.gc_df.to_csv(filepath)
 
+    def show_build_process(self):
+        """
+        Show the process of building the mosaic
+        self goes as argument, to be available for viz
+        """
+
+        self.viz.show_build_process(self, show_all_spatial_fits=False)
 
 class WorkingRetina(RetinaMath):
     _properties_list = [
         "path",
         "output_folder",
         "my_retina",
-        "my_stimuli",
+        "my_stimulus_options",
     ]
 
     def __init__(self, context, data_io, viz) -> None:
@@ -943,12 +949,12 @@ class WorkingRetina(RetinaMath):
         self.gc_type = self.context.my_retina["gc_type"]
         self.response_type = self.context.my_retina["response_type"]
         self.deg_per_mm = self.context.my_retina["deg_per_mm"]
+        stimulus_center = self.context.my_retina["stimulus_center"]
 
-        stimulus_center = self.context.my_stimuli["stimulus_center"]
-        stimulus_width_pix = self.context.my_stimuli["stimulus_width_pix"]
-        stimulus_height_pix = self.context.my_stimuli["stimulus_height_pix"]
-        pix_per_deg = self.context.my_stimuli["pix_per_deg"]
-        fps = self.context.my_stimuli["fps"]
+        stimulus_width_pix = self.context.my_stimulus_options["image_width"]
+        stimulus_height_pix = self.context.my_stimulus_options["image_height"]
+        pix_per_deg = self.context.my_stimulus_options["pix_per_deg"]
+        fps = self.context.my_stimulus_options["fps"]
 
         # Metadata for Apricot dataset
         self.data_microm_per_pixel = 60

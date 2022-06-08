@@ -19,11 +19,8 @@ from data_io.data_io_module import DataIO
 from context.context_module import Context
 
 # Builtin
-import os
-
-# import sys
+from pathlib import Path
 import pdb
-
 # import time
 
 plt.rcParams["image.cmap"] = "gray"
@@ -102,8 +99,7 @@ class VideoBaseClass(object):
 
         # Get resolution
         options["pix_per_deg"] = 60
-        # options["pix_per_deg"] = options["max_spatial_frequency"] * 3  # min sampling at 1.5 x Nyquist frequency of the highest sf
-        # options["image_width_in_deg"] = options["image_width"] / options["pix_per_deg"]
+
 
         options["baseline_start_seconds"] = 0
         options["baseline_end_seconds"] = 0
@@ -548,10 +544,12 @@ class ConstructStimulus(VideoBaseClass):
     _properties_list = [
         "path",
         "output_folder",
+        "input_folder",
+        "my_stimulus_options",
+        "my_stimulus_metadata",
     ]
 
     def __init__(self, context, data_io):
-        # super(ConstructStimulus, self).__init__()
         super().__init__()
 
         self._context = context.set_context(self._properties_list)
@@ -565,12 +563,9 @@ class ConstructStimulus(VideoBaseClass):
     def data_io(self):
         return self._data_io
 
-    def make_stimulus_video(self, **kwargs):
+    def make_stimulus_video(self):
         """
-        Format: my_video_object.main(filename, keyword1=value1, keyword2=value2,...)
-
-
-        Valid input keyword arguments include
+        Valid stimulus_options include
 
         image_width: in pixels
         image_height: in pixels
@@ -620,12 +615,15 @@ class ConstructStimulus(VideoBaseClass):
 
         # Set input arguments to video-object, updates the defaults from VideoBaseClass
         print("Making a stimulus with the following properties:")
-        for kw in kwargs:
-            print(kw, ":", kwargs[kw])
-            assert kw in self.options.keys(), f"The keyword '{kw}' was not recognized"
-        self.options.update(kwargs)
+        
+        my_stimulus_options = self.context.my_stimulus_options
 
-        # Init 3-D frames numpy array. Number of frames = frames per second * duration in seconds
+        for this_option in my_stimulus_options:
+            print(this_option, ":", my_stimulus_options[this_option])
+            assert this_option in self.options.keys(), f"The option '{this_option}' was not recognized"
+
+        self.options.update(my_stimulus_options)
+
 
         self.frames = self._create_frames(
             self.options["duration_seconds"]
@@ -677,7 +675,8 @@ class ConstructStimulus(VideoBaseClass):
         stimulus_video = self
 
         # Save video
-        self.data_io.save_stimulus_to_videofile(stimulus_video)
+        stimulus_video_name = Path(self.options["stimulus_video_name"])
+        self.data_io.save_stimulus_to_videofile(stimulus_video_name, stimulus_video)
 
     def _create_frames(self, epoch__in_seconds):
         # Create frames for the requested duration in sec
