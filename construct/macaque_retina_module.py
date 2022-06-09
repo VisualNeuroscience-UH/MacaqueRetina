@@ -915,7 +915,9 @@ class WorkingRetina(RetinaMath):
         "path",
         "output_folder",
         "my_retina",
+        "my_stimulus_metadata",
         "my_stimulus_options",
+        "my_run_options",
     ]
 
     def __init__(self, context, data_io, viz) -> None:
@@ -1261,13 +1263,20 @@ class WorkingRetina(RetinaMath):
 
         return stimulus_cropped
 
-    def load_stimulus(self, stimulus_video):
+    def load_stimulus(self, stimulus_video=None):
         """
         Loads stimulus video
 
         :param stimulus_video: VideoBaseClass, visual stimulus to project to the ganglion cell mosaic
         :return:
         """
+
+        if stimulus_video is None:
+            video_file_name = self.context.my_stimulus_metadata["stimulus_video_name"]
+
+            stimulus_video = self.data_io.load_stimulus_from_videofile(video_file_name)
+
+            pdb.set_trace()
 
         assert (stimulus_video.video_width == self.stimulus_width_pix) & (
             stimulus_video.video_height == self.stimulus_height_pix
@@ -1391,7 +1400,6 @@ class WorkingRetina(RetinaMath):
         :return:
         """
 
-        # pdb.set_trace()
         # Save spike generation model
         self.spike_generator_model = spike_generator_model
 
@@ -1474,6 +1482,8 @@ class WorkingRetina(RetinaMath):
             poisson_group = b2.PoissonGroup(n_cells, rates="inst_rates(t, i)")
             spike_monitor = b2.SpikeMonitor(poisson_group)
             net = b2.Network(poisson_group, spike_monitor)
+        else:
+            raise ValueError('Missing valid spike_generator_model, check my_run_options parameters, aborting...')
 
         # Save brian state
         net.store()
@@ -1527,6 +1537,29 @@ class WorkingRetina(RetinaMath):
             return spike_monitor
         else:
             return spiketrains, interpolated_rates_array.flatten()
+
+    def run_with_my_run_options(self):
+        '''
+        Filter method between my_run_options and run cells.
+        See run_cells for parameter description.
+        '''
+    
+        filenames = self.context.my_run_options["gc_response_filenames"]
+        cell_index = self.context.my_run_options["cell_index"]
+        n_trials = self.context.my_run_options["n_trials"]
+        save_data = self.context.my_run_options["save_data"]
+        spike_generator_model = self.context.my_run_options["spike_generator_model"]
+
+        for filename in filenames:
+
+            self.run_cells(
+                cell_index=cell_index,
+                n_trials=n_trials,
+                save_data=save_data,
+                spike_generator_model=spike_generator_model,
+                return_monitor=False,
+                filename=filename,
+            )
 
     def run_all_cells(
         self,

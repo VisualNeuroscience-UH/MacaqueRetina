@@ -8,6 +8,8 @@ import zlib
 import pickle
 import logging
 import pdb
+from copy import deepcopy
+import sys
 
 # io tools from common packages
 import scipy.io as sio
@@ -15,6 +17,7 @@ import scipy.sparse as scprs
 import pandas as pd
 import h5py
 import cv2
+
 # from cv2 import VideoWriter, VideoWriter_fourcc
 
 # io tools from cxsystem
@@ -130,7 +133,9 @@ class DataIO(DataIOBase):
                     output_path, filename
                 )
             if not data_fullpath_filename:
-                data_fullpath_filename = self._check_candidate_file(input_path, filename)
+                data_fullpath_filename = self._check_candidate_file(
+                    input_path, filename
+                )
             if not data_fullpath_filename:
                 data_fullpath_filename = self._check_candidate_file(path, filename)
 
@@ -205,7 +210,9 @@ class DataIO(DataIOBase):
             if "Unnamed: 0" in data.columns:
                 data = data.drop(["Unnamed: 0"], axis=1)
         elif "jpg" in filename_extension or "png" in filename_extension:
-            image = cv2.imread(str(data_fullpath_filename), 0)  # The 0-flag calls for grayscale. Comes in as uint8 type
+            image = cv2.imread(
+                str(data_fullpath_filename), 0
+            )  # The 0-flag calls for grayscale. Comes in as uint8 type
 
             # Normalize image intensity to 0-1, if RGB value
             if np.ptp(image) > 1:
@@ -225,77 +232,96 @@ class DataIO(DataIOBase):
         else:
             return data
 
-
     def save_dict_to_hdf5(self, filename, dic):
         """
         Save a dictionary to hdf5 file.
         :param filename: hdf5 file name
         :param dic: dictionary to save
         """
-        with h5py.File(filename, 'w') as h5file:
-            self._recursively_save_dict_contents_to_group(h5file, '/', dic)
+        with h5py.File(filename, "w") as h5file:
+            self._recursively_save_dict_contents_to_group(h5file, "/", dic)
 
     def _recursively_save_dict_contents_to_group(self, h5file, path, dic):
 
         for key, item in dic.items():
-            if isinstance(item, (np.ndarray, np.int64, np.float64, str, bytes, int, tuple, float)):
+
+            if isinstance(item, (np.ndarray)):
+                h5file.create_dataset(
+                    path + key, data=item, compression="gzip", compression_opts=6
+                )
+            elif isinstance(
+                item, (np.int64, np.float64, str, bytes, int, tuple, float)
+            ):
                 h5file[path + key] = item
             elif isinstance(item, dict):
-                self._recursively_save_dict_contents_to_group(h5file, path + key + '/', item)
+                self._recursively_save_dict_contents_to_group(
+                    h5file, path + key + "/", item
+                )
             elif item is None:
-                h5file[path + key] = ''
+                h5file[path + key] = ""
             else:
-                raise ValueError('Cannot save %s type'%type(item))
+                raise ValueError("Cannot save %s type" % type(item))
 
     def load_dict_from_hdf5(self, filename):
-        '''
+        """
         Load a dictionary from hdf5 file.
         :param filename: hdf5 file name
-        '''
-        with h5py.File(filename, 'r') as h5file:
-            return self._recursively_load_dict_contents_from_group(h5file, '/')
+        """
+        with h5py.File(filename, "r") as h5file:
+            return self._recursively_load_dict_contents_from_group(h5file, "/")
 
     def _recursively_load_dict_contents_from_group(self, h5file, path):
 
         ans = {}
         for key, item in h5file[path].items():
             if isinstance(item, h5py._hl.dataset.Dataset):
-                ans[key] = item.value
+                try:
+                    # ans[key] = item.value
+                    ans[key] = item[()]
+                except:
+                    pdb.set_trace()
             elif isinstance(item, h5py._hl.group.Group):
-                ans[key] = self._recursively_load_dict_contents_from_group(h5file, path + key + '/')
+                ans[key] = self._recursively_load_dict_contents_from_group(
+                    h5file, path + key + "/"
+                )
         return ans
 
     def save_array_to_hdf5(self, filename, array):
-        '''
+        """
         Save a numpy array to hdf5 file.
         :param array: numpy array to save
         :param filename: hdf5 file name
-        '''
-        assert isinstance(array, np.ndarray), f'Cannot save {type(array)} type'
-        with h5py.File(filename, 'w') as hdf5_file_handle:
-            # highest compression as default     
-            dset = hdf5_file_handle.create_dataset("array", data=array, compression="gzip", compression_opts=6)     
+        """
+        assert isinstance(array, np.ndarray), f"Cannot save {type(array)} type"
+        with h5py.File(filename, "w") as hdf5_file_handle:
+            # highest compression as default
+            dset = hdf5_file_handle.create_dataset(
+                "array", data=array, compression="gzip", compression_opts=6
+            )
 
     def load_array_from_hdf5(self, filename):
-        '''
+        """
         Load a numpy array from hdf5 file.
         :param filename: hdf5 file name
-        '''
+        """
 
-        with h5py.File(filename, 'r') as hdf5_file_handle:
-            array = hdf5_file_handle['array'][...]
+        with h5py.File(filename, "r") as hdf5_file_handle:
+            array = hdf5_file_handle["array"][...]
         return array
-    
+
     def _write_frames_to_videofile(self, pl_fullpath_filename, stimulus):
-        '''Write frames to videofile
-        '''
+        """Write frames to videofile"""
         # Init openCV VideoWriter
         fourcc = cv2.VideoWriter_fourcc(*stimulus.options["codec"])
-        fullpath_filename = str(pl_fullpath_filename) 
+        fullpath_filename = str(pl_fullpath_filename)
         print(f"Saving video to {fullpath_filename}")
-        video = cv2.VideoWriter(fullpath_filename, fourcc, float(stimulus.options["fps"]),
-                            (stimulus.options["image_width"], stimulus.options["image_height"]),
-                            isColor=False)  # path, codec, fps, size. Note, the isColor the flag is currently supported on Windows only
+        video = cv2.VideoWriter(
+            fullpath_filename,
+            fourcc,
+            float(stimulus.options["fps"]),
+            (stimulus.options["image_width"], stimulus.options["image_height"]),
+            isColor=False,
+        )  # path, codec, fps, size. Note, the isColor the flag is currently supported on Windows only
 
         # Write frames to videofile frame-by-frame
         for index in np.arange(stimulus.frames.shape[2]):
@@ -303,7 +329,20 @@ class DataIO(DataIOBase):
 
         video.release()
 
-    def save_stimulus_to_videofile(self, filename, stimulus):
+    def get_video_full_name(self, filename):
+        """
+        Add full path to video name. Create output directory if it does not exist.
+
+        Then check if video name has correct extension.
+        If not, add correct extension.
+
+        :param filename: video name
+        :return: full path to video name
+        """
+
+        # Check if filename is a pathlib object. If not, convert to pathlib object.
+        if not isinstance(filename, Path):
+            filename = Path(filename)
 
         filename_stem = filename.stem
         filename_extension = filename.suffix
@@ -312,21 +351,63 @@ class DataIO(DataIOBase):
         if not Path(parent_path).exists():
             Path(parent_path).mkdir(parents=True)
 
-        if filename_extension in ['mp4', 'avi', 'mov']:
-            fullpath_filename = Path.joinpath(parent_path, filename_stem + filename_extension)
-        elif filename_extension == '':
-            fullpath_filename = Path.joinpath(parent_path, filename_stem + '.mp4')
+        if filename_extension in ["mp4", "avi", "mov"]:
+            fullpath_filename = Path.joinpath(
+                parent_path, filename_stem + filename_extension
+            )
+        elif filename_extension == "":
+            fullpath_filename = Path.joinpath(parent_path, filename_stem + ".mp4")
             print(f"Missing filename extension, saving video as .mp4")
         else:
-            fullpath_filename = Path.joinpath(parent_path, filename_stem + '.mp4')
+            fullpath_filename = Path.joinpath(parent_path, filename_stem + ".mp4")
             print(f"Extension {filename_extension} not supported, saving video as .mp4")
 
+        return fullpath_filename
+
+    def save_stimulus_to_videofile(self, filename, stimulus):
+        """ 
+        Save stimulus to videofile. This saves two different files.
+        1. A video file in mp4 or comparable video format for viewing.
+        2. A hdf5 file for reloading.
+        :param filename: video name
+        :param stimulus: stimulus object
+        """
+
+        fullpath_filename = self.get_video_full_name(filename)
+
+        # To display to user
         self._write_frames_to_videofile(fullpath_filename, stimulus)
 
-        # save video to hdf5 file
-        full_path_out = f"{fullpath_filename}.hdf5"
-        self.save_array_to_hdf5(full_path_out, stimulus.frames)
+        # save all stimulus object attributes in the same format
+        # Delete attributes "context" and "data_io" from stimulus object before saving, because they cannot be saved in hdf5 format.
+        stimulus_out = deepcopy(stimulus)
+        del stimulus_out._context
+        del stimulus_out._data_io
 
-        # save options as metadata in the same format
-        full_path_out_options = f"{fullpath_filename}_options.hdf5"
-        self.save_dict_to_hdf5(full_path_out_options, stimulus.options)
+        full_path_out_options = f"{fullpath_filename}.hdf5"
+        self.save_dict_to_hdf5(full_path_out_options, stimulus_out.__dict__)
+
+    def load_stimulus_from_videofile(self, filename):
+        """
+        Load stimulus from hdf5 videofile.
+        :param filename: video file name
+        :return: stimulus
+        """
+        fullpath_filename = self.get_video_full_name(filename)
+
+        # load video from hdf5 file
+        full_path_in = f"{fullpath_filename}.hdf5"
+        data_dict = self.load_dict_from_hdf5(full_path_in)
+
+        # Create a dummy VideoBaseCLass object to create a stimulus object
+        class DummyVideoClass:
+            def __init__(self, data_dict):
+                # self.frames = frames
+
+                for key, value in data_dict.items():
+                    setattr(self, key, value)
+                # self.options = options
+
+        stimulus = DummyVideoClass(data_dict)
+
+        return stimulus

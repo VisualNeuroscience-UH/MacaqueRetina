@@ -818,8 +818,8 @@ class Viz:
             n_samples = n_cells
             sample_name = "Cell #"
         else:
-            print(
-                "You attempted to visualize gc activity, but you have either n_trials or n_cells must be 1, and the other > 1"
+            raise ValueError(
+                """You attempted to visualize gc activity, but you have either n_trials or n_cells must be 1, and the other > 1"""
             )
 
         plt.subplots(2, 1, sharex=True)

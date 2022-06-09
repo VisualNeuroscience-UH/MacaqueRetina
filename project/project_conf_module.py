@@ -14,7 +14,7 @@ This is code for building macaque retinal filters corresponding to midget and pa
 
 The cone photoreceptor sampling is approximated as achromatic (single) compressive cone response(Baylor_1987_JPhysiol).
 
-Visual angle (A) in degrees from previous studies (Croner and Kaplan, 1995) was approximated with relation 5 deg/mm. This works fine up to 20 deg ecc, but underestimates the distance thereafter. If more peripheral representations are later necessary, the millimeters should be calculates by inverting the relation 
+Visual angle (A) in degrees from previous studies (Croner and Kaplan, 1995) was approximated with relation 5 deg/mm. This works fine up to 20 deg ecc, but underestimates the distance thereafter. If more peripheral representations are later necessary, the millimeters should be calculated by inverting the relation 
 A = 0.1 + 4.21E + 0.038E^2 (Drasdo and Fowler, 1974; Dacey and Petersen, 1992). Current implementation uses one deg = 220um (Perry et al 1985). One mm retina is ~4.55 deg visual field.
 
 We have extracted statistics of macaque ganglion cell receptive fields from literature and build continuous functions.
@@ -47,12 +47,8 @@ Use keyword substring "file" in filenames, and "folder" in folder names to asser
 
 Abbreviations:
 ana : analysis
-ci : current injection
 col : column
-coll : collated, collected
-conn : connections
 full : full absolute path
-mid : midpoint
 param : parameter
 """
 
@@ -107,10 +103,8 @@ my_retina = {
     "model_density" : 1.0,
     "randomize_position" : 0.05,
     "stimulus_center": 5 + 0j,
-    "gc_response_file": "my_gc_response",  # check extension
 }
 
-# TÄHÄN JÄIT. RAKENNA TÄHÄN RUN CELLS TIEDOT JA PARAMETRIT. TAI SITTEN ERILLINEN OBJEKTI.
 
 my_stimulus_metadata = {
     "stimulus_file": "testi.jpg",
@@ -179,8 +173,19 @@ my_stimulus_options = {
     "phase_shift" : 0,
 }
 
+# Each response file contain n_trials
+n_files = 1
 
-''''
+my_run_options = {
+    "cell_index" : 2, # int or None for all cells
+    "n_trials" : 10, # For each of the response files
+    "spike_generator_model" : "poisson", # poisson or refractory
+    "save_data" : True,
+    "gc_response_filenames" : [f"gc_response_{x:02}" for x in range(n_files)],
+}
+
+
+'''
 Semi-constant variables
 '''
 
@@ -249,6 +254,7 @@ if __name__ == "__main__":
         my_retina=my_retina,
         my_stimulus_metadata=my_stimulus_metadata,
         my_stimulus_options=my_stimulus_options,
+        my_run_options=my_run_options,
         apricot_data_folder=apricot_data_folder,
         literature_data_folder=literature_data_folder,
         dendr_diam1_file=dendr_diam1_file,
@@ -261,6 +267,9 @@ if __name__ == "__main__":
     #################################
 
     """
+    The Chichilnisky model receptive fields were measured from isolated retinas.
+    Images were focused on photoreceptors. To account for the blur by the eye,
+    we have the cone sample image method.
     """
     # PM.cones.sample_image(image_file_name="testi.jpg")
     # PM.viz.show_cone_response(PM.cones.image, PM.cones.image_after_optics, PM.cones.cone_response)
@@ -273,16 +282,15 @@ if __name__ == "__main__":
     Build and test your retina here, one gc type at a time. Temporal hemiretina of macaques.
     """
     
-    PM.construct_retina.initialize()
+    # # options are defined in my_retina_options
+    # PM.construct_retina.initialize()
 
-    PM.construct_retina.build()
+    # PM.construct_retina.build()
 
-    PM.construct_retina.save_mosaic()
+    # PM.construct_retina.save_mosaic()
 
     # PM.construct_retina.show_build_process()
 
-    # Reads the mosaic file from my_retina["mosaic_file_name"] at output_folder.
-    PM.working_retina.initialize()
 
     #################################
     ### Create stimulus ###
@@ -291,11 +299,16 @@ if __name__ == "__main__":
     # options are defined in my_stimulus_options
     PM.stimulate.make_stimulus_video()
 
+
     #################################
     ### Load stimulus to get working retina ###
     #################################
 
-    PM.working_retina.load_stimulus(PM.stimulate) # => METADATA
+    # Reads the mosaic file from my_retina["mosaic_file_name"] at output_folder.
+    PM.working_retina.initialize()
+
+    # PM.working_retina.load_stimulus(PM.stimulate) # => METADATA
+    PM.working_retina.load_stimulus() # => METADATA
 
     # # movie = vs.NaturalMovie('/home/henhok/nature4_orig35_fps100.avi', fps=100, pix_per_deg=60)# => METADATA
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
@@ -316,24 +329,12 @@ if __name__ == "__main__":
     #################################
     ### Run multiple trials for single cell ###
     #################################
-    
-    filenames = [f"Response_foo_{x:02}" for x in range(3)]
 
-    example_gc = 2  # int or 'None'
-    for filename in filenames:
-
-        PM.working_retina.run_cells(
-            cell_index=example_gc,
-            n_trials=10,
-            save_data=True,
-            spike_generator_model="poisson",
-            return_monitor=False,
-            filename=filename,
-        )
+    PM.working_retina.run_with_my_run_options()
 
     PM.viz.show_gc_responses(PM.working_retina)
 
-    # PM.viz.show_stimulus_with_gcs(PM.working_retina, example_gc=example_gc, frame_number=51)
+    PM.viz.show_stimulus_with_gcs(PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51)
 
     # PM.viz.show_single_gc_view(PM.working_retina, cell_index=example_gc, frame_number=21)
 
