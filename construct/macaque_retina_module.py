@@ -1276,8 +1276,6 @@ class WorkingRetina(RetinaMath):
 
             stimulus_video = self.data_io.load_stimulus_from_videofile(video_file_name)
 
-            pdb.set_trace()
-
         assert (stimulus_video.video_width == self.stimulus_width_pix) & (
             stimulus_video.video_height == self.stimulus_height_pix
         ), "Check that stimulus dimensions match those of the mosaic"
