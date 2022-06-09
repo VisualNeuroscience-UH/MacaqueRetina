@@ -1,22 +1,16 @@
 # Numerical
 import numpy as np
+import numpy.matlib as npm
 
 # import numpy.matlib as matlib
 from scipy import ndimage
 import colorednoise as cn
 
 # Data IO
-# import h5py
 import cv2
-
-# from cv2 import VideoWriter, VideoWriter_fourcc
 
 # Viz
 import matplotlib.pyplot as plt
-
-# Local
-from data_io.data_io_module import DataIO
-from context.context_module import Context
 
 # Builtin
 from pathlib import Path
@@ -313,10 +307,32 @@ class VideoBaseClass(object):
 
         self.options["raw_intensity"] = (np.min(self.frames), np.max(self.frames))
 
+    def _create_frames(self, epoch__in_seconds):
+        # Create frames for the requested duration in sec
+        frames = (
+            np.ones(
+                (
+                    self.options["image_height"],
+                    self.options["image_width"],
+                    int(self.options["fps"] * epoch__in_seconds),
+                ),
+                dtype=np.uint8,
+            )
+            * self.options["background"]
+        )
+
+        return frames
+
+    def _set_zero_masked_pixels_to_bg(self):
+        # Set masked pixels to background value.
+        mask_value = 1
+        self.frames[self.frames == mask_value] = self.options["background"]
 
 class StimulusPattern:
     """
-    Construct the stimulus images
+    Construct the stimulus image pattern.
+    This class is for isolating logic. Self comes from
+    the calling function as argument
     """
 
     def sine_grating(self):
@@ -425,20 +441,36 @@ class StimulusPattern:
 
         self.frames = np.zeros(self.frames.shape) + frame_time_series
 
-    def natural_images(
-        self,
-        full_path_to_folder,
-        width,
-        height,
-        fps,
-        duration,
-        spatial_band_pass=None,
-        temporal_band_pass=None,
-        orientation=0,
-    ):
+    def natural_images(self):
+
+        if self.context.my_stimulus_metadata["apply_cone_filter"] is True:
+            self.cones.image2cone_response()
+            self.image = self.cones.cone_response
+        else:
+            image_file_name = self.context.my_stimulus_metadata["stimulus_file"]
+            self.image = self.data_io.get_data(image_file_name)
+
+        # resize image by specifying custom width and height
+        resized_image = cv2.resize(self.image, self.frames.shape[:2])
+
+        # Prep for temporal pattern. Writes on top of self.frames,
+        self._prepare_temporal_sine_pattern()
+
+
+        # Change temporal sine pattern to temporal square pattern.
+        threshold = (
+            0  # Change this between [-1 1] if you want uneven grating. Default is 0
+        )
+        self.frames[self.frames >= threshold] = 1
+        self.frames[self.frames < threshold] = 0
+
+        # add new axis to b to use numpy broadcasting
+        resized_image = resized_image[:,:,np.newaxis]
+
+        self.frames =  self.frames * resized_image
+
         # filtering: http://www.djmannion.net/psych_programming/vision/sf_filt/sf_filt.html
         self._raw_intensity_from_data()
-        pass
 
     def phase_scrambled_images(
         self,
@@ -485,7 +517,8 @@ class StimulusPattern:
 
 class StimulusForm:
     """
-    Mask the stimulus images
+    Mask the stimulus images. This class is for isolating logic. 
+    Self comes from the calling function as argument.
     """
 
     def circular(self):
@@ -501,9 +534,9 @@ class StimulusForm:
 
         # Prepare rectangular distance map in pixels
         x_distance_vector = np.abs(X - center_pix[0])
-        X_distance_matrix = np.matlib.repmat(x_distance_vector, Y.shape[0], 1)
+        X_distance_matrix = npm.repmat(x_distance_vector, Y.shape[0], 1)
         y_distance_vector = np.abs(Y - center_pix[1])
-        Y_distance_matrix = np.matlib.repmat(y_distance_vector, 1, X.shape[1])
+        Y_distance_matrix = npm.repmat(y_distance_vector, 1, X.shape[1])
 
         # rectangular_dist_from_center = np.abs(X - center_pix[0]) + np.abs(Y - center_pix[1])
         mask = np.logical_and(
@@ -549,11 +582,13 @@ class ConstructStimulus(VideoBaseClass):
         "my_stimulus_metadata",
     ]
 
-    def __init__(self, context, data_io):
+    def __init__(self, context, data_io, cones):
         super().__init__()
 
         self._context = context.set_context(self._properties_list)
         self._data_io = data_io
+        self._cones = cones
+
 
     @property
     def context(self):
@@ -562,6 +597,10 @@ class ConstructStimulus(VideoBaseClass):
     @property
     def data_io(self):
         return self._data_io
+
+    @property
+    def cones(self):
+        return self._cones
 
     def make_stimulus_video(self):
         """
@@ -638,16 +677,25 @@ class ConstructStimulus(VideoBaseClass):
         # self.frames updated according to the pattern
         eval(
             f'StimulusPattern.{self.options["pattern"]}(self)'
-        )  # Direct call to class.method() requires the self argument
+        )  # Direct call to class.method() requires the self as argument
 
         # Now only the stimulus is scaled. The baseline and bg comes from options
         self._scale_intensity()
+
+        # For natural images, set zero-masked pixels to background value
+        if self.options["pattern"] == "natural_images":
+            self._set_zero_masked_pixels_to_bg()
 
         # Call StimulusForm class method to mask frames
         # self.frames updated according to the form
         eval(
             f'StimulusForm.{self.options["stimulus_form"]}(self)'
         )  # Direct call to class.method() requires the self argument
+
+        # Apply cone filtering to grating frames here
+        # Not implemented yet
+        # Natural images are filtered at the StimulusPattern method,
+        # because they are typically not evolving over time
 
         self.frames_baseline_start = self._create_frames(
             self.options["baseline_start_seconds"]
@@ -677,22 +725,6 @@ class ConstructStimulus(VideoBaseClass):
         # Save video
         stimulus_video_name = Path(self.context.my_stimulus_metadata["stimulus_video_name"])
         self.data_io.save_stimulus_to_videofile(stimulus_video_name, stimulus_video)
-
-    def _create_frames(self, epoch__in_seconds):
-        # Create frames for the requested duration in sec
-        frames = (
-            np.ones(
-                (
-                    self.options["image_height"],
-                    self.options["image_width"],
-                    int(self.options["fps"] * epoch__in_seconds),
-                ),
-                dtype=np.uint8,
-            )
-            * self.options["background"]
-        )
-
-        return frames
 
     def get_2d_video(self):
         stim_video_2d = np.reshape(
@@ -751,112 +783,75 @@ class NaturalMovie(VideoBaseClass):
         cap.release()
 
 
-class PhotoReceptor:
-    """
-    This class gets one image at a time, and provides the cone response.
-    After instantiation, the RGC group can get one frame at a time, and the system will give an impulse response.
+# class NaturalImage(VideoBaseClass):
 
-    This is not necessary for GC transfer function, it is not used in Chichilnisky_2002_JNeurosci Field_2010_Nature.
-    Instead, they focus the pattern directly on isolated cone mosaic.
-    Nevertheless, it may be useful for comparison of image input with and w/o  explicit photoreceptor.
-    """
 
-    # self.context. attributes
-    _properties_list = ["path", "input_folder", "output_folder", "my_retina"]
+#     # self.context. attributes
+#     _properties_list = [
+#         "path",
+#         "output_folder",
+#         "input_folder",
+#         "my_stimulus_options",
+#         "my_stimulus_metadata",
+#     ]
 
-    def __init__(self, context, data_io) -> None:
+#     def __init__(self, context, data_io, cones):
+#         super().__init__()
 
-        self.context = context.set_context(self._properties_list)
+#         self._context = context.set_context(self._properties_list)
+#         self._data_io = data_io
+#         self._cones = cones
 
-        self.data_io = data_io
+#     @property
+#     def context(self):
+#         return self._context
 
-    @property
-    def context(self):
-        return self._context
+#     @property
+#     def data_io(self):
+#         return self._data_io
 
-    @context.setter
-    def context(self, value):
-        if isinstance(value, Context):
-            self._context = value
-        else:
-            raise AttributeError(
-                "Trying to set improper context. Context must be a Context object."
-            )
+#     @property
+#     def cones(self):
+#         return self._cones
 
-    @property
-    def data_io(self):
-        return self._data_io
+#     def make_stimulus_video(self):
+#         """
 
-    @data_io.setter
-    def data_io(self, value):
-        if isinstance(value, DataIO):
-            self._data_io = value
-        else:
-            raise AttributeError(
-                "Trying to set improper data_io. data_io must be a DataIO object."
-            )
+#         """
 
-    def image2cone_response(self):
-
-        image_file_name = self.context.my_stimulus_metadata["stimulus_file"]
-        self.pix_per_deg = self.context.my_stimulus_metadata["pix_per_deg"]
-        self.fps= self.context.my_stimulus_metadata["fps"]
-
-        self.optical_aberration = self.context.my_retina["optical_aberration"]
-        self.rm = self.context.my_retina["rm"]
-        self.k = self.context.my_retina["k"]
-        self.cone_sensitivity_min = self.context.my_retina["cone_sensitivity_min"]
-        self.cone_sensitivity_max = self.context.my_retina["cone_sensitivity_max"]
-
-        # Process stimulus.
-        self.image = self.data_io.get_data(image_file_name)
-        self.blur_image()
-        self.aberrated_image2cone_response()
-
-    def blur_image(self):
-        """
-        Gaussian smoothing from Navarro 1993: 2 arcmin FWHM under 20deg eccentricity.
-        """
-
-        # Turn the optical aberration of 2 arcmin FWHM to Gaussian function sigma
-        sigma_in_degrees = self.optical_aberration / (2 * np.sqrt(2 * np.log(2)))
-        sigma_in_pixels = self.pix_per_deg * sigma_in_degrees
-
-        # Turn
-        kernel_size = (
-            5,
-            5,
-        )  # Dimensions of the smoothing kernel in pixels, centered in the pixel to be smoothed
-        image_after_optics = cv2.GaussianBlur(
-            self.image, kernel_size, sigmaX=sigma_in_pixels
-        )  # sigmaY = sigmaX
-
-        self.image_after_optics = image_after_optics
-
-    def aberrated_image2cone_response(self):
-        '''
-        Cone nonlinearity. Equation from Baylor_1987_JPhysiol. 
-        '''
+#         # Set input arguments to video-object, updates the defaults from VideoBaseClass
+#         print("Making a stimulus with the following properties:")
         
-        # Range
-        response_range = np.ptp([self.cone_sensitivity_min, self.cone_sensitivity_max])
+#         my_stimulus_options = self.context.my_stimulus_options
 
-        # Scale
-        image_at_response_scale = (
-            self.image * response_range
-        )  # Image should be between 0 and 1
-        cone_input = image_at_response_scale + self.cone_sensitivity_min
 
-        # Cone nonlinearity
-        cone_response = self.rm * (1 - np.exp(-self.k * cone_input))
+#         # options_to_update = 
+#         for this_option in my_stimulus_options:
+#             print(this_option, ":", my_stimulus_options[this_option])
+#             assert this_option in self.options.keys(), f"The option '{this_option}' was not recognized"
 
-        self.cone_response = cone_response
+#         self.options.update(my_stimulus_options)
 
-        # Save the cone response to output folder
-        filename = self.context.my_stimulus_metadata["stimulus_file"]
-        self.data_io.save_cone_response_to_hdf5(filename, cone_response)   
+
+#         self.frames = self._create_frames(
+#             self.options["duration_seconds"]
+#         )  # background for stimulus
+
+
+#         if self.context.my_stimulus_metadata["apply_cone_filter"] is True:
+#             self.cones.image2cone_response()
+#             self.cones.cone_response
+#         else:
+#             image_file_name = self.context.my_stimulus_metadata["stimulus_file"]
+#             self.image = self.data_io.get_data(image_file_name)
+
+#         pdb.set_trace()
         
+#         stimulus_video = self
 
+#         # Save video
+#         stimulus_video_name = Path(self.context.my_stimulus_metadata["stimulus_video_name"])
+#         self.data_io.save_stimulus_to_videofile(stimulus_video_name, stimulus_video)
 
 # if __name__ == "__main__":
 # # NaturalMovie('/home/henhok/nature4_orig35_slowed.avi', fps=100, pix_per_deg=60)

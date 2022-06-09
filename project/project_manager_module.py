@@ -5,21 +5,21 @@ from context.context_module import Context
 from data_io.data_io_module import DataIO
 from analysis.analysis_module import Analysis
 from viz.viz_module import Viz
-from  construct.macaque_retina_module import ConstructRetina, WorkingRetina
+from  construct.macaque_retina_module import ConstructRetina, WorkingRetina, PhotoReceptor
 from construct.construct_math_module import RetinaMath
-from stimuli.visual_stimulus_module import ConstructStimulus, PhotoReceptor
+from stimuli.visual_stimulus_module import ConstructStimulus
 
 # Builtin
 import pdb
-import time
-import shlex
-import subprocess
-from types import ModuleType
-from copy import deepcopy
+# import time
+# import shlex
+# import subprocess
+# from types import ModuleType
+# from copy import deepcopy
 
 
 # Analysis
-import pandas as pd
+# import pandas as pd
 
 
 """
@@ -52,11 +52,15 @@ class ProjectManager(ProjectBase, ProjectUtilities):
 
         data_io = DataIO(context)
         self.data_io = data_io
+        
+        cones = PhotoReceptor(context, data_io)
+        self.cones = cones
 
-        stimulate = ConstructStimulus(context, data_io) 
+        stimulate = ConstructStimulus(context, data_io, cones) 
         self.stimulate = stimulate
-
-        self.cones = PhotoReceptor(context, data_io)
+        
+        # natural_image = NaturalImage(context, data_io, cones) 
+        # self.natural_image = natural_image
 
         ana = Analysis(
             # Interfaces

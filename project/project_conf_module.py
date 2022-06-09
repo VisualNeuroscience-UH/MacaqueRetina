@@ -102,16 +102,16 @@ my_retina = {
     "sector_limits" : [-0.4, 0.4],
     "model_density" : 1.0,
     "randomize_position" : 0.05,
-    "stimulus_center": 5 + 0j,
+    "stimulus_center": 4.45 + 0j,
 }
 
 
 my_stimulus_metadata = {
     "stimulus_file": "testi.jpg",
     "stimulus_type": "image",  # "image", "video" or "grating"
-    "stimulus_video_name": "tmp2",
+    "stimulus_video_name": "testi.mp4",
     "pix_per_deg": 60,
-    "fps": 30, # int, applies only to video stimulus
+    "apply_cone_filter": False,
 }
 
 """
@@ -160,13 +160,13 @@ my_stimulus_options = {
     "pix_per_deg": 60, 
     "fps": 100,
     # stimulus only
-    "pattern" : "temporal_square_pattern",
-    "stimulus_form" : "circular",
-    "temporal_frequency" : 0.1,
-    "spatial_frequency" : 1.0,
-    "stimulus_position" : (-0.06, 0.03), # center_deg
-    "duration_seconds" : 0.4,
-    "stimulus_size" : 0.1,
+    "pattern" : "natural_images",
+    "stimulus_form" : "rectangular",
+    "temporal_frequency" : 1,
+    "spatial_frequency" : 2.0,
+    "stimulus_position" : (0, 0), # center_deg
+    "duration_seconds" : 3.0,
+    "stimulus_size" : 1.0,
     "contrast" : 0.99,
     "baseline_start_seconds" : 0.5,
     "baseline_end_seconds" : 0.5,
@@ -277,7 +277,7 @@ if __name__ == "__main__":
     )
 
     #################################
-    ### Get image ###
+    ### Check cone response ###
     #################################
 
     """
@@ -285,8 +285,8 @@ if __name__ == "__main__":
     Images were focused on photoreceptors. To account for the blur by the eye,
     we have the cone sample image method.
     """
-    PM.cones.image2cone_response()
-    PM.viz.show_cone_response(PM.cones.image, PM.cones.image_after_optics, PM.cones.cone_response)
+    # PM.cones.image2cone_response()
+    # PM.viz.show_cone_response(PM.cones.image, PM.cones.image_after_optics, PM.cones.cone_response)
 
     #################################
     ### Build retina ###
@@ -310,21 +310,21 @@ if __name__ == "__main__":
     ### Create stimulus ###
     #################################
 
-    # # options are defined in my_stimulus_options
-    # # stimulus video will be saved on output_folder in mp4 format (viewing and hdf5 format (for reloading)
-    # PM.stimulate.make_stimulus_video()
+    # options are defined in my_stimulus_options
+    # stimulus video will be saved on output_folder in mp4 format (viewing and hdf5 format (for reloading)
+    PM.stimulate.make_stimulus_video()
 
 
     #################################
     ### Load stimulus to get working retina ###
     #################################
 
-    # # Reads the mosaic file from my_retina["mosaic_file_name"] at output_folder.
-    # PM.working_retina.initialize()
+    # Reads the mosaic file from my_retina["mosaic_file_name"] at output_folder.
+    PM.working_retina.initialize()
 
     # # If you want to load with object, it is possible by:
-    # # PM.working_retina.load_stimulus(PM.stimulate) 
-    # PM.working_retina.load_stimulus() 
+    # PM.working_retina.load_stimulus(PM.stimulate) 
+    PM.working_retina.load_stimulus() 
 
     # # movie = vs.NaturalMovie('/home/henhok/nature4_orig35_fps100.avi', fps=100, pix_per_deg=60)# => METADATA
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
@@ -346,11 +346,11 @@ if __name__ == "__main__":
     ### Run multiple trials for single cell ###
     #################################
 
-    # PM.working_retina.run_with_my_run_options()
+    PM.working_retina.run_with_my_run_options()
 
-    # PM.viz.show_gc_responses(PM.working_retina)
+    PM.viz.show_gc_responses(PM.working_retina)
 
-    # PM.viz.show_stimulus_with_gcs(PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51)
+    PM.viz.show_stimulus_with_gcs(PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51)
 
     # PM.viz.show_single_gc_view(PM.working_retina, cell_index=example_gc, frame_number=21)
 

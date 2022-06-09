@@ -8,6 +8,9 @@ import pandas as pd
 from scipy.signal import convolve
 from scipy.interpolate import interp1d
 
+# Data IO
+import cv2
+
 # Viz
 from tqdm import tqdm
 
@@ -910,6 +913,7 @@ class ConstructRetina(RetinaMath):
 
         self.viz.show_build_process(self, show_all_spatial_fits=False)
 
+
 class WorkingRetina(RetinaMath):
     _properties_list = [
         "path",
@@ -1140,7 +1144,6 @@ class WorkingRetina(RetinaMath):
         return w_coord, z_coord
 
     def _save_for_cxsystem(self, spike_mons, filename=None, analog_signal=None):
-
 
         self.w_coord, self.z_coord = self._get_w_z_coords()
 
@@ -1481,7 +1484,9 @@ class WorkingRetina(RetinaMath):
             spike_monitor = b2.SpikeMonitor(poisson_group)
             net = b2.Network(poisson_group, spike_monitor)
         else:
-            raise ValueError('Missing valid spike_generator_model, check my_run_options parameters, aborting...')
+            raise ValueError(
+                "Missing valid spike_generator_model, check my_run_options parameters, aborting..."
+            )
 
         # Save brian state
         net.store()
@@ -1537,11 +1542,11 @@ class WorkingRetina(RetinaMath):
             return spiketrains, interpolated_rates_array.flatten()
 
     def run_with_my_run_options(self):
-        '''
+        """
         Filter method between my_run_options and run cells.
         See run_cells for parameter description.
-        '''
-    
+        """
+
         filenames = self.context.my_run_options["gc_response_filenames"]
         cell_index = self.context.my_run_options["cell_index"]
         n_trials = self.context.my_run_options["n_trials"]
@@ -1628,6 +1633,100 @@ class WorkingRetina(RetinaMath):
         rgc_coords["z_deg"] = 0.0
 
         rgc_coords.to_csv(filename_full, header=False, index=False)
+
+
+class PhotoReceptor:
+    """
+    This class gets one image at a time, and provides the cone response.
+    After instantiation, the RGC group can get one frame at a time, and the system will give an impulse response.
+
+    This is not necessary for GC transfer function, it is not used in Chichilnisky_2002_JNeurosci Field_2010_Nature.
+    Instead, they focus the pattern directly on isolated cone mosaic.
+    Nevertheless, it may be useful for comparison of image input with and w/o  explicit photoreceptor.
+    """
+
+    # self.context. attributes
+    _properties_list = [
+        "path",
+        "input_folder",
+        "output_folder",
+        "my_retina",
+        "my_stimulus_metadata",
+        "my_stimulus_options",
+    ]
+
+    def __init__(self, context, data_io) -> None:
+
+        self._context = context.set_context(self._properties_list)
+        self._data_io = data_io
+
+        self.optical_aberration = self.context.my_retina["optical_aberration"]
+        self.rm = self.context.my_retina["rm"]
+        self.k = self.context.my_retina["k"]
+        self.cone_sensitivity_min = self.context.my_retina["cone_sensitivity_min"]
+        self.cone_sensitivity_max = self.context.my_retina["cone_sensitivity_max"]
+
+    @property
+    def context(self):
+        return self._context
+
+    @property
+    def data_io(self):
+        return self._data_io
+
+    def image2cone_response(self):
+
+        image_file_name = self.context.my_stimulus_metadata["stimulus_file"]
+        self.pix_per_deg = self.context.my_stimulus_metadata["pix_per_deg"]
+        self.fps = self.context.my_stimulus_options["fps"]
+
+        # Process stimulus.
+        self.image = self.data_io.get_data(image_file_name)
+        self.blur_image()
+        self.aberrated_image2cone_response()
+
+    def blur_image(self):
+        """
+        Gaussian smoothing from Navarro 1993: 2 arcmin FWHM under 20deg eccentricity.
+        """
+
+        # Turn the optical aberration of 2 arcmin FWHM to Gaussian function sigma
+        sigma_in_degrees = self.optical_aberration / (2 * np.sqrt(2 * np.log(2)))
+        sigma_in_pixels = self.pix_per_deg * sigma_in_degrees
+
+        # Turn
+        kernel_size = (
+            5,
+            5,
+        )  # Dimensions of the smoothing kernel in pixels, centered in the pixel to be smoothed
+        image_after_optics = cv2.GaussianBlur(
+            self.image, kernel_size, sigmaX=sigma_in_pixels
+        )  # sigmaY = sigmaX
+
+        self.image_after_optics = image_after_optics
+
+    def aberrated_image2cone_response(self):
+        """
+        Cone nonlinearity. Equation from Baylor_1987_JPhysiol.
+        """
+
+        # Range
+        response_range = np.ptp([self.cone_sensitivity_min, self.cone_sensitivity_max])
+
+        # Scale
+        image_at_response_scale = (
+            self.image * response_range
+        )  # Image should be between 0 and 1
+        cone_input = image_at_response_scale + self.cone_sensitivity_min
+
+        # Cone nonlinearity
+        cone_response = self.rm * (1 - np.exp(-self.k * cone_input))
+
+        self.cone_response = cone_response
+
+        # Save the cone response to output folder
+        filename = self.context.my_stimulus_metadata["stimulus_file"]
+        self.data_io.save_cone_response_to_hdf5(filename, cone_response)
 
 
 # if __name__ == "__main__":

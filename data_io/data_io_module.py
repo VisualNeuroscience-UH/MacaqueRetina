@@ -394,10 +394,11 @@ class DataIO(DataIOBase):
         self._write_frames_to_videofile(fullpath_filename, stimulus)
 
         # save all stimulus object attributes in the same format
-        # Delete attributes "context" and "data_io" from stimulus object before saving, because they cannot be saved in hdf5 format.
+        # Delete injected attributes "context", "data_io" and cones from stimulus object before saving, because they cannot be saved in hdf5 format.
         stimulus_out = deepcopy(stimulus)
         del stimulus_out._context
         del stimulus_out._data_io
+        del stimulus_out._cones
 
         full_path_out = f"{fullpath_filename}.hdf5"
         self.save_dict_to_hdf5(full_path_out, stimulus_out.__dict__)
@@ -435,23 +436,13 @@ class DataIO(DataIOBase):
         """
         parent_path = self._check_output_folder()
 
-        if not isinstance(filename, Path):
-            filename = Path(filename)
-        filename_suffix = filename.suffix
-        filename_stem = filename.stem
+        filename_stem, filename_suffix = self._get_filename_stem_and_suffix(filename)
+
         filename_extension = "_cone_response"
         stem_extension = filename_stem + filename_extension
 
-        if filename_suffix in ["hdf5", "h5"]:
-            fullpath_filename = Path.joinpath(parent_path, stem_extension + filename_suffix)
-        elif filename_suffix == "":
-            fullpath_filename = Path.joinpath(parent_path, stem_extension + ".hdf5")
-            print(f"Missing filename extension, saving cone response as .hdf5")
-        else:
-            fullpath_filename = Path.joinpath(parent_path, stem_extension + ".hdf5")
-            print(f"Extension {filename_suffix} not supported, saving cone response as .hdf5")
+        fullpath_filename = Path.joinpath(parent_path, stem_extension + ".hdf5")
         
-        pdb.set_trace()
         self.save_array_to_hdf5(fullpath_filename, cone_response)
 
     def load_cone_response_from_hdf5(self, filename):
