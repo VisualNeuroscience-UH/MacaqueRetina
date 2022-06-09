@@ -329,9 +329,28 @@ class DataIO(DataIOBase):
 
         video.release()
 
+    def _check_output_folder(self):
+        '''
+        Create output directory if it does not exist.
+        Return full path to output directory.
+        '''
+        parent_path = Path.joinpath(self.context.path, self.context.output_folder)
+        if not Path(parent_path).exists():
+            Path(parent_path).mkdir(parents=True)
+
+        return parent_path
+
+    def _get_filename_stem_and_suffix(self, filename):
+        '''
+        Get filename stem and suffix.
+        '''
+        filename_stem = Path(filename).stem
+        filename_suffix = Path(filename).suffix
+        return filename_stem, filename_suffix
+
     def get_video_full_name(self, filename):
         """
-        Add full path to video name. Create output directory if it does not exist.
+        Add full path to video name. 
 
         Then check if video name has correct extension.
         If not, add correct extension.
@@ -340,27 +359,23 @@ class DataIO(DataIOBase):
         :return: full path to video name
         """
 
-        # Check if filename is a pathlib object. If not, convert to pathlib object.
+        parent_path = self._check_output_folder()
+
         if not isinstance(filename, Path):
             filename = Path(filename)
 
-        filename_stem = filename.stem
-        filename_extension = filename.suffix
+        filename_stem, filename_suffix = self._get_filename_stem_and_suffix(filename)
 
-        parent_path = Path.joinpath(self.context.path, self.context.output_folder)
-        if not Path(parent_path).exists():
-            Path(parent_path).mkdir(parents=True)
-
-        if filename_extension in ["mp4", "avi", "mov"]:
+        if filename_suffix in ["mp4", "avi", "mov"]:
             fullpath_filename = Path.joinpath(
-                parent_path, filename_stem + filename_extension
+                parent_path, filename_stem + filename_suffix
             )
-        elif filename_extension == "":
+        elif filename_suffix == "":
             fullpath_filename = Path.joinpath(parent_path, filename_stem + ".mp4")
             print(f"Missing filename extension, saving video as .mp4")
         else:
             fullpath_filename = Path.joinpath(parent_path, filename_stem + ".mp4")
-            print(f"Extension {filename_extension} not supported, saving video as .mp4")
+            print(f"Extension {filename_suffix} not supported, saving video as .mp4")
 
         return fullpath_filename
 
@@ -384,8 +399,8 @@ class DataIO(DataIOBase):
         del stimulus_out._context
         del stimulus_out._data_io
 
-        full_path_out_options = f"{fullpath_filename}.hdf5"
-        self.save_dict_to_hdf5(full_path_out_options, stimulus_out.__dict__)
+        full_path_out = f"{fullpath_filename}.hdf5"
+        self.save_dict_to_hdf5(full_path_out, stimulus_out.__dict__)
 
     def load_stimulus_from_videofile(self, filename):
         """
@@ -411,3 +426,49 @@ class DataIO(DataIOBase):
         stimulus = DummyVideoClass(data_dict)
 
         return stimulus
+
+    def save_cone_response_to_hdf5(self, filename, cone_response):
+        """
+        Save cone response to hdf5 file.
+        :param filename: hdf5 file name
+        :param cone_response: cone response object
+        """
+        parent_path = self._check_output_folder()
+
+        if not isinstance(filename, Path):
+            filename = Path(filename)
+        filename_suffix = filename.suffix
+        filename_stem = filename.stem
+        filename_extension = "_cone_response"
+        stem_extension = filename_stem + filename_extension
+
+        if filename_suffix in ["hdf5", "h5"]:
+            fullpath_filename = Path.joinpath(parent_path, stem_extension + filename_suffix)
+        elif filename_suffix == "":
+            fullpath_filename = Path.joinpath(parent_path, stem_extension + ".hdf5")
+            print(f"Missing filename extension, saving cone response as .hdf5")
+        else:
+            fullpath_filename = Path.joinpath(parent_path, stem_extension + ".hdf5")
+            print(f"Extension {filename_suffix} not supported, saving cone response as .hdf5")
+        
+        pdb.set_trace()
+        self.save_array_to_hdf5(fullpath_filename, cone_response)
+
+    def load_cone_response_from_hdf5(self, filename):
+        '''
+        Load cone response from hdf5 file.
+        :param filename: hdf5 file name
+        :return: cone response
+        '''
+        
+        parent_path = self.context.output_folder
+        
+        filename_stem, filename_suffix = self._get_filename_stem_and_suffix(filename)
+        if filename_suffix in ["hdf5"]:
+            fullpath_filename = Path.joinpath(parent_path, filename_stem + filename_suffix)
+        else:
+            fullpath_filename = Path.joinpath(parent_path, filename_stem + ".hdf5")
+
+        cone_response = self.load_array_from_hdf5(fullpath_filename)
+        
+        return cone_response

@@ -762,7 +762,7 @@ class PhotoReceptor:
     """
 
     # self.context. attributes
-    _properties_list = ["path", "input_folder", "output_folder", "deg_per_mm"]
+    _properties_list = ["path", "input_folder", "output_folder", "my_retina"]
 
     def __init__(self, context, data_io) -> None:
 
@@ -796,25 +796,20 @@ class PhotoReceptor:
                 "Trying to set improper data_io. data_io must be a DataIO object."
             )
 
-    def sample_image(
-        self,
-        image_file_name=None,
-        micrometers_per_pixel=10,
-        image_resolution=(100, 100),
-        temporal_resolution=1,
-    ):
+    def image2cone_response(self):
 
-        assert image_file_name is not None, "Please provide an image file name."
+        image_file_name = self.context.my_stimulus_metadata["stimulus_file"]
+        self.pix_per_deg = self.context.my_stimulus_metadata["pix_per_deg"]
+        self.fps= self.context.my_stimulus_metadata["fps"]
 
-        """
-        Instantiate new stimulus.
-        """
-        self.millimeters_per_pixel = micrometers_per_pixel / 1000  # Turn to millimeters
-        self.temporal_resolution = temporal_resolution
-        self.optical_aberration = 2 / 60  # unit is degree
+        self.optical_aberration = self.context.my_retina["optical_aberration"]
+        self.rm = self.context.my_retina["rm"]
+        self.k = self.context.my_retina["k"]
+        self.cone_sensitivity_min = self.context.my_retina["cone_sensitivity_min"]
+        self.cone_sensitivity_max = self.context.my_retina["cone_sensitivity_max"]
 
+        # Process stimulus.
         self.image = self.data_io.get_data(image_file_name)
-
         self.blur_image()
         self.aberrated_image2cone_response()
 
@@ -825,12 +820,7 @@ class PhotoReceptor:
 
         # Turn the optical aberration of 2 arcmin FWHM to Gaussian function sigma
         sigma_in_degrees = self.optical_aberration / (2 * np.sqrt(2 * np.log(2)))
-
-        # Turn Gaussian function with defined sigma in degrees to pixel space
-        sigma_in_mm = sigma_in_degrees / self.context.deg_per_mm
-        sigma_in_pixels = (
-            sigma_in_mm / self.millimeters_per_pixel
-        )  # This is small, 0.28 pixels for 10 microm/pixel resolution
+        sigma_in_pixels = self.pix_per_deg * sigma_in_degrees
 
         # Turn
         kernel_size = (
@@ -844,27 +834,28 @@ class PhotoReceptor:
         self.image_after_optics = image_after_optics
 
     def aberrated_image2cone_response(self):
-
-        # Compressing nonlinearity. Parameters are manually scaled to give dynamic cone ouput.
-        # Equation, data from Baylor_1987_JPhysiol
-        rm = 25  # pA
-        k = 2.77e-4  # at 500 nm
-        cone_sensitivity_min = 5e2
-        cone_sensitivity_max = 1e4
-
+        '''
+        Cone nonlinearity. Equation from Baylor_1987_JPhysiol. 
+        '''
+        
         # Range
-        response_range = np.ptp([cone_sensitivity_min, cone_sensitivity_max])
+        response_range = np.ptp([self.cone_sensitivity_min, self.cone_sensitivity_max])
 
         # Scale
         image_at_response_scale = (
             self.image * response_range
         )  # Image should be between 0 and 1
-        cone_input = image_at_response_scale + cone_sensitivity_min
+        cone_input = image_at_response_scale + self.cone_sensitivity_min
 
         # Cone nonlinearity
-        cone_response = rm * (1 - np.exp(-k * cone_input))
+        cone_response = self.rm * (1 - np.exp(-self.k * cone_input))
 
         self.cone_response = cone_response
+
+        # Save the cone response to output folder
+        filename = self.context.my_stimulus_metadata["stimulus_file"]
+        self.data_io.save_cone_response_to_hdf5(filename, cone_response)   
+        
 
 
 # if __name__ == "__main__":

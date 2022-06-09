@@ -110,10 +110,12 @@ my_stimulus_metadata = {
     "stimulus_file": "testi.jpg",
     "stimulus_type": "image",  # "image", "video" or "grating"
     "stimulus_video_name": "tmp2",
+    "pix_per_deg": 60,
+    "fps": 30, # int, applies only to video stimulus
 }
 
 """
-Valid stimulus_options include (override visual_stimulus_module.VideoBaseClass):
+Valid stimulus_options include (overriding visual_stimulus_module.VideoBaseClass):
 
 image_width: in pixels
 image_height: in pixels
@@ -173,7 +175,7 @@ my_stimulus_options = {
     "phase_shift" : 0,
 }
 
-# Each response file contain n_trials
+# Each gc response file contain n_trials
 n_files = 1
 
 my_run_options = {
@@ -202,6 +204,13 @@ proportion_of_OFF_response_type = 0.60
 # One mm retina is ~4.55 deg visual field.
 deg_per_mm = 1 / 0.223
 
+# Compressing cone nonlinearity. Parameters are manually scaled to give dynamic cone ouput.
+# Equation, data from Baylor_1987_JPhysiol
+rm_param = 25  # pA
+k_param = 2.77e-4  # at 500 nm
+cone_sensitivity_min = 5e2
+cone_sensitivity_max = 1e4
+
 my_retina_append = {
     "proportion_of_parasol_gc_type" : proportion_of_parasol_gc_type,
     "proportion_of_midget_gc_type" : proportion_of_midget_gc_type,
@@ -209,6 +218,12 @@ my_retina_append = {
     "proportion_of_OFF_response_type" : proportion_of_OFF_response_type,
     "mosaic_file_name": "parasol_on_single.csv",
     "deg_per_mm" : deg_per_mm,
+    "optical_aberration": 2 / 60,  # unit is degree
+    "cone_sensitivity_min" : cone_sensitivity_min,
+    "cone_sensitivity_max" : cone_sensitivity_max,
+    "rm" : rm_param,
+    "k" : k_param,
+
 }
 
 my_retina.update(my_retina_append)
@@ -226,7 +241,6 @@ if my_retina["gc_type"] == "parasol":
 elif my_retina["gc_type"] == "midget":
     dendr_diam1_file = literature_data_folder / "Perry_1984_Neurosci_MidgetDendrDiam_c.mat"
     dendr_diam2_file = literature_data_folder / "Watanabe_1989_JCompNeurol_GCDendrDiam_midget_c.mat"
-
 
 
 profile = False
@@ -271,8 +285,8 @@ if __name__ == "__main__":
     Images were focused on photoreceptors. To account for the blur by the eye,
     we have the cone sample image method.
     """
-    # PM.cones.sample_image(image_file_name="testi.jpg")
-    # PM.viz.show_cone_response(PM.cones.image, PM.cones.image_after_optics, PM.cones.cone_response)
+    PM.cones.image2cone_response()
+    PM.viz.show_cone_response(PM.cones.image, PM.cones.image_after_optics, PM.cones.cone_response)
 
     #################################
     ### Build retina ###
@@ -296,19 +310,21 @@ if __name__ == "__main__":
     ### Create stimulus ###
     #################################
 
-    # options are defined in my_stimulus_options
-    PM.stimulate.make_stimulus_video()
+    # # options are defined in my_stimulus_options
+    # # stimulus video will be saved on output_folder in mp4 format (viewing and hdf5 format (for reloading)
+    # PM.stimulate.make_stimulus_video()
 
 
     #################################
     ### Load stimulus to get working retina ###
     #################################
 
-    # Reads the mosaic file from my_retina["mosaic_file_name"] at output_folder.
-    PM.working_retina.initialize()
+    # # Reads the mosaic file from my_retina["mosaic_file_name"] at output_folder.
+    # PM.working_retina.initialize()
 
-    # PM.working_retina.load_stimulus(PM.stimulate) # => METADATA
-    PM.working_retina.load_stimulus() # => METADATA
+    # # If you want to load with object, it is possible by:
+    # # PM.working_retina.load_stimulus(PM.stimulate) 
+    # PM.working_retina.load_stimulus() 
 
     # # movie = vs.NaturalMovie('/home/henhok/nature4_orig35_fps100.avi', fps=100, pix_per_deg=60)# => METADATA
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
@@ -330,11 +346,11 @@ if __name__ == "__main__":
     ### Run multiple trials for single cell ###
     #################################
 
-    PM.working_retina.run_with_my_run_options()
+    # PM.working_retina.run_with_my_run_options()
 
-    PM.viz.show_gc_responses(PM.working_retina)
+    # PM.viz.show_gc_responses(PM.working_retina)
 
-    PM.viz.show_stimulus_with_gcs(PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51)
+    # PM.viz.show_stimulus_with_gcs(PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51)
 
     # PM.viz.show_single_gc_view(PM.working_retina, cell_index=example_gc, frame_number=21)
 
