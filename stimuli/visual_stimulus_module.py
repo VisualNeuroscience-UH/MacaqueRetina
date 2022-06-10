@@ -328,6 +328,23 @@ class VideoBaseClass(object):
         mask_value = 1
         self.frames[self.frames == mask_value] = self.options["background"]
 
+    def _extract_frames(self, cap, n_frames):
+        """
+        Extracts and resizes the frames from a cv2.VideoCapture object
+
+        :param cap:
+        :return:
+        """
+        w = self.options["image_width"]
+        h = self.options["image_height"]
+        # Load each frame as array of gray values between 0-255
+        for frame_ix in range(n_frames):
+            _, frame = cap.read()
+
+            frame_out = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            self.frames[:, :, frame_ix] = cv2.resize(frame_out, (w, h), interpolation=cv2.INTER_AREA)
+
+
 class StimulusPattern:
     """
     Construct the stimulus image pattern.
@@ -472,47 +489,56 @@ class StimulusPattern:
         # filtering: http://www.djmannion.net/psych_programming/vision/sf_filt/sf_filt.html
         self._raw_intensity_from_data()
 
-    def phase_scrambled_images(
-        self,
-        full_path_to_folder,
-        width,
-        height,
-        fps,
-        duration,
-        spatial_band_pass=None,
-        temporal_band_pass=None,
-        orientation=0,
-    ):
+    def phase_scrambled_images(self):
+        raise NotImplementedError("Phase scrambled images are not implemented yet.")
         self._raw_intensity_from_data()
-        pass
 
-    def natural_video(
-        self,
-        full_path,
-        width,
-        height,
-        fps,
-        duration,
-        spatial_band_pass=None,
-        temporal_band_pass=None,
-        orientation=0,
-    ):
-        self._raw_intensity_from_data()
-        pass
+    def natural_video(self):
 
-    def phase_scrambled_video(
-        self,
-        full_path,
-        width,
-        height,
-        fps,
-        duration,
-        spatial_band_pass=None,
-        temporal_band_pass=None,
-        orientation=0,
-    ):
+        
+        # self.cones.image2cone_response()
+        # self.image = self.cones.cone_response
+        video_file_name = self.context.my_stimulus_metadata["stimulus_file"]
+        video_cap = self.data_io.get_data(video_file_name)
+
+
+        self.fps = self.options["fps"]
+        self.pix_per_deg = self.options["pix_per_deg"]
+
+        # Cut to desired length at desired fps
+        n_frames = self.frames.shape[2]
+        self.frames = np.ones(
+            (self.options["image_height"], self.options["image_width"], n_frames)
+        )
+
+        video_n_frames = int(video_cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        video_width = int(video_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        video_height = int(video_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = video_cap.get(cv2.CAP_PROP_FPS)
+
+        self._extract_frames(video_cap, n_frames)
+
+        print(
+            "Original movie dimensions %d x %d px, %d frames at %d fps."
+            % (video_width, video_height, video_n_frames, fps)
+        )
+        print(
+            "Resized movie dimensions %d x %d px, %d frames at %d fps."
+            % (self.options["image_width"], self.options["image_height"], n_frames, self.fps)
+        )
+
+        if self.context.my_stimulus_metadata["apply_cone_filter"] is True:
+            pass
+        # TÄHÄN JÄIT. MUUTA  PHOTORESEPTOR KÄYTTÄMÄÄN MYÖS VIDEOKUVAA.
+        # TILAA VIDEOFILTTERÖINTI TÄSSÄ
+
         self._raw_intensity_from_data()
-        pass
+        video_cap.release()
+
+
+    def phase_scrambled_video(self):
+        raise NotImplementedError("Phase scrambled video is not implemented yet.")
+        self._raw_intensity_from_data()
 
 
 class StimulusForm:
@@ -745,127 +771,4 @@ class NaturalMovie(VideoBaseClass):
             assert kw in self.options.keys(), f"The keyword '{kw}' was not recognized"
         self.options.update(kwargs)
 
-        cap = cv2.VideoCapture(filename)
 
-        self.fps = self.options["fps"]
-        self.pix_per_deg = self.options["pix_per_deg"]
-
-        self.video_n_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        self.video_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        self.video_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        self.video_width_deg = self.video_width / self.pix_per_deg
-        self.video_height_deg = self.video_height / self.pix_per_deg
-
-        # self.video = self.frames.transpose(2, 0, 1)
-        self.frames = np.ones(
-            (self.video_height, self.video_width, self.video_n_frames)
-        )
-        self._extract_frames(cap)
-
-        print(
-            "Loaded movie file with dimensions %d x %d px, %d frames at %d fps."
-            % (self.video_width, self.video_height, self.video_n_frames, self.fps)
-        )
-
-    def _extract_frames(self, cap):
-        """
-        Extracts the frames from a cv2.VideoCapture object
-
-        :param cap:
-        :return:
-        """
-
-        # Load each frame as array of gray values between 0-255
-        for frame_ix in range(self.video_n_frames):
-            _, frame = cap.read()
-            self.frames[:, :, frame_ix] = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-        cap.release()
-
-
-# class NaturalImage(VideoBaseClass):
-
-
-#     # self.context. attributes
-#     _properties_list = [
-#         "path",
-#         "output_folder",
-#         "input_folder",
-#         "my_stimulus_options",
-#         "my_stimulus_metadata",
-#     ]
-
-#     def __init__(self, context, data_io, cones):
-#         super().__init__()
-
-#         self._context = context.set_context(self._properties_list)
-#         self._data_io = data_io
-#         self._cones = cones
-
-#     @property
-#     def context(self):
-#         return self._context
-
-#     @property
-#     def data_io(self):
-#         return self._data_io
-
-#     @property
-#     def cones(self):
-#         return self._cones
-
-#     def make_stimulus_video(self):
-#         """
-
-#         """
-
-#         # Set input arguments to video-object, updates the defaults from VideoBaseClass
-#         print("Making a stimulus with the following properties:")
-        
-#         my_stimulus_options = self.context.my_stimulus_options
-
-
-#         # options_to_update = 
-#         for this_option in my_stimulus_options:
-#             print(this_option, ":", my_stimulus_options[this_option])
-#             assert this_option in self.options.keys(), f"The option '{this_option}' was not recognized"
-
-#         self.options.update(my_stimulus_options)
-
-
-#         self.frames = self._create_frames(
-#             self.options["duration_seconds"]
-#         )  # background for stimulus
-
-
-#         if self.context.my_stimulus_metadata["apply_cone_filter"] is True:
-#             self.cones.image2cone_response()
-#             self.cones.cone_response
-#         else:
-#             image_file_name = self.context.my_stimulus_metadata["stimulus_file"]
-#             self.image = self.data_io.get_data(image_file_name)
-
-#         pdb.set_trace()
-        
-#         stimulus_video = self
-
-#         # Save video
-#         stimulus_video_name = Path(self.context.my_stimulus_metadata["stimulus_video_name"])
-#         self.data_io.save_stimulus_to_videofile(stimulus_video_name, stimulus_video)
-
-# if __name__ == "__main__":
-# # NaturalMovie('/home/henhok/nature4_orig35_slowed.avi', fps=100, pix_per_deg=60)
-# ''' pattern:
-#             'sine_grating'; 'square_grating'; 'colored_temporal_noise'; 'white_gaussian_noise';
-#             'natural_images'; 'phase_scrambled_images'; 'natural_video'; 'phase_scrambled_video';
-#             'temporal_sine_pattern'; 'temporal_square_pattern'; 'spatially_uniform_binary_noise'
-# '''
-
-# stim = ConstructStimulus(pattern='temporal_square_pattern', stimulus_form='circular',
-#                             temporal_frequency=1, spatial_frequency=1.0,
-#                             duration_seconds=.49, orientation=90, image_width=240, image_height=240,
-#                             stimulus_size=1, contrast=.2, baseline_start_seconds = 0,
-#                             baseline_end_seconds = 0.25, background=128, mean=128, phase_shift=0,
-#                             on_proportion=0.05, direction='increment')
-
-# stim.save_stimulus_to_videofile(filename='temporal_square_pattern_increment')

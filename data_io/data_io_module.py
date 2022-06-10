@@ -219,6 +219,8 @@ class DataIO(DataIOBase):
                 data = np.float32(image / 255)
             else:
                 data = np.float32(image)  # 16 bit to save space and memory
+        elif filename_extension in [".avi", ".mp4"]:
+            data = cv2.VideoCapture(str(data_fullpath_filename))
         else:
             raise TypeError("U r trying to input unknown filetype, aborting...")
 
@@ -366,7 +368,7 @@ class DataIO(DataIOBase):
 
         filename_stem, filename_suffix = self._get_filename_stem_and_suffix(filename)
 
-        if filename_suffix in ["mp4", "avi", "mov"]:
+        if filename_suffix in ["mp4", "avi"]:
             fullpath_filename = Path.joinpath(
                 parent_path, filename_stem + filename_suffix
             )

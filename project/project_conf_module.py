@@ -107,9 +107,8 @@ my_retina = {
 
 
 my_stimulus_metadata = {
-    "stimulus_file": "testi.jpg",
-    "stimulus_type": "image",  # "image", "video" or "grating"
-    "stimulus_video_name": "testi.mp4",
+    "stimulus_file": "nature1.avi", # nature1.avi, testi.jpg
+    "stimulus_video_name": "testi.mp4", #REFACTOR
     "pix_per_deg": 60,
     "apply_cone_filter": False,
 }
@@ -155,17 +154,17 @@ stimulus_video_name: name of the stimulus video
 
 my_stimulus_options = {
     #Shared btw stimulus and working_retina
-    "image_width": 240, 
-    "image_height": 240,
+    "image_width": 240, # 752 for nature1.avi
+    "image_height": 138, # 432 for nature1.avi
     "pix_per_deg": 60, 
-    "fps": 100,
+    "fps": 30,
+    "pattern" : "natural_video", 
     # stimulus only
-    "pattern" : "natural_images",
     "stimulus_form" : "rectangular",
-    "temporal_frequency" : 1,
+    "temporal_frequency" : 2,
     "spatial_frequency" : 2.0,
     "stimulus_position" : (0, 0), # center_deg
-    "duration_seconds" : 3.0,
+    "duration_seconds" : 4.0,
     "stimulus_size" : 1.0,
     "contrast" : 0.99,
     "baseline_start_seconds" : 0.5,
@@ -326,7 +325,6 @@ if __name__ == "__main__":
     # PM.working_retina.load_stimulus(PM.stimulate) 
     PM.working_retina.load_stimulus() 
 
-    # # movie = vs.NaturalMovie('/home/henhok/nature4_orig35_fps100.avi', fps=100, pix_per_deg=60)# => METADATA
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
     # ret.load_stimulus(movie)# => METADATA
 
