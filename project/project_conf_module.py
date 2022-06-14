@@ -313,10 +313,6 @@ if __name__ == "__main__":
     # options are defined in my_stimulus_options
     # stimulus video will be saved on output_folder in mp4 format (viewing and hdf5 format (for reloading)
     # PM.stimulate.make_stimulus_video()
-
-    # Low-level control for analog stimulus file. 
-    # freq = N_cycles * 2 * np.pi * 1/N_tp
-    # N_cycles = freq / (2 * np.pi * 1/N_tp)
     
     N_tp = 20000
     dt = 0.1 # ms
@@ -333,9 +329,8 @@ if __name__ == "__main__":
         "coord_type" :"real",
         "N_tp" : N_tp,
         "input_type" : 'quadratic_oscillation', # 'quadratic_oscillation' or 'noise' or 'step_current'
-        # "N_cycles" : [4, 4, 0], # Scalar provides two units at quadrature, other units are zero. List of ints/floats provides separate freq to each. Ignored for noise.
         "N_cycles" : [N_cycles, 0, 0], # Scalar provides two units at quadrature, other units are zero. List of ints/floats provides separate freq to each. Ignored for noise.
-        "dt" : 0.1, # IMPORTANT: assuming milliseconds
+        "dt" : dt, # IMPORTANT: assuming milliseconds
         "save_stimulus" : True
         }
 
