@@ -134,7 +134,7 @@ class Mathematics:
         return y
 
     def diff_of_lowpass_filters(self, t, n, p1, p2, tau1, tau2):
-        # From Chichilnisky&Kalmar JNeurosci 2002
+        # From Chichilnisky & Kalmar JNeurosci 2002
         y = self.lowpass(t, n, p1, tau1) - self.lowpass(t, n, p2, tau2)
         return y
 
