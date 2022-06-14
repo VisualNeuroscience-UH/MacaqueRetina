@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import sys
 import pdb
+import math
 
 # This computer git repos
 from project.project_manager_module import ProjectManager
@@ -57,11 +58,11 @@ Main paths in different operating systems
 """
 if sys.platform == "linux":
     root_path = "/opt3/Laskenta/Models"  # pikkuveli
+    git_repo_root = Path(r'/opt2/Laskenta_ssd/Git_Repos/MacaqueRetina')
     # root_path = "/opt2/Laskenta_ssd/Models"  # isosisko
 elif sys.platform == "win32":
     root_path = r"C:\Users\Simo\Laskenta\Models"
-
-git_repo_root = Path(r'C:\Users\Simo\Laskenta\Git_Repos\MacaqueRetina_Git')
+    git_repo_root = Path(r'C:\Users\Simo\Laskenta\Git_Repos\MacaqueRetina_Git')
 
 
 """
@@ -227,8 +228,8 @@ my_retina_append = {
 
 my_retina.update(my_retina_append)
 
-apricot_data_folder = git_repo_root.joinpath(r"construct\apricot_data")
-literature_data_folder = git_repo_root.joinpath(r"construct\literature_data")
+apricot_data_folder = git_repo_root.joinpath(r"construct/apricot_data")
+literature_data_folder = git_repo_root.joinpath(r"construct/literature_data")
 
 # Define digitized literature data files for gc density and dendritic diameters.
 # Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
@@ -311,19 +312,46 @@ if __name__ == "__main__":
 
     # options are defined in my_stimulus_options
     # stimulus video will be saved on output_folder in mp4 format (viewing and hdf5 format (for reloading)
-    PM.stimulate.make_stimulus_video()
+    # PM.stimulate.make_stimulus_video()
 
+    # Low-level control for analog stimulus file. 
+    # freq = N_cycles * 2 * np.pi * 1/N_tp
+    # N_cycles = freq / (2 * np.pi * 1/N_tp)
+    
+    N_tp = 20000
+    dt = 0.1 # ms
 
+    for freq in range(1,101):
+        N_cycles = freq * (dt/1000) * N_tp
+        print(f"Creating stim with {freq=}, holding {N_cycles=}")
+        
+        filename_out =  f'freq_{freq:02}.mat'
+
+        analog_options = {
+        "filename_out" : filename_out,
+        "N_units" :3,
+        "coord_type" :"real",
+        "N_tp" : N_tp,
+        "input_type" : 'quadratic_oscillation', # 'quadratic_oscillation' or 'noise' or 'step_current'
+        # "N_cycles" : [4, 4, 0], # Scalar provides two units at quadrature, other units are zero. List of ints/floats provides separate freq to each. Ignored for noise.
+        "N_cycles" : [N_cycles, 0, 0], # Scalar provides two units at quadrature, other units are zero. List of ints/floats provides separate freq to each. Ignored for noise.
+        "dt" : 0.1, # IMPORTANT: assuming milliseconds
+        "save_stimulus" : True
+        }
+
+        PM.analog_input.make_stimulus_video(analog_options=analog_options)
+        # PM.viz.plot_analog_stimulus(PM.analog_input)
+    
     #################################
     ### Load stimulus to get working retina ###
     #################################
 
-    # Reads the mosaic file from my_retina["mosaic_file_name"] at output_folder.
-    PM.working_retina.initialize()
+    # # Reads the mosaic file from my_retina["mosaic_file_name"] at output_folder.
+    # PM.working_retina.initialize()
 
-    # # If you want to load with object, it is possible by:
-    # PM.working_retina.load_stimulus(PM.stimulate) 
-    PM.working_retina.load_stimulus() 
+    # # # If you want to load with object, it is possible by:
+    # # PM.working_retina.load_stimulus(PM.stimulate) 
+    # PM.working_retina.load_stimulus() 
 
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
     # ret.load_stimulus(movie)# => METADATA
@@ -344,11 +372,11 @@ if __name__ == "__main__":
     ### Run multiple trials for single cell ###
     #################################
 
-    PM.working_retina.run_with_my_run_options()
+    # PM.working_retina.run_with_my_run_options()
 
-    PM.viz.show_gc_responses(PM.working_retina)
+    # PM.viz.show_gc_responses(PM.working_retina)
 
-    PM.viz.show_stimulus_with_gcs(PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51)
+    # PM.viz.show_stimulus_with_gcs(PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51)
 
     # PM.viz.show_single_gc_view(PM.working_retina, cell_index=example_gc, frame_number=21)
 
