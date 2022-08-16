@@ -19,7 +19,7 @@ import pandas as pd
 from tqdm import tqdm
 
 # Local
-from construct.construct_math_module import RetinaMath
+from construct.retina_math_module import RetinaMath
 
 # Builtin
 import pdb

@@ -159,7 +159,7 @@ my_stimulus_options = {
     "image_height": 240, # 432 for nature1.avi
     "pix_per_deg": 60, 
     "fps": 30,
-    "pattern" : "sine_grating", 
+    "pattern" : "sine_grating", # Natural video is not supported yet. One of the StimulusPatterns
     # stimulus only
     "stimulus_form" : "rectangular",
     "temporal_frequency" : 2,
