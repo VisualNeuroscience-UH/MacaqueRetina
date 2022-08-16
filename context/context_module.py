@@ -10,7 +10,7 @@ class Context(ContextBase):
     '''
     Set context (paths, filenames, etc) for the project.
     Each module orders self.context.property name from context by calling set_context()
-    Paths and folders become pathlib.Path object in construction (__init__)
+    Paths and folders relative to main project path become pathlib.Path object in construction (__init__)
     Variable names with either 'file' or 'folder' in the name become pathlib.Path object in construction (__init__)
     '''
 
