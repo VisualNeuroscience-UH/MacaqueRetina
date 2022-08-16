@@ -895,6 +895,11 @@ class ConstructRetina(RetinaMath):
     def save_mosaic(self, filename=None):
 
         output_folder = self.context.output_folder
+
+        # Create output folder if it doues not exist, with parents
+        if not output_folder.exists():
+            Path.mkdir(output_folder, mode=0o771, parents=True, exist_ok=False)
+
         if filename is None:
             filepath = output_folder.joinpath(
                 self.context.my_retina["mosaic_file_name"]
@@ -962,7 +967,7 @@ class WorkingRetina(RetinaMath):
         pix_per_deg = self.context.my_stimulus_options["pix_per_deg"]
         fps = self.context.my_stimulus_options["fps"]
 
-        # Metadata for Apricot dataset
+        # Metadata for Apricot dataset. TODO move to project_conf module
         self.data_microm_per_pixel = 60
         self.data_filter_fps = 30  # Uncertain - "30 or 120 Hz"
         self.data_filter_timesteps = 15
@@ -1125,27 +1130,9 @@ class WorkingRetina(RetinaMath):
 
         return firing_rate
 
-    def _get_w_z_coords(self):
-        """
-        # Create w_coord, z_coord for cortical and visual coordinates, respectively
-        """
-        # Create w_coord, z_coord for cortical and visual coordinates, respectively
-        z_coord = self.gc_df["x_deg"].values + 1j * self.gc_df["y_deg"].values
-
-        # Macaque values
-        # a for macaques should be 0.3 - 0.9, Schwartz 1994 citing Wilson et al 1990 "The perception of form" in Visual perception: The neurophysiological foundations, Academic Press
-        # k has been pretty open.
-        # However, if we relate 1/M = (a/k) + (1/k) * E and M = (1/0.077) + (1/(0.082 * E)), we get
-        # Andrew James, personal communication: k=1/.082, a=. 077/.082
-        a = 0.077 / 0.082  # ~ 0.94
-        k = 1 / 0.082  # ~ 12.2
-        w_coord = k * np.log(z_coord + a)
-
-        return w_coord, z_coord
-
     def _save_for_cxsystem(self, spike_mons, filename=None, analog_signal=None):
 
-        self.w_coord, self.z_coord = self._get_w_z_coords()
+        self.w_coord, self.z_coord = self.get_w_z_coords()
 
         # Copied from CxSystem2\cxsystem2\core\stimuli.py The Stimuli class does not support reuse
         print(" -  Saving spikes, rgc coordinates and analog signal (if not None)...")
@@ -1265,6 +1252,24 @@ class WorkingRetina(RetinaMath):
             stimulus_cropped = np.reshape(stimulus_cropped, (sidelen**2, n_frames))
 
         return stimulus_cropped
+
+    def get_w_z_coords(self):
+        """
+        # Create w_coord, z_coord for cortical and visual coordinates, respectively
+        """
+        # Create w_coord, z_coord for cortical and visual coordinates, respectively
+        z_coord = self.gc_df["x_deg"].values + 1j * self.gc_df["y_deg"].values
+
+        # Macaque values
+        # a for macaques should be 0.3 - 0.9, Schwartz 1994 citing Wilson et al 1990 "The perception of form" in Visual perception: The neurophysiological foundations, Academic Press
+        # k has been pretty open.
+        # However, if we relate 1/M = (a/k) + (1/k) * E and M = (1/0.077) + (1/(0.082 * E)), we get
+        # Andrew James, personal communication: k=1/.082, a=. 077/.082
+        a = 0.077 / 0.082  # ~ 0.94
+        k = 1 / 0.082  # ~ 12.2
+        w_coord = k * np.log(z_coord + a)
+
+        return w_coord, z_coord
 
     def load_stimulus(self, stimulus_video=None):
         """

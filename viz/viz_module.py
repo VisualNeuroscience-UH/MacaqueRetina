@@ -14,6 +14,7 @@ import brian2.units as b2u
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 from tqdm import tqdm
+import seaborn as sns
 
 # Builtin
 import os
@@ -928,4 +929,11 @@ class Viz:
         axs[3].imshow(image, cmap="Greys")
         axs[4].imshow(image_after_optics, cmap="Greys")
         axs[5].imshow(cone_response, cmap="Greys")
+
+    def plot_analog_stimulus(self, analog_input):
+        data=analog_input.Input
+
+        plt.figure()
+        plt.plot(data.T)
+
 

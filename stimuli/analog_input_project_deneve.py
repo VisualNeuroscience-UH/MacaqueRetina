@@ -201,7 +201,7 @@ class AnalogInput():
 
         ret = WorkingRetina(testmosaic, 'parasol', 'on', stimulus_center=5+0j,
                                    stimulus_width_pix=240, stimulus_height_pix=240)
-        w_coord, z_coord = WorkingRetina._get_w_z_coords(ret)
+        w_coord, z_coord = WorkingRetina.get_w_z_coords(ret)
 
         # Get random sample sized N_units, assert for too small sample
 
@@ -241,10 +241,10 @@ if __name__ == "__main__":
 
         # filename_out = 'input_quadratic_oscillation_220215.mat'
         full_filename_out = os.path.join(root_path, filename_out)
-        N_units = 6
+        N_units = 3
         N_tp = 20000
         input_type = 'noise' # 'quadratic_oscillation' or 'noise' or 'step_current'
-        N_cycles = [4, 4, 0, 0, 0, 0] # Scalar provides two units at quadrature, other units are zero. List of ints/floats provides separate freq to each. Ignored for noise.
+        N_cycles = [4, 4, 0] # Scalar provides two units at quadrature, other units are zero. List of ints/floats provides separate freq to each. Ignored for noise.
         dt = 0.1 # IMPORTANT: assuming milliseconds
 
 
