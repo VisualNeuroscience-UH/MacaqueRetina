@@ -13,12 +13,12 @@ import brian2.units as b2u
 # Viz
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
-from tqdm import tqdm
-import seaborn as sns
+# from tqdm import tqdm
+# import seaborn as sns
 
 # Builtin
-import os
-import sys
+# import os
+# import sys
 import pdb
 
 
