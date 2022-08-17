@@ -5,8 +5,8 @@ from context.context_module import Context
 from data_io.data_io_module import DataIO
 from analysis.analysis_module import Analysis
 from viz.viz_module import Viz
-from  construct.macaque_retina_module import ConstructRetina, WorkingRetina, PhotoReceptor
-from construct.retina_math_module import RetinaMath
+from  retina.macaque_retina_module import ConstructRetina, WorkingRetina, PhotoReceptor
+from retina.retina_math_module import RetinaMath
 from stimuli.visual_stimulus_module import ConstructStimulus, AnalogInput
 
 # Builtin
