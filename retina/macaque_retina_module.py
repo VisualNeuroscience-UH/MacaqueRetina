@@ -645,6 +645,7 @@ class ConstructRetina(RetinaMath):
 
         # parameter_names, data_all_viable_cells, bad_cell_indices = fitdata
         data_all_viable_cells = np.array(self.all_fits_df)
+        
         bad_cell_indices = np.where((self.all_fits_df == 0.0).all(axis=1))[0].tolist()
         parameter_names = self.all_fits_df.columns.tolist()
 
@@ -918,13 +919,13 @@ class ConstructRetina(RetinaMath):
         print("Saving model mosaic to %s" % filepath)
         self.gc_df.to_csv(filepath)
 
-    def show_build_process(self):
+    def show_build_process(self, show_all_spatial_fits=False):
         """
         Show the process of building the mosaic
         self goes as argument, to be available for viz
         """
 
-        self.viz.show_build_process(self, show_all_spatial_fits=False)
+        self.viz.show_build_process(self, show_all_spatial_fits=show_all_spatial_fits)
 
 
 class WorkingRetina(RetinaMath):
