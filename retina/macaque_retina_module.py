@@ -20,8 +20,8 @@ import brian2.units as b2u
 
 # Local
 from cxsystem2.core.tools import write_to_file, load_from_file
-from construct.apricot_fitter_module import ApricotFits
-from construct.construct_math_module import RetinaMath
+from retina.apricot_fitter_module import ApricotFits
+from retina.retina_math_module import RetinaMath
 
 # Builtin
 import sys

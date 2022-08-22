@@ -11,7 +11,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Local
-from construct.macaque_retina_module import ConstructRetina, WorkingRetina
+from retina.macaque_retina_module import ConstructRetina, WorkingRetina
 from stimuli import visual_stimulus_module as vs
 from cxsystem2.core.tools import write_to_file, load_from_file
 
@@ -22,7 +22,7 @@ import os
 
 class Experiment:
     """
-    Run your experiment here
+    Build your experiment here
     """
 
     def __init__(self, input_options={}):

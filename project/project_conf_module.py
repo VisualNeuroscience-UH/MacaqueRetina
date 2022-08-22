@@ -156,10 +156,10 @@ stimulus_video_name: name of the stimulus video
 my_stimulus_options = {
     #Shared btw stimulus and working_retina
     "image_width": 240, # 752 for nature1.avi
-    "image_height": 138, # 432 for nature1.avi
+    "image_height": 240, # 432 for nature1.avi
     "pix_per_deg": 60, 
     "fps": 30,
-    "pattern" : "natural_video", 
+    "pattern" : "sine_grating", # Natural video is not supported yet. One of the StimulusPatterns
     # stimulus only
     "stimulus_form" : "rectangular",
     "temporal_frequency" : 2,
@@ -228,8 +228,8 @@ my_retina_append = {
 
 my_retina.update(my_retina_append)
 
-apricot_data_folder = git_repo_root.joinpath(r"construct/apricot_data")
-literature_data_folder = git_repo_root.joinpath(r"construct/literature_data")
+apricot_data_folder = git_repo_root.joinpath(r"retina/apricot_data")
+literature_data_folder = git_repo_root.joinpath(r"retina/literature_data")
 
 # Define digitized literature data files for gc density and dendritic diameters.
 # Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
@@ -288,6 +288,8 @@ if __name__ == "__main__":
     # PM.cones.image2cone_response()
     # PM.viz.show_cone_response(PM.cones.image, PM.cones.image_after_optics, PM.cones.cone_response)
 
+    #TODO take raw hdf5 image through cone response to working retina
+
     #################################
     ### Build retina ###
     #################################
@@ -296,12 +298,12 @@ if __name__ == "__main__":
     Build and test your retina here, one gc type at a time. Temporal hemiretina of macaques.
     """
     
-    # # options are defined in my_retina_options
-    # PM.construct_retina.initialize()
+    # options are defined in my_retina_options
+    PM.construct_retina.initialize()
 
-    # PM.construct_retina.build()
+    PM.construct_retina.build()
 
-    # PM.construct_retina.save_mosaic()
+    PM.construct_retina.save_mosaic()
 
     # PM.construct_retina.show_build_process()
 
@@ -312,41 +314,48 @@ if __name__ == "__main__":
 
     # options are defined in my_stimulus_options
     # stimulus video will be saved on output_folder in mp4 format (viewing and hdf5 format (for reloading)
-    # PM.stimulate.make_stimulus_video()
+    PM.stimulate.make_stimulus_video()
     
-    N_tp = 20000
-    dt = 0.1 # ms
+    #######################################
+    ### Create analog current injection ###
+    #######################################
 
-    for freq in range(1,101):
-        N_cycles = freq * (dt/1000) * N_tp
-        print(f"Creating stim with {freq=}, holding {N_cycles=}")
+    # N_tp = 20000
+    # dt = 0.1 # ms
+
+    # # for freq in range(1,101):
+    # #     N_cycles = freq * (dt/1000) * N_tp
+    # #     print(f"Creating stim with {freq=}, holding {N_cycles=}")
         
-        filename_out =  f'freq_{freq:02}.mat'
+    # #     filename_out =  f'freq_{freq:02}.mat'
 
-        analog_options = {
-        "filename_out" : filename_out,
-        "N_units" :3,
-        "coord_type" :"real",
-        "N_tp" : N_tp,
-        "input_type" : 'quadratic_oscillation', # 'quadratic_oscillation' or 'noise' or 'step_current'
-        "N_cycles" : [N_cycles, 0, 0], # Scalar provides two units at quadrature, other units are zero. List of ints/floats provides separate freq to each. Ignored for noise.
-        "dt" : dt, # IMPORTANT: assuming milliseconds
-        "save_stimulus" : True
-        }
+    # freq = 2
+    # N_cycles = freq * (dt/1000) * N_tp
+    # filename_out =  'test.mat'
+    # analog_options = {
+    # "filename_out" : filename_out,
+    # "N_units" :3,
+    # "coord_type" :"real",
+    # "N_tp" : N_tp,
+    # "input_type" : 'quadratic_oscillation', # 'quadratic_oscillation' or 'noise' or 'step_current'
+    # "N_cycles" : [N_cycles, 0, 0], # Scalar provides two units at quadrature, other units are zero. List of ints/floats provides separate freq to each. Ignored for noise.
+    # "dt" : dt, # IMPORTANT: assuming milliseconds
+    # "save_stimulus" : True
+    # }
 
-        PM.analog_input.make_stimulus_video(analog_options=analog_options)
-        # PM.viz.plot_analog_stimulus(PM.analog_input)
+    # PM.analog_input.make_stimulus_video(analog_options=analog_options)
+    # PM.viz.plot_analog_stimulus(PM.analog_input)
     
     #################################
     ### Load stimulus to get working retina ###
     #################################
 
-    # # Reads the mosaic file from my_retina["mosaic_file_name"] at output_folder.
-    # PM.working_retina.initialize()
+    # Reads the mosaic file from my_retina["mosaic_file_name"] at output_folder.
+    PM.working_retina.initialize()
 
-    # # # If you want to load with object, it is possible by:
-    # # PM.working_retina.load_stimulus(PM.stimulate) 
-    # PM.working_retina.load_stimulus() 
+    # # If you want to load with object, it is possible by:
+    # PM.working_retina.load_stimulus(PM.stimulate) 
+    PM.working_retina.load_stimulus() 
 
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
     # ret.load_stimulus(movie)# => METADATA
@@ -367,11 +376,11 @@ if __name__ == "__main__":
     ### Run multiple trials for single cell ###
     #################################
 
-    # PM.working_retina.run_with_my_run_options()
+    PM.working_retina.run_with_my_run_options()
 
-    # PM.viz.show_gc_responses(PM.working_retina)
+    PM.viz.show_gc_responses(PM.working_retina)
 
-    # PM.viz.show_stimulus_with_gcs(PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51)
+    PM.viz.show_stimulus_with_gcs(PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51)
 
     # PM.viz.show_single_gc_view(PM.working_retina, cell_index=example_gc, frame_number=21)
 
