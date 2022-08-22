@@ -95,7 +95,7 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         self.construct_retina = ConstructRetina(context, data_io, viz)
         self.working_retina = WorkingRetina(context, data_io, viz)
 
-        analog_input = AnalogInput(context, data_io, viz, wr_initialize = self.working_retina.initialize, get_w_z_coords = self.working_retina.get_w_z_coords)
+        analog_input = AnalogInput(context, data_io, viz, wr_initialize = self.working_retina._initialize, get_w_z_coords = self.working_retina.get_w_z_coords)
         self.analog_input = analog_input
         
 

@@ -81,10 +81,7 @@ class Analysis(AnalysisBase):
         plt.show()
 
     def _show_rasterplot_from_df(self, spiketrain_df, unit_idx=0,title=''):
-        # pdb.set_trace()
-        # for i, spiketrain in enumerate(spiketrain_list):
-        #     t = spiketrain.rescale(b2u.ms)
-        #     plt.plot(t, i * np.ones_like(t), 'k.', markersize=2)
+
         plt.figure()
         unit_data_df = spiketrain_df.loc[spiketrain_df['unit_idx'] == unit_idx]
         plt.plot(unit_data_df['spike_time'], unit_data_df['trial'], 'k.', markersize=2)
@@ -110,10 +107,8 @@ class Analysis(AnalysisBase):
         #     block = nixfile.read_block()
         #     nixfile.close()
         #     spiketrains = el.neo_tools.get_all_spiketrains(block)
-        #     pdb.set_trace()
         # elif file_type=='cxsystem':
-        #     pdb.set_trace()
-
+        #   pass
         assert file_type=='cxsystem', 'Sorry, nix is defunc at the moment, u need to use cxsystem and gz filetype'
         
         data = load_from_file(fullpath)
@@ -189,7 +184,6 @@ class Analysis(AnalysisBase):
 
 
             self._show_rasterplot_from_df(spiketrains_df,unit_idx=unit_idx, title=cond_idx_key)
-            # pdb.set_trace()
 
         plt.show()
         csv_save_path = os.path.join(path + metadata_folder, 'contrast_df.csv')

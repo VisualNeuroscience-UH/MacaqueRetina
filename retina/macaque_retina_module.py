@@ -55,6 +55,8 @@ class ConstructRetina(RetinaMath):
         self._data_io = data_io
         self._viz = viz
 
+        self.initialized = False
+
     @property
     def context(self):
         return self._context
@@ -67,7 +69,7 @@ class ConstructRetina(RetinaMath):
     def viz(self):
         return self._viz
 
-    def initialize(self, fits_from_file=None):
+    def _initialize(self, fits_from_file=None):
 
         """
         Initialize the ganglion cell mosaic
@@ -191,6 +193,8 @@ class ConstructRetina(RetinaMath):
         self.good_data_indices = np.setdiff1d(
             range(self.n_cells_data), self.bad_data_indices
         )
+
+        self.initialized = True
 
     def _get_random_samples(self, shape, loc, scale, n_cells, distribution):
         """
@@ -848,6 +852,10 @@ class ConstructRetina(RetinaMath):
         Builds the receptive field mosaic
         :return:
         """
+
+        if self.initialized is False:
+            self._initialize()
+
         # -- First, place the ganglion cell midpoints
         # Run GC density fit to data, get func_params. Data from Perry_1984_Neurosci
         gc_density_func_params = self._fit_gc_density_data()
@@ -936,6 +944,8 @@ class WorkingRetina(RetinaMath):
         # viz.client_object = self  # injecting client object pointer into viz object
         self._viz = viz
 
+        self.initialized = False
+
     @property
     def context(self):
         return self._context
@@ -948,7 +958,7 @@ class WorkingRetina(RetinaMath):
     def viz(self):
         return self._viz
 
-    def initialize(self):
+    def _initialize(self):
         """
 
         :param gc_dataframe: Ganglion cell parameters; positions are retinal coordinates; positions_eccentricity in mm, positions_polar_angle in degrees
@@ -1016,6 +1026,8 @@ class WorkingRetina(RetinaMath):
         self.temporal_filter_len = 0
 
         self._initialize_digital_sampling()
+
+        self.initialized = True
 
     def _vspace_to_pixspace(self, x, y):
         """
@@ -1278,6 +1290,9 @@ class WorkingRetina(RetinaMath):
         :param stimulus_video: VideoBaseClass, visual stimulus to project to the ganglion cell mosaic
         :return:
         """
+
+        if self.initialized is False:
+            self._initialize()
 
         if stimulus_video is None:
             video_file_name = self.context.my_stimulus_metadata["stimulus_video_name"]

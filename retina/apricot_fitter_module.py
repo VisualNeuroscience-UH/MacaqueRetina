@@ -250,8 +250,7 @@ class ApricotFits(ApricotData, RetinaMath):
 
     def _fit_temporal_filters(self, normalize_before_fit=False):
         """
-        Fits each temporal filter to a function consisting of the difference of two
-        cascades of lowpass filters. This follows Chichilnisky&Kalmar 2002 JNeurosci.
+        Fits each temporal filter to a function consisting of the difference of two cascades of lowpass filters. This follows Chichilnisky&Kalmar 2002 JNeurosci.
 
         :return dataframe: concatenated parameters_df, error_df 
         :set self.temporal_filters_to_show: dict of temporal filters to show with viz
@@ -327,9 +326,7 @@ class ApricotFits(ApricotData, RetinaMath):
         show_spatial_filter_response=False,
     ):
         """
-        Fits a function consisting of the difference of two 2-dimensional elliptical Gaussian functions to
-        retinal spike triggered average (STA) data.
-        The show_spatial_filter_response parameter will show each DoG fit in order to search for bad cell fits and data.
+        Fits a function consisting of the difference of two 2-dimensional elliptical Gaussian functions to retinal spike triggered average (STA) data.The show_spatial_filter_response parameter will show each DoG fit in order to search for bad cell fits and data.
 
         :param show_spatial_filter_response: boolean, whether to visualize all fits
         :param surround_model: 0=fit center and surround separately, 1=surround midpoint same as center midpoint
@@ -406,7 +403,7 @@ class ApricotFits(ApricotData, RetinaMath):
             'pixel_array_shape_y' : pixel_array_shape_y,
         }
 
-        # GO THROUGH ALL CELLS
+        # Go through all cells
         print(("Fitting DoG model, surround is {0}".format(surround_status)))
         for cell_index in tqdm(all_viable_cells, desc="Fitting spatial  filters"):
             # pbar(cell_index/n_cells)

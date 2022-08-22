@@ -277,11 +277,7 @@ class DataIO(DataIOBase):
         ans = {}
         for key, item in h5file[path].items():
             if isinstance(item, h5py._hl.dataset.Dataset):
-                try:
-                    # ans[key] = item.value
-                    ans[key] = item[()]
-                except:
-                    pdb.set_trace()
+                ans[key] = item[()] # was ans[key] = item.value
             elif isinstance(item, h5py._hl.group.Group):
                 ans[key] = self._recursively_load_dict_contents_from_group(
                     h5file, path + key + "/"

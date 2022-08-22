@@ -299,11 +299,10 @@ if __name__ == "__main__":
     """
     
     # options are defined in my_retina_options
-    PM.construct_retina.initialize()
 
     PM.construct_retina.build()
 
-    PM.construct_retina.save_mosaic()
+    # PM.construct_retina.save_mosaic()
 
     # PM.construct_retina.show_build_process()
 
@@ -316,9 +315,11 @@ if __name__ == "__main__":
     # stimulus video will be saved on output_folder in mp4 format (viewing and hdf5 format (for reloading)
     PM.stimulate.make_stimulus_video()
     
-    #######################################
-    ### Create analog current injection ###
-    #######################################
+    ##############################
+    ### Create analog stimulus ###
+    ##############################
+
+    # # Analog stimulus comprises of continuous waveforms of types 'quadratic_oscillation', 'noise' or 'step_current'. You get few input  channels (N_units) of temporal signals. These signals do not pass through the retina, instead they are saved as .mat files.
 
     # N_tp = 20000
     # dt = 0.1 # ms
@@ -350,12 +351,9 @@ if __name__ == "__main__":
     ### Load stimulus to get working retina ###
     #################################
 
-    # Reads the mosaic file from my_retina["mosaic_file_name"] at output_folder.
-    PM.working_retina.initialize()
-
-    # # If you want to load with object, it is possible by:
-    # PM.working_retina.load_stimulus(PM.stimulate) 
-    PM.working_retina.load_stimulus() 
+    # # # If you want to load with object, it is possible by:
+    PM.working_retina.load_stimulus(PM.stimulate) 
+    # PM.working_retina.load_stimulus() 
 
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
     # ret.load_stimulus(movie)# => METADATA
@@ -364,8 +362,8 @@ if __name__ == "__main__":
     ### Show single ganglion cell response ###
     #################################
 
-    # example_gc = 2  # int or 'None'
-    # PM.working_retina.convolve_stimulus(example_gc)
+    example_gc = 2  # int or 'None'
+    PM.working_retina.convolve_stimulus(example_gc)
 
     # PM.viz.show_spatiotemporal_filter(PM.working_retina)
     # PM.viz.show_convolved_stimulus(PM.working_retina)
@@ -380,7 +378,7 @@ if __name__ == "__main__":
 
     PM.viz.show_gc_responses(PM.working_retina)
 
-    PM.viz.show_stimulus_with_gcs(PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51)
+    # PM.viz.show_stimulus_with_gcs(PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51)
 
     # PM.viz.show_single_gc_view(PM.working_retina, cell_index=example_gc, frame_number=21)
 
