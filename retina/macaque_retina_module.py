@@ -87,6 +87,8 @@ class ConstructRetina(RetinaMath):
         randomize_position = my_retina["randomize_position"]
         self.deg_per_mm = my_retina["deg_per_mm"]
 
+        self.model_type = my_retina["model_type"]
+
         proportion_of_parasol_gc_type = my_retina["proportion_of_parasol_gc_type"]
         proportion_of_midget_gc_type = my_retina["proportion_of_midget_gc_type"]
         proportion_of_ON_response_type = my_retina["proportion_of_ON_response_type"]
@@ -129,8 +131,7 @@ class ConstructRetina(RetinaMath):
                 * model_density
             )
         else:
-            print("Unknown ganglion cell type, aborting")
-            sys.exit()
+            raise ValueError("Unknown ganglion cell type, aborting")
 
         self.gc_type = gc_type
         self.response_type = response_type
@@ -172,27 +173,32 @@ class ConstructRetina(RetinaMath):
         self.stimulus_video = None
 
         # Make or read fits
-        if fits_from_file is None:
-            # init and call -- only connection to apricot_fitter_module
-            (
-                self.all_fits_df,
-                self.temporal_filters_to_show,
-                self.spatial_filters_to_show,
-            ) = ApricotFits(
-                self.context.apricot_data_folder, gc_type, response_type
-            ).get_fits()
-        else:
-            self.all_fits_df = pd.read_csv(
-                fits_from_file, header=0, index_col=0
-            ).fillna(0.0)
+        if self.model_type == "FIT":
+            if fits_from_file is None:
+                # init and call -- only connection to apricot_fitter_module
+                (
+                    self.all_fits_df,
+                    self.temporal_filters_to_show,
+                    self.spatial_filters_to_show,
+                ) = ApricotFits(
+                    self.context.apricot_data_folder, gc_type, response_type
+                ).get_fits()
+            else:
+                self.all_fits_df = pd.read_csv(
+                    fits_from_file, header=0, index_col=0
+                ).fillna(0.0)
 
-        self.n_cells_data = len(self.all_fits_df)
-        self.bad_data_indices = np.where((self.all_fits_df == 0.0).all(axis=1))[
-            0
-        ].tolist()
-        self.good_data_indices = np.setdiff1d(
-            range(self.n_cells_data), self.bad_data_indices
-        )
+            self.n_cells_data = len(self.all_fits_df)
+            self.bad_data_indices = np.where((self.all_fits_df == 0.0).all(axis=1))[
+                0
+            ].tolist()
+            self.good_data_indices = np.setdiff1d(
+                range(self.n_cells_data), self.bad_data_indices
+            )
+        elif self.model_type == "VAE":
+            # Fit variational autoencoder to generate ganglion cells
+            #TÄHÄN JÄIT TEE vae MODEL FIT
+            pass
 
         self.initialized = True
 
@@ -864,40 +870,46 @@ class ConstructRetina(RetinaMath):
         # Place ganglion cells to desired retina.
         self._place_gc_units(gc_density_func_params)
 
-        # -- Second, endow cells with spatial receptive fields
-        # Collect spatial statistics for receptive fields
-        spatial_statistics_dict = self._fit_spatial_statistics()
+        if self.model_type == "FIT":
+            # -- Second, endow cells with spatial receptive fields
+            # Collect spatial statistics for receptive fields
+            spatial_statistics_dict = self._fit_spatial_statistics()
 
-        # Get fit parameters for dendritic field diameter with respect to eccentricity. Linear and quadratic fit.
-        # Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
-        dendr_diam_vs_eccentricity_parameters_dict = (
-            self._fit_dendritic_diameter_vs_eccentricity()
-        )
+            # Get fit parameters for dendritic field diameter with respect to eccentricity. Linear and quadratic fit.
+            # Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
+            dendr_diam_vs_eccentricity_parameters_dict = (
+                self._fit_dendritic_diameter_vs_eccentricity()
+            )
 
-        # Construct spatial receptive fields. Centers are saved in the object
-        self._place_spatial_receptive_fields(
-            spatial_statistics_dict,
-            dendr_diam_vs_eccentricity_parameters_dict,
-        )
+            # Construct spatial receptive fields. Centers are saved in the object
+            self._place_spatial_receptive_fields(
+                spatial_statistics_dict,
+                dendr_diam_vs_eccentricity_parameters_dict,
+            )
 
-        # Scale center and surround amplitude so that Gaussian volume is preserved
-        self._scale_both_amplitudes()  # TODO - what was the purpose of this?
+            # Scale center and surround amplitude so that Gaussian volume is preserved
+            self._scale_both_amplitudes()  # TODO - what was the purpose of this?
 
-        # At this point the spatial receptive fields are ready.
-        # The positions are in gc_eccentricity, gc_polar_angle, and the rf parameters in gc_rf_models
-        n_rgc = len(self.gc_df)
+            # At this point the spatial receptive fields are ready.
+            # The positions are in gc_eccentricity, gc_polar_angle, and the rf parameters in gc_rf_models
+            n_rgc = len(self.gc_df)
 
-        # Summarize RF semi_xc and semi_yc as "RF radius" (geometric mean)
-        self.gc_df["rf_radius"] = np.sqrt(self.gc_df.semi_xc * self.gc_df.semi_yc)
+            # Summarize RF semi_xc and semi_yc as "RF radius" (geometric mean)
+            self.gc_df["rf_radius"] = np.sqrt(self.gc_df.semi_xc * self.gc_df.semi_yc)
 
-        # Finally, get non-spatial parameters
-        temporal_statistics_df = self._fit_temporal_statistics()
-        self._create_temporal_filters(temporal_statistics_df)
+            # Finally, get non-spatial parameters
+            temporal_statistics_df = self._fit_temporal_statistics()
+            self._create_temporal_filters(temporal_statistics_df)
 
-        td_shape, td_loc, td_scale = self._fit_tonic_drives()
-        self.gc_df["tonicdrive"] = self._get_random_samples(
-            td_shape, td_loc, td_scale, n_rgc, "gamma"
-        )
+            td_shape, td_loc, td_scale = self._fit_tonic_drives()
+            self.gc_df["tonicdrive"] = self._get_random_samples(
+                td_shape, td_loc, td_scale, n_rgc, "gamma"
+            )
+        elif self.model_type == "VAE":
+            # Build variational autoencoder model for given gc_type and response_type
+            pass
+        else:
+            raise ValueError("Model type not recognized")
 
         print("Built RGC mosaic with %d cells" % n_rgc)
 
@@ -965,6 +977,7 @@ class WorkingRetina(RetinaMath):
         :param gc_dataframe: Ganglion cell parameters; positions are retinal coordinates; positions_eccentricity in mm, positions_polar_angle in degrees
         """
 
+        # Read fitted parameters from file
         gc_dataframe = self.data_io.get_data(
             filename=self.context.my_retina["mosaic_file_name"]
         )
@@ -978,6 +991,8 @@ class WorkingRetina(RetinaMath):
         pix_per_deg = self.context.my_stimulus_options["pix_per_deg"]
         fps = self.context.my_stimulus_options["fps"]
 
+        self.model_type = self.context.my_retina["model_type"]
+        
         # Metadata for Apricot dataset. TODO move to project_conf module
         self.data_microm_per_pixel = 60
         self.data_filter_fps = 30  # Uncertain - "30 or 120 Hz"
@@ -1266,6 +1281,10 @@ class WorkingRetina(RetinaMath):
 
         return stimulus_cropped
 
+    def _filter_from_VAE_model(self, cell_index):
+        # Convolve stimulus with VAE model
+        pass
+
     def get_w_z_coords(self):
         """
         # Create w_coord, z_coord for cortical and visual coordinates, respectively
@@ -1335,16 +1354,18 @@ class WorkingRetina(RetinaMath):
         :param cell_index: int
         :return:
         """
+        if self.model_type == "FIT":
+            spatial_filter = self._create_spatial_filter(cell_index)
+            s = self.spatial_filter_sidelen
+            spatial_filter_1d = np.array([np.reshape(spatial_filter, s**2)]).T
 
-        spatial_filter = self._create_spatial_filter(cell_index)
-        s = self.spatial_filter_sidelen
-        spatial_filter_1d = np.array([np.reshape(spatial_filter, s**2)]).T
+            temporal_filter = self._create_temporal_filter(cell_index)
 
-        temporal_filter = self._create_temporal_filter(cell_index)
-
-        spatiotemporal_filter = (
-            spatial_filter_1d * temporal_filter
-        )  # (Nx1) * (1xT) = NxT
+            spatiotemporal_filter = (
+                spatial_filter_1d * temporal_filter
+            )  # (Nx1) * (1xT) = NxT
+        elif self.model_type == "VAE":
+            spatiotemporal_filter = self._filter_from_VAE_model(cell_index)
 
         if called_from_loop is False:
             self.spatiotemporal_filter_to_show = {

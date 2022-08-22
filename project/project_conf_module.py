@@ -97,13 +97,14 @@ path = Path.joinpath(root_path, Path(project), experiment)
 
 
 my_retina = {
-    "gc_type" : "midget",
+    "gc_type" : "parasol",
     "response_type" : "on",
     "ecc_limits" : [4.8, 5.2],
     "sector_limits" : [-0.4, 0.4],
     "model_density" : 1.0,
     "randomize_position" : 0.05,
     "stimulus_center": 4.45 + 0j,
+    "model_type" : "VAE", # "FIT" or "VAE" for variational autoencoder
 }
 
 

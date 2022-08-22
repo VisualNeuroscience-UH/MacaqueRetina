@@ -237,6 +237,29 @@ class ApricotData:
         )
 
 
+class ApricotVAE(ApricotData):
+    """
+    Class for creating model for variational autoencoder from  Apricot data 
+    """
+
+    # Load temporal and spatial data from Apricot data
+    def __init__(self, gc_type, response_type, apricot_data_folder):
+        super().__init__(gc_type, response_type, apricot_data_folder)
+        self.temporal_filename = "temporal_filter_%s_%s.mat" % (
+            self.gc_type,
+            self.response_type,
+        )
+        self.spatial_filename = "spatial_filter_%s_%s.mat" % (
+            self.gc_type,
+            self.response_type,
+        )
+        self.temporal_filter_data = self.read_temporal_filter_data()
+        self.spatial_filter_data = self.read_spatial_filter_data()
+        self.spatial_filter_sums = self.compute_spatial_filter_sums()
+        self.temporal_filter_sums = self.compute_temporal_filter_sums()
+
+        pdb.set_trace()
+
 class ApricotFits(ApricotData, RetinaMath):
     """
     Methods for deriving spatial receptive field parameters from the apricot dataset (Field_2010)
