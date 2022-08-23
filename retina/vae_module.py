@@ -3,6 +3,8 @@ import numpy as np
 # import scipy.optimize as opt
 # import scipy.io as sio
 # from scipy.optimize import curve_fit
+from scipy.ndimage import zoom
+from scipy.interpolate import RectBivariateSpline
 import pandas as pd
 
 # Machine learning
@@ -32,30 +34,6 @@ class Sampling(layers.Layer):
         dim = tf.shape(z_mean)[1]
         epsilon = tf.keras.backend.random_normal(shape=(batch, dim))
         return z_mean + tf.exp(0.5 * z_log_var) * epsilon
-
-
-latent_dim = 2
-
-encoder_inputs = keras.Input(shape=(28, 28, 1))
-x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(encoder_inputs)
-x = layers.Conv2D(64, 3, activation="relu", strides=2, padding="same")(x)
-x = layers.Flatten()(x)
-x = layers.Dense(16, activation="relu")(x)
-z_mean = layers.Dense(latent_dim, name="z_mean")(x)
-z_log_var = layers.Dense(latent_dim, name="z_log_var")(x)
-z = Sampling()([z_mean, z_log_var])
-encoder = keras.Model(encoder_inputs, [z_mean, z_log_var, z], name="encoder")
-encoder.summary()
-
-
-latent_inputs = keras.Input(shape=(latent_dim,))
-x = layers.Dense(7 * 7 * 64, activation="relu")(latent_inputs)
-x = layers.Reshape((7, 7, 64))(x)
-x = layers.Conv2DTranspose(64, 3, activation="relu", strides=2, padding="same")(x)
-x = layers.Conv2DTranspose(32, 3, activation="relu", strides=2, padding="same")(x)
-decoder_outputs = layers.Conv2DTranspose(1, 3, activation="sigmoid", padding="same")(x)
-decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
-decoder.summary()
 
 
 class VAE(keras.Model):
@@ -101,87 +79,148 @@ class VAE(keras.Model):
         }
 
 
-(x_train, _), (x_test, _) = keras.datasets.mnist.load_data()
-mnist_digits = np.concatenate([x_train, x_test], axis=0)
-mnist_digits = np.expand_dims(mnist_digits, -1).astype("float32") / 255
+class ApricotVAE(ApricotData):
+    """
+    Class for creating model for variational autoencoder from  Apricot data 
+    """
 
-vae = VAE(encoder, decoder)
-vae.compile(optimizer=keras.optimizers.Adam())
-pdb.set_trace()
-vae.fit(mnist_digits, epochs=2, batch_size=128)
+    # Load temporal and spatial data from Apricot data
+    def __init__(self, apricot_data_folder, gc_type, response_type):
+        super().__init__(apricot_data_folder, gc_type, response_type)
 
-
-
-def plot_latent_space(vae, n=30, figsize=15):
-    # display a n*n 2D manifold of digits
-    digit_size = 28
-    scale = 1.0
-    figure = np.zeros((digit_size * n, digit_size * n))
-    # linearly spaced coordinates corresponding to the 2D plot
-    # of digit classes in the latent space
-    grid_x = np.linspace(-scale, scale, n)
-    grid_y = np.linspace(-scale, scale, n)[::-1]
-
-    for i, yi in enumerate(grid_y):
-        for j, xi in enumerate(grid_x):
-            z_sample = np.array([[xi, yi]])
-            x_decoded = vae.decoder.predict(z_sample)
-            digit = x_decoded[0].reshape(digit_size, digit_size)
-            figure[
-                i * digit_size : (i + 1) * digit_size,
-                j * digit_size : (j + 1) * digit_size,
-            ] = digit
-
-    plt.figure(figsize=(figsize, figsize))
-    start_range = digit_size // 2
-    end_range = n * digit_size + start_range
-    pixel_range = np.arange(start_range, end_range, digit_size)
-    sample_range_x = np.round(grid_x, 1)
-    sample_range_y = np.round(grid_y, 1)
-    plt.xticks(pixel_range, sample_range_x)
-    plt.yticks(pixel_range, sample_range_y)
-    plt.xlabel("z[0]")
-    plt.ylabel("z[1]")
-    plt.imshow(figure, cmap="Greys_r")
-    plt.show()
+        self.temporal_filter_data = self.read_temporal_filter_data()
+        self.spatial_filter_data = self.read_spatial_filter_data()
+        # self.spatial_filter_sums = self.compute_spatial_filter_sums()
+        # self.temporal_filter_sums = self.compute_temporal_filter_sums()
+        self.bad_data_indices = self.spatial_filter_data[2]
 
 
-plot_latent_space(vae)
+        self._fit_all()
+
+    def _build_encoder(self, input_shape=(None, None, 1)):
+        """
+        Build encoder
+        """
+
+        encoder_inputs = keras.Input(shape=input_shape)
+        x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(encoder_inputs)
+        x = layers.Conv2D(64, 3, activation="relu", strides=2, padding="same")(x)
+        x = layers.Flatten()(x)
+        x = layers.Dense(16, activation="relu")(x)
+        z_mean = layers.Dense(self.latent_dim, name="z_mean")(x)
+        z_log_var = layers.Dense(self.latent_dim, name="z_log_var")(x)
+        z = Sampling()([z_mean, z_log_var])
+        encoder = keras.Model(encoder_inputs, [z_mean, z_log_var, z], name="encoder")
+        encoder.summary()
+
+        return encoder
+
+    def _build_decoder(self):
+
+        # Build decoder
+        latent_inputs = keras.Input(shape=(self.latent_dim,))
+        x = layers.Dense(7 * 7 * 64, activation="relu")(latent_inputs)
+        x = layers.Reshape((7, 7, 64))(x)
+        x = layers.Conv2DTranspose(64, 3, activation="relu", strides=2, padding="same")(x)
+        x = layers.Conv2DTranspose(32, 3, activation="relu", strides=2, padding="same")(x)
+        decoder_outputs = layers.Conv2DTranspose(1, 3, activation="sigmoid", padding="same")(x)
+        decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
+        decoder.summary()
+
+        return decoder
+
+    def plot_latent_space(self, vae, n=30, figsize=15):
+        # display a n*n 2D manifold of digits
+        digit_size = 28
+        scale = 1.0
+        figure = np.zeros((digit_size * n, digit_size * n))
+        # linearly spaced coordinates corresponding to the 2D plot
+        # of digit classes in the latent space
+        grid_x = np.linspace(-scale, scale, n)
+        grid_y = np.linspace(-scale, scale, n)[::-1]
+
+        for i, yi in enumerate(grid_y):
+            for j, xi in enumerate(grid_x):
+                z_sample = np.array([[xi, yi]])
+                x_decoded = vae.decoder.predict(z_sample)
+                digit = x_decoded[0].reshape(digit_size, digit_size)
+                figure[
+                    i * digit_size : (i + 1) * digit_size,
+                    j * digit_size : (j + 1) * digit_size,
+                ] = digit
+
+        plt.figure(figsize=(figsize, figsize))
+        start_range = digit_size // 2
+        end_range = n * digit_size + start_range
+        pixel_range = np.arange(start_range, end_range, digit_size)
+        sample_range_x = np.round(grid_x, 1)
+        sample_range_y = np.round(grid_y, 1)
+        plt.xticks(pixel_range, sample_range_x)
+        plt.yticks(pixel_range, sample_range_y)
+        plt.xlabel("z[0]")
+        plt.ylabel("z[1]")
+        plt.imshow(figure, cmap="Greys_r")
+        
+        plt.figure()
+        plt.hist(figure.flatten(), bins=30, density=True)
+        plt.show()
+
+    def _prep_data(self, data):
+        """
+        Prep data for training
+        """
+        
+        # rf_data should have shape N samples, xdim, ydim, 1
+        upsampled_data = np.zeros((data.shape[2], 28, 28, 1))
+        xx = np.array(range(data.shape[1]))
+        yy = np.array(range(data.shape[0]))
+        xnew = np.linspace(0, 13, num=28)
+        ynew = np.linspace(0, 13, num=28)
+
+        # Temporary upsampling to build vae model
+        for this_sample in range(data.shape[2]):
+            aa = data[:,:,this_sample] # 2-D array of data with shape (x.size,y.size)
+            f = RectBivariateSpline(xx, yy, aa)
+            upsampled_data[this_sample, :, :, 0] = f(xnew, ynew)
 
 
+        # RectBivariateSpline
+        # # Divide data into train and test sets
+        # train_data, test_data = train_test_split(data, test_size=0.2, random_state=42)
+        # (train_data, _), (test_data, _) = keras.datasets.mnist.load_data()
+        # rf_data = np.concatenate([train_data, test_data], axis=0)
+        # rf_data = np.expand_dims(rf_data, -1).astype("float32") / 25
 
+        rf_data = upsampled_data
 
+        return rf_data
 
+    def _fit_spatial_vae(self):
 
+        gc_spatial_data_array, initial_center_values, _ \
+            = self.spatial_filter_data
 
+        # input_shape = gc_spatial_data_array.shape[:2] + (1,)
+        input_shape = (28, 28, 1) # tmp for buildup
+        self.latent_dim = 2
 
-# class ApricotVAE(ApricotData):
-#     """
-#     Class for creating model for variational autoencoder from  Apricot data 
-#     """
+        # Build spatial VAE
+        self.encoder = self._build_encoder(input_shape=input_shape)
+        self.decoder = self._build_decoder()
 
-#     # Load temporal and spatial data from Apricot data
-#     def __init__(self, apricot_data_folder, gc_type, response_type):
-#         super().__init__(apricot_data_folder, gc_type, response_type)
+        rf_data = self._prep_data(gc_spatial_data_array)
 
-#         self.temporal_filter_data = self.read_temporal_filter_data()
-#         self.spatial_filter_data = self.read_spatial_filter_data()
-#         # self.spatial_filter_sums = self.compute_spatial_filter_sums()
-#         # self.temporal_filter_sums = self.compute_temporal_filter_sums()
-#         self.bad_data_indices = self.spatial_filter_data[2]
+        vae = VAE(self.encoder, self.decoder)
+        vae.compile(optimizer=keras.optimizers.Adam())
 
-#         self._fit_all()
+        vae.fit(rf_data, epochs=30, batch_size=16)
 
-#     def _fit_spatial_vae(self):
+        self.plot_latent_space(vae)
+        # TÄHÄN JÄIT. VAE PAINAA KAIKKI NOLLAAN KUN OPETTAA PIDEMPÄÄN. EPOCH=2 TOIMII
+        pdb.set_trace()
 
-#         gc_spatial_data_array, initial_center_values, _ \
-#             = self.spatial_filter_data
+        return model
 
-
-
-#         pdb.set_trace()
-#         return model
-
-#     def _fit_all(self):
-#         spatial_model = self._fit_spatial_vae()
+    def _fit_all(self):
+        spatial_model = self._fit_spatial_vae()
 

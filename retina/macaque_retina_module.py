@@ -20,8 +20,9 @@ import brian2.units as b2u
 
 # Local
 from cxsystem2.core.tools import write_to_file, load_from_file
-from retina.apricot_fitter_module import ApricotFits, ApricotVAE
+from retina.apricot_fitter_module import ApricotFits
 from retina.retina_math_module import RetinaMath
+from retina.vae_module import ApricotVAE
 
 # Builtin
 import sys
@@ -197,6 +198,7 @@ class ConstructRetina(RetinaMath):
         elif self.model_type == "VAE":
             # Fit variational autoencoder to generate ganglion cells
             self.vae_model = ApricotVAE(self.context.apricot_data_folder, gc_type, response_type)
+            print("Back to ConstructRetina!")
             pdb.set_trace()
 
         self.initialized = True
