@@ -20,7 +20,7 @@ import brian2.units as b2u
 
 # Local
 from cxsystem2.core.tools import write_to_file, load_from_file
-from retina.apricot_fitter_module import ApricotFits
+from retina.apricot_fitter_module import ApricotFits, ApricotVAE
 from retina.retina_math_module import RetinaMath
 
 # Builtin
@@ -142,38 +142,37 @@ class ConstructRetina(RetinaMath):
         )  # Turn list to numpy array
         self.theta = np.asarray(sector_limits)  # Turn list to numpy array
         self.randomize_position = randomize_position
-        self.dendr_diam_model = "quadratic"  # 'linear' # 'quadratic' # cubic
-
-        # If study concerns visual field within 4 mm (20 deg) of retinal eccentricity, the cubic fit for
-        # dendritic diameters fails close to fovea. Better limit it to more central part of the data
+        
+        # If study concerns visual field within 4 mm (20 deg) of retinal eccentricity, the cubic fit for dendritic diameters fails close to fovea. Better limit it to more central part of the data
         if np.max(self.eccentricity_in_mm) <= 4:
             self.visual_field_fit_limit = 4
         else:
             self.visual_field_fit_limit = np.inf
 
-        # If surround is fixed, the surround position, semi_x, semi_y (aspect_ratio)
-        # and orientation are are the same as center params. This appears to give better results.
-        self.surround_fixed = 1
-
-        # Initialize pandas dataframe to hold the ganglion cells (one per row) and all their parameters in one place
-        columns = [
-            "positions_eccentricity",
-            "positions_polar_angle",
-            "eccentricity_group_index",
-            "semi_xc",
-            "semi_yc",
-            "xy_aspect_ratio",
-            "amplitudes",
-            "sur_ratio",
-            "orientation_center",
-        ]
-        self.gc_df = pd.DataFrame(columns=columns)
-
-        # Set stimulus stuff
-        self.stimulus_video = None
-
-        # Make or read fits
         if self.model_type == "FIT":
+            self.dendr_diam_model = "quadratic"  # 'linear' # 'quadratic' # cubic
+
+            # If surround is fixed, the surround position, semi_x, semi_y (aspect_ratio) and orientation are the same as center params. This appears to give better results.
+            self.surround_fixed = 1
+
+            # Initialize pandas dataframe to hold the ganglion cells (one per row) and all their parameters in one place
+            columns = [
+                "positions_eccentricity",
+                "positions_polar_angle",
+                "eccentricity_group_index",
+                "semi_xc",
+                "semi_yc",
+                "xy_aspect_ratio",
+                "amplitudes",
+                "sur_ratio",
+                "orientation_center",
+            ]
+            self.gc_df = pd.DataFrame(columns=columns)
+
+            # Set stimulus stuff
+            self.stimulus_video = None
+
+            # Make or read fits
             if fits_from_file is None:
                 # init and call -- only connection to apricot_fitter_module
                 (
@@ -197,8 +196,8 @@ class ConstructRetina(RetinaMath):
             )
         elif self.model_type == "VAE":
             # Fit variational autoencoder to generate ganglion cells
-            #TÄHÄN JÄIT TEE vae MODEL FIT
-            pass
+            self.vae_model = ApricotVAE(self.context.apricot_data_folder, gc_type, response_type)
+            pdb.set_trace()
 
         self.initialized = True
 
@@ -906,7 +905,7 @@ class ConstructRetina(RetinaMath):
                 td_shape, td_loc, td_scale, n_rgc, "gamma"
             )
         elif self.model_type == "VAE":
-            # Build variational autoencoder model for given gc_type and response_type
+            # Use the generative variational autoencoder model to provide spatial and temporal receptive fields
             pass
         else:
             raise ValueError("Model type not recognized")
@@ -917,7 +916,7 @@ class ConstructRetina(RetinaMath):
 
         output_folder = self.context.output_folder
 
-        # Create output folder if it doues not exist, with parents
+        # Create output folder if it does not exist, with parents
         if not output_folder.exists():
             Path.mkdir(output_folder, mode=0o771, parents=True, exist_ok=False)
 
