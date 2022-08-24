@@ -44,10 +44,6 @@ class VAE(keras.Model):
         assert input_shape is not None, 'Argument input_shape  must be specified, aborting...'
         assert latent_dim is not None, 'Argument latent_dim must be specified, aborting...'
 
-
-        # self.encoder = encoder
-        # self.decoder = decoder
-
         """
         Build encoder
         """
@@ -141,7 +137,7 @@ class ApricotVAE(ApricotData, VAE):
 
     def plot_latent_space(self, vae, n=30, figsize=15):
         # display a n*n 2D manifold of digits
-        digit_size = 28
+        digit_size = 28 # side length of the digits
         scale = 1.0
         figure = np.zeros((digit_size * n, digit_size * n))
         # linearly spaced coordinates corresponding to the 2D plot
@@ -174,30 +170,51 @@ class ApricotVAE(ApricotData, VAE):
         plt.figure()
         plt.hist(figure.flatten(), bins=30, density=True)
 
-    def plot_comparison_image_samples(self, array1, array2):
+    def plot_random_samples(self, image_array, n=10):
         """
-        Displays ten random images from each one of the supplied arrays.
+        Displays n random images from each one of the supplied arrays.
         """
 
-        n = 10
+        if isinstance(image_array, list):
+            nrows = len(image_array)
+            # Assert that all supplied arrays are of type numpy.ndarray and are of the same length
+            for image_array_i in image_array:
+                assert isinstance(image_array_i, np.ndarray)
+                assert len(image_array_i) == len(image_array[0])
+        else:
+            nrows = 1
+            image_array = [image_array]
 
-        indices = np.random.randint(len(array1), size=n)
-        images1 = array1[indices, :]
-        images2 = array2[indices, :]
+        indices = np.random.randint(len(image_array[0]), size=n)
+        images1 = image_array[0][indices, :]
 
-        plt.figure(figsize=(20, 4))
-        for i, (image1, image2) in enumerate(zip(images1, images2)):
-            ax = plt.subplot(2, n, i + 1)
-            plt.imshow(image1.reshape(28, 28))
+        images1_min = np.min(images1.flatten())
+        images1_max = np.max(images1.flatten())
+
+        plt.figure(figsize=(20, 2 * nrows))
+
+        for i, image1 in enumerate(images1):
+            ax = plt.subplot(nrows, n, i + 1)
+            plt.imshow(image1.reshape(28, 28), vmin=images1_min, vmax=images1_max)
             plt.gray()
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
+        plt.colorbar()
 
-            ax = plt.subplot(2, n, i + 1 + n)
-            plt.imshow(image2.reshape(28, 28))
-            plt.gray()
-            ax.get_xaxis().set_visible(False)
-            ax.get_yaxis().set_visible(False)
+        if nrows > 1:
+            for i, image_array_i in enumerate(image_array[1:]):
+                images2 = image_array_i[indices, :]
+                images2_min = np.min(images2.flatten())
+                images2_max = np.max(images2.flatten())
+
+                for j, image2 in enumerate(images2):
+                    ax = plt.subplot(nrows, n, i * n + j + 1 + n)
+                    plt.imshow(image2.reshape(28, 28), vmin=images2_min, vmax=images2_max)
+                    plt.gray()
+                    ax.get_xaxis().set_visible(False)
+                    ax.get_yaxis().set_visible(False)
+                plt.colorbar()
+
 
     def _prep_data(self, data):
         """
@@ -214,16 +231,11 @@ class ApricotVAE(ApricotData, VAE):
         # Temporary upsampling to build vae model
         for this_sample in range(data.shape[2]):
             aa = data[:,:,this_sample] # 2-D array of data with shape (x.size,y.size)
+            # Normalize to [0, 1]
+            aa = (aa - aa.min()) / (aa.max() - aa.min())
             f = RectBivariateSpline(xx, yy, aa)
             upsampled_data[this_sample, :, :, 0] = f(xnew, ynew)
 
-
-        # RectBivariateSpline
-        # # Divide data into train and test sets
-        # train_data, test_data = train_test_split(data, test_size=0.2, random_state=42)
-        # (train_data, _), (test_data, _) = keras.datasets.mnist.load_data()
-        # rf_data = np.concatenate([train_data, test_data], axis=0)
-        # rf_data = np.expand_dims(rf_data, -1).astype("float32") / 25
 
         rf_data = upsampled_data
 
@@ -238,28 +250,34 @@ class ApricotVAE(ApricotData, VAE):
         input_shape = (28, 28, 1) # tmp for buildup
         latent_dim = 2
 
-        # # Build spatial VAE
-        # self.encoder = self.build_encoder(input_shape=input_shape)
-        # self.decoder = self.build_decoder()
-
         # vae = VAE(self.encoder, self.decoder)
         vae = VAE(input_shape=input_shape, latent_dim=latent_dim)
         vae.compile(optimizer=keras.optimizers.Adam())
 
         rf_data = self._prep_data(gc_spatial_data_array)
 
-        vae.fit(rf_data, epochs=200, batch_size=16)
+        fit_history = vae.fit(rf_data, epochs=2000, batch_size=32, validation_split=0.1)
 
-        return vae, rf_data
+        return vae, rf_data, fit_history
 
     def _fit_all(self):
 
-        spatial_vae, rf_data = self._fit_spatial_vae()
+        spatial_vae, rf_data, fit_history = self._fit_spatial_vae()
 
         # Quality of fit
-        # self.plot_latent_space(spatial_vae)
-        predictions, z_mean, z_log_var, z = spatial_vae.predict(rf_data)
-        self.plot_comparison_image_samples(rf_data, predictions)
+        # self.plot_latent_space(spatial_vae, n=5)
+        predictions, z_mean, z_log_var, z_input = spatial_vae.predict(rf_data)
+
+        # Random sample from latent space
+        z_random = Sampling()([z_mean, z_log_var]).numpy()
+        reconstruction = spatial_vae.decoder(z_random)
+        plt.plot(z_input[:, 0])
+        plt.plot(z_random[:, 0])
+        plt.plot(z_mean[:, 0])
+        plt.show()
+        pdb.set_trace()
+        self.plot_random_samples([rf_data, predictions, reconstruction.numpy()], n=5)
+        # self.plot_random_samples(reconstruction.numpy())
 
         plt.show()
         sys.exit()
