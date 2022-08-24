@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt
 from retina.apricot_fitter_module import ApricotData
 
 # Builtin
+import sys
 import pdb
 
 
@@ -37,15 +38,54 @@ class Sampling(layers.Layer):
 
 
 class VAE(keras.Model):
-    def __init__(self, encoder, decoder, **kwargs):
+    def __init__(self, input_shape=None, latent_dim=None, **kwargs):
         super(VAE, self).__init__(**kwargs)
-        self.encoder = encoder
-        self.decoder = decoder
+
+        assert input_shape is not None, 'Argument input_shape  must be specified, aborting...'
+        assert latent_dim is not None, 'Argument latent_dim must be specified, aborting...'
+
+
+        # self.encoder = encoder
+        # self.decoder = decoder
+
+        """
+        Build encoder
+        """
+        encoder_inputs = keras.Input(shape=input_shape)
+        x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(encoder_inputs)
+        x = layers.Conv2D(64, 3, activation="relu", strides=2, padding="same")(x)
+        x = layers.Flatten()(x)
+        x = layers.Dense(16, activation="relu")(x)
+        z_mean = layers.Dense(latent_dim, name="z_mean")(x)
+        z_log_var = layers.Dense(latent_dim, name="z_log_var")(x)
+        z = Sampling()([z_mean, z_log_var])
+        self.encoder = keras.Model(encoder_inputs, [z_mean, z_log_var, z], name="encoder")
+        self.encoder.summary()
+
+        '''
+        Build decoder
+        '''
+
+        latent_inputs = keras.Input(shape=(latent_dim,))
+        x = layers.Dense(7 * 7 * 64, activation="relu")(latent_inputs)
+        x = layers.Reshape((7, 7, 64))(x)
+        x = layers.Conv2DTranspose(64, 3, activation="relu", strides=2, padding="same")(x)
+        x = layers.Conv2DTranspose(32, 3, activation="relu", strides=2, padding="same")(x)
+        decoder_outputs = layers.Conv2DTranspose(1, 3, activation="sigmoid", padding="same")(x)
+        self.decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
+        self.decoder.summary()
+
+
         self.total_loss_tracker = keras.metrics.Mean(name="total_loss")
         self.reconstruction_loss_tracker = keras.metrics.Mean(
             name="reconstruction_loss"
         )
         self.kl_loss_tracker = keras.metrics.Mean(name="kl_loss")
+
+    def call(self, inputs):
+        z_mean, z_log_var, z = self.encoder(inputs)
+        reconstruction = self.decoder(z)
+        return reconstruction, z_mean, z_log_var, z
 
     @property
     def metrics(self):
@@ -79,7 +119,9 @@ class VAE(keras.Model):
         }
 
 
-class ApricotVAE(ApricotData):
+
+
+class ApricotVAE(ApricotData, VAE):
     """
     Class for creating model for variational autoencoder from  Apricot data 
     """
@@ -96,38 +138,6 @@ class ApricotVAE(ApricotData):
 
 
         self._fit_all()
-
-    def _build_encoder(self, input_shape=(None, None, 1)):
-        """
-        Build encoder
-        """
-
-        encoder_inputs = keras.Input(shape=input_shape)
-        x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(encoder_inputs)
-        x = layers.Conv2D(64, 3, activation="relu", strides=2, padding="same")(x)
-        x = layers.Flatten()(x)
-        x = layers.Dense(16, activation="relu")(x)
-        z_mean = layers.Dense(self.latent_dim, name="z_mean")(x)
-        z_log_var = layers.Dense(self.latent_dim, name="z_log_var")(x)
-        z = Sampling()([z_mean, z_log_var])
-        encoder = keras.Model(encoder_inputs, [z_mean, z_log_var, z], name="encoder")
-        encoder.summary()
-
-        return encoder
-
-    def _build_decoder(self):
-
-        # Build decoder
-        latent_inputs = keras.Input(shape=(self.latent_dim,))
-        x = layers.Dense(7 * 7 * 64, activation="relu")(latent_inputs)
-        x = layers.Reshape((7, 7, 64))(x)
-        x = layers.Conv2DTranspose(64, 3, activation="relu", strides=2, padding="same")(x)
-        x = layers.Conv2DTranspose(32, 3, activation="relu", strides=2, padding="same")(x)
-        decoder_outputs = layers.Conv2DTranspose(1, 3, activation="sigmoid", padding="same")(x)
-        decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
-        decoder.summary()
-
-        return decoder
 
     def plot_latent_space(self, vae, n=30, figsize=15):
         # display a n*n 2D manifold of digits
@@ -163,7 +173,31 @@ class ApricotVAE(ApricotData):
         
         plt.figure()
         plt.hist(figure.flatten(), bins=30, density=True)
-        plt.show()
+
+    def plot_comparison_image_samples(self, array1, array2):
+        """
+        Displays ten random images from each one of the supplied arrays.
+        """
+
+        n = 10
+
+        indices = np.random.randint(len(array1), size=n)
+        images1 = array1[indices, :]
+        images2 = array2[indices, :]
+
+        plt.figure(figsize=(20, 4))
+        for i, (image1, image2) in enumerate(zip(images1, images2)):
+            ax = plt.subplot(2, n, i + 1)
+            plt.imshow(image1.reshape(28, 28))
+            plt.gray()
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+
+            ax = plt.subplot(2, n, i + 1 + n)
+            plt.imshow(image2.reshape(28, 28))
+            plt.gray()
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
 
     def _prep_data(self, data):
         """
@@ -202,25 +236,31 @@ class ApricotVAE(ApricotData):
 
         # input_shape = gc_spatial_data_array.shape[:2] + (1,)
         input_shape = (28, 28, 1) # tmp for buildup
-        self.latent_dim = 2
+        latent_dim = 2
 
-        # Build spatial VAE
-        self.encoder = self._build_encoder(input_shape=input_shape)
-        self.decoder = self._build_decoder()
+        # # Build spatial VAE
+        # self.encoder = self.build_encoder(input_shape=input_shape)
+        # self.decoder = self.build_decoder()
+
+        # vae = VAE(self.encoder, self.decoder)
+        vae = VAE(input_shape=input_shape, latent_dim=latent_dim)
+        vae.compile(optimizer=keras.optimizers.Adam())
 
         rf_data = self._prep_data(gc_spatial_data_array)
 
-        vae = VAE(self.encoder, self.decoder)
-        vae.compile(optimizer=keras.optimizers.Adam())
+        vae.fit(rf_data, epochs=200, batch_size=16)
 
-        vae.fit(rf_data, epochs=30, batch_size=16)
-
-        self.plot_latent_space(vae)
-        # TÄHÄN JÄIT. VAE PAINAA KAIKKI NOLLAAN KUN OPETTAA PIDEMPÄÄN. EPOCH=2 TOIMII
-        pdb.set_trace()
-
-        return model
+        return vae, rf_data
 
     def _fit_all(self):
-        spatial_model = self._fit_spatial_vae()
+
+        spatial_vae, rf_data = self._fit_spatial_vae()
+
+        # Quality of fit
+        # self.plot_latent_space(spatial_vae)
+        predictions, z_mean, z_log_var, z = spatial_vae.predict(rf_data)
+        self.plot_comparison_image_samples(rf_data, predictions)
+
+        plt.show()
+        sys.exit()
 
