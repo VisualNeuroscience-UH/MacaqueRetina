@@ -148,6 +148,7 @@ class ApricotVAE(ApricotData, VAE):
         for i, yi in enumerate(grid_y):
             for j, xi in enumerate(grid_x):
                 z_sample = np.array([[xi, yi]])
+                print(f'z_sample: {z_sample}')
                 x_decoded = vae.decoder.predict(z_sample)
                 digit = x_decoded[0].reshape(digit_size, digit_size)
                 figure[
@@ -256,27 +257,31 @@ class ApricotVAE(ApricotData, VAE):
 
         rf_data = self._prep_data(gc_spatial_data_array)
 
-        fit_history = vae.fit(rf_data, epochs=2000, batch_size=32, validation_split=0.1)
+        fit_history = vae.fit(rf_data, epochs=20, batch_size=32, validation_split=0.1)
 
         return vae, rf_data, fit_history
 
     def _fit_all(self):
 
         spatial_vae, rf_data, fit_history = self._fit_spatial_vae()
+        n_samples = 5
 
         # Quality of fit
-        # self.plot_latent_space(spatial_vae, n=5)
+        self.plot_latent_space(spatial_vae, n=n_samples)
         predictions, z_mean, z_log_var, z_input = spatial_vae.predict(rf_data)
 
         # Random sample from latent space
+        # TÄHÄN JÄIT. SEURAAVA ON ILMEISESTI VÄÄRÄ TAPA SAADA RANDOM SAMPPELI LATENTISTA AVARUUDESTA.
+        # HOMMAA VARTEN LIENEE KUVAUS SEURAAVASSA: https://blog.tensorflow.org/2019/03/variational-autoencoders-with.html
         z_random = Sampling()([z_mean, z_log_var]).numpy()
         reconstruction = spatial_vae.decoder(z_random)
-        plt.plot(z_input[:, 0])
-        plt.plot(z_random[:, 0])
-        plt.plot(z_mean[:, 0])
-        plt.show()
+
+        # plt.plot(z_input[:, 0])
+        # plt.plot(z_random[:, 0])
+        # plt.plot(z_mean[:, 0])
+        # plt.show()
         pdb.set_trace()
-        self.plot_random_samples([rf_data, predictions, reconstruction.numpy()], n=5)
+        self.plot_random_samples([rf_data, predictions, reconstruction.numpy()], n=n_samples)
         # self.plot_random_samples(reconstruction.numpy())
 
         plt.show()
