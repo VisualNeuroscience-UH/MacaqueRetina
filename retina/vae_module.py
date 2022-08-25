@@ -6,12 +6,14 @@ import numpy as np
 from scipy.ndimage import rotate 
 # import scipy.ndimage as ndimage
 from scipy.interpolate import RectBivariateSpline
-import pandas as pd
+# import pandas as pd
 
 # Machine learning
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
+# from keras import backend as keras_backend
+
 
 
 # Viz
@@ -25,6 +27,7 @@ from retina.apricot_fitter_module import ApricotData
 # Builtin
 import sys
 import pdb
+import os
 
 
 class Sampling(layers.Layer):
@@ -39,16 +42,16 @@ class Sampling(layers.Layer):
 
 
 class VAE(keras.Model):
-    def __init__(self, input_shape=None, latent_dim=None, **kwargs):
+    def __init__(self, image_shape=None, latent_dim=None, **kwargs):
         super(VAE, self).__init__(**kwargs)
 
-        assert input_shape is not None, 'Argument input_shape  must be specified, aborting...'
+        assert image_shape is not None, 'Argument image_shape  must be specified, aborting...'
         assert latent_dim is not None, 'Argument latent_dim must be specified, aborting...'
 
         """
         Build encoder
         """
-        encoder_inputs = keras.Input(shape=input_shape)
+        encoder_inputs = keras.Input(shape=image_shape)
         x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(encoder_inputs)
         x = layers.Conv2D(64, 3, activation="relu", strides=2, padding="same")(x)
         x = layers.Flatten()(x)
@@ -116,8 +119,6 @@ class VAE(keras.Model):
         }
 
 
-
-
 class ApricotVAE(ApricotData, VAE):
     """
     Class for creating model for variational autoencoder from  Apricot data 
@@ -133,12 +134,54 @@ class ApricotVAE(ApricotData, VAE):
         # self.temporal_filter_sums = self.compute_temporal_filter_sums()
         # self.bad_data_indices = self.spatial_filter_data[2]
 
+        # Set common VAE model parameters
+        self.latent_dim = 2
+        self.image_shape = (28, 28, 1)
+        # self.image_shape = (13, 13, 1)
+        # self.resample_size = (28, 28) # x, y
 
+        self.batch_size = 32
+        self.epochs = 5
+        self.n_repeats = 10
+        self.angle_min = -30 # int in degrees
+        self.angle_max = 30
+        self.buffer_size = 1000
+        self.test_validation_split = 0.2
+        self.rotation_seed = 1
+        self.shuffle_seed = 42
+
+        self.optimizer = keras.optimizers.Adam(learning_rate=0.001)  # default lr = 0.001
+
+        n_threads = 30
+        self._set_n_cpus(n_threads)
+        
         self._fit_all()
+    
+    def _set_n_cpus(self, n_threads):
+        # Set number of CPU cores to use for parallel processing
+        os.environ["OMP_NUM_THREADS"] = str(n_threads)
+        os.environ["TF_NUM_INTRAOP_THREADS"] = str(n_threads)
+        os.environ["TF_NUM_INTEROP_THREADS"] = str(n_threads)
 
+        tf.config.threading.set_inter_op_parallelism_threads(
+            n_threads
+        )
+        tf.config.threading.set_intra_op_parallelism_threads(
+            n_threads
+        )
+        tf.config.set_soft_device_placement(True)
+ 
+        # config = tf.ConfigProto(intra_op_parallelism_threads=n_threads,
+        #                         inter_op_parallelism_threads=n_threads,
+        #                         allow_soft_placement=True,
+        #                         device_count={'CPU': n_threads})
+        # session = tf.Session(config=config)
+        # keras_backend.set_session(session)
+  
+    
     def plot_latent_space(self, vae, n=30, figsize=15):
         # display a n*n 2D manifold of digits
-        digit_size = 28 # side length of the digits
+        digit_size = self.image_shape[0] # side length of the digits
         scale = 1.0
         figure = np.zeros((digit_size * n, digit_size * n))
         # linearly spaced coordinates corresponding to the 2D plot
@@ -230,38 +273,6 @@ class ApricotVAE(ApricotData, VAE):
                     ax.get_yaxis().set_visible(False)
                 plt.colorbar()
 
-    def _prep_data(self, data):
-        """
-        Prep data for training
-        """
-        
-        # rf_data should have shape N samples, xdim, ydim, 1
-        upsampled_data = np.zeros((data.shape[2], 28, 28, 1))
-        xx = np.array(range(data.shape[1]))
-        yy = np.array(range(data.shape[0]))
-        xnew = np.linspace(0, 13, num=28)
-        ynew = np.linspace(0, 13, num=28)
-
-        mins = np.zeros((data.shape[2], 1))
-        scales = np.zeros((data.shape[2], 1))
-
-        # Temporary upsampling to build vae model
-        for this_sample in range(data.shape[2]):
-            aa = data[:,:,this_sample] # 2-D array of data with shape (x.size,y.size)
-            # Normalize to [0, 1]
-            this_min = aa.min()
-            this_scale = aa.max() - this_min
-            aa = (aa - this_min) / this_scale
-            f = RectBivariateSpline(xx, yy, aa)
-            upsampled_data[this_sample, :, :, 0] = f(xnew, ynew)
-            mins[this_sample] = this_min
-            scales[this_sample] = this_scale
-
-        rf_scaling_params = [mins, scales]
-        rf_data = upsampled_data
-
-        return rf_data, rf_scaling_params
-
     def _resample_data(self, data, resampled_size):
         """
         Up- or downsample data
@@ -292,33 +303,16 @@ class ApricotVAE(ApricotData, VAE):
 
         return upsampled_data
 
-    def _random_rotate_image(self, image, angle_min=-30, angle_max=30):
+    def _fit_spatial_vae(self, data, validation_data=None):
+
+        # Build model
+        vae = VAE(image_shape=self.image_shape, latent_dim=self.latent_dim)
         
-        image = rotate(image, np.random.uniform(angle_min, angle_max), reshape=False)
-        return image
+        # Compile model
+        vae.compile(optimizer=self.optimizer)
 
-    # @tf.autograph.experimental.do_not_convert
-    def _tf_random_rotate_image(self, image):
-
-        im_shape = image.shape
-        [image,] = tf.py_function(self._random_rotate_image, [image], [tf.float64])
-        image.set_shape(im_shape)
-        return image
-  
-    def _fit_spatial_vae(self, data):
-
-        # input_shape = data.shape[:2] + (1,)
-        input_shape = (28, 28, 1) # tmp for buildup
-        latent_dim = 2
-
-
-        # vae = VAE(self.encoder, self.decoder)
-        vae = VAE(input_shape=input_shape, latent_dim=latent_dim)
-        vae.compile(optimizer=keras.optimizers.Adam())
-
-        # rf_data, rf_scaling_params = self._prep_data(data)
-
-        fit_history = vae.fit(data, epochs=20, batch_size=32, validation_split=0.0)
+        # Fit model
+        fit_history = vae.fit(data, epochs=self.epochs, batch_size=self.batch_size, validation_data=validation_data)
 
         return vae, fit_history
     
@@ -349,11 +343,24 @@ class ApricotVAE(ApricotData, VAE):
         """
         Rotate and repeat datasets
         """
+        def _random_rotate_image(image):
+            
+            image = rotate(image, np.random.uniform(self.angle_min, self.angle_max), reshape=False, mode='reflect')
+            return image
 
-        np.random.seed(42)
+        # @tf.autograph.experimental.do_not_convert
+        def _tf_random_rotate_image(image):
+
+            im_shape = image.shape
+            [image,] = tf.py_function(_random_rotate_image, [image], [tf.float64])
+            image.set_shape(im_shape)
+            return image
+
+        np.random.seed(self.rotation_seed)
+
         ds_rep = ds
         for _ in range(n_repeats):
-            rot_ds = ds.map(self._tf_random_rotate_image)
+            rot_ds = ds.map(_tf_random_rotate_image)
             ds_rep = ds_rep.concatenate(rot_ds)
 
         return ds_rep
@@ -362,34 +369,54 @@ class ApricotVAE(ApricotData, VAE):
         """
         Convert tf.data.Dataset to numpy array e.g. for easier visualization and analysis
         """
-        row_length = len(ds)
-        dims = [row_length] + ds.element_spec.shape.as_list()
-        ds_np = np.zeros(dims)
 
-        for idx, element in enumerate(ds):
-            ds_np[idx, :] = element.numpy()
+        if isinstance(ds, tf.data.Dataset):
+            ds_np =  np.stack(list(ds))
+            ds_np = np.squeeze(ds_np)
+            dims = ds_np.shape
+            ds_np = ds_np.reshape(dims[0] * dims[1], dims[2], dims[3])
+        else:
+            row_length = len(ds)
+            dims = [row_length] + ds.element_spec.shape.as_list()
+            ds_np = np.zeros(dims)
+
+            for idx, element in enumerate(ds):
+                ds_np[idx, :] = element.numpy()
         
         return ds_np
 
+    def _normalize_data(self, data):
+        """
+        Normalize data to [0, 1]
+        """
+        data_min = data.min()
+        data_scale = data.max() - data_min
+        data = (data - data_min) / data_scale
+        
+        # Get data transfer parameters 
+        self.data_min = data_min
+        self.data_scale = data_scale
+        
+        return data
+    
     def _input_processing_pipe(self, data_np):
         """
         Process input data for training and validation
         """
         # Up or downsample 2D image data
-        resample_size = np.array([28, 28]) # x, y
-        data_us = self._resample_data(data_np, resample_size)
+        data_us = self._resample_data(data_np, self.image_shape[:2])
 
         # Normalize data
-
+        data_usn = self._normalize_data(data_us)
 
         # Turn data from numpy array to tensorflow dataset
-        data_tf = tf.data.Dataset.from_tensor_slices(data_us)
+        data_tf = tf.data.Dataset.from_tensor_slices(data_usn)
 
         # Shuffle data
-        # data_tf = data_tf.shuffle(buffer_size=data_us.shape[0], seed=42)
+        data_tf = data_tf.shuffle(buffer_size=self.buffer_size, seed=self.shuffle_seed)
 
         # split data into test and validation sets using proportion of 20%
-        skip_size = int(data_us.shape[0] * 0.2)
+        skip_size = int(data_us.shape[0] * self.test_validation_split)
         data_tf_train = data_tf.skip(skip_size, name='train')
         data_tf_test = data_tf.take(skip_size, name='test')
         
@@ -397,31 +424,24 @@ class ApricotVAE(ApricotData, VAE):
         print(f'The test sample size is {tf.data.experimental.cardinality(data_tf_train).numpy()}')
         print(f'The validation sample size is {tf.data.experimental.cardinality(data_tf_test).numpy()}')
         
-        # Repeat data for training and apply batching
-        # Repeating first will yield batches that straddle epoch boundaries
-        # Typical mini-batch sizes for large datasets: 32, 64, 128, 256, 512, 1024, 2048
-        n_repeats = 3
-        batch_size = 16
-        
+
         # Augment data with random rotation and repeat
         # Rotate between repeats
-        data_tf_train = self._rotate_and_repeat_datasets(data_tf_train, n_repeats) 
-        data_tf_test = self._rotate_and_repeat_datasets(data_tf_test, n_repeats)
+        data_tf_train_reps = self._rotate_and_repeat_datasets(data_tf_train, self.n_repeats) 
+        data_tf_test_reps = self._rotate_and_repeat_datasets(data_tf_test, self.n_repeats)
         
         # Batch data for more efficient processing
-        data_tf_train_batches = data_tf_train.batch(batch_size)
-        data_tf_test_batches = data_tf_test.batch(batch_size)
-        self._plot_batch_sizes(data_tf_test_batches)
+        data_tf_train_batches = data_tf_train_reps.batch(self.batch_size, drop_remainder=True)
+        data_tf_test_batches = data_tf_test_reps.batch(self.batch_size, drop_remainder=True)
             
         # Quality check on data
-        data_tf_np = self._to_numpy_array(data_tf_train)
-        # Tähän jäit. Tarkista pyöritys
-        sample_images = [0, 1]  
-        self.plot_sample_images([data_np, data_us, data_tf_np], sample=sample_images)
-
-        plt.show()
-        pdb.set_trace()
-
+        if 0:
+            self._plot_batch_sizes(data_tf_train_batches)
+            data_tf_np = self._to_numpy_array(data_tf_train_reps)
+            this_sample = 12
+            sample_images = [this_sample, len(data_tf_train) + this_sample, 2 * len(data_tf_train) + this_sample]  
+            self.plot_sample_images([data_tf_np], sample=sample_images)
+            plt.show()
 
         return data_tf_train_batches, data_tf_test_batches
     
@@ -433,12 +453,12 @@ class ApricotVAE(ApricotData, VAE):
         # Process input data for training and validation dataset objects
         rf_training_ds, rf_validation_ds = self._input_processing_pipe(gc_spatial_data_np)
         
-        spatial_vae, fit_history = self._fit_spatial_vae(rf_training_ds)
+        spatial_vae, fit_history = self._fit_spatial_vae(rf_training_ds, validation_data=rf_validation_ds)
         n_samples = 5
 
         # Quality of fit
         self.plot_latent_space(spatial_vae, n=n_samples)
-        predictions, z_mean, z_log_var, z_input = spatial_vae.predict(rf_validation_dataset)
+        predictions, z_mean, z_log_var, z_input = spatial_vae.predict(rf_validation_ds)
 
         # Random sample from latent space
         # TÄHÄN JÄIT. SEURAAVA ON ILMEISESTI VÄÄRÄ TAPA SAADA RANDOM SAMPPELI LATENTISTA AVARUUDESTA.
@@ -446,12 +466,8 @@ class ApricotVAE(ApricotData, VAE):
         z_random = Sampling()([z_mean, z_log_var]).numpy()
         reconstruction = spatial_vae.decoder(z_random)
 
-        # plt.plot(z_input[:, 0])
-        # plt.plot(z_random[:, 0])
-        # plt.plot(z_mean[:, 0])
-        # plt.show()
-        pdb.set_trace()
-        self.plot_sample_images([rf_data, predictions, reconstruction.numpy()], n=n_samples)
+        rf_validation_ds_np = self._to_numpy_array(rf_validation_ds)
+        self.plot_sample_images([rf_validation_ds_np, predictions, reconstruction.numpy()], n=n_samples)
         # self.plot_sample_images(reconstruction.numpy())
 
         plt.show()
