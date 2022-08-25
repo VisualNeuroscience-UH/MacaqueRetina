@@ -455,7 +455,7 @@ class ApricotVAE(ApricotData, VAE):
         predictions, z_mean, z_log_var, z_input = spatial_vae.predict(rf_validation_ds)
 
         # Random sample from latent space
-        # TÄHÄN JÄIT. SEURAAVA ON ILMEISESTI VÄÄRÄ TAPA SAADA RANDOM SAMPPELI LATENTISTA AVARUUDESTA.
+        # SEURAAVA ON ILMEISESTI VÄÄRÄ TAPA SAADA RANDOM SAMPPELI LATENTISTA AVARUUDESTA.
         # HOMMAA VARTEN LIENEE KUVAUS SEURAAVASSA: https://blog.tensorflow.org/2019/03/variational-autoencoders-with.html
         z_random = Sampling()([z_mean, z_log_var]).numpy()
         reconstruction = spatial_vae.decoder(z_random)
@@ -466,10 +466,3 @@ class ApricotVAE(ApricotData, VAE):
 
         plt.show()
         sys.exit()
-
-# dataset = tf.data.Dataset.list_files(DB_PATH+'\\*.jpg')
-
-
-# val_size = int(image_count * 0.2)
-# train_ds = dataset.skip(val_size)
-# val_ds = dataset.take(val_size)
