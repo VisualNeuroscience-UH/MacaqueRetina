@@ -136,15 +136,16 @@ class ApricotVAE(ApricotData, VAE):
 
         # Set common VAE model parameters
         self.latent_dim = 2
-        self.image_shape = (28, 28, 1)
+        self.image_shape = (28, 28, 1) # If you change this you need to change layers, too, for consistent output shape
         # self.image_shape = (13, 13, 1)
         # self.resample_size = (28, 28) # x, y
 
+        # TÄHÄN JÄIT. NÄILLÄ PARAMETREILLA MENEE LAHJAKKAASTI PERSIILLEEN
         self.batch_size = 32
-        self.epochs = 5
+        self.epochs = 100
         self.n_repeats = 10
-        self.angle_min = -30 # int in degrees
-        self.angle_max = 30
+        self.angle_min = -45 # int in degrees
+        self.angle_max = 45
         self.buffer_size = 1000
         self.test_validation_split = 0.2
         self.rotation_seed = 1
@@ -159,6 +160,7 @@ class ApricotVAE(ApricotData, VAE):
     
     def _set_n_cpus(self, n_threads):
         # Set number of CPU cores to use for parallel processing
+        # NOTE Not sure this has any effect
         os.environ["OMP_NUM_THREADS"] = str(n_threads)
         os.environ["TF_NUM_INTRAOP_THREADS"] = str(n_threads)
         os.environ["TF_NUM_INTEROP_THREADS"] = str(n_threads)
@@ -170,14 +172,6 @@ class ApricotVAE(ApricotData, VAE):
             n_threads
         )
         tf.config.set_soft_device_placement(True)
- 
-        # config = tf.ConfigProto(intra_op_parallelism_threads=n_threads,
-        #                         inter_op_parallelism_threads=n_threads,
-        #                         allow_soft_placement=True,
-        #                         device_count={'CPU': n_threads})
-        # session = tf.Session(config=config)
-        # keras_backend.set_session(session)
-  
     
     def plot_latent_space(self, vae, n=30, figsize=15):
         # display a n*n 2D manifold of digits
