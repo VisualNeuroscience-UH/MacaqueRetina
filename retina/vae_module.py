@@ -172,29 +172,40 @@ class ApricotVAE(ApricotData, VAE):
         plt.figure()
         plt.hist(figure.flatten(), bins=30, density=True)
 
-    def plot_random_samples(self, image_array, n=10):
+    def plot_sample_images(self, image_array, n=10, sample=None):
         """
         Displays n random images from each one of the supplied arrays.
         """
 
+        if sample is not None:
+            n = len(sample)
+        
         if isinstance(image_array, list):
             nrows = len(image_array)
             # Assert that all supplied arrays are of type numpy.ndarray and are of the same length
             for image_array_i in image_array:
-                assert isinstance(image_array_i, np.ndarray)
-                assert len(image_array_i) == len(image_array[0])
+                assert isinstance(image_array_i, np.ndarray), "Supplied array is not of type numpy.ndarray, aborting..."
         else:
             nrows = 1
             image_array = [image_array]
 
-        indices = np.random.randint(len(image_array[0]), size=n)
+        if not len(image_array_i) == len(image_array[0]):
+            print(  """Supplied arrays are of different length. 
+                        If no sample list is provided, 
+                        indices will be drawn randomly from the first array.""")
+
+        if sample is None:
+            indices = np.random.randint(len(image_array[0]), size=n)
+        else:
+            indices = sample
+
         image1_shape = image_array[0][0].squeeze().shape
         images1 = image_array[0][indices, :]
 
         images1_min = np.min(images1.flatten())
         images1_max = np.max(images1.flatten())
 
-        plt.figure(figsize=(20, 2 * nrows))
+        plt.figure(figsize=(2 * n, 2 * nrows))
 
         for i, image1 in enumerate(images1):
             ax = plt.subplot(nrows, n, i + 1)
@@ -315,17 +326,17 @@ class ApricotVAE(ApricotData, VAE):
         """
         Get spatial data from file using the inherited method read_spatial_filter_data()
         """
-        gc_spatial_data_np, _, bad_data_indices = self.read_spatial_filter_data()
+        gc_spatial_data_np_orig, _, bad_data_indices = self.read_spatial_filter_data()
 
         # drop bad data
-        gc_spatial_data_np = np.delete(gc_spatial_data_np, bad_data_indices, axis=2)
+        gc_spatial_data_np = np.delete(gc_spatial_data_np_orig, bad_data_indices, axis=2)
 
         # reshape to (n_samples, xdim, ydim, 1)
-        gc_spatial_data_np = gc_spatial_data_np.reshape(gc_spatial_data_np.shape[2], gc_spatial_data_np.shape[0], gc_spatial_data_np.shape[1], 1)
-
+        gc_spatial_data_np = np.moveaxis(gc_spatial_data_np, 2, 0)
+        gc_spatial_data_np = np.expand_dims(gc_spatial_data_np, axis=3)
+ 
         return gc_spatial_data_np
 
-    
     def _plot_batch_sizes(self, ds):
         
         plt.figure()
@@ -347,6 +358,18 @@ class ApricotVAE(ApricotData, VAE):
 
         return ds_rep
 
+    def _to_numpy_array(self, ds):
+        """
+        Convert tf.data.Dataset to numpy array e.g. for easier visualization and analysis
+        """
+        row_length = len(ds)
+        dims = [row_length] + ds.element_spec.shape.as_list()
+        ds_np = np.zeros(dims)
+
+        for idx, element in enumerate(ds):
+            ds_np[idx, :] = element.numpy()
+        
+        return ds_np
 
     def _input_processing_pipe(self, data_np):
         """
@@ -356,7 +379,6 @@ class ApricotVAE(ApricotData, VAE):
         resample_size = np.array([28, 28]) # x, y
         data_us = self._resample_data(data_np, resample_size)
 
-        self.plot_random_samples([data_np, data_us])
         # Normalize data
 
 
@@ -364,7 +386,7 @@ class ApricotVAE(ApricotData, VAE):
         data_tf = tf.data.Dataset.from_tensor_slices(data_us)
 
         # Shuffle data
-        data_tf = data_tf.shuffle(buffer_size=data_us.shape[0], seed=42)
+        # data_tf = data_tf.shuffle(buffer_size=data_us.shape[0], seed=42)
 
         # split data into test and validation sets using proportion of 20%
         skip_size = int(data_us.shape[0] * 0.2)
@@ -390,31 +412,15 @@ class ApricotVAE(ApricotData, VAE):
         data_tf_train_batches = data_tf_train.batch(batch_size)
         data_tf_test_batches = data_tf_test.batch(batch_size)
         self._plot_batch_sizes(data_tf_test_batches)
-        
-        # Dataset is an iterator and thus we need to loop to get items
-        plt.figure()
-        sample_images = [10, 20, 30, 40, 50]
-        row_length = len(sample_images)
-        for idx, element in enumerate(data_tf_train):
-            j=0
-            if idx in sample_images:
-                plt.subplot(2, len(sample_images), j+1)
-                plt.imshow(element)
-                plt.subplot(2, len(sample_images), j+row_length+1)
-                plt.imshow(data_np[idx,:,:,0])
-                j+=1
+            
+        # Quality check on data
+        data_tf_np = self._to_numpy_array(data_tf_train)
+        # Tähän jäit. Tarkista pyöritys
+        sample_images = [0, 1]  
+        self.plot_sample_images([data_np, data_us, data_tf_np], sample=sample_images)
+
         plt.show()
-        
         pdb.set_trace()
-        # idx_tf = tf.constant([0], dtype=tf.int64)
-
-        # index_dataset = tf.data.Dataset.from_tensor_slices(idx_tf)
-        # sample_image = tf.data.Dataset.choose_from_datasets([data_tf_train], index_dataset)
-
-        plt.figure()
-        plt.imshow(sample_image)
-
-        plt.show()
 
 
         return data_tf_train_batches, data_tf_test_batches
@@ -445,8 +451,8 @@ class ApricotVAE(ApricotData, VAE):
         # plt.plot(z_mean[:, 0])
         # plt.show()
         pdb.set_trace()
-        self.plot_random_samples([rf_data, predictions, reconstruction.numpy()], n=n_samples)
-        # self.plot_random_samples(reconstruction.numpy())
+        self.plot_sample_images([rf_data, predictions, reconstruction.numpy()], n=n_samples)
+        # self.plot_sample_images(reconstruction.numpy())
 
         plt.show()
         sys.exit()
