@@ -30,20 +30,30 @@ import pdb
 import os
 
 
-class Sampling(layers.Layer):
-    """Uses (z_mean, z_log_var) to sample z, the vector encoding a digit."""
+# class Sampling(layers.Layer):
+#     """Uses (z_mean, z_log_var) to sample z, the vector encoding a digit."""
 
-    def call(self, inputs):
-        z_mean, z_log_var = inputs
-        batch = tf.shape(z_mean)[0]
-        dim = tf.shape(z_mean)[1]
-        epsilon = tf.keras.backend.random_normal(shape=(batch, dim))
+#     def call(self, inputs):
+#         z_mean, z_log_var = inputs
+#         batch = tf.shape(z_mean)[0]
+#         dim = tf.shape(z_mean)[1]
+#         epsilon = tf.keras.backend.random_normal(shape=(batch, dim))
+#         return z_mean + tf.exp(0.5 * z_log_var) * epsilon
+
+class Sampler(layers.Layer):
+    """Uses (z_mean, z_log_var) to sample z, the vector encoding a digit."""
+    
+    def call(self, z_mean, z_log_var):
+        batch_size = tf.shape(z_mean)[0]
+        z_size = tf.shape(z_mean)[1]
+        epsilon = tf.random.normal(shape=(batch_size, z_size))
         return z_mean + tf.exp(0.5 * z_log_var) * epsilon
 
 
 class VAE(keras.Model):
     def __init__(self, image_shape=None, latent_dim=None, **kwargs):
-        super(VAE, self).__init__(**kwargs)
+        # super(VAE, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
         assert image_shape is not None, 'Argument image_shape  must be specified, aborting...'
         assert latent_dim is not None, 'Argument latent_dim must be specified, aborting...'
@@ -51,6 +61,17 @@ class VAE(keras.Model):
         """
         Build encoder
         """
+        # encoder_inputs = keras.Input(shape=image_shape)
+        # x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(encoder_inputs)
+        # x = layers.Conv2D(64, 3, activation="relu", strides=2, padding="same")(x)
+        # x = layers.Flatten()(x)
+        # x = layers.Dense(16, activation="relu")(x)
+        # z_mean = layers.Dense(latent_dim, name="z_mean")(x)
+        # z_log_var = layers.Dense(latent_dim, name="z_log_var")(x)
+        # z = Sampling()([z_mean, z_log_var])
+        # self.encoder = keras.Model(encoder_inputs, [z_mean, z_log_var, z], name="encoder")
+        # self.encoder.summary()
+
         encoder_inputs = keras.Input(shape=image_shape)
         x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(encoder_inputs)
         x = layers.Conv2D(64, 3, activation="relu", strides=2, padding="same")(x)
@@ -58,68 +79,108 @@ class VAE(keras.Model):
         x = layers.Dense(16, activation="relu")(x)
         z_mean = layers.Dense(latent_dim, name="z_mean")(x)
         z_log_var = layers.Dense(latent_dim, name="z_log_var")(x)
-        z = Sampling()([z_mean, z_log_var])
-        self.encoder = keras.Model(encoder_inputs, [z_mean, z_log_var, z], name="encoder")
+        self.encoder = keras.Model(encoder_inputs, [z_mean, z_log_var], name="encoder")
         self.encoder.summary()
 
         '''
         Build decoder
         '''
 
+        # latent_inputs = keras.Input(shape=(latent_dim,))
+        # x = layers.Dense(7 * 7 * 64, activation="relu")(latent_inputs)
+        # x = layers.Reshape((7, 7, 64))(x)
+        # x = layers.Conv2DTranspose(64, 3, activation="relu", strides=2, padding="same")(x)
+        # x = layers.Conv2DTranspose(32, 3, activation="relu", strides=2, padding="same")(x)
+        # decoder_outputs = layers.Conv2DTranspose(1, 3, activation="sigmoid", padding="same")(x)
+        # self.decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
+        # self.decoder.summary()
+
         latent_inputs = keras.Input(shape=(latent_dim,))
         x = layers.Dense(7 * 7 * 64, activation="relu")(latent_inputs)
         x = layers.Reshape((7, 7, 64))(x)
         x = layers.Conv2DTranspose(64, 3, activation="relu", strides=2, padding="same")(x)
         x = layers.Conv2DTranspose(32, 3, activation="relu", strides=2, padding="same")(x)
-        decoder_outputs = layers.Conv2DTranspose(1, 3, activation="sigmoid", padding="same")(x)
+        decoder_outputs = layers.Conv2D(1, 3, activation="sigmoid", padding="same")(x)
         self.decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
         self.decoder.summary()
 
+        self.sampler = Sampler()
 
+        # self.total_loss_tracker = keras.metrics.Mean(name="total_loss")
+        # self.reconstruction_loss_tracker = keras.metrics.Mean(
+        #     name="reconstruction_loss"
+        # )
+        # self.kl_loss_tracker = keras.metrics.Mean(name="kl_loss")
         self.total_loss_tracker = keras.metrics.Mean(name="total_loss")
         self.reconstruction_loss_tracker = keras.metrics.Mean(
-            name="reconstruction_loss"
-        )
+        name="reconstruction_loss")
         self.kl_loss_tracker = keras.metrics.Mean(name="kl_loss")
 
     def call(self, inputs):
-        z_mean, z_log_var, z = self.encoder(inputs)
-        reconstruction = self.decoder(z)
-        return reconstruction, z_mean, z_log_var, z
+        z_mean, z_log_var = self.encoder(inputs)
+        z_random = Sampler()(z_mean, z_log_var)
+        reconstruction = self.decoder(z_random)
+        return reconstruction, z_mean, z_log_var 
 
     @property
     def metrics(self):
         return [
             self.total_loss_tracker,
             self.reconstruction_loss_tracker,
-            self.kl_loss_tracker,
-        ]
+            self.kl_loss_tracker
+            ]
+
+    # def train_step(self, data):
+    #     with tf.GradientTape() as tape:
+    #         z_mean, z_log_var, z = self.encoder(data)
+    #         reconstruction = self.decoder(z)
+    #         reconstruction_loss = tf.reduce_mean(
+    #             tf.reduce_sum(
+    #                 keras.losses.binary_crossentropy(data, reconstruction), axis=(1, 2)
+    #             )
+    #         )
+    #         kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
+    #         kl_loss = tf.reduce_mean(tf.reduce_sum(kl_loss, axis=1))
+    #         total_loss = reconstruction_loss + kl_loss
+    #     grads = tape.gradient(total_loss, self.trainable_weights)
+    #     self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
+    #     self.total_loss_tracker.update_state(total_loss)
+    #     self.reconstruction_loss_tracker.update_state(reconstruction_loss)
+    #     self.kl_loss_tracker.update_state(kl_loss)
+    #     return {
+    #         "loss": self.total_loss_tracker.result(),
+    #         "reconstruction_loss": self.reconstruction_loss_tracker.result(),
+    #         "kl_loss": self.kl_loss_tracker.result(),
+    #     }
 
     def train_step(self, data):
         with tf.GradientTape() as tape:
-            z_mean, z_log_var, z = self.encoder(data)
+            z_mean, z_log_var = self.encoder(data)
+            z = self.sampler(z_mean, z_log_var)
             reconstruction = self.decoder(z)
             reconstruction_loss = tf.reduce_mean(
                 tf.reduce_sum(
-                    keras.losses.binary_crossentropy(data, reconstruction), axis=(1, 2)
+                    keras.losses.binary_crossentropy(data, reconstruction),
+                    axis=(1, 2)
                 )
             )
             kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
-            kl_loss = tf.reduce_mean(tf.reduce_sum(kl_loss, axis=1))
-            total_loss = reconstruction_loss + kl_loss
+            total_loss = reconstruction_loss + tf.reduce_mean(kl_loss)
+
         grads = tape.gradient(total_loss, self.trainable_weights)
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
         self.total_loss_tracker.update_state(total_loss)
         self.reconstruction_loss_tracker.update_state(reconstruction_loss)
         self.kl_loss_tracker.update_state(kl_loss)
         return {
-            "loss": self.total_loss_tracker.result(),
+            "total_loss": self.total_loss_tracker.result(),
             "reconstruction_loss": self.reconstruction_loss_tracker.result(),
             "kl_loss": self.kl_loss_tracker.result(),
         }
 
 
 class ApricotVAE(ApricotData, VAE):
+# class ApricotVAE(VAE, ApricotData):
     """
     Class for creating model for variational autoencoder from  Apricot data 
     """
@@ -140,18 +201,22 @@ class ApricotVAE(ApricotData, VAE):
         # self.image_shape = (13, 13, 1)
         # self.resample_size = (28, 28) # x, y
 
-        # TÄHÄN JÄIT. NÄILLÄ PARAMETREILLA MENEE LAHJAKKAASTI PERSIILLEEN
-        self.batch_size = 32
-        self.epochs = 100
-        self.n_repeats = 10
-        self.angle_min = -45 # int in degrees
+        self.batch_size = 128 # None will take the batch size from test_split size
+        self.epochs = 30
+        self.test_split = 0.2   # Split data for testing
+        self.verbose = 2 #  'auto', 0, 1, or 2. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch. 
+
+        self.n_repeats = 0 # Augment data with rotations
+        self.angle_min = -45 # rotation int in degrees
         self.angle_max = 45
-        self.buffer_size = 1000
-        self.test_validation_split = 0.2
         self.rotation_seed = 1
+
         self.shuffle_seed = 42
 
-        self.optimizer = keras.optimizers.Adam(learning_rate=0.001)  # default lr = 0.001
+        self.buffer_size = 1000
+
+        # self.optimizer = keras.optimizers.Adam(learning_rate=0.001)  # default lr = 0.001
+        self.optimizer = keras.optimizers.Adam()  # default lr = 0.001
 
         n_threads = 30
         self._set_n_cpus(n_threads)
@@ -297,7 +362,7 @@ class ApricotVAE(ApricotData, VAE):
 
         return upsampled_data
 
-    def _fit_spatial_vae(self, data, validation_data=None):
+    def _fit_spatial_vae(self, data):
 
         # Build model
         vae = VAE(image_shape=self.image_shape, latent_dim=self.latent_dim)
@@ -306,7 +371,7 @@ class ApricotVAE(ApricotData, VAE):
         vae.compile(optimizer=self.optimizer)
 
         # Fit model
-        fit_history = vae.fit(data, epochs=self.epochs, batch_size=self.batch_size, validation_data=validation_data)
+        fit_history = vae.fit(data, epochs=self.epochs, batch_size=self.batch_size, verbose=self.verbose)
 
         return vae, fit_history
     
@@ -333,7 +398,7 @@ class ApricotVAE(ApricotData, VAE):
         plt.xlabel('Batch number')
         plt.ylabel('Batch size')
 
-    def _rotate_and_repeat_datasets(self, ds, n_repeats):
+    def _rotate_and_repeat_datasets(self, np_array, n_repeats):
         """
         Rotate and repeat datasets
         """
@@ -342,26 +407,19 @@ class ApricotVAE(ApricotData, VAE):
             image = rotate(image, np.random.uniform(self.angle_min, self.angle_max), reshape=False, mode='reflect')
             return image
 
-        # @tf.autograph.experimental.do_not_convert
-        def _tf_random_rotate_image(image):
-
-            im_shape = image.shape
-            [image,] = tf.py_function(_random_rotate_image, [image], [tf.float64])
-            image.set_shape(im_shape)
-            return image
-
         np.random.seed(self.rotation_seed)
 
-        ds_rep = ds
+        np_array_rep = np_array
         for _ in range(n_repeats):
-            rot_ds = ds.map(_tf_random_rotate_image)
-            ds_rep = ds_rep.concatenate(rot_ds)
+            rot_ds = _random_rotate_image(np_array)
+            np_array_rep = np.vstack((np_array_rep, rot_ds))
 
-        return ds_rep
+        return np_array_rep
 
     def _to_numpy_array(self, ds):
         """
         Convert tf.data.Dataset to numpy array e.g. for easier visualization and analysis
+        This function is on hold, because I am working directly with numpy arrays at the moment (small datasets)
         """
 
         if isinstance(ds, tf.data.Dataset):
@@ -369,6 +427,7 @@ class ApricotVAE(ApricotData, VAE):
             ds_np = np.squeeze(ds_np)
             dims = ds_np.shape
             ds_np = ds_np.reshape(dims[0] * dims[1], dims[2], dims[3])
+
         else:
             row_length = len(ds)
             dims = [row_length] + ds.element_spec.shape.as_list()
@@ -403,65 +462,74 @@ class ApricotVAE(ApricotData, VAE):
         # Normalize data
         data_usn = self._normalize_data(data_us)
 
-        # Turn data from numpy array to tensorflow dataset
-        data_tf = tf.data.Dataset.from_tensor_slices(data_usn)
-
-        # Shuffle data
-        data_tf = data_tf.shuffle(buffer_size=self.buffer_size, seed=self.shuffle_seed)
-
         # split data into test and validation sets using proportion of 20%
-        skip_size = int(data_us.shape[0] * self.test_validation_split)
-        data_tf_train = data_tf.skip(skip_size, name='train')
-        data_tf_test = data_tf.take(skip_size, name='test')
+        skip_size = int(data_us.shape[0] * self.test_split)
+        data_train_np = data_usn[skip_size:]
+        data_test_np = data_usn[:skip_size]
         
         # Report split sizes
-        print(f'The test sample size is {tf.data.experimental.cardinality(data_tf_train).numpy()}')
-        print(f'The validation sample size is {tf.data.experimental.cardinality(data_tf_test).numpy()}')
+        print(f'The train sample size before augmentation is {data_train_np.shape[0]}')
+        print(f'The test sample size before augmentation is {data_test_np.shape[0]}')
         
-
         # Augment data with random rotation and repeat
         # Rotate between repeats
-        data_tf_train_reps = self._rotate_and_repeat_datasets(data_tf_train, self.n_repeats) 
-        data_tf_test_reps = self._rotate_and_repeat_datasets(data_tf_test, self.n_repeats)
-        
-        # Batch data for more efficient processing
-        data_tf_train_batches = data_tf_train_reps.batch(self.batch_size, drop_remainder=True)
-        data_tf_test_batches = data_tf_test_reps.batch(self.batch_size, drop_remainder=True)
-            
-        # Quality check on data
-        if 0:
-            self._plot_batch_sizes(data_tf_train_batches)
-            data_tf_np = self._to_numpy_array(data_tf_train_reps)
-            this_sample = 12
-            sample_images = [this_sample, len(data_tf_train) + this_sample, 2 * len(data_tf_train) + this_sample]  
-            self.plot_sample_images([data_tf_np], sample=sample_images)
-            plt.show()
+        data_train_np_reps = self._rotate_and_repeat_datasets(data_train_np, self.n_repeats) 
+        data_test_np_reps = self._rotate_and_repeat_datasets(data_test_np, self.n_repeats)
 
-        return data_tf_train_batches, data_tf_test_batches
+        # Report split sizes
+        print(f'The train sample size after augmentation is {data_train_np_reps.shape[0]}')
+        print(f'The test sample size after augmentation is {data_test_np_reps.shape[0]}')
+
+        # Set batch size as the number of samples in the smallest dataset
+        if self.batch_size == None:
+            self.batch_size = min(data_train_np_reps.shape[0], data_test_np_reps.shape[0])
+
+        return data_train_np_reps, data_test_np_reps
     
+    def _plot_fit_history(self, fit_history):
+        """
+        Plot the fit history
+        """
+
+        plt.figure()
+        keys = [k for k in fit_history.history.keys()]
+        for key in keys:
+            plt.plot(fit_history.history[key])
+        plt.title('model loss')
+        plt.ylabel('loss')
+        plt.xlabel('epoch')
+        plt.legend(keys, loc='upper left')
+        # plt.show()
+
     def _fit_all(self):
 
         # Get numpy array of data in correct dimensions
         gc_spatial_data_np = self._get_spatial_apricot_data()
 
-        # Process input data for training and validation dataset objects
-        rf_training_ds, rf_validation_ds = self._input_processing_pipe(gc_spatial_data_np)
+        (mnists, _), (_, _) = keras.datasets.mnist.load_data()
         
-        spatial_vae, fit_history = self._fit_spatial_vae(rf_training_ds, validation_data=rf_validation_ds)
-        n_samples = 5
+        # # Process input data for training and validation dataset objects
+        # rf_training, rf_test = self._input_processing_pipe(gc_spatial_data_np)
+        rf_training, rf_test = self._input_processing_pipe(mnists)
+        spatial_vae, fit_history = self._fit_spatial_vae(rf_training)
+
+        # Plot history of training and validation loss
+        self._plot_fit_history(fit_history)
 
         # Quality of fit
+        n_samples = 5
         self.plot_latent_space(spatial_vae, n=n_samples)
-        predictions, z_mean, z_log_var, z_input = spatial_vae.predict(rf_validation_ds)
+        predictions, z_mean, z_log_var = spatial_vae.predict(rf_test)
+        # pdb.set_trace()
 
         # Random sample from latent space
         # SEURAAVA ON ILMEISESTI VÄÄRÄ TAPA SAADA RANDOM SAMPPELI LATENTISTA AVARUUDESTA.
         # HOMMAA VARTEN LIENEE KUVAUS SEURAAVASSA: https://blog.tensorflow.org/2019/03/variational-autoencoders-with.html
-        z_random = Sampling()([z_mean, z_log_var]).numpy()
+        z_random = Sampler()(z_mean, z_log_var).numpy()
         reconstruction = spatial_vae.decoder(z_random)
 
-        rf_validation_ds_np = self._to_numpy_array(rf_validation_ds)
-        self.plot_sample_images([rf_validation_ds_np, predictions, reconstruction.numpy()], n=n_samples)
+        # rf_validation_ds_np = self._to_numpy_array(rf_validation_ds)
+        self.plot_sample_images([rf_test, predictions, reconstruction.numpy()], n=n_samples)
         # self.plot_sample_images(reconstruction.numpy())
 
         plt.show()
