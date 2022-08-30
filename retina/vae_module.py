@@ -13,7 +13,7 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 # from keras import backend as keras_backend
-
+from keras.preprocessing.image import ImageDataGenerator
 
 
 # Viz
@@ -489,6 +489,14 @@ class ApricotVAE(ApricotData, VAE):
         # Normalize data
         data_usn = self._normalize_data(data_us, scale_type='minmax', scale_min=None, scale_max=None)
 
+        # # Preprocessing keras style
+        # TÄHÄN JÄIT, RAKENNA
+        # flip = layers.RandomFlip
+        # translation = layers.RandomTranslation
+        # rotation = layers.RandomRotation
+        # preprocessing_model = tf.keras.Sequential() # sitten lisäilet esiprosessit
+        
+        
         # split data into test and validation sets using proportion of 20%
         skip_size = int(data_us.shape[0] * self.test_split)
         data_train_np = data_usn[skip_size:]
@@ -526,7 +534,6 @@ class ApricotVAE(ApricotData, VAE):
         plt.ylabel('loss')
         plt.xlabel('epoch')
         plt.legend(keys, loc='upper left')
-        # plt.show()
 
     def _get_mnist_data(self):
         (x_train, _), (x_test, _) = keras.datasets.mnist.load_data()
