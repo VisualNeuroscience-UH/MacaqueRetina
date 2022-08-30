@@ -58,6 +58,8 @@ class VAE(keras.Model):
         assert image_shape is not None, 'Argument image_shape  must be specified, aborting...'
         assert latent_dim is not None, 'Argument latent_dim must be specified, aborting...'
 
+        self.beta = 1.0
+
         """
         Build encoder
         """
@@ -165,7 +167,7 @@ class VAE(keras.Model):
                 )
             )
             kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
-            total_loss = reconstruction_loss + tf.reduce_mean(kl_loss)
+            total_loss = reconstruction_loss + self.beta * tf.reduce_mean(kl_loss)
 
         grads = tape.gradient(total_loss, self.trainable_weights)
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
@@ -201,22 +203,21 @@ class ApricotVAE(ApricotData, VAE):
         # self.image_shape = (13, 13, 1)
         # self.resample_size = (28, 28) # x, y
 
-        self.batch_size = 128 # None will take the batch size from test_split size
-        self.epochs = 30
+        self.batch_size = None # None will take the batch size from test_split size
+        self.epochs = 60
         self.test_split = 0.2   # Split data for testing
         self.verbose = 2 #  'auto', 0, 1, or 2. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch. 
 
-        self.n_repeats = 0 # Augment data with rotations
-        self.angle_min = -45 # rotation int in degrees
-        self.angle_max = 45
-        self.rotation_seed = 1
+        self.n_repeats = 10 # Augment data with rotations
+        self.angle_min = -10 # rotation int in degrees
+        self.angle_max = 10
 
-        self.shuffle_seed = 42
+        self.random_seed = 42
+        tf.keras.utils.set_random_seed(self.random_seed)
 
-        self.buffer_size = 1000
+        self.beta = 1 # Beta parameter for KL loss
 
-        # self.optimizer = keras.optimizers.Adam(learning_rate=0.001)  # default lr = 0.001
-        self.optimizer = keras.optimizers.Adam()  # default lr = 0.001
+        self.optimizer = keras.optimizers.Adam(lr = 0.001)  # default lr = 0.001
 
         n_threads = 30
         self._set_n_cpus(n_threads)
@@ -251,6 +252,10 @@ class ApricotVAE(ApricotData, VAE):
         for i, yi in enumerate(grid_y):
             for j, xi in enumerate(grid_x):
                 z_sample = np.array([[xi, yi]])
+                if self.latent_dim > 2:
+                    # Add the extra dimensions as zeros to the z_sample
+                    z_sample = np.concatenate((z_sample, np.zeros((1, self.latent_dim - 2))), axis=1)
+                    # z_sample = np.concatenate((z_sample, np.ones((1, self.latent_dim - 2))), axis=1)
                 print(f'z_sample: {z_sample}')
                 x_decoded = vae.decoder.predict(z_sample)
                 digit = x_decoded[0].reshape(digit_size, digit_size)
@@ -273,6 +278,8 @@ class ApricotVAE(ApricotData, VAE):
         
         plt.figure()
         plt.hist(figure.flatten(), bins=30, density=True)
+        # set title as "latent space"
+        plt.title("latent space")
 
     def plot_sample_images(self, image_array, n=10, sample=None):
         """
@@ -366,12 +373,15 @@ class ApricotVAE(ApricotData, VAE):
 
         # Build model
         vae = VAE(image_shape=self.image_shape, latent_dim=self.latent_dim)
+
+        # change beta
+        vae.beta = self.beta
         
         # Compile model
         vae.compile(optimizer=self.optimizer)
 
         # Fit model
-        fit_history = vae.fit(data, epochs=self.epochs, batch_size=self.batch_size, verbose=self.verbose)
+        fit_history = vae.fit(data, epochs=self.epochs, batch_size=self.batch_size, shuffle=True, verbose=self.verbose)
 
         return vae, fit_history
     
@@ -407,8 +417,6 @@ class ApricotVAE(ApricotData, VAE):
             image = rotate(image, np.random.uniform(self.angle_min, self.angle_max), reshape=False, mode='reflect')
             return image
 
-        np.random.seed(self.rotation_seed)
-
         np_array_rep = np_array
         for _ in range(n_repeats):
             rot_ds = _random_rotate_image(np_array)
@@ -438,20 +446,39 @@ class ApricotVAE(ApricotData, VAE):
         
         return ds_np
 
-    def _normalize_data(self, data):
+    def _normalize_data(self, data, scale_type='standard', scale_min=None, scale_max=None):
         """
-        Normalize data to [0, 1]
+        Normalize data to either mean 0, std 1 or [scale_min, scale_max] 
+
+        :param data: numpy array
+        :param type: 'standard' or 'minmax'
+        :param scale_min: minimum value of scaled data
+        :param scale_max: maximum value of scaled data
         """
-        data_min = data.min()
-        data_scale = data.max() - data_min
-        data = (data - data_min) / data_scale
         
-        # Get data transfer parameters 
-        self.data_min = data_min
-        self.data_scale = data_scale
+        if scale_type == 'standard':
+            data_mean = data.mean()
+            data_std = data.std()
+            data = (data - data_mean) / data_std
+            
+            # Get data transfer parameters 
+            self.data_mean = data_mean
+            self.data_std = data_std
+        elif scale_type == 'minmax':
+            if scale_min is None:
+                scale_min = data.min()
+            if scale_max is None:
+                scale_max = data.max()
+            data = (data - scale_min) / (scale_max - scale_min)
+
+            # Get data transfer parameters
+            self.data_min = scale_min
+            self.data_max = scale_max
+        else:
+            raise ValueError('scale_type must be either "standard" or "minmax"')
         
-        return data
-    
+        return data.astype("float32")
+
     def _input_processing_pipe(self, data_np):
         """
         Process input data for training and validation
@@ -460,7 +487,7 @@ class ApricotVAE(ApricotData, VAE):
         data_us = self._resample_data(data_np, self.image_shape[:2])
 
         # Normalize data
-        data_usn = self._normalize_data(data_us)
+        data_usn = self._normalize_data(data_us, scale_type='minmax', scale_min=None, scale_max=None)
 
         # split data into test and validation sets using proportion of 20%
         skip_size = int(data_us.shape[0] * self.test_split)
@@ -501,16 +528,23 @@ class ApricotVAE(ApricotData, VAE):
         plt.legend(keys, loc='upper left')
         # plt.show()
 
+    def _get_mnist_data(self):
+        (x_train, _), (x_test, _) = keras.datasets.mnist.load_data()
+        mnist_digits = np.concatenate([x_train, x_test], axis=0)
+        mnist_digits = np.expand_dims(mnist_digits, -1).astype("float32") / 255
+        return mnist_digits
+
     def _fit_all(self):
 
         # Get numpy array of data in correct dimensions
         gc_spatial_data_np = self._get_spatial_apricot_data()
 
-        (mnists, _), (_, _) = keras.datasets.mnist.load_data()
         
         # # Process input data for training and validation dataset objects
-        # rf_training, rf_test = self._input_processing_pipe(gc_spatial_data_np)
-        rf_training, rf_test = self._input_processing_pipe(mnists)
+        rf_training, rf_test = self._input_processing_pipe(gc_spatial_data_np)
+
+        # rf_training = self._get_mnist_data()
+
         spatial_vae, fit_history = self._fit_spatial_vae(rf_training)
 
         # Plot history of training and validation loss
