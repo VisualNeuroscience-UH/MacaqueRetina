@@ -47,7 +47,8 @@ class Sampler(layers.Layer):
         batch_size = tf.shape(z_mean)[0]
         z_size = tf.shape(z_mean)[1]
         epsilon = tf.random.normal(shape=(batch_size, z_size))
-        return z_mean + tf.exp(0.5 * z_log_var) * epsilon
+        z_dist = z_mean + tf.exp(0.5 * z_log_var) * epsilon
+        return z_dist
 
 
 class VAE(keras.Model):
@@ -198,7 +199,7 @@ class ApricotVAE(ApricotData, VAE):
         # self.bad_data_indices = self.spatial_filter_data[2]
 
         # Set common VAE model parameters
-        self.latent_dim = 2
+        self.latent_dim = 4
         self.image_shape = (28, 28, 1) # If you change this you need to change layers, too, for consistent output shape
         # self.image_shape = (13, 13, 1)
         # self.resample_size = (28, 28) # x, y
@@ -209,8 +210,8 @@ class ApricotVAE(ApricotData, VAE):
         self.verbose = 2 #  'auto', 0, 1, or 2. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch. 
 
         self.n_repeats = 10 # Augment data with rotations
-        self.angle_min = -10 # rotation int in degrees
-        self.angle_max = 10
+        self.angle_min = -0 # rotation int in degrees
+        self.angle_max = 0
 
         self.random_seed = 42
         tf.keras.utils.set_random_seed(self.random_seed)
@@ -221,6 +222,11 @@ class ApricotVAE(ApricotData, VAE):
 
         n_threads = 30
         self._set_n_cpus(n_threads)
+
+        # Eager mode works like normal python code. You can access variables better. 
+        # Graph mode postpones computations, but is more efficient.
+        tf.config.run_functions_eagerly(False) 
+
         
         self._fit_all()
     
@@ -281,7 +287,7 @@ class ApricotVAE(ApricotData, VAE):
         # set title as "latent space"
         plt.title("latent space")
 
-    def plot_sample_images(self, image_array, n=10, sample=None):
+    def plot_sample_images(self, image_array, labels=None, n=10, sample=None):
         """
         Displays n random images from each one of the supplied arrays.
         """
@@ -322,6 +328,8 @@ class ApricotVAE(ApricotData, VAE):
             plt.gray()
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
+            if labels is not None and i==0:
+                plt.title(labels[0])
         plt.colorbar()
 
         if nrows > 1:
@@ -337,6 +345,8 @@ class ApricotVAE(ApricotData, VAE):
                     plt.gray()
                     ax.get_xaxis().set_visible(False)
                     ax.get_yaxis().set_visible(False)
+                    if labels is not None and j==0:
+                        plt.title(labels[i + 1])
                 plt.colorbar()
 
     def _resample_data(self, data, resampled_size):
@@ -561,7 +571,7 @@ class ApricotVAE(ApricotData, VAE):
         n_samples = 5
         self.plot_latent_space(spatial_vae, n=n_samples)
         predictions, z_mean, z_log_var = spatial_vae.predict(rf_test)
-        # pdb.set_trace()
+        print(spatial_vae.evaluate(rf_test, rf_test))
 
         # Random sample from latent space
         # SEURAAVA ON ILMEISESTI VÄÄRÄ TAPA SAADA RANDOM SAMPPELI LATENTISTA AVARUUDESTA.
@@ -570,7 +580,7 @@ class ApricotVAE(ApricotData, VAE):
         reconstruction = spatial_vae.decoder(z_random)
 
         # rf_validation_ds_np = self._to_numpy_array(rf_validation_ds)
-        self.plot_sample_images([rf_test, predictions, reconstruction.numpy()], n=n_samples)
+        self.plot_sample_images([rf_test, predictions, reconstruction.numpy()], labels=['test', 'pred', 'randreco'], n=n_samples)
         # self.plot_sample_images(reconstruction.numpy())
 
         plt.show()
