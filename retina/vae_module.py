@@ -3,7 +3,7 @@ import numpy as np
 # import scipy.optimize as opt
 # import scipy.io as sio
 # from scipy.optimize import curve_fit
-from scipy.ndimage import rotate 
+from scipy.ndimage import rotate, fourier_shift 
 # import scipy.ndimage as ndimage
 from scipy.interpolate import RectBivariateSpline
 # import pandas as pd
@@ -199,19 +199,20 @@ class ApricotVAE(ApricotData, VAE):
         # self.bad_data_indices = self.spatial_filter_data[2]
 
         # Set common VAE model parameters
-        self.latent_dim = 4
-        self.image_shape = (28, 28, 1) # If you change this you need to change layers, too, for consistent output shape
-        # self.image_shape = (13, 13, 1)
-        # self.resample_size = (28, 28) # x, y
+        self.latent_dim = 2
+        self.image_shape = (28, 28, 1) # Images will be smapled to this space. If you change this you need to change layers, too, for consistent output shape
 
         self.batch_size = None # None will take the batch size from test_split size
         self.epochs = 60
         self.test_split = 0.2   # Split data for testing
         self.verbose = 2 #  'auto', 0, 1, or 2. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch. 
-
-        self.n_repeats = 10 # Augment data with rotations
-        self.angle_min = -0 # rotation int in degrees
-        self.angle_max = 0
+        
+        # Augment data. Final n samples =  n * (1 + n_repeats * 2): n is the original number of samples, 2 is the rot & shift 
+        self.n_repeats = 5 # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
+        self.angle_min = -30 # rotation int in degrees
+        self.angle_max = 30
+        self.shift_min = -5 # shift int in pixels (upsampled space, rand int for both x and y)
+        self.shift_max = 5
 
         self.random_seed = 42
         tf.keras.utils.set_random_seed(self.random_seed)
@@ -227,7 +228,6 @@ class ApricotVAE(ApricotData, VAE):
         # Graph mode postpones computations, but is more efficient.
         tf.config.run_functions_eagerly(False) 
 
-        
         self._fit_all()
     
     def _set_n_cpus(self, n_threads):
@@ -380,7 +380,7 @@ class ApricotVAE(ApricotData, VAE):
         return upsampled_data
 
     def _fit_spatial_vae(self, data):
-
+       
         # Build model
         vae = VAE(image_shape=self.image_shape, latent_dim=self.latent_dim)
 
@@ -422,17 +422,67 @@ class ApricotVAE(ApricotData, VAE):
         """
         Rotate and repeat datasets
         """
-        def _random_rotate_image(image):
+        def _random_rotate_image(image, rot_angle):
             
-            image = rotate(image, np.random.uniform(self.angle_min, self.angle_max), reshape=False, mode='reflect')
-            return image
+            assert image.ndim == 4, 'Image array must be 4-dimensional for rotation axes to match, aborting...'
 
-        np_array_rep = np_array
-        for _ in range(n_repeats):
-            rot_ds = _random_rotate_image(np_array)
-            np_array_rep = np.vstack((np_array_rep, rot_ds))
+            image_rot = rotate(image, rot_angle, axes=(2, 1), reshape=False, mode='reflect')
+            return image_rot
 
-        return np_array_rep
+        def _random_shift_image(image, shift):
+                
+            assert image.ndim == 4, 'Image array must be 4-dimensional for shift axes to match, aborting...'
+            image_shifted = image.copy()
+            for this_image_idx in range(image.shape[0]):
+                this_image = image[this_image_idx, :, :, 0]
+                input_ = np.fft.fft2(this_image)
+                result = fourier_shift(input_, shift=shift) # shift in pixels, tuple of (y, x) shift
+                # result = fourier_shift(input_, shift=(-5, 0)) # shift in pixels, tuple of (y, x) shift
+                result = np.fft.ifft2(result)
+                image_shifted[this_image_idx, :, :, 0] = result.real
+
+            return image_shifted   
+
+        def _rotate_and_shift_image_QA(image, image_transf, this_ima=0, this_transf=0):
+
+            n_ima = image.shape[0]
+
+            plt.figure()
+            plt.imshow(image[this_ima,:,:,0])
+            plt.title('Original image')
+            plt.figure()
+            plt.imshow(image_transf[this_ima + n_ima * this_transf,:,:,0])
+            plt.title('Transformed image')
+            plt.show()
+
+
+        n_orig_images = np_array.shape[0]
+        
+        # Augment with rotations
+        # n_repeats which will be rotated
+        np_array_rep = np.repeat(np_array, n_repeats, axis=0) 
+        rot = np.random.uniform(self.angle_min, self.angle_max, size=n_repeats)
+
+        for rot_idx, this_rot in enumerate(rot):
+            np_array_rep[rot_idx * n_orig_images : (rot_idx + 1) * n_orig_images, :, :] = _random_rotate_image(np_array, this_rot)
+            # rot_all = rot_all + [this_rot] * n_orig_images # append this_rot to list rot_all n_orig_images times
+
+        np_array_augmented = np.vstack((np_array, np_array_rep))
+
+        # Augment with shifts
+        # n_repeats which will be shifted
+        np_array_rep = np.repeat(np_array, n_repeats, axis=0)
+        shift = np.random.uniform(self.shift_min, self.shift_max, size=(n_repeats, 2))
+
+        for shift_idx, this_shift in enumerate(shift):
+            np_array_rep[shift_idx * n_orig_images : (shift_idx + 1) * n_orig_images, :, :] = _random_shift_image(np_array, this_shift)
+
+        # if 0:
+        #     _rotate_and_shift_image_QA(np_array, np_array_rep, this_ima=0, this_transf=2)
+        
+        np_array_augmented = np.vstack((np_array_augmented, np_array_rep))
+
+        return np_array_augmented
 
     def _to_numpy_array(self, ds):
         """
@@ -498,13 +548,6 @@ class ApricotVAE(ApricotData, VAE):
 
         # Normalize data
         data_usn = self._normalize_data(data_us, scale_type='minmax', scale_min=None, scale_max=None)
-
-        # # Preprocessing keras style
-        # TÄHÄN JÄIT, RAKENNA
-        # flip = layers.RandomFlip
-        # translation = layers.RandomTranslation
-        # rotation = layers.RandomRotation
-        # preprocessing_model = tf.keras.Sequential() # sitten lisäilet esiprosessit
         
         
         # split data into test and validation sets using proportion of 20%
