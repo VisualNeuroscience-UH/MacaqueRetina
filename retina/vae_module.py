@@ -157,16 +157,21 @@ class VAE(keras.Model):
     #     }
 
     def train_step(self, data):
+        mse=keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)
+        # mse=keras.losses.MeanSquaredError()
         with tf.GradientTape() as tape:
             z_mean, z_log_var = self.encoder(data)
             z = self.sampler(z_mean, z_log_var)
             reconstruction = self.decoder(z)
-            reconstruction_loss = tf.reduce_mean(
-                tf.reduce_sum(
-                    keras.losses.binary_crossentropy(data, reconstruction),
-                    axis=(1, 2)
-                )
-            )
+            # pdb.set_trace()
+            # reconstruction_loss = tf.reduce_mean(
+            #     tf.reduce_sum(
+            #         keras.losses.binary_crossentropy(data, reconstruction),
+            #         axis=(1, 2)
+            #     )
+            # )
+            reconstruction_loss = mse(data, reconstruction)
+
             kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
             total_loss = reconstruction_loss + self.beta * tf.reduce_mean(kl_loss)
 
@@ -201,9 +206,10 @@ class ApricotVAE(ApricotData, VAE):
         # Set common VAE model parameters
         self.latent_dim = 2
         self.image_shape = (28, 28, 1) # Images will be smapled to this space. If you change this you need to change layers, too, for consistent output shape
+        self.latent_space_plot_scale = 4 # Scale for plotting latent space
 
         self.batch_size = None # None will take the batch size from test_split size
-        self.epochs = 60
+        self.epochs = 360
         self.test_split = 0.2   # Split data for testing
         self.verbose = 2 #  'auto', 0, 1, or 2. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch. 
         
@@ -248,7 +254,7 @@ class ApricotVAE(ApricotData, VAE):
     def plot_latent_space(self, vae, n=30, figsize=15):
         # display a n*n 2D manifold of digits
         digit_size = self.image_shape[0] # side length of the digits
-        scale = 1.0
+        scale = self.latent_space_plot_scale
         figure = np.zeros((digit_size * n, digit_size * n))
         # linearly spaced coordinates corresponding to the 2D plot
         # of digit classes in the latent space
@@ -286,6 +292,7 @@ class ApricotVAE(ApricotData, VAE):
         plt.hist(figure.flatten(), bins=30, density=True)
         # set title as "latent space"
         plt.title("latent space")
+
 
     def plot_sample_images(self, image_array, labels=None, n=10, sample=None):
         """
@@ -418,7 +425,7 @@ class ApricotVAE(ApricotData, VAE):
         plt.xlabel('Batch number')
         plt.ylabel('Batch size')
 
-    def _rotate_and_repeat_datasets(self, np_array, n_repeats):
+    def _augment_data(self, np_array, n_repeats):
         """
         Rotate and repeat datasets
         """
@@ -559,10 +566,9 @@ class ApricotVAE(ApricotData, VAE):
         print(f'The train sample size before augmentation is {data_train_np.shape[0]}')
         print(f'The test sample size before augmentation is {data_test_np.shape[0]}')
         
-        # Augment data with random rotation and repeat
-        # Rotate between repeats
-        data_train_np_reps = self._rotate_and_repeat_datasets(data_train_np, self.n_repeats) 
-        data_test_np_reps = self._rotate_and_repeat_datasets(data_test_np, self.n_repeats)
+        # Augment data with random rotation and shift
+        data_train_np_reps = self._augment_data(data_train_np, self.n_repeats) 
+        data_test_np_reps = self._augment_data(data_test_np, self.n_repeats)
 
         # Report split sizes
         print(f'The train sample size after augmentation is {data_train_np_reps.shape[0]}')
@@ -588,6 +594,11 @@ class ApricotVAE(ApricotData, VAE):
         plt.xlabel('epoch')
         plt.legend(keys, loc='upper left')
 
+    def _plot_z_mean_in_2D(self, z_mean):
+        plt.figure()
+        plt.scatter(z_mean[:,0], z_mean[:,1])
+        plt.title('Latent space')
+
     def _get_mnist_data(self):
         (x_train, _), (x_test, _) = keras.datasets.mnist.load_data()
         mnist_digits = np.concatenate([x_train, x_test], axis=0)
@@ -599,7 +610,6 @@ class ApricotVAE(ApricotData, VAE):
         # Get numpy array of data in correct dimensions
         gc_spatial_data_np = self._get_spatial_apricot_data()
 
-        
         # # Process input data for training and validation dataset objects
         rf_training, rf_test = self._input_processing_pipe(gc_spatial_data_np)
 
@@ -611,10 +621,13 @@ class ApricotVAE(ApricotData, VAE):
         self._plot_fit_history(fit_history)
 
         # Quality of fit
-        n_samples = 5
+        n_samples = 10
         self.plot_latent_space(spatial_vae, n=n_samples)
         predictions, z_mean, z_log_var = spatial_vae.predict(rf_test)
         print(spatial_vae.evaluate(rf_test, rf_test))
+
+        # Plot latent space
+        self._plot_z_mean_in_2D(z_mean)
 
         # Random sample from latent space
         # SEURAAVA ON ILMEISESTI VÄÄRÄ TAPA SAADA RANDOM SAMPPELI LATENTISTA AVARUUDESTA.
