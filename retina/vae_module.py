@@ -30,16 +30,6 @@ import pdb
 import os
 
 
-# class Sampling(layers.Layer):
-#     """Uses (z_mean, z_log_var) to sample z, the vector encoding a digit."""
-
-#     def call(self, inputs):
-#         z_mean, z_log_var = inputs
-#         batch = tf.shape(z_mean)[0]
-#         dim = tf.shape(z_mean)[1]
-#         epsilon = tf.keras.backend.random_normal(shape=(batch, dim))
-#         return z_mean + tf.exp(0.5 * z_log_var) * epsilon
-
 class Sampler(layers.Layer):
     """Uses (z_mean, z_log_var) to sample z, the vector encoding a digit."""
     
@@ -64,16 +54,6 @@ class VAE(keras.Model):
         """
         Build encoder
         """
-        # encoder_inputs = keras.Input(shape=image_shape)
-        # x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(encoder_inputs)
-        # x = layers.Conv2D(64, 3, activation="relu", strides=2, padding="same")(x)
-        # x = layers.Flatten()(x)
-        # x = layers.Dense(16, activation="relu")(x)
-        # z_mean = layers.Dense(latent_dim, name="z_mean")(x)
-        # z_log_var = layers.Dense(latent_dim, name="z_log_var")(x)
-        # z = Sampling()([z_mean, z_log_var])
-        # self.encoder = keras.Model(encoder_inputs, [z_mean, z_log_var, z], name="encoder")
-        # self.encoder.summary()
 
         encoder_inputs = keras.Input(shape=image_shape)
         x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(encoder_inputs)
@@ -89,15 +69,6 @@ class VAE(keras.Model):
         Build decoder
         '''
 
-        # latent_inputs = keras.Input(shape=(latent_dim,))
-        # x = layers.Dense(7 * 7 * 64, activation="relu")(latent_inputs)
-        # x = layers.Reshape((7, 7, 64))(x)
-        # x = layers.Conv2DTranspose(64, 3, activation="relu", strides=2, padding="same")(x)
-        # x = layers.Conv2DTranspose(32, 3, activation="relu", strides=2, padding="same")(x)
-        # decoder_outputs = layers.Conv2DTranspose(1, 3, activation="sigmoid", padding="same")(x)
-        # self.decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
-        # self.decoder.summary()
-
         latent_inputs = keras.Input(shape=(latent_dim,))
         x = layers.Dense(7 * 7 * 64, activation="relu")(latent_inputs)
         x = layers.Reshape((7, 7, 64))(x)
@@ -109,11 +80,6 @@ class VAE(keras.Model):
 
         self.sampler = Sampler()
 
-        # self.total_loss_tracker = keras.metrics.Mean(name="total_loss")
-        # self.reconstruction_loss_tracker = keras.metrics.Mean(
-        #     name="reconstruction_loss"
-        # )
-        # self.kl_loss_tracker = keras.metrics.Mean(name="kl_loss")
         self.total_loss_tracker = keras.metrics.Mean(name="total_loss")
         self.reconstruction_loss_tracker = keras.metrics.Mean(
         name="reconstruction_loss")
@@ -121,7 +87,7 @@ class VAE(keras.Model):
 
     def call(self, inputs):
         z_mean, z_log_var = self.encoder(inputs)
-        z_random = Sampler()(z_mean, z_log_var)
+        z_random = self.sampler(z_mean, z_log_var)
         reconstruction = self.decoder(z_random)
         return reconstruction, z_mean, z_log_var 
 
@@ -133,43 +99,13 @@ class VAE(keras.Model):
             self.kl_loss_tracker
             ]
 
-    # def train_step(self, data):
-    #     with tf.GradientTape() as tape:
-    #         z_mean, z_log_var, z = self.encoder(data)
-    #         reconstruction = self.decoder(z)
-    #         reconstruction_loss = tf.reduce_mean(
-    #             tf.reduce_sum(
-    #                 keras.losses.binary_crossentropy(data, reconstruction), axis=(1, 2)
-    #             )
-    #         )
-    #         kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
-    #         kl_loss = tf.reduce_mean(tf.reduce_sum(kl_loss, axis=1))
-    #         total_loss = reconstruction_loss + kl_loss
-    #     grads = tape.gradient(total_loss, self.trainable_weights)
-    #     self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
-    #     self.total_loss_tracker.update_state(total_loss)
-    #     self.reconstruction_loss_tracker.update_state(reconstruction_loss)
-    #     self.kl_loss_tracker.update_state(kl_loss)
-    #     return {
-    #         "loss": self.total_loss_tracker.result(),
-    #         "reconstruction_loss": self.reconstruction_loss_tracker.result(),
-    #         "kl_loss": self.kl_loss_tracker.result(),
-    #     }
-
     def train_step(self, data):
         mse=keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)
-        # mse=keras.losses.MeanSquaredError()
+
         with tf.GradientTape() as tape:
             z_mean, z_log_var = self.encoder(data)
             z = self.sampler(z_mean, z_log_var)
             reconstruction = self.decoder(z)
-            # pdb.set_trace()
-            # reconstruction_loss = tf.reduce_mean(
-            #     tf.reduce_sum(
-            #         keras.losses.binary_crossentropy(data, reconstruction),
-            #         axis=(1, 2)
-            #     )
-            # )
             reconstruction_loss = mse(data, reconstruction)
 
             kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
@@ -209,7 +145,7 @@ class ApricotVAE(ApricotData, VAE):
         self.latent_space_plot_scale = 4 # Scale for plotting latent space
 
         self.batch_size = None # None will take the batch size from test_split size
-        self.epochs = 360
+        self.epochs = 60
         self.test_split = 0.2   # Split data for testing
         self.verbose = 2 #  'auto', 0, 1, or 2. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch. 
         
@@ -292,7 +228,6 @@ class ApricotVAE(ApricotData, VAE):
         plt.hist(figure.flatten(), bins=30, density=True)
         # set title as "latent space"
         plt.title("latent space")
-
 
     def plot_sample_images(self, image_array, labels=None, n=10, sample=None):
         """
@@ -386,8 +321,10 @@ class ApricotVAE(ApricotData, VAE):
 
         return upsampled_data
 
-    def _fit_spatial_vae(self, data):
-       
+    def _get_spatial_vae_model(self):
+        """
+        Builds a model for the spatial VAE
+        """
         # Build model
         vae = VAE(image_shape=self.image_shape, latent_dim=self.latent_dim)
 
@@ -396,6 +333,12 @@ class ApricotVAE(ApricotData, VAE):
         
         # Compile model
         vae.compile(optimizer=self.optimizer)
+
+        return vae
+
+    def _fit_spatial_vae(self, data):
+       
+        vae = self._get_spatial_vae_model()
 
         # Fit model
         fit_history = vae.fit(data, epochs=self.epochs, batch_size=self.batch_size, shuffle=True, verbose=self.verbose)
@@ -605,6 +548,43 @@ class ApricotVAE(ApricotData, VAE):
         mnist_digits = np.expand_dims(mnist_digits, -1).astype("float32") / 255
         return mnist_digits
 
+    def _k_fold_cross_validation(self, data_np, n_folds=3):
+        """
+        Perform k-fold cross validation on the data
+        """
+        # loss for validation reconstruction
+        mse=keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)
+
+        num_validation_samples = len(data_np) // n_folds
+        np.random.shuffle(data_np)
+        
+        validation_scores = []
+        reconstruction_losses = []
+        
+        for fold in range(n_folds):
+
+            validation_data = data_np[num_validation_samples * fold:num_validation_samples * (fold + 1)]
+            training_data = np.vstack((data_np[:num_validation_samples * fold], data_np[num_validation_samples * (fold + 1):]))
+
+            model = self._get_spatial_vae_model()
+            model.fit(training_data, epochs=self.epochs, batch_size=self.batch_size, shuffle=True, verbose=self.verbose)
+            
+            # Evaluate model on validation data
+            (this_val_rf_reconstructed, _, _) = model.predict(validation_data)
+            loss = mse(validation_data, this_val_rf_reconstructed)
+            n_val = validation_data.shape[0]
+            reconstruction_losses.append(loss / n_val) 
+
+            validation_scores.append(np.average(np.array(reconstruction_losses)))
+
+        validation_score = np.average(validation_scores)
+        
+        # Final model fit with all training data
+        model = self._get_spatial_vae_model()
+        fit_history = model.fit(data_np, epochs=self.epochs, batch_size=self.batch_size, shuffle=True, verbose=self.verbose)
+
+        return model, validation_score, fit_history
+
     def _fit_all(self):
 
         # Get numpy array of data in correct dimensions
@@ -615,16 +595,18 @@ class ApricotVAE(ApricotData, VAE):
 
         # rf_training = self._get_mnist_data()
 
-        spatial_vae, fit_history = self._fit_spatial_vae(rf_training)
+        # spatial_vae, fit_history = self._fit_spatial_vae(rf_training)
+        spatial_vae, validation_score, fit_history = self._k_fold_cross_validation(rf_training, n_folds=5)
 
+        pdb.set_trace()
+        # validation_score = spatial_vae.evaluate(rf_test, rf_test)
         # Plot history of training and validation loss
         self._plot_fit_history(fit_history)
 
         # Quality of fit
-        n_samples = 10
-        self.plot_latent_space(spatial_vae, n=n_samples)
+        self.plot_latent_space(spatial_vae, n=5)
         predictions, z_mean, z_log_var = spatial_vae.predict(rf_test)
-        print(spatial_vae.evaluate(rf_test, rf_test))
+        # print(spatial_vae.evaluate(rf_test, rf_test))
 
         # Plot latent space
         self._plot_z_mean_in_2D(z_mean)
@@ -632,10 +614,11 @@ class ApricotVAE(ApricotData, VAE):
         # Random sample from latent space
         # SEURAAVA ON ILMEISESTI VÄÄRÄ TAPA SAADA RANDOM SAMPPELI LATENTISTA AVARUUDESTA.
         # HOMMAA VARTEN LIENEE KUVAUS SEURAAVASSA: https://blog.tensorflow.org/2019/03/variational-autoencoders-with.html
-        z_random = Sampler()(z_mean, z_log_var).numpy()
+        z_random = spatial_vae.sampler(z_mean, z_log_var)
         reconstruction = spatial_vae.decoder(z_random)
 
         # rf_validation_ds_np = self._to_numpy_array(rf_validation_ds)
+        n_samples = 10
         self.plot_sample_images([rf_test, predictions, reconstruction.numpy()], labels=['test', 'pred', 'randreco'], n=n_samples)
         # self.plot_sample_images(reconstruction.numpy())
 
