@@ -44,7 +44,7 @@ class Sampler(layers.Layer):
 
 
 class VAE(keras.Model):
-    def __init__(self, image_shape=None, latent_dim=None, **kwargs):
+    def __init__(self, image_shape=None, latent_dim=None, val_data=None, **kwargs):
         # super(VAE, self).__init__(**kwargs)
         super().__init__(**kwargs)
 
@@ -52,20 +52,22 @@ class VAE(keras.Model):
         assert latent_dim is not None, 'Argument latent_dim must be specified, aborting...'
 
         self.beta = 1.0
+        # Init attribute for validation. We lack custom fit() method, so we need to pass validation data to train_step()
+        self.val_data = val_data
 
         """
         Build encoder
         """
 
         encoder_inputs = keras.Input(shape=image_shape)
-        x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(encoder_inputs)
-        x = layers.Conv2D(64, 3, activation="relu", strides=2, padding="same")(x)
+        # x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(encoder_inputs)
+        # x = layers.Conv2D(64, 3, activation="relu", strides=2, padding="same")(x)
+        # x = layers.Flatten()(x)
+        # x = layers.Dense(16, activation="relu")(x)
+        x = layers.Conv2D(16, 3, activation="relu", strides=2, padding="same")(encoder_inputs)
+        x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(x)
         x = layers.Flatten()(x)
         x = layers.Dense(16, activation="relu")(x)
-        # x = layers.Conv2D(16, 3, activation="relu", strides=2, padding="same")(encoder_inputs)
-        # x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(x)
-        # x = layers.Flatten()(x)
-        # x = layers.Dense(8, activation="relu")(x)
         z_mean = layers.Dense(latent_dim, name="z_mean")(x)
         z_log_var = layers.Dense(latent_dim, name="z_log_var")(x)
         self.encoder = keras.Model(encoder_inputs, [z_mean, z_log_var], name="encoder")
@@ -76,14 +78,14 @@ class VAE(keras.Model):
         '''
 
         latent_inputs = keras.Input(shape=(latent_dim,))
-        x = layers.Dense(7 * 7 * 64, activation="relu")(latent_inputs)
-        x = layers.Reshape((7, 7, 64))(x)
-        x = layers.Conv2DTranspose(64, 3, activation="relu", strides=2, padding="same")(x)
-        x = layers.Conv2DTranspose(32, 3, activation="relu", strides=2, padding="same")(x)
-        # x = layers.Dense(3 * 3 * 32, activation="relu")(latent_inputs)
-        # x = layers.Reshape((3, 3, 32))(x)
+        # x = layers.Dense(7 * 7 * 64, activation="relu")(latent_inputs)
+        # x = layers.Reshape((7, 7, 64))(x)
+        # x = layers.Conv2DTranspose(64, 3, activation="relu", strides=2, padding="same")(x)
         # x = layers.Conv2DTranspose(32, 3, activation="relu", strides=2, padding="same")(x)
-        # x = layers.Conv2DTranspose(14, 3, activation="relu", strides=2, padding="same")(x)
+        x = layers.Dense(7 * 7 * 32, activation="relu")(latent_inputs)
+        x = layers.Reshape((7, 7, 32))(x)
+        x = layers.Conv2DTranspose(32, 3, activation="relu", strides=2, padding="same")(x)
+        x = layers.Conv2DTranspose(16, 3, activation="relu", strides=2, padding="same")(x)
         decoder_outputs = layers.Conv2D(1, 3, activation="sigmoid", padding="same")(x)
         self.decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
         self.decoder.summary()
@@ -95,6 +97,7 @@ class VAE(keras.Model):
         self.reconstruction_loss_tracker = keras.metrics.Mean(
         name="reconstruction_loss")
         self.kl_loss_tracker = keras.metrics.Mean(name="kl_loss")
+        self.val_loss_tracker = keras.metrics.Mean(name="val_loss")
 
     def call(self, inputs):
         z_mean, z_log_var = self.encoder(inputs)
@@ -107,11 +110,13 @@ class VAE(keras.Model):
         return [
             self.total_loss_tracker,
             self.reconstruction_loss_tracker,
-            self.kl_loss_tracker
+            self.kl_loss_tracker,
+            self.val_loss_tracker
             ]
 
     def train_step(self, data):
         mse=keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)
+        val_loss = 0.0
 
         with tf.GradientTape() as tape:
             z_mean, z_log_var = self.encoder(data)
@@ -127,10 +132,21 @@ class VAE(keras.Model):
         self.total_loss_tracker.update_state(total_loss)
         self.reconstruction_loss_tracker.update_state(reconstruction_loss)
         self.kl_loss_tracker.update_state(kl_loss)
+        if self.val_data is not None:
+            print('Validation data is not None')
+            z_mean, _ = self.encoder(self.val_data)
+            val_reconstruction = self.decoder(z_mean)
+            val_loss = mse(self.val_data, val_reconstruction)
+            self.val_loss_tracker.update_state(val_loss)
+            val_loss = self.val_loss_tracker.result()
+        else:
+            print('Validation data is None')
+
         return {
             "total_loss": self.total_loss_tracker.result(),
             "reconstruction_loss": self.reconstruction_loss_tracker.result(),
             "kl_loss": self.kl_loss_tracker.result(),
+            "val_reconstruction_loss": val_loss,
         }
 
 
@@ -151,12 +167,12 @@ class ApricotVAE(ApricotData, VAE):
         # self.bad_data_indices = self.spatial_filter_data[2]
 
         # Set common VAE model parameters
-        self.latent_dim = 5
+        self.latent_dim = 2
         self.image_shape = (28, 28, 1) # Images will be smapled to this space. If you change this you need to change layers, too, for consistent output shape
         self.latent_space_plot_scale = 4 # Scale for plotting latent space
 
         self.batch_size = None # None will take the batch size from test_split size
-        self.epochs = 240
+        self.epochs = 60
         self.test_split = 0.2   # Split data for testing
         self.verbose = 2 #  'auto', 0, 1, or 2. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch. 
         
@@ -335,12 +351,12 @@ class ApricotVAE(ApricotData, VAE):
 
         return upsampled_data
 
-    def _get_spatial_vae_model(self):
+    def _get_spatial_vae_model(self, val_data):
         """
         Builds a model for the spatial VAE
         """
         # Build model
-        vae = VAE(image_shape=self.image_shape, latent_dim=self.latent_dim)
+        vae = VAE(image_shape=self.image_shape, latent_dim=self.latent_dim, val_data=val_data)
 
         # change beta
         vae.beta = self.beta
@@ -350,9 +366,9 @@ class ApricotVAE(ApricotData, VAE):
 
         return vae
 
-    def _fit_spatial_vae(self, data):
+    def _fit_spatial_vae(self, data, val_data):
        
-        vae = self._get_spatial_vae_model()
+        vae = self._get_spatial_vae_model(val_data)
 
         # Fit model
         fit_history = vae.fit(data, epochs=self.epochs, batch_size=self.batch_size, shuffle=True, verbose=self.verbose)
@@ -565,7 +581,6 @@ class ApricotVAE(ApricotData, VAE):
         """
         # Filter data
         data_npf = self._filter_data(data_np, self.gaussian_filter_size)
-        # pdb.set_trace()
 
         # Up or downsample 2D image data
         data_us = self._resample_data(data_npf, self.image_shape[:2])
@@ -669,13 +684,13 @@ class ApricotVAE(ApricotData, VAE):
 
         # rf_training = self._get_mnist_data()
 
-        spatial_vae, fit_history = self._fit_spatial_vae(rf_training)
+        spatial_vae, fit_history = self._fit_spatial_vae(rf_training, rf_test)
         # spatial_vae, validation_data, fit_history = self._k_fold_cross_validation(rf_training, n_folds=5)
 
-        # pdb.set_trace()
         # print(f'Validation score: {validation_data[0]} +/- {validation_data[1]}')
 
         # validation_score = spatial_vae.evaluate(rf_test, rf_test)
+
         # Plot history of training and validation loss
         self._plot_fit_history(fit_history)
 

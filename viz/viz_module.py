@@ -937,26 +937,3 @@ class Viz:
         plt.plot(data.T)
 
 
-    # Fourier filter visualization
-    def show_fourier_filter(self, fourier_filter, image):
-        '''
-        FourierFilter call.
-        '''
-        if image.ndim == 3:
-            image_grey = np.mean(image, axis=2, keepdims=False)
-            image_size = image_grey.shape
-
-        #Show 2 by 2 plot with the filter response as a frequency-amplitude plot, 
-        # the original image, the filter and the filtered image 
-        fig, ax = plt.subplots(nrows=2, ncols=2)
-        axs = ax.ravel()
-        axs[0].plot(fourier_filter.frequency, fourier_filter.amplitude)
-        axs[0].set_xlabel('Frequency (cycles per image)')
-        axs[0].set_ylabel('Amplitude')
-        axs[1].imshow(image_grey, cmap="Greys")
-        plt.colorbar()
-        axs[2].imshow(fourier_filter.filter, cmap="Greys")
-        plt.colorbar()
-        axs[3].imshow(fourier_filter.filtered_image, cmap="Greys")
-        plt.colorbar()
-
