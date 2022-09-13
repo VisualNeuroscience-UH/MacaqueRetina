@@ -116,6 +116,7 @@ class VAE(keras.Model):
 
     def train_step(self, data):
         mse=keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)
+        # mse=keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM_OVER_BATCH_SIZE)
 
         with tf.GradientTape() as tape:
             z_mean, z_log_var = self.encoder(data)
@@ -128,23 +129,32 @@ class VAE(keras.Model):
 
         grads = tape.gradient(total_loss, self.trainable_weights)
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
+        # pdb.set_trace()
         self.total_loss_tracker.update_state(total_loss)
         self.reconstruction_loss_tracker.update_state(reconstruction_loss)
         self.kl_loss_tracker.update_state(kl_loss)
+        total_loss = self.total_loss_tracker.result()
+        reconstruction_loss = self.reconstruction_loss_tracker.result()
+        kl_loss = self.kl_loss_tracker.result()
+
         if self.val_data is not None:
-            z_mean, _ = self.encoder(self.val_data)
-            val_reconstruction = self.decoder(z_mean)
+            val_z_mean, _ = self.encoder(self.val_data)
+            val_reconstruction = self.decoder(val_z_mean)
             val_loss = mse(self.val_data, val_reconstruction)
             self.val_loss_tracker.update_state(val_loss)
             val_loss = self.val_loss_tracker.result()
         else:
             val_loss = 0.0
 
-        self.val_loss_tracker.reset_states()
+        # self.total_loss_tracker.reset_states()
+        # self.reconstruction_loss_tracker.reset_states()
+        # self.kl_loss_tracker.reset_states()
+        # self.val_loss_tracker.reset_states()
+
         return {
-            "total_loss": self.total_loss_tracker.result(),
-            "reconstruction_loss": self.reconstruction_loss_tracker.result(),
-            "kl_loss": self.kl_loss_tracker.result(),
+            "total_loss": total_loss,
+            "reconstruction_loss": reconstruction_loss,
+            "kl_loss": kl_loss,
             "val_reconstruction_loss": val_loss,
         }
 
@@ -170,8 +180,8 @@ class ApricotVAE(ApricotData, VAE):
         self.image_shape = (28, 28, 1) # Images will be smapled to this space. If you change this you need to change layers, too, for consistent output shape
         self.latent_space_plot_scale = 4 # Scale for plotting latent space
 
-        self.batch_size = None # None will take the batch size from test_split size
-        self.epochs = 40
+        self.batch_size = 16 # None will take the batch size from test_split size
+        self.epochs = 200
         self.test_split = 0.2   # Split data for validation and testing (both will take this fraction of data)
         self.verbose = 2 #  'auto', 0, 1, or 2. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch. 
         
@@ -179,7 +189,7 @@ class ApricotVAE(ApricotData, VAE):
         self.gaussian_filter_size = 0.5
         
         # Augment data. Final n samples =  n * (1 + n_repeats * 2): n is the original number of samples, 2 is the rot & shift 
-        self.n_repeats = 0 # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
+        self.n_repeats = 5 # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
         self.angle_min = -30 # rotation int in degrees
         self.angle_max = 30
         self.shift_min = -5 # shift int in pixels (upsampled space, rand int for both x and y)
@@ -190,7 +200,7 @@ class ApricotVAE(ApricotData, VAE):
 
         self.beta = 1 # Beta parameter for KL loss
 
-        self.optimizer = keras.optimizers.Adam(lr = 0.0001)  # default lr = 0.001
+        self.optimizer = keras.optimizers.Adam(lr = 0.001)  # default lr = 0.001
 
         n_threads = 30
         self._set_n_cpus(n_threads)
@@ -607,6 +617,15 @@ class ApricotVAE(ApricotData, VAE):
         # Set batch size as the number of samples in the smallest dataset
         if self.batch_size == None:
             self.batch_size = min(data_train_np_reps.shape[0], data_val_np.shape[0], data_test_np.shape[0])
+            print (f'Batch size is {self.batch_size}')
+        elif self.batch_size > min(data_train_np_reps.shape[0], data_val_np.shape[0], data_test_np.shape[0]):
+            self.batch_size = min(data_train_np_reps.shape[0], data_val_np.shape[0], data_test_np.shape[0])
+            print(f'Batch size is set to {self.batch_size} to match the smallest dataset')
+        elif self.batch_size < min(data_train_np_reps.shape[0], data_val_np.shape[0], data_test_np.shape[0]):
+            print(f'Validation and test data size is set to {self.batch_size} to match the batch size')
+            data_val_np = data_val_np[:self.batch_size]
+            data_test_np = data_test_np[:self.batch_size]
+        print('\n') 
 
         return data_train_np_reps, data_val_np, data_test_np
     
