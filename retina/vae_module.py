@@ -6,6 +6,7 @@ import numpy as np
 from scipy.ndimage import rotate, fourier_shift 
 # import scipy.ndimage as ndimage
 from scipy.interpolate import RectBivariateSpline
+from skimage.filters import butterworth, gaussian
 # import pandas as pd
 
 # Machine learning
@@ -38,6 +39,7 @@ class Sampler(layers.Layer):
         z_size = tf.shape(z_mean)[1]
         epsilon = tf.random.normal(shape=(batch_size, z_size))
         z_dist = z_mean + tf.exp(0.5 * z_log_var) * epsilon
+        # z_dist = z_mean # my autoencoder
         return z_dist
 
 
@@ -60,6 +62,10 @@ class VAE(keras.Model):
         x = layers.Conv2D(64, 3, activation="relu", strides=2, padding="same")(x)
         x = layers.Flatten()(x)
         x = layers.Dense(16, activation="relu")(x)
+        # x = layers.Conv2D(16, 3, activation="relu", strides=2, padding="same")(encoder_inputs)
+        # x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(x)
+        # x = layers.Flatten()(x)
+        # x = layers.Dense(8, activation="relu")(x)
         z_mean = layers.Dense(latent_dim, name="z_mean")(x)
         z_log_var = layers.Dense(latent_dim, name="z_log_var")(x)
         self.encoder = keras.Model(encoder_inputs, [z_mean, z_log_var], name="encoder")
@@ -74,9 +80,14 @@ class VAE(keras.Model):
         x = layers.Reshape((7, 7, 64))(x)
         x = layers.Conv2DTranspose(64, 3, activation="relu", strides=2, padding="same")(x)
         x = layers.Conv2DTranspose(32, 3, activation="relu", strides=2, padding="same")(x)
+        # x = layers.Dense(3 * 3 * 32, activation="relu")(latent_inputs)
+        # x = layers.Reshape((3, 3, 32))(x)
+        # x = layers.Conv2DTranspose(32, 3, activation="relu", strides=2, padding="same")(x)
+        # x = layers.Conv2DTranspose(14, 3, activation="relu", strides=2, padding="same")(x)
         decoder_outputs = layers.Conv2D(1, 3, activation="sigmoid", padding="same")(x)
         self.decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
         self.decoder.summary()
+        # pdb.set_trace()
 
         self.sampler = Sampler()
 
@@ -140,14 +151,17 @@ class ApricotVAE(ApricotData, VAE):
         # self.bad_data_indices = self.spatial_filter_data[2]
 
         # Set common VAE model parameters
-        self.latent_dim = 2
+        self.latent_dim = 5
         self.image_shape = (28, 28, 1) # Images will be smapled to this space. If you change this you need to change layers, too, for consistent output shape
         self.latent_space_plot_scale = 4 # Scale for plotting latent space
 
         self.batch_size = None # None will take the batch size from test_split size
-        self.epochs = 60
+        self.epochs = 240
         self.test_split = 0.2   # Split data for testing
         self.verbose = 2 #  'auto', 0, 1, or 2. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch. 
+        
+        # preprocessing denoising gaussian filter size (in pixels)
+        self.gaussian_filter_size = 0.5
         
         # Augment data. Final n samples =  n * (1 + n_repeats * 2): n is the original number of samples, 2 is the rot & shift 
         self.n_repeats = 5 # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
@@ -489,17 +503,76 @@ class ApricotVAE(ApricotData, VAE):
         
         return data.astype("float32")
 
+    def _filter_data(self, data, filter_size_pixels=1):
+        """
+        Filter data with butterworth filter
+        """
+                
+        dataf = np.zeros(data.shape)
+        # butterworth(image, cutoff_frequency_ratio=0.005, high_pass=True, order=2.0, channel_axis=None)
+        for idx in range(data.shape[0]):
+
+            # Apply gaussian filter
+            dataf[idx, :, :, 0] = gaussian(data[idx, :, :, 0], sigma=[filter_size_pixels, filter_size_pixels], channel_axis=-1, mode='reflect', truncate=2.0)
+            
+            if 0:
+                print(f'idx: {idx}')
+                plt.figure();plt.imshow(data[idx,:,:,0]); plt.colorbar(); plt.title('Original')
+                plt.figure();plt.imshow(dataf[idx,:,:,0]); plt.colorbar(); plt.title('Filtered')
+
+                # extract edge pixels into single flattened array
+                edge_pixels = np.concatenate((data[idx, 0, :, 0], dataf[idx, -1, :, 0], dataf[idx, :, 0, 0], dataf[idx, :, -1, 0]))
+                # show histogram of edge pixes
+                plt.figure(); plt.hist(edge_pixels, bins=30); plt.title('Histogram of original edge pixels')
+                # plot mean value as dashed red vertical line
+                plt.axvline(edge_pixels.mean(), color='r', linestyle='dashed', linewidth=1)
+
+                # extract edge pixels into single flattened array
+                edge_pixels = np.concatenate((dataf[idx, 0, :, 0], dataf[idx, -1, :, 0], dataf[idx, :, 0, 0], dataf[idx, :, -1, 0]))
+                # show histogram of edge pixes
+                plt.figure(); plt.hist(edge_pixels, bins=30); plt.title('Histogram of filtered edge pixels')
+                # plot mean value as dashed red vertical line
+                plt.axvline(edge_pixels.mean(), color='r', linestyle='dashed', linewidth=1)
+                
+                # show histogram of all original pixels
+                plt.figure(); plt.hist(data[idx, :, :, 0].flatten(), bins=30); plt.title('Histogram of original pixels')
+                # plot mean value as dashed red vertical line
+                plt.axvline(data[idx, :, :, 0].mean(), color='r', linestyle='dashed', linewidth=1)
+                # show histogram of all filtered pixels
+                plt.figure(); plt.hist(dataf[idx, :, :, 0].flatten(), bins=30); plt.title('Histogram of filtered pixels')
+                # plot mean value as dashed red vertical line
+                plt.axvline(dataf[idx, :, :, 0].mean(), color='r', linestyle='dashed', linewidth=1)
+                
+                # Create impulse image
+                impulse_img = np.zeros(data[idx, :, :, 0].shape)
+                # Mark center pixel as 1
+                impulse_img[int(impulse_img.shape[0] / 2), int(impulse_img.shape[1] / 2)] = 1
+                # Apply gaussian filter
+                impulse_response = gaussian(impulse_img, sigma=[filter_size_pixels, filter_size_pixels], channel_axis=-1, mode='reflect')
+                #show impulse response
+                plt.figure(); plt.imshow(impulse_response, cmap='gray'); plt.colorbar(); plt.title('Impulse response')
+                # Plot numerical values on top of the image
+                for i in range(impulse_response.shape[0]):
+                    for j in range(impulse_response.shape[1]):
+                        plt.text(j, i, round(impulse_response[i, j], 2), ha="center", va="center", color="w")
+                plt.show()
+        
+        return dataf.astype("float32")
+
     def _input_processing_pipe(self, data_np):
         """
         Process input data for training and validation
         """
+        # Filter data
+        data_npf = self._filter_data(data_np, self.gaussian_filter_size)
+        # pdb.set_trace()
+
         # Up or downsample 2D image data
-        data_us = self._resample_data(data_np, self.image_shape[:2])
+        data_us = self._resample_data(data_npf, self.image_shape[:2])
 
         # Normalize data
         data_usn = self._normalize_data(data_us, scale_type='minmax', scale_min=None, scale_max=None)
-        
-        
+                
         # split data into test and validation sets using proportion of 20%
         skip_size = int(data_us.shape[0] * self.test_split)
         data_train_np = data_usn[skip_size:]
@@ -578,12 +651,13 @@ class ApricotVAE(ApricotData, VAE):
             validation_scores.append(np.average(np.array(reconstruction_losses)))
 
         validation_score = np.average(validation_scores)
+        validation_score_std = np.std(validation_scores)
         
         # Final model fit with all training data
         model = self._get_spatial_vae_model()
         fit_history = model.fit(data_np, epochs=self.epochs, batch_size=self.batch_size, shuffle=True, verbose=self.verbose)
 
-        return model, validation_score, fit_history
+        return model, (validation_score, validation_score_std), fit_history
 
     def _fit_all(self):
 
@@ -595,10 +669,12 @@ class ApricotVAE(ApricotData, VAE):
 
         # rf_training = self._get_mnist_data()
 
-        # spatial_vae, fit_history = self._fit_spatial_vae(rf_training)
-        spatial_vae, validation_score, fit_history = self._k_fold_cross_validation(rf_training, n_folds=5)
+        spatial_vae, fit_history = self._fit_spatial_vae(rf_training)
+        # spatial_vae, validation_data, fit_history = self._k_fold_cross_validation(rf_training, n_folds=5)
 
-        pdb.set_trace()
+        # pdb.set_trace()
+        # print(f'Validation score: {validation_data[0]} +/- {validation_data[1]}')
+
         # validation_score = spatial_vae.evaluate(rf_test, rf_test)
         # Plot history of training and validation loss
         self._plot_fit_history(fit_history)
