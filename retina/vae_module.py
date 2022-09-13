@@ -116,7 +116,6 @@ class VAE(keras.Model):
 
     def train_step(self, data):
         mse=keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)
-        val_loss = 0.0
 
         with tf.GradientTape() as tape:
             z_mean, z_log_var = self.encoder(data)
@@ -133,15 +132,15 @@ class VAE(keras.Model):
         self.reconstruction_loss_tracker.update_state(reconstruction_loss)
         self.kl_loss_tracker.update_state(kl_loss)
         if self.val_data is not None:
-            print('Validation data is not None')
             z_mean, _ = self.encoder(self.val_data)
             val_reconstruction = self.decoder(z_mean)
             val_loss = mse(self.val_data, val_reconstruction)
             self.val_loss_tracker.update_state(val_loss)
             val_loss = self.val_loss_tracker.result()
         else:
-            print('Validation data is None')
+            val_loss = 0.0
 
+        self.val_loss_tracker.reset_states()
         return {
             "total_loss": self.total_loss_tracker.result(),
             "reconstruction_loss": self.reconstruction_loss_tracker.result(),
@@ -172,7 +171,7 @@ class ApricotVAE(ApricotData, VAE):
         self.latent_space_plot_scale = 4 # Scale for plotting latent space
 
         self.batch_size = None # None will take the batch size from test_split size
-        self.epochs = 200
+        self.epochs = 40
         self.test_split = 0.2   # Split data for validation and testing (both will take this fraction of data)
         self.verbose = 2 #  'auto', 0, 1, or 2. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch. 
         
@@ -180,7 +179,7 @@ class ApricotVAE(ApricotData, VAE):
         self.gaussian_filter_size = 0.5
         
         # Augment data. Final n samples =  n * (1 + n_repeats * 2): n is the original number of samples, 2 is the rot & shift 
-        self.n_repeats = 5 # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
+        self.n_repeats = 0 # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
         self.angle_min = -30 # rotation int in degrees
         self.angle_max = 30
         self.shift_min = -5 # shift int in pixels (upsampled space, rand int for both x and y)
@@ -191,7 +190,7 @@ class ApricotVAE(ApricotData, VAE):
 
         self.beta = 1 # Beta parameter for KL loss
 
-        self.optimizer = keras.optimizers.Adam(lr = 0.001)  # default lr = 0.001
+        self.optimizer = keras.optimizers.Adam(lr = 0.0001)  # default lr = 0.001
 
         n_threads = 30
         self._set_n_cpus(n_threads)
@@ -596,24 +595,20 @@ class ApricotVAE(ApricotData, VAE):
         
         # Report split sizes
         print(f'The train sample size before augmentation is {data_train_np.shape[0]}')
-        print(f'The validation sample size before augmentation is {data_val_np.shape[0]}')
-        print(f'The test sample size before augmentation is {data_test_np.shape[0]}')
+        print(f'The validation sample size is {data_val_np.shape[0]}')
+        print(f'The test sample size is {data_test_np.shape[0]}')
         
         # Augment data with random rotation and shift
         data_train_np_reps = self._augment_data(data_train_np, self.n_repeats) 
-        data_val_np_reps = self._augment_data(data_val_np, self.n_repeats)
-        data_test_np_reps = self._augment_data(data_test_np, self.n_repeats)
 
         # Report split sizes
         print(f'The train sample size after augmentation is {data_train_np_reps.shape[0]}')
-        print(f'The validation sample size after augmentation is {data_val_np_reps.shape[0]}')
-        print(f'The test sample size after augmentation is {data_test_np_reps.shape[0]}')
 
         # Set batch size as the number of samples in the smallest dataset
         if self.batch_size == None:
-            self.batch_size = min(data_train_np_reps.shape[0], data_val_np_reps.shape[0], data_test_np_reps.shape[0])
+            self.batch_size = min(data_train_np_reps.shape[0], data_val_np.shape[0], data_test_np.shape[0])
 
-        return data_train_np_reps, data_val_np_reps, data_test_np_reps
+        return data_train_np_reps, data_val_np, data_test_np
     
     def _plot_fit_history(self, fit_history):
         """
@@ -628,6 +623,15 @@ class ApricotVAE(ApricotData, VAE):
         plt.ylabel('loss')
         plt.xlabel('epoch')
         plt.legend(keys, loc='upper left')
+
+        val_min = min(fit_history.history['val_reconstruction_loss'])
+        # plot horizontal dashed red line at the minimum of val_reconstruction_loss
+        plt.axhline(val_min, color='r', linestyle='dashed', linewidth=1)
+        
+        # get the max value of x-axis
+        x_max = plt.xlim()[1]
+        # add the minimum value as text
+        plt.text(x_max, val_min, round(val_min, 1), ha="right", va="bottom", color="r")
 
     def _plot_z_mean_in_2D(self, z_mean):
         plt.figure()
