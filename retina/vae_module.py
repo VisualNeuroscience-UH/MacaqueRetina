@@ -172,8 +172,8 @@ class ApricotVAE(ApricotData, VAE):
         self.latent_space_plot_scale = 4 # Scale for plotting latent space
 
         self.batch_size = None # None will take the batch size from test_split size
-        self.epochs = 60
-        self.test_split = 0.2   # Split data for testing
+        self.epochs = 200
+        self.test_split = 0.2   # Split data for validation and testing (both will take this fraction of data)
         self.verbose = 2 #  'auto', 0, 1, or 2. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch. 
         
         # preprocessing denoising gaussian filter size (in pixels)
@@ -588,28 +588,32 @@ class ApricotVAE(ApricotData, VAE):
         # Normalize data
         data_usn = self._normalize_data(data_us, scale_type='minmax', scale_min=None, scale_max=None)
                 
-        # split data into test and validation sets using proportion of 20%
+        # split data into train, validation and test sets using proportion of 60%, 20%, 20%
         skip_size = int(data_us.shape[0] * self.test_split)
-        data_train_np = data_usn[skip_size:]
-        data_test_np = data_usn[:skip_size]
+        data_train_np = data_usn[skip_size * 2:]
+        data_val_np = data_usn[:skip_size]
+        data_test_np = data_usn[skip_size:skip_size * 2]
         
         # Report split sizes
         print(f'The train sample size before augmentation is {data_train_np.shape[0]}')
+        print(f'The validation sample size before augmentation is {data_val_np.shape[0]}')
         print(f'The test sample size before augmentation is {data_test_np.shape[0]}')
         
         # Augment data with random rotation and shift
         data_train_np_reps = self._augment_data(data_train_np, self.n_repeats) 
+        data_val_np_reps = self._augment_data(data_val_np, self.n_repeats)
         data_test_np_reps = self._augment_data(data_test_np, self.n_repeats)
 
         # Report split sizes
         print(f'The train sample size after augmentation is {data_train_np_reps.shape[0]}')
+        print(f'The validation sample size after augmentation is {data_val_np_reps.shape[0]}')
         print(f'The test sample size after augmentation is {data_test_np_reps.shape[0]}')
 
         # Set batch size as the number of samples in the smallest dataset
         if self.batch_size == None:
-            self.batch_size = min(data_train_np_reps.shape[0], data_test_np_reps.shape[0])
+            self.batch_size = min(data_train_np_reps.shape[0], data_val_np_reps.shape[0], data_test_np_reps.shape[0])
 
-        return data_train_np_reps, data_test_np_reps
+        return data_train_np_reps, data_val_np_reps, data_test_np_reps
     
     def _plot_fit_history(self, fit_history):
         """
@@ -680,11 +684,11 @@ class ApricotVAE(ApricotData, VAE):
         gc_spatial_data_np = self._get_spatial_apricot_data()
 
         # # Process input data for training and validation dataset objects
-        rf_training, rf_test = self._input_processing_pipe(gc_spatial_data_np)
+        rf_training, rf_val, rf_test = self._input_processing_pipe(gc_spatial_data_np)
 
         # rf_training = self._get_mnist_data()
 
-        spatial_vae, fit_history = self._fit_spatial_vae(rf_training, rf_test)
+        spatial_vae, fit_history = self._fit_spatial_vae(rf_training, rf_val)
         # spatial_vae, validation_data, fit_history = self._k_fold_cross_validation(rf_training, n_folds=5)
 
         # print(f'Validation score: {validation_data[0]} +/- {validation_data[1]}')
