@@ -76,7 +76,7 @@ class VAE(keras.Model):
         '''
         Build decoder
         '''
-
+        # TÄHÄN JÄIT: HYPERPARAMETRI FITTI. KOKEILE TOINEN AKTIVAATIOFUNKTIO
         latent_inputs = keras.Input(shape=(latent_dim,))
         # x = layers.Dense(7 * 7 * 64, activation="relu")(latent_inputs)
         # x = layers.Reshape((7, 7, 64))(x)
@@ -89,7 +89,6 @@ class VAE(keras.Model):
         decoder_outputs = layers.Conv2D(1, 3, activation="sigmoid", padding="same")(x)
         self.decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
         self.decoder.summary()
-        # pdb.set_trace()
 
         self.sampler = Sampler()
 
@@ -180,7 +179,7 @@ class ApricotVAE(ApricotData, VAE):
         self.image_shape = (28, 28, 1) # Images will be smapled to this space. If you change this you need to change layers, too, for consistent output shape
         self.latent_space_plot_scale = 4 # Scale for plotting latent space
 
-        self.batch_size = 16 # None will take the batch size from test_split size
+        self.batch_size = 16 # None will take the batch size from test_split size. Note that the batch size affects training speed and loss values
         self.epochs = 200
         self.test_split = 0.2   # Split data for validation and testing (both will take this fraction of data)
         self.verbose = 2 #  'auto', 0, 1, or 2. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch. 
@@ -189,11 +188,11 @@ class ApricotVAE(ApricotData, VAE):
         self.gaussian_filter_size = 0.5
         
         # Augment data. Final n samples =  n * (1 + n_repeats * 2): n is the original number of samples, 2 is the rot & shift 
-        self.n_repeats = 5 # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
-        self.angle_min = -30 # rotation int in degrees
-        self.angle_max = 30
-        self.shift_min = -5 # shift int in pixels (upsampled space, rand int for both x and y)
-        self.shift_max = 5
+        self.n_repeats = 10 # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
+        self.angle_min = -30 #30 # rotation int in degrees
+        self.angle_max = 30 #30
+        self.shift_min = -5 #5 # shift int in pixels (upsampled space, rand int for both x and y)
+        self.shift_max = 5 #5
 
         self.random_seed = 42
         tf.keras.utils.set_random_seed(self.random_seed)
