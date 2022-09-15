@@ -184,8 +184,9 @@ class ApricotVAE(ApricotData, VAE):
         self.test_split = 0.2   # Split data for validation and testing (both will take this fraction of data)
         self.verbose = 2 #  'auto', 0, 1, or 2. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch. 
         
-        # preprocessing denoising gaussian filter size (in pixels)
-        self.gaussian_filter_size = 0.5
+        # Preprocessing parameters
+        self.gaussian_filter_size = 0.5 # Denoising gaussian filter size (in pixels)
+        self.n_pca_components = 32 # Number of PCA components to use for denoising
         
         # Augment data. Final n samples =  n * (1 + n_repeats * 2): n is the original number of samples, 2 is the rot & shift 
         self.n_repeats = 10 # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
@@ -537,25 +538,6 @@ class ApricotVAE(ApricotData, VAE):
 
             # Apply gaussian filter
             dataf[idx, :, :, 0] = gaussian(data[idx, :, :, 0], sigma=[filter_size_pixels, filter_size_pixels], channel_axis=-1, mode='reflect', truncate=2.0)
-
-
-        if 0:
-            example_image = 0
-            plt.figure()
-            # Create one subplt for each plot below
-
-            # Show exaple original and filtered image
-            plt.subplot(1, 2, 1)
-            plt.imshow(data[example_image,:,:])
-            plt.colorbar()
-            plt.title('Original image')
-
-            plt.subplot(1, 2, 2)
-            plt.imshow(dataf[example_image,:,:])
-            plt.colorbar()
-            plt.title('Gaussian filtered image')
-            
-            plt.show()
  
         return dataf.astype("float32")    
         
@@ -580,35 +562,65 @@ class ApricotVAE(ApricotData, VAE):
 
         return data_pca.astype("float32"), pca
 
-    def _show_pca_components(self, data, data_pca, pca, example_image=0):
+    def _show_gaussian_filtered_data(self, data, dataf, example_image=[0]):
+        """
+        Show original and filtered data
+        """
+        if isinstance(example_image, int):
+            example_image = [example_image]
+
+        for example_image_idx in example_image:
+
+            plt.figure()
+            # Create one subplt for each plot below
+
+            # Show exaple original and filtered image
+            plt.subplot(1, 2, 1)
+            plt.imshow(data[example_image_idx,:,:])
+            plt.colorbar()
+            plt.title('Original image')
+
+            plt.subplot(1, 2, 2)
+            plt.imshow(dataf[example_image_idx,:,:])
+            plt.colorbar()
+            plt.title('Gaussian filtered image')
+            
+    def _show_pca_components(self, data, data_pca, pca, example_image=[0]):
         """
         Show PCA components
         """
-        example_image = 3
-        plt.figure()
-        # Create one subplt for each plot below
-
-        # Show PCA components
-        plt.subplot(2, 2, 1)
-        plt.bar(range(len(pca.explained_variance_ratio_)), pca.explained_variance_ratio_)
-        plt.title('PCA explained variance ratio')
-
-        # Plot first 2 PCA components as scatter plot
-        plt.subplot(2, 2, 2)
-        plt.scatter(pca.components_[0,:], pca.components_[1,:])
-        plt.title('PCA components 1 and 2')
-
-        # Show exaple original and filtered image
-        plt.subplot(2, 2, 3)
-        plt.imshow(data[example_image,:,:])
-        plt.colorbar()
-        plt.title('Original image')
-
-        plt.subplot(2, 2, 4)
-        plt.imshow(data_pca[example_image,:,:])
-        plt.colorbar()
-        plt.title('PCA reconstructed image')
         
+        if isinstance(example_image, int):
+            example_image = [example_image]
+        
+        for example_image_idx in example_image:
+            plt.figure()
+            # Create one subplt for each plot below
+
+            # Show PCA components
+            plt.subplot(2, 2, 1)
+            plt.bar(range(len(pca.explained_variance_ratio_)), pca.explained_variance_ratio_)
+            plt.title('PCA explained variance ratio')
+
+            # Plot first 2 PCA components as scatter plot
+            plt.subplot(2, 2, 2)
+            plt.scatter(pca.components_[0,:], pca.components_[1,:])
+            plt.title('PCA components 1 and 2')
+
+            # From the previous subplot, color the example_image red
+            plt.scatter(pca.components_[0,example_image_idx], pca.components_[1,example_image_idx], c='r')
+
+            # Show exaple original and filtered image
+            plt.subplot(2, 2, 3)
+            plt.imshow(data[example_image_idx,:,:])
+            plt.colorbar()
+            plt.title('Original image')
+
+            plt.subplot(2, 2, 4)
+            plt.imshow(data_pca[example_image_idx,:,:])
+            plt.colorbar()
+            plt.title('PCA reconstructed image')
+            
         plt.show()
 
 
@@ -617,9 +629,11 @@ class ApricotVAE(ApricotData, VAE):
         Process input data for training and validation
         """
         # Filter data
-        # data_npf = self._filter_data_gaussian(data_np, self.gaussian_filter_size)
-        data_npf, pca = self._filter_data_PCA(data_np, n_pca_components=10)
-        self._show_pca_components(data_np, data_npf, pca, example_image=0)
+        data_npf = self._filter_data_gaussian(data_np, self.gaussian_filter_size)
+        self._show_gaussian_filtered_data(data_np, data_npf, example_image=[0, 69, 87])
+
+        data_npf, pca = self._filter_data_PCA(data_npf, n_pca_components=self.n_pca_components)
+        self._show_pca_components(data_np, data_npf, pca, example_image=[0, 69, 87])
         # TÄHÄN JÄIT : ETSI SOPIVA DIMENSIONALITEETTI
         pdb.set_trace()
         # Up or downsample 2D image data
