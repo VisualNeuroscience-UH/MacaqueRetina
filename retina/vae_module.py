@@ -175,7 +175,7 @@ class ApricotVAE(ApricotData, VAE):
         # self.bad_data_indices = self.spatial_filter_data[2]
 
         # Set common VAE model parameters
-        self.latent_dim = 16 # 2
+        self.latent_dim = 32 # 2
         self.image_shape = (28, 28, 1) # Images will be smapled to this space. If you change this you need to change layers, too, for consistent output shape
         self.latent_space_plot_scale = 4 # Scale for plotting latent space
 
@@ -185,8 +185,8 @@ class ApricotVAE(ApricotData, VAE):
         self.verbose = 2 #  'auto', 0, 1, or 2. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch. 
         
         # Preprocessing parameters
-        self.gaussian_filter_size = 0.5 # Denoising gaussian filter size (in pixels)
-        self.n_pca_components = 32 # Number of PCA components to use for denoising
+        self.gaussian_filter_size = None # None or 0.5 or ... # Denoising gaussian filter size (in pixels)
+        self.n_pca_components = 32 # None or 32 # Number of PCA components to use for denoising
         
         # Augment data. Final n samples =  n * (1 + n_repeats * 2): n is the original number of samples, 2 is the rot & shift 
         self.n_repeats = 10 # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
@@ -528,11 +528,18 @@ class ApricotVAE(ApricotData, VAE):
         
         return data.astype("float32")
 
-    def _filter_data_gaussian(self, data, filter_size_pixels=1):
+    def _filter_data_gaussian(self, data):
         """
         Filter data with Gaussian filter
+        :param data: numpy array
         """
-                
+        filter_size_pixels = self.gaussian_filter_size
+
+        # If filter_size_pixels = None, do not filter
+        if filter_size_pixels is None:
+            print('No filtering with Gaussian filter')
+            return data
+
         dataf = np.zeros(data.shape)
         for idx in range(data.shape[0]):
 
@@ -541,11 +548,18 @@ class ApricotVAE(ApricotData, VAE):
  
         return dataf.astype("float32")    
         
-    def _filter_data_PCA(self, data, n_pca_components=2):
+    def _filter_data_PCA(self, data):
         """
         Filter data with PCA
+        :param data: numpy array
         """
                 
+        n_pca_components = self.n_pca_components
+
+        if n_pca_components is None:
+            print('No filtering with PCA')
+            return data, None
+
         # PCA without Gaussian filter
         # Flatten images to provide 2D input for PCA. Each row is an image, each column a pixel
         data_2D_np = data.reshape(data.shape[0], data.shape[1] * data.shape[2])
@@ -566,6 +580,10 @@ class ApricotVAE(ApricotData, VAE):
         """
         Show original and filtered data
         """
+
+        if self.gaussian_filter_size is None:
+            return
+
         if isinstance(example_image, int):
             example_image = [example_image]
 
@@ -589,7 +607,9 @@ class ApricotVAE(ApricotData, VAE):
         """
         Show PCA components
         """
-        
+        if pca is None:
+            return
+
         if isinstance(example_image, int):
             example_image = [example_image]
         
@@ -621,21 +641,18 @@ class ApricotVAE(ApricotData, VAE):
             plt.colorbar()
             plt.title('PCA reconstructed image')
             
-        plt.show()
-
-
     def _input_processing_pipe(self, data_np):
         """
         Process input data for training and validation
         """
         # Filter data
-        data_npf = self._filter_data_gaussian(data_np, self.gaussian_filter_size)
-        self._show_gaussian_filtered_data(data_np, data_npf, example_image=[0, 69, 87])
+        data_npf = self._filter_data_gaussian(data_np)
+        # self._show_gaussian_filtered_data(data_np, data_npf, example_image=[0, 69, 87])
 
-        data_npf, pca = self._filter_data_PCA(data_npf, n_pca_components=self.n_pca_components)
-        self._show_pca_components(data_np, data_npf, pca, example_image=[0, 69, 87])
-        # TÄHÄN JÄIT : ETSI SOPIVA DIMENSIONALITEETTI
-        pdb.set_trace()
+        data_npf, pca = self._filter_data_PCA(data_npf)
+        # self._show_pca_components(data_np, data_npf, pca, example_image=[0, 69, 87])
+        # plt.show()
+
         # Up or downsample 2D image data
         data_us = self._resample_data(data_npf, self.image_shape[:2])
 
