@@ -6,7 +6,6 @@ import numpy as np
 from scipy.ndimage import rotate, fourier_shift 
 # import scipy.ndimage as ndimage
 from scipy.interpolate import RectBivariateSpline
-from skimage.filters import butterworth, gaussian
 # import pandas as pd
 
 # Machine learning
@@ -15,6 +14,8 @@ from tensorflow import keras
 from tensorflow.keras import layers
 # from keras import backend as keras_backend
 from keras.preprocessing.image import ImageDataGenerator
+from skimage.filters import gaussian
+from sklearn.decomposition import PCA
 
 
 # Viz
@@ -51,7 +52,7 @@ class VAE(keras.Model):
         assert image_shape is not None, 'Argument image_shape  must be specified, aborting...'
         assert latent_dim is not None, 'Argument latent_dim must be specified, aborting...'
 
-        self.beta = 1.0
+        # self.beta = 1.0
         # Init attribute for validation. We lack custom fit() method, so we need to pass validation data to train_step()
         self.val_data = val_data
 
@@ -128,7 +129,6 @@ class VAE(keras.Model):
 
         grads = tape.gradient(total_loss, self.trainable_weights)
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
-        # pdb.set_trace()
         self.total_loss_tracker.update_state(total_loss)
         self.reconstruction_loss_tracker.update_state(reconstruction_loss)
         self.kl_loss_tracker.update_state(kl_loss)
@@ -175,7 +175,7 @@ class ApricotVAE(ApricotData, VAE):
         # self.bad_data_indices = self.spatial_filter_data[2]
 
         # Set common VAE model parameters
-        self.latent_dim = 2
+        self.latent_dim = 16 # 2
         self.image_shape = (28, 28, 1) # Images will be smapled to this space. If you change this you need to change layers, too, for consistent output shape
         self.latent_space_plot_scale = 4 # Scale for plotting latent space
 
@@ -197,9 +197,9 @@ class ApricotVAE(ApricotData, VAE):
         self.random_seed = 42
         tf.keras.utils.set_random_seed(self.random_seed)
 
-        self.beta = 1 # Beta parameter for KL loss
+        self.beta = 1 # Beta parameter for KL loss. Overrides VAE class beta parameter
 
-        self.optimizer = keras.optimizers.Adam(lr = 0.001)  # default lr = 0.001
+        self.optimizer = keras.optimizers.Adam(learning_rate=0.001)  # default lr = 0.001
 
         n_threads = 30
         self._set_n_cpus(n_threads)
@@ -527,69 +527,101 @@ class ApricotVAE(ApricotData, VAE):
         
         return data.astype("float32")
 
-    def _filter_data(self, data, filter_size_pixels=1):
+    def _filter_data_gaussian(self, data, filter_size_pixels=1):
         """
-        Filter data with butterworth filter
+        Filter data with Gaussian filter
         """
                 
         dataf = np.zeros(data.shape)
-        # butterworth(image, cutoff_frequency_ratio=0.005, high_pass=True, order=2.0, channel_axis=None)
         for idx in range(data.shape[0]):
 
             # Apply gaussian filter
             dataf[idx, :, :, 0] = gaussian(data[idx, :, :, 0], sigma=[filter_size_pixels, filter_size_pixels], channel_axis=-1, mode='reflect', truncate=2.0)
+
+
+        if 0:
+            example_image = 0
+            plt.figure()
+            # Create one subplt for each plot below
+
+            # Show exaple original and filtered image
+            plt.subplot(1, 2, 1)
+            plt.imshow(data[example_image,:,:])
+            plt.colorbar()
+            plt.title('Original image')
+
+            plt.subplot(1, 2, 2)
+            plt.imshow(dataf[example_image,:,:])
+            plt.colorbar()
+            plt.title('Gaussian filtered image')
             
-            if 0:
-                print(f'idx: {idx}')
-                plt.figure();plt.imshow(data[idx,:,:,0]); plt.colorbar(); plt.title('Original')
-                plt.figure();plt.imshow(dataf[idx,:,:,0]); plt.colorbar(); plt.title('Filtered')
-
-                # extract edge pixels into single flattened array
-                edge_pixels = np.concatenate((data[idx, 0, :, 0], dataf[idx, -1, :, 0], dataf[idx, :, 0, 0], dataf[idx, :, -1, 0]))
-                # show histogram of edge pixes
-                plt.figure(); plt.hist(edge_pixels, bins=30); plt.title('Histogram of original edge pixels')
-                # plot mean value as dashed red vertical line
-                plt.axvline(edge_pixels.mean(), color='r', linestyle='dashed', linewidth=1)
-
-                # extract edge pixels into single flattened array
-                edge_pixels = np.concatenate((dataf[idx, 0, :, 0], dataf[idx, -1, :, 0], dataf[idx, :, 0, 0], dataf[idx, :, -1, 0]))
-                # show histogram of edge pixes
-                plt.figure(); plt.hist(edge_pixels, bins=30); plt.title('Histogram of filtered edge pixels')
-                # plot mean value as dashed red vertical line
-                plt.axvline(edge_pixels.mean(), color='r', linestyle='dashed', linewidth=1)
-                
-                # show histogram of all original pixels
-                plt.figure(); plt.hist(data[idx, :, :, 0].flatten(), bins=30); plt.title('Histogram of original pixels')
-                # plot mean value as dashed red vertical line
-                plt.axvline(data[idx, :, :, 0].mean(), color='r', linestyle='dashed', linewidth=1)
-                # show histogram of all filtered pixels
-                plt.figure(); plt.hist(dataf[idx, :, :, 0].flatten(), bins=30); plt.title('Histogram of filtered pixels')
-                # plot mean value as dashed red vertical line
-                plt.axvline(dataf[idx, :, :, 0].mean(), color='r', linestyle='dashed', linewidth=1)
-                
-                # Create impulse image
-                impulse_img = np.zeros(data[idx, :, :, 0].shape)
-                # Mark center pixel as 1
-                impulse_img[int(impulse_img.shape[0] / 2), int(impulse_img.shape[1] / 2)] = 1
-                # Apply gaussian filter
-                impulse_response = gaussian(impulse_img, sigma=[filter_size_pixels, filter_size_pixels], channel_axis=-1, mode='reflect')
-                #show impulse response
-                plt.figure(); plt.imshow(impulse_response, cmap='gray'); plt.colorbar(); plt.title('Impulse response')
-                # Plot numerical values on top of the image
-                for i in range(impulse_response.shape[0]):
-                    for j in range(impulse_response.shape[1]):
-                        plt.text(j, i, round(impulse_response[i, j], 2), ha="center", va="center", color="w")
-                plt.show()
+            plt.show()
+ 
+        return dataf.astype("float32")    
         
-        return dataf.astype("float32")
+    def _filter_data_PCA(self, data, n_pca_components=2):
+        """
+        Filter data with PCA
+        """
+                
+        # PCA without Gaussian filter
+        # Flatten images to provide 2D input for PCA. Each row is an image, each column a pixel
+        data_2D_np = data.reshape(data.shape[0], data.shape[1] * data.shape[2])
+        
+        # Apply PCA to data
+        pca = PCA(n_components=n_pca_components)
+        pca.fit(data_2D_np)
+
+        # Get inverse PCA transformation
+        pca_inv = pca.inverse_transform(pca.transform(data_2D_np))
+
+        # Resahpe to 3D
+        data_pca = pca_inv.reshape(data.shape[0], data.shape[1], data.shape[2])
+
+        return data_pca.astype("float32"), pca
+
+    def _show_pca_components(self, data, data_pca, pca, example_image=0):
+        """
+        Show PCA components
+        """
+        example_image = 3
+        plt.figure()
+        # Create one subplt for each plot below
+
+        # Show PCA components
+        plt.subplot(2, 2, 1)
+        plt.bar(range(len(pca.explained_variance_ratio_)), pca.explained_variance_ratio_)
+        plt.title('PCA explained variance ratio')
+
+        # Plot first 2 PCA components as scatter plot
+        plt.subplot(2, 2, 2)
+        plt.scatter(pca.components_[0,:], pca.components_[1,:])
+        plt.title('PCA components 1 and 2')
+
+        # Show exaple original and filtered image
+        plt.subplot(2, 2, 3)
+        plt.imshow(data[example_image,:,:])
+        plt.colorbar()
+        plt.title('Original image')
+
+        plt.subplot(2, 2, 4)
+        plt.imshow(data_pca[example_image,:,:])
+        plt.colorbar()
+        plt.title('PCA reconstructed image')
+        
+        plt.show()
+
 
     def _input_processing_pipe(self, data_np):
         """
         Process input data for training and validation
         """
         # Filter data
-        data_npf = self._filter_data(data_np, self.gaussian_filter_size)
-
+        # data_npf = self._filter_data_gaussian(data_np, self.gaussian_filter_size)
+        data_npf, pca = self._filter_data_PCA(data_np, n_pca_components=10)
+        self._show_pca_components(data_np, data_npf, pca, example_image=0)
+        # TÄHÄN JÄIT : ETSI SOPIVA DIMENSIONALITEETTI
+        pdb.set_trace()
         # Up or downsample 2D image data
         data_us = self._resample_data(data_npf, self.image_shape[:2])
 
