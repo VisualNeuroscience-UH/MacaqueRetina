@@ -1,29 +1,21 @@
 # Numerical
 import numpy as np
-# import scipy.optimize as opt
-# import scipy.io as sio
-# from scipy.optimize import curve_fit
 from scipy.ndimage import rotate, fourier_shift 
-# import scipy.ndimage as ndimage
 from scipy.interpolate import RectBivariateSpline
-# import pandas as pd
+from scipy import linalg
 
 # Machine learning
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras import layers
-# from keras import backend as keras_backend
-from keras.preprocessing.image import ImageDataGenerator
+# from tensorflow.keras import layers
 from skimage.filters import gaussian
 from sklearn.decomposition import PCA
-
+layers = keras.layers
 
 # Viz
-# from tqdm import tqdm
 import matplotlib.pyplot as plt
 
 # Local
-# from retina.retina_math_module import RetinaMath
 from retina.apricot_fitter_module import ApricotData
 
 # Builtin
@@ -77,7 +69,6 @@ class VAE(keras.Model):
         '''
         Build decoder
         '''
-        # TÄHÄN JÄIT: HYPERPARAMETRI FITTI. KOKEILE TOINEN AKTIVAATIOFUNKTIO
         latent_inputs = keras.Input(shape=(latent_dim,))
         # x = layers.Dense(7 * 7 * 64, activation="relu")(latent_inputs)
         # x = layers.Reshape((7, 7, 64))(x)
@@ -94,8 +85,7 @@ class VAE(keras.Model):
         self.sampler = Sampler()
 
         self.total_loss_tracker = keras.metrics.Mean(name="total_loss")
-        self.reconstruction_loss_tracker = keras.metrics.Mean(
-        name="reconstruction_loss")
+        self.reconstruction_loss_tracker = keras.metrics.Mean(name="reconstruction_loss")
         self.kl_loss_tracker = keras.metrics.Mean(name="kl_loss")
         self.val_loss_tracker = keras.metrics.Mean(name="val_loss")
 
@@ -116,7 +106,6 @@ class VAE(keras.Model):
 
     def train_step(self, data):
         mse=keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)
-        # mse=keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM_OVER_BATCH_SIZE)
 
         with tf.GradientTape() as tape:
             z_mean, z_log_var = self.encoder(data)
@@ -145,10 +134,143 @@ class VAE(keras.Model):
         else:
             val_loss = 0.0
 
-        # self.total_loss_tracker.reset_states()
-        # self.reconstruction_loss_tracker.reset_states()
-        # self.kl_loss_tracker.reset_states()
-        # self.val_loss_tracker.reset_states()
+        return {
+            "total_loss": total_loss,
+            "reconstruction_loss": reconstruction_loss,
+            "kl_loss": kl_loss,
+            "val_reconstruction_loss": val_loss,
+        }
+
+class TwoStageVAE(keras.Model):
+    def __init__(self, image_shape=None, latent_dim=None, val_data=None, **kwargs):
+        super().__init__(**kwargs)
+
+        assert image_shape is not None, 'Argument image_shape  must be specified, aborting...'
+        assert latent_dim is not None, 'Argument latent_dim must be specified, aborting...'
+
+        # Init attribute for validation. We lack custom fit() method, so we need to pass validation data to train_step()
+        self.val_data = val_data
+
+        self.image_shape = image_shape
+        self.latent_dim = latent_dim
+        self.second_depth = 3
+        self.second_dim=1024
+
+        self._build_encoder1()
+        self._build_decoder1()
+        self._build_encoder2()
+        self._build_decoder2()
+        self._build_loss()
+
+        pdb.set_trace()
+        self.sampler = Sampler()
+
+        self.total_loss_tracker = keras.metrics.Mean(name="total_loss")
+        self.reconstruction_loss_tracker = keras.metrics.Mean(name="reconstruction_loss")
+        self.kl_loss_tracker = keras.metrics.Mean(name="kl_loss")
+        self.val_loss_tracker = keras.metrics.Mean(name="val_loss")
+
+    def _build_encoder1(self):
+        encoder_inputs = keras.Input(shape=self.image_shape)
+        x = layers.Conv2D(16, 3, activation="relu", strides=2, padding="same")(encoder_inputs)
+        x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(x)
+        x = layers.Flatten()(x)
+        x = layers.Dense(16, activation="relu")(x)
+        z_mean = layers.Dense(self.latent_dim, name="z_mean")(x)
+        z_log_var = layers.Dense(self.latent_dim, name="z_log_var")(x)
+        self.encoder = keras.Model(encoder_inputs, [z_mean, z_log_var], name="encoder")
+        self.encoder.summary()
+
+    def _build_encoder2(self):
+        t = self.z 
+        for i in range(self.second_depth):
+            t = tf.layers.dense(t, self.second_dim, tf.nn.relu, name='fc'+str(i))
+        t = tf.concat([self.z, t], -1)
+    
+        self.mu_u = tf.layers.dense(t, self.latent_dim, name='mu_u')
+        self.logsd_u = tf.layers.dense(t, self.latent_dim, name='logsd_u')
+        self.sd_u = tf.exp(self.logsd_u)
+        self.u = self.mu_u + self.sd_u * tf.random_normal([self.batch_size, self.latent_dim])
+
+    def _build_decoder1(self):
+        latent_inputs = keras.Input(shape=(self.latent_dim,))
+        x = layers.Dense(7 * 7 * 32, activation="relu")(latent_inputs)
+        x = layers.Reshape((7, 7, 32))(x)
+        x = layers.Conv2DTranspose(32, 3, activation="relu", strides=2, padding="same")(x)
+        x = layers.Conv2DTranspose(16, 3, activation="relu", strides=2, padding="same")(x)
+        decoder_outputs = layers.Conv2D(1, 3, activation="sigmoid", padding="same")(x)
+        self.decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
+        self.decoder.summary()
+
+    def _build_decoder2(self):
+        t = self.u 
+        for i in range(self.second_depth):
+            t = tf.layers.dense(t, self.second_dim, tf.nn.relu, name='fc'+str(i))
+        t = tf.concat([self.u, t], -1)
+
+        self.z_hat = tf.layers.dense(t, self.latent_dim, name='z_hat')
+        self.loggamma_z = tf.get_variable('loggamma_z', [], tf.float32, tf.zeros_initializer())
+        self.gamma_z = tf.exp(self.loggamma_z)
+
+    def _build_loss(self):
+        HALF_LOG_TWO_PI = 0.91893 # np.log(2*np.pi)*0.5
+
+        self.kl_loss1 = tf.reduce_sum(tf.square(self.mu_z) + tf.square(self.sd_z) - 2 * self.logsd_z - 1) / 2.0 / float(self.batch_size)
+        if not self.cross_entropy_loss:
+            self.gen_loss1 = tf.reduce_sum(tf.square((self.x - self.x_hat) / self.gamma_x) / 2.0 + self.loggamma_x + HALF_LOG_TWO_PI) / float(self.batch_size)
+        else:
+            self.gen_loss1 = -tf.reduce_sum(self.x * tf.log(tf.maximum(self.x_hat, 1e-8)) + (1-self.x) * tf.log(tf.maximum(1-self.x_hat, 1e-8))) / float(self.batch_size)
+        self.loss1 = self.kl_loss1 + self.gen_loss1 
+
+        self.kl_loss2 = tf.reduce_sum(tf.square(self.mu_u) + tf.square(self.sd_u) - 2 * self.logsd_u - 1) / 2.0 / float(self.batch_size)
+        self.gen_loss2 = tf.reduce_sum(tf.square((self.z - self.z_hat) / self.gamma_z) / 2.0 + self.loggamma_z + HALF_LOG_TWO_PI) / float(self.batch_size)
+        self.loss2 = self.kl_loss2 + self.gen_loss2 
+
+
+    def call(self, inputs):
+        z_mean, z_log_var = self.encoder(inputs)
+        z_random = self.sampler(z_mean, z_log_var)
+        reconstruction = self.decoder(z_random)
+        return reconstruction, z_mean, z_log_var 
+
+    @property
+    def metrics(self):
+        return [
+            self.total_loss_tracker,
+            self.reconstruction_loss_tracker,
+            self.kl_loss_tracker,
+            self.val_loss_tracker
+            ]
+
+    def train_step(self, data):
+        mse=keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)
+
+        with tf.GradientTape() as tape:
+            z_mean, z_log_var = self.encoder(data)
+            z = self.sampler(z_mean, z_log_var)
+            reconstruction = self.decoder(z)
+            reconstruction_loss = mse(data, reconstruction)
+
+            kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
+            total_loss = reconstruction_loss + self.beta * tf.reduce_mean(kl_loss)
+
+        grads = tape.gradient(total_loss, self.trainable_weights)
+        self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
+        self.total_loss_tracker.update_state(total_loss)
+        self.reconstruction_loss_tracker.update_state(reconstruction_loss)
+        self.kl_loss_tracker.update_state(kl_loss)
+        total_loss = self.total_loss_tracker.result()
+        reconstruction_loss = self.reconstruction_loss_tracker.result()
+        kl_loss = self.kl_loss_tracker.result()
+
+        if self.val_data is not None:
+            val_z_mean, _ = self.encoder(self.val_data)
+            val_reconstruction = self.decoder(val_z_mean)
+            val_loss = mse(self.val_data, val_reconstruction)
+            self.val_loss_tracker.update_state(val_loss)
+            val_loss = self.val_loss_tracker.result()
+        else:
+            val_loss = 0.0
 
         return {
             "total_loss": total_loss,
@@ -159,7 +281,6 @@ class VAE(keras.Model):
 
 
 class ApricotVAE(ApricotData, VAE):
-# class ApricotVAE(VAE, ApricotData):
     """
     Class for creating model for variational autoencoder from  Apricot data 
     """
@@ -185,8 +306,8 @@ class ApricotVAE(ApricotData, VAE):
         self.verbose = 2 #  'auto', 0, 1, or 2. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch. 
         
         # Preprocessing parameters
-        self.gaussian_filter_size = None # None or 0.5 or ... # Denoising gaussian filter size (in pixels)
-        self.n_pca_components = 32 # None or 32 # Number of PCA components to use for denoising
+        self.gaussian_filter_size = None # None or 0.5 or ... # Denoising gaussian filter size (in pixels). None does not apply filter
+        self.n_pca_components = 32 # None or 32 # Number of PCA components to use for denoising. None does not apply PCA
         
         # Augment data. Final n samples =  n * (1 + n_repeats * 2): n is the original number of samples, 2 is the rot & shift 
         self.n_repeats = 10 # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
@@ -365,8 +486,9 @@ class ApricotVAE(ApricotData, VAE):
         Builds a model for the spatial VAE
         """
         # Build model
-        vae = VAE(image_shape=self.image_shape, latent_dim=self.latent_dim, val_data=val_data)
-
+        # vae = VAE(image_shape=self.image_shape, latent_dim=self.latent_dim, val_data=val_data)
+        vae = TwoStageVAE(image_shape=self.image_shape, latent_dim=self.latent_dim, val_data=val_data)
+        pdb.set_trace()
         # change beta
         vae.beta = self.beta
         
@@ -763,6 +885,25 @@ class ApricotVAE(ApricotData, VAE):
 
         return model, (validation_score, validation_score_std), fit_history
 
+    def fid_score(codes_g, codes_r, eps=1e-6):
+        d = codes_g.shape[1]
+        assert codes_r.shape[1] == d
+        
+        mn_g = codes_g.mean(axis=0)
+        mn_r = codes_r.mean(axis=0)
+
+        cov_g = np.cov(codes_g, rowvar=False)
+        cov_r = np.cov(codes_r, rowvar=False)
+
+        covmean, _ = linalg.sqrtm(cov_g.dot(cov_r), disp=False)
+        if not np.isfinite(covmean).all():
+            cov_g[range(d), range(d)] += eps
+            cov_r[range(d), range(d)] += eps 
+            covmean = linalg.sqrtm(cov_g.dot(cov_r))
+
+        score = np.sum((mn_g - mn_r) ** 2) + (np.trace(cov_g) + np.trace(cov_r) - 2 * np.trace(covmean))
+        return score 
+    
     def _fit_all(self):
 
         # Get numpy array of data in correct dimensions
