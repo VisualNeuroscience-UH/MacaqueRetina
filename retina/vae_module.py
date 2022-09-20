@@ -295,7 +295,7 @@ class ApricotVAE(ApricotData, VAE):
     def __init__(self, apricot_data_folder, gc_type, response_type):
         super().__init__(apricot_data_folder, gc_type, response_type)
 
-        self.temporal_filter_data = self.read_temporal_filter_data()
+        # self.temporal_filter_data = self.read_temporal_filter_data()
         # self.spatial_filter_data = self.read_spatial_filter_data()
         # self.spatial_filter_sums = self.compute_spatial_filter_sums()
         # self.temporal_filter_sums = self.compute_temporal_filter_sums()
@@ -303,9 +303,11 @@ class ApricotVAE(ApricotData, VAE):
 
         # Set common VAE model parameters
         self.latent_dim = 32 # 2
-        self.image_shape = (28, 28, 1) # Images will be smapled to this space. If you change this you need to change layers, too, for consistent output shape
         self.latent_space_plot_scale = 4 # Scale for plotting latent space
+        self.beta = 1 # Beta parameter for KL loss. Overrides VAE class beta parameter
+        self.vae_optimizer = keras.optimizers.Adam(learning_rate=0.001)  # default lr = 0.001
 
+        self.image_shape = (28, 28, 1) # Images will be smapled to this space. If you change this you need to change layers, too, for consistent output shape
         self.batch_size = 16 # None will take the batch size from test_split size. Note that the batch size affects training speed and loss values
         self.epochs = 200
         self.test_split = 0.2   # Split data for validation and testing (both will take this fraction of data)
@@ -325,9 +327,7 @@ class ApricotVAE(ApricotData, VAE):
         self.random_seed = 42
         tf.keras.utils.set_random_seed(self.random_seed)
 
-        self.beta = 1 # Beta parameter for KL loss. Overrides VAE class beta parameter
 
-        self.optimizer = keras.optimizers.Adam(learning_rate=0.001)  # default lr = 0.001
 
         n_threads = 30
         self._set_n_cpus(n_threads)
@@ -491,6 +491,8 @@ class ApricotVAE(ApricotData, VAE):
         """
         Builds a model for the spatial VAE
         """
+        
+        
         # Build model
         vae = VAE(image_shape=self.image_shape, latent_dim=self.latent_dim, val_data=val_data)
         # vae = TwoStageVAE(image_shape=self.image_shape, latent_dim=self.latent_dim, val_data=val_data)
@@ -499,7 +501,7 @@ class ApricotVAE(ApricotData, VAE):
         vae.beta = self.beta
         
         # Compile model
-        vae.compile(optimizer=self.optimizer)
+        vae.compile(optimizer=self.vae_optimizer)
 
         return vae
 
