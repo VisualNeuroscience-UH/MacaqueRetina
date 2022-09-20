@@ -141,7 +141,13 @@ class VAE(keras.Model):
             "val_reconstruction_loss": val_loss,
         }
 
+
 class TwoStageVAE(keras.Model):
+    '''
+    Constructing code following the two-stage VAE model proposed in ICLR 2019 paper 
+    Dai, B. and Wipf, D. Diagnosing and enhancing VAE models. Not functional in current status
+    '''
+    
     def __init__(self, image_shape=None, latent_dim=None, val_data=None, **kwargs):
         super().__init__(**kwargs)
 
@@ -486,9 +492,9 @@ class ApricotVAE(ApricotData, VAE):
         Builds a model for the spatial VAE
         """
         # Build model
-        # vae = VAE(image_shape=self.image_shape, latent_dim=self.latent_dim, val_data=val_data)
-        vae = TwoStageVAE(image_shape=self.image_shape, latent_dim=self.latent_dim, val_data=val_data)
-        pdb.set_trace()
+        vae = VAE(image_shape=self.image_shape, latent_dim=self.latent_dim, val_data=val_data)
+        # vae = TwoStageVAE(image_shape=self.image_shape, latent_dim=self.latent_dim, val_data=val_data)
+        # pdb.set_trace()
         # change beta
         vae.beta = self.beta
         
