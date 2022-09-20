@@ -594,8 +594,8 @@ class ApricotVAE(ApricotData, VAE):
         for shift_idx, this_shift in enumerate(shift):
             np_array_rep[shift_idx * n_orig_images : (shift_idx + 1) * n_orig_images, :, :] = _random_shift_image(np_array, this_shift)
 
-        # if 0:
-        #     _rotate_and_shift_image_QA(np_array, np_array_rep, this_ima=0, this_transf=2)
+        if 0:
+            _rotate_and_shift_image_QA(np_array, np_array_rep, this_ima=0, this_transf=2)
         
         np_array_augmented = np.vstack((np_array_augmented, np_array_rep))
 
@@ -892,6 +892,10 @@ class ApricotVAE(ApricotData, VAE):
         return model, (validation_score, validation_score_std), fit_history
 
     def fid_score(codes_g, codes_r, eps=1e-6):
+        '''
+        Calculates the Frechet Inception Distance (FID) to evalulate generated images
+        '''
+        
         d = codes_g.shape[1]
         assert codes_r.shape[1] == d
         
