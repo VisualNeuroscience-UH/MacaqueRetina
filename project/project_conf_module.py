@@ -6,9 +6,13 @@ from pathlib import Path
 import sys
 import pdb
 import math
+import os
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 # This computer git repos
 from project.project_manager_module import ProjectManager
+# from project_manager_module import ProjectManager
 
 """
 This is code for building macaque retinal filters corresponding to midget and parasol cell responses. We keep modular code structure, to be able to add new features at later phase.
@@ -58,8 +62,8 @@ Main paths in different operating systems
 """
 if sys.platform == "linux":
     root_path = "/opt3/Laskenta/Models"  # pikkuveli
-    git_repo_root = Path(r'/opt2/Laskenta_ssd/Git_Repos/MacaqueRetina')
-    # root_path = "/opt2/Laskenta_ssd/Models"  # isosisko
+    git_repo_root = Path(r'/opt2/Git_Repos/MacaqueRetina')
+    # root_path = "/opt2/Models"  # isosisko
 elif sys.platform == "win32":
     root_path = r"C:\Users\Simo\Laskenta\Models"
     git_repo_root = Path(r'C:\Users\Simo\Laskenta\Git_Repos\MacaqueRetina_Git')

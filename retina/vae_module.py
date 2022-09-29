@@ -168,7 +168,6 @@ class TwoStageVAE(keras.Model):
         self._build_decoder2()
         self._build_loss()
 
-        pdb.set_trace()
         self.sampler = Sampler()
 
         self.total_loss_tracker = keras.metrics.Mean(name="total_loss")
@@ -496,7 +495,6 @@ class ApricotVAE(ApricotData, VAE):
         # Build model
         vae = VAE(image_shape=self.image_shape, latent_dim=self.latent_dim, val_data=val_data)
         # vae = TwoStageVAE(image_shape=self.image_shape, latent_dim=self.latent_dim, val_data=val_data)
-        # pdb.set_trace()
         # change beta
         vae.beta = self.beta
         
