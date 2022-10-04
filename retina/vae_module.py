@@ -17,11 +17,13 @@ import matplotlib.pyplot as plt
 
 # Local
 from retina.apricot_fitter_module import ApricotData
+from retina.fid_module import FrechetInceptionDistance
 
 # Builtin
 import sys
 import pdb
 import os
+import time
 
 
 class Sampler(layers.Layer):
@@ -306,9 +308,10 @@ class ApricotVAE(ApricotData, VAE):
         self.beta = 1 # Beta parameter for KL loss. Overrides VAE class beta parameter
         self.vae_optimizer = keras.optimizers.Adam(learning_rate=0.001)  # default lr = 0.001
 
-        self.image_shape = (28, 28, 1) # Images will be smapled to this space. If you change this you need to change layers, too, for consistent output shape
+        self.image_shape = (28, 28, 1) # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
+        # self.image_shape = (299, 299, 1) # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
         self.batch_size = 16 # None will take the batch size from test_split size. Note that the batch size affects training speed and loss values
-        self.epochs = 200
+        self.epochs = 1000
         self.test_split = 0.2   # Split data for validation and testing (both will take this fraction of data)
         self.verbose = 2 #  'auto', 0, 1, or 2. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch. 
         
@@ -891,29 +894,39 @@ class ApricotVAE(ApricotData, VAE):
 
         return model, (validation_score, validation_score_std), fit_history
 
-    def fid_score(codes_g, codes_r, eps=1e-6):
-        '''
-        Calculates the Frechet Inception Distance (FID) to evalulate generated images
-        '''
+    def _get_fid_score(self, model, fid_data, image_range):
+        """
+        Calculate the FID score for the model
+        """
+        # Construct inception model
+        fid = FrechetInceptionDistance(image_range=image_range, 
+		generator_postprocessing=None)
+
+        # Get the predicted image given the data as input
+        generated_val, _, _ = model.predict(fid_data)
         
-        d = codes_g.shape[1]
-        assert codes_r.shape[1] == d
+        # Up or downsample 2D image data
+        fid_data_us = self._resample_data(fid_data, (75,75))
+        generated_val_us = self._resample_data(generated_val, (75,75))
         
-        mn_g = codes_g.mean(axis=0)
-        mn_r = codes_r.mean(axis=0)
+        # Augment data by multiplying the last dimension to 3
+        fid_data_3 = np.repeat(fid_data_us, 3, axis=-1)
+        generated_val_3 = np.repeat(generated_val_us, 3, axis=-1)       
+        
+        #	Arguments to call, see FrechetInceptionDistance class in fid_module for more details
+        n_samples = fid_data_3.shape[0]
+        fid_score = fid(
+			fid_data_3,
+			generated_val_3,
+			batch_size=self.batch_size,
+			num_batches_real=int(np.floor(n_samples / self.batch_size)),
+			num_batches_gen=None,
+			shuffle=True,
+			seed=self.random_seed
+		)
 
-        cov_g = np.cov(codes_g, rowvar=False)
-        cov_r = np.cov(codes_r, rowvar=False)
+        return fid_score
 
-        covmean, _ = linalg.sqrtm(cov_g.dot(cov_r), disp=False)
-        if not np.isfinite(covmean).all():
-            cov_g[range(d), range(d)] += eps
-            cov_r[range(d), range(d)] += eps 
-            covmean = linalg.sqrtm(cov_g.dot(cov_r))
-
-        score = np.sum((mn_g - mn_r) ** 2) + (np.trace(cov_g) + np.trace(cov_r) - 2 * np.trace(covmean))
-        return score 
-    
     def _fit_all(self):
 
         # Get numpy array of data in correct dimensions
@@ -931,6 +944,14 @@ class ApricotVAE(ApricotData, VAE):
 
         # validation_score = spatial_vae.evaluate(rf_test, rf_test)
 
+        # Get fid score
+        fid_score_test = self._get_fid_score(spatial_vae, rf_test, image_range=(0, 1))
+        print(f'FID score on test data: {fid_score_test}')
+
+        fid_score_train = self._get_fid_score(spatial_vae, rf_training, image_range=(0, 1))
+        print(f'FID score on training data: {fid_score_train}')
+
+        
         # Plot history of training and validation loss
         self._plot_fit_history(fit_history)
 
