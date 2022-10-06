@@ -311,7 +311,7 @@ class ApricotVAE(ApricotData, VAE):
         self.image_shape = (28, 28, 1) # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
         # self.image_shape = (299, 299, 1) # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
         self.batch_size = 16 # None will take the batch size from test_split size. Note that the batch size affects training speed and loss values
-        self.epochs = 1000
+        self.epochs = 10
         self.test_split = 0.2   # Split data for validation and testing (both will take this fraction of data)
         self.verbose = 2 #  'auto', 0, 1, or 2. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch. 
         
@@ -927,6 +927,22 @@ class ApricotVAE(ApricotData, VAE):
 
         return fid_score
 
+    def _get_ssim_score(self, model, ssim_data, image_range):
+        """
+        Calculate the SSIM score for the model
+        """
+        # Get the predicted image given the data as input
+        generated_val, _, _ = model.predict(ssim_data)
+        
+        # Up or downsample 2D image data
+        ssim_data_us = self._resample_data(ssim_data, (75,75))
+        generated_val_us = self._resample_data(generated_val, (75,75))
+        
+        # Calculate SSIM
+        ssim_score = tf.image.ssim(ssim_data_us, generated_val_us, max_val=np.ptp(image_range))
+
+        return ssim_score.numpy().mean()
+    
     def _fit_all(self):
 
         # Get numpy array of data in correct dimensions
@@ -948,9 +964,14 @@ class ApricotVAE(ApricotData, VAE):
         fid_score_test = self._get_fid_score(spatial_vae, rf_test, image_range=(0, 1))
         print(f'FID score on test data: {fid_score_test}')
 
-        fid_score_train = self._get_fid_score(spatial_vae, rf_training, image_range=(0, 1))
-        print(f'FID score on training data: {fid_score_train}')
+        # get ssim score
+        ssim_score_test = self._get_ssim_score(spatial_vae, rf_test, image_range=(0, 1))
+        print(f'SSIM score on test data: {ssim_score_test}')
+        
+        # fid_score_train = self._get_fid_score(spatial_vae, rf_training, image_range=(0, 1))
+        # print(f'FID score on training data: {fid_score_train}')
 
+        pdb.set_trace()
         
         # Plot history of training and validation loss
         self._plot_fit_history(fit_history)
