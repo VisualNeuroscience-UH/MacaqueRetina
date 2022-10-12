@@ -8,10 +8,11 @@ import pdb
 import math
 import os
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 # This computer git repos
 from project.project_manager_module import ProjectManager
+
 # from project_manager_module import ProjectManager
 
 """
@@ -53,7 +54,7 @@ Use keyword substring "file" in filenames, and "folder" in folder names to asser
 Abbreviations:
 ana : analysis
 col : column
-full : full absolute path
+full : full absolute path 
 param : parameter
 """
 
@@ -62,11 +63,11 @@ Main paths in different operating systems
 """
 if sys.platform == "linux":
     root_path = "/opt3/Laskenta/Models"  # pikkuveli
-    git_repo_root = Path(r'/opt2/Git_Repos/MacaqueRetina')
+    git_repo_root = Path(r"/opt2/Git_Repos/MacaqueRetina")
     # root_path = "/opt2/Models"  # isosisko
 elif sys.platform == "win32":
     root_path = r"C:\Users\Simo\Laskenta\Models"
-    git_repo_root = Path(r'C:\Users\Simo\Laskenta\Git_Repos\MacaqueRetina_Git')
+    git_repo_root = Path(r"C:\Users\Simo\Laskenta\Git_Repos\MacaqueRetina_Git")
 
 
 """
@@ -84,7 +85,7 @@ experiment = "test"  # "test"
 Input context
 Stimulus images and videos
 """
-input_folder = "../in" # input figs, videos
+input_folder = "../in"  # input figs, videos
 
 
 """
@@ -101,20 +102,20 @@ path = Path.joinpath(root_path, Path(project), experiment)
 
 
 my_retina = {
-    "gc_type" : "parasol",
-    "response_type" : "on",
-    "ecc_limits" : [4.8, 5.2],
-    "sector_limits" : [-0.4, 0.4],
-    "model_density" : 1.0,
-    "randomize_position" : 0.05,
+    "gc_type": "parasol",
+    "response_type": "on",
+    "ecc_limits": [4.8, 5.2],
+    "sector_limits": [-0.4, 0.4],
+    "model_density": 1.0,
+    "randomize_position": 0.05,
     "stimulus_center": 4.45 + 0j,
-    "model_type" : "VAE", # "FIT" or "VAE" for variational autoencoder
+    "model_type": "VAE",  # "FIT" or "VAE" for variational autoencoder
 }
 
 
 my_stimulus_metadata = {
-    "stimulus_file": "nature1.avi", # nature1.avi, testi.jpg
-    "stimulus_video_name": "testi.mp4", #REFACTOR
+    "stimulus_file": "nature1.avi",  # nature1.avi, testi.jpg
+    "stimulus_video_name": "testi.mp4",  # REFACTOR
     "pix_per_deg": 60,
     "apply_cone_filter": False,
 }
@@ -159,42 +160,42 @@ stimulus_video_name: name of the stimulus video
 """
 
 my_stimulus_options = {
-    #Shared btw stimulus and working_retina
-    "image_width": 240, # 752 for nature1.avi
-    "image_height": 240, # 432 for nature1.avi
-    "pix_per_deg": 60, 
+    # Shared btw stimulus and working_retina
+    "image_width": 240,  # 752 for nature1.avi
+    "image_height": 240,  # 432 for nature1.avi
+    "pix_per_deg": 60,
     "fps": 30,
-    "pattern" : "sine_grating", # Natural video is not supported yet. One of the StimulusPatterns
+    "pattern": "sine_grating",  # Natural video is not supported yet. One of the StimulusPatterns
     # stimulus only
-    "stimulus_form" : "rectangular",
-    "temporal_frequency" : 2,
-    "spatial_frequency" : 2.0,
-    "stimulus_position" : (0, 0), # center_deg
-    "duration_seconds" : 4.0,
-    "stimulus_size" : 1.0,
-    "contrast" : 0.99,
-    "baseline_start_seconds" : 0.5,
-    "baseline_end_seconds" : 0.5,
-    "background" : 128,
-    "mean" : 128,
-    "phase_shift" : 0,
+    "stimulus_form": "rectangular",
+    "temporal_frequency": 2,
+    "spatial_frequency": 2.0,
+    "stimulus_position": (0, 0),  # center_deg
+    "duration_seconds": 4.0,
+    "stimulus_size": 1.0,
+    "contrast": 0.99,
+    "baseline_start_seconds": 0.5,
+    "baseline_end_seconds": 0.5,
+    "background": 128,
+    "mean": 128,
+    "phase_shift": 0,
 }
 
 # Each gc response file contain n_trials
 n_files = 1
 
 my_run_options = {
-    "cell_index" : 2, # int or None for all cells
-    "n_trials" : 10, # For each of the response files
-    "spike_generator_model" : "poisson", # poisson or refractory
-    "save_data" : True,
-    "gc_response_filenames" : [f"gc_response_{x:02}" for x in range(n_files)],
+    "cell_index": 2,  # int or None for all cells
+    "n_trials": 10,  # For each of the response files
+    "spike_generator_model": "poisson",  # poisson or refractory
+    "save_data": True,
+    "gc_response_filenames": [f"gc_response_{x:02}" for x in range(n_files)],
 }
 
 
-'''
+"""
 Semi-constant variables
-'''
+"""
 
 # Proportion from all ganglion cells. Density of all ganglion cells is given later as a function of ecc from literature.
 proportion_of_parasol_gc_type = 0.08
@@ -217,18 +218,17 @@ cone_sensitivity_min = 5e2
 cone_sensitivity_max = 1e4
 
 my_retina_append = {
-    "proportion_of_parasol_gc_type" : proportion_of_parasol_gc_type,
-    "proportion_of_midget_gc_type" : proportion_of_midget_gc_type,
-    "proportion_of_ON_response_type" : proportion_of_ON_response_type,
-    "proportion_of_OFF_response_type" : proportion_of_OFF_response_type,
+    "proportion_of_parasol_gc_type": proportion_of_parasol_gc_type,
+    "proportion_of_midget_gc_type": proportion_of_midget_gc_type,
+    "proportion_of_ON_response_type": proportion_of_ON_response_type,
+    "proportion_of_OFF_response_type": proportion_of_OFF_response_type,
     "mosaic_file_name": "parasol_on_single.csv",
-    "deg_per_mm" : deg_per_mm,
+    "deg_per_mm": deg_per_mm,
     "optical_aberration": 2 / 60,  # unit is degree
-    "cone_sensitivity_min" : cone_sensitivity_min,
-    "cone_sensitivity_max" : cone_sensitivity_max,
-    "rm" : rm_param,
-    "k" : k_param,
-
+    "cone_sensitivity_min": cone_sensitivity_min,
+    "cone_sensitivity_max": cone_sensitivity_max,
+    "rm": rm_param,
+    "k": k_param,
 }
 
 my_retina.update(my_retina_append)
@@ -241,11 +241,19 @@ literature_data_folder = git_repo_root.joinpath(r"retina/literature_data")
 
 gc_density_file = literature_data_folder / "Perry_1984_Neurosci_GCdensity_c.mat"
 if my_retina["gc_type"] == "parasol":
-    dendr_diam1_file = literature_data_folder / "Perry_1984_Neurosci_ParasolDendrDiam_c.mat"
-    dendr_diam2_file = literature_data_folder / "Watanabe_1989_JCompNeurol_GCDendrDiam_parasol_c.mat"
+    dendr_diam1_file = (
+        literature_data_folder / "Perry_1984_Neurosci_ParasolDendrDiam_c.mat"
+    )
+    dendr_diam2_file = (
+        literature_data_folder / "Watanabe_1989_JCompNeurol_GCDendrDiam_parasol_c.mat"
+    )
 elif my_retina["gc_type"] == "midget":
-    dendr_diam1_file = literature_data_folder / "Perry_1984_Neurosci_MidgetDendrDiam_c.mat"
-    dendr_diam2_file = literature_data_folder / "Watanabe_1989_JCompNeurol_GCDendrDiam_midget_c.mat"
+    dendr_diam1_file = (
+        literature_data_folder / "Perry_1984_Neurosci_MidgetDendrDiam_c.mat"
+    )
+    dendr_diam2_file = (
+        literature_data_folder / "Watanabe_1989_JCompNeurol_GCDendrDiam_midget_c.mat"
+    )
 
 
 profile = False
@@ -278,7 +286,7 @@ if __name__ == "__main__":
         literature_data_folder=literature_data_folder,
         dendr_diam1_file=dendr_diam1_file,
         dendr_diam2_file=dendr_diam2_file,
-        gc_density_file=gc_density_file
+        gc_density_file=gc_density_file,
     )
 
     #################################
@@ -293,7 +301,7 @@ if __name__ == "__main__":
     # PM.cones.image2cone_response()
     # PM.viz.show_cone_response(PM.cones.image, PM.cones.image_after_optics, PM.cones.cone_response)
 
-    #TODO take raw hdf5 image through cone response to working retina
+    # TODO take raw hdf5 image through cone response to working retina
 
     #################################
     ### Build retina ###
@@ -302,7 +310,7 @@ if __name__ == "__main__":
     """
     Build and test your retina here, one gc type at a time. Temporal hemiretina of macaques.
     """
-    
+
     # options are defined in my_retina_options
 
     PM.construct_retina.build()
@@ -311,7 +319,6 @@ if __name__ == "__main__":
 
     PM.construct_retina.show_build_process(show_all_spatial_fits=True)
 
-
     #################################
     ### Create stimulus ###
     #################################
@@ -319,7 +326,7 @@ if __name__ == "__main__":
     # options are defined in my_stimulus_options
     # stimulus video will be saved on output_folder in mp4 format (viewing and hdf5 format (for reloading)
     # PM.stimulate.make_stimulus_video()
-    
+
     ##############################
     ### Create analog stimulus ###
     ##############################
@@ -332,7 +339,7 @@ if __name__ == "__main__":
     # # for freq in range(1,101):
     # #     N_cycles = freq * (dt/1000) * N_tp
     # #     print(f"Creating stim with {freq=}, holding {N_cycles=}")
-        
+
     # #     filename_out =  f'freq_{freq:02}.mat'
 
     # freq = 2
@@ -351,14 +358,14 @@ if __name__ == "__main__":
 
     # PM.analog_input.make_stimulus_video(analog_options=analog_options)
     # PM.viz.plot_analog_stimulus(PM.analog_input)
-    
+
     #################################
     ### Load stimulus to get working retina ###
     #################################
 
     # # # If you want to load with object, it is possible by:
-    # PM.working_retina.load_stimulus(PM.stimulate) 
-    # PM.working_retina.load_stimulus() 
+    # PM.working_retina.load_stimulus(PM.stimulate)
+    # PM.working_retina.load_stimulus()
 
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
     # ret.load_stimulus(movie)# => METADATA
@@ -372,7 +379,6 @@ if __name__ == "__main__":
 
     # PM.viz.show_spatiotemporal_filter(PM.working_retina)
     # PM.viz.show_convolved_stimulus(PM.working_retina)
-
 
     #################################
     ### Run multiple trials for single cell ###
@@ -397,7 +403,6 @@ if __name__ == "__main__":
     # PM.viz.plot_local_michelson_contrast(PM.working_retina, example_gc)
     # plt.show(block=False)
 
-
     #################################
     ### Run all cells ###
     #################################
@@ -407,8 +412,6 @@ if __name__ == "__main__":
 
     # PM.working_retina.save_spikes_csv(filename='testi_spikes.csv') # => METADATA
     # PM.working_retina.save_structure_csv(filename='testi_structure.csv') # => METADATA
-
-
 
     plt.show()
 
