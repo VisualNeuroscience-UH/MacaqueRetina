@@ -28,6 +28,7 @@ import os
 import time
 import datetime
 from pathlib import Path
+import shutil
 
 
 class Sampler(layers.Layer):
@@ -63,10 +64,6 @@ class VAE(keras.Model):
         """
 
         encoder_inputs = keras.Input(shape=image_shape)
-        # x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(encoder_inputs)
-        # x = layers.Conv2D(64, 3, activation="relu", strides=2, padding="same")(x)
-        # x = layers.Flatten()(x)
-        # x = layers.Dense(16, activation="relu")(x)
         x = layers.Conv2D(16, 3, activation="relu", strides=2, padding="same")(
             encoder_inputs
         )
@@ -82,10 +79,6 @@ class VAE(keras.Model):
         Build decoder
         """
         latent_inputs = keras.Input(shape=(latent_dim,))
-        # x = layers.Dense(7 * 7 * 64, activation="relu")(latent_inputs)
-        # x = layers.Reshape((7, 7, 64))(x)
-        # x = layers.Conv2DTranspose(64, 3, activation="relu", strides=2, padding="same")(x)
-        # x = layers.Conv2DTranspose(32, 3, activation="relu", strides=2, padding="same")(x)
         x = layers.Dense(7 * 7 * 32, activation="relu")(latent_inputs)
         x = layers.Reshape((7, 7, 32))(x)
         x = layers.Conv2DTranspose(32, 3, activation="relu", strides=2, padding="same")(
@@ -100,6 +93,7 @@ class VAE(keras.Model):
 
         self.sampler = Sampler()
 
+        # Metrics
         self.total_loss_tracker = keras.metrics.Mean(name="total_loss")
         self.reconstruction_loss_tracker = keras.metrics.Mean(
             name="reconstruction_loss"
@@ -122,7 +116,7 @@ class VAE(keras.Model):
             self.val_loss_tracker,
         ]
 
-    @tf.function
+    # @tf.function
     def train_step(self, data):
         mse = keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)
 
@@ -144,15 +138,21 @@ class VAE(keras.Model):
         reconstruction_loss = self.reconstruction_loss_tracker.result()
         kl_loss = self.kl_loss_tracker.result()
 
+        # tf.print(f"***tf.print loss = {total_loss}", output_stream=sys.stdout)
+        # print(f"***print loss = {total_loss}")
+
+        # Within summary writer scope, we can use tf.summary
+        tf.summary.scalar("kl_loss", kl_loss, step=self.optimizer.iterations)
+
         if self.val_data is not None:
             val_z_mean, _ = self.encoder(self.val_data)
             val_reconstruction = self.decoder(val_z_mean)
             val_loss = mse(self.val_data, val_reconstruction)
             self.val_loss_tracker.update_state(val_loss)
-            val_loss = self.val_loss_tracker.result()
         else:
             val_loss = 0.0
 
+        # Returning validation here evokes tensorboard validation callback
         return {
             "total_loss": total_loss,
             "reconstruction_loss": reconstruction_loss,
@@ -378,7 +378,7 @@ class ApricotVAE(ApricotData, VAE):
         # self.image_shape = (299, 299, 1) # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
         self.batch_size = 16  # None will take the batch size from test_split size. Note that the batch size affects training speed and loss values
         self.epochs = 20
-        self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
+        self.test_split = 0.2  # None or 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.verbose = "auto"  #  'auto' necessary for graph creation. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch.
 
         # Preprocessing parameters
@@ -398,11 +398,12 @@ class ApricotVAE(ApricotData, VAE):
         tf.keras.utils.set_random_seed(self.random_seed)
 
         n_threads = 30
-        self._set_n_cpus(n_threads)
+        # self._set_n_cpus(n_threads)
 
         # Eager mode works like normal python code. You can access variables better.
         # Graph mode postpones computations, but is more efficient.
-        tf.config.run_functions_eagerly(False)
+        # Graph mode also forces tensorflow to produce graph for tensorboard
+        tf.config.run_functions_eagerly(True)
 
         self.output_path = Path("./retina/output")  # move  later to io
         self.exp_folder = Path("vae")
@@ -416,20 +417,25 @@ class ApricotVAE(ApricotData, VAE):
         Prepare local folder environment for tensorboard logging and model building
         """
 
-        # current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-        # train_log_dir = self.exp_folder.joinpath(current_time, "train")
-        # self.train_summary_writer = tf.summary.create_file_writer(str(train_log_dir))
-
         # Folders
         exp_folder = Path(self.output_path).joinpath(self.exp_folder)
         Path.mkdir(exp_folder, parents=True, exist_ok=True)
-        # model_path = exp_folder.joinpath("model")
-        # model_path = Path.mkdir(model_path, parents=True, exist_ok=True)
+
+        # Clear files and folders under exp_folder
+        for f in exp_folder.iterdir():
+            if f.is_dir():
+                shutil.rmtree(f)
+            else:
+                f.unlink()
+
         self.tensorboard_callback = tf.keras.callbacks.TensorBoard(
             log_dir=exp_folder,
             histogram_freq=1,
             write_graph=True,
         )
+
+        # This creates new scalar/time series line in tensorboard
+        self.summary_writer = tf.summary.create_file_writer(str(exp_folder))
 
     def _set_n_cpus(self, n_threads):
         # Set number of CPU cores to use for parallel processing
@@ -608,16 +614,20 @@ class ApricotVAE(ApricotData, VAE):
 
         vae = self._get_spatial_vae_model(val_data)
 
-        # pdb.set_trace()
-        # Fit model
-        fit_history = vae.fit(
-            data,
-            epochs=self.epochs,
-            batch_size=self.batch_size,
-            shuffle=True,
-            verbose=self.verbose,
-            callbacks=self.tensorboard_callback,
-        )
+        # Attach summary file writer
+        # vae.summary_writer = self.summary_writer
+
+        with self.summary_writer.as_default():
+
+            # Fit model
+            fit_history = vae.fit(
+                data,
+                epochs=self.epochs,
+                batch_size=self.batch_size,
+                shuffle=True,
+                verbose=self.verbose,
+                callbacks=self.tensorboard_callback,
+            )
 
         return vae, fit_history
 
@@ -928,51 +938,65 @@ class ApricotVAE(ApricotData, VAE):
             data_us, scale_type="minmax", scale_min=None, scale_max=None
         )
 
-        # split data into train, validation and test sets using proportion of 60%, 20%, 20%
-        skip_size = int(data_us.shape[0] * self.test_split)
-        data_train_np = data_usn[skip_size * 2 :]
-        data_val_np = data_usn[:skip_size]
-        data_test_np = data_usn[skip_size : skip_size * 2]
-
-        # Report split sizes
-        print(f"The train sample size before augmentation is {data_train_np.shape[0]}")
-        print(f"The validation sample size is {data_val_np.shape[0]}")
-        print(f"The test sample size is {data_test_np.shape[0]}")
-
-        # Augment data with random rotation and shift
-        data_train_np_reps = self._augment_data(data_train_np, self.n_repeats)
-
-        # Report split sizes
-        print(
-            f"The train sample size after augmentation is {data_train_np_reps.shape[0]}"
-        )
-
-        # Set batch size as the number of samples in the smallest dataset
-        if self.batch_size == None:
-            self.batch_size = min(
-                data_train_np_reps.shape[0], data_val_np.shape[0], data_test_np.shape[0]
-            )
-            print(f"Batch size is {self.batch_size}")
-        elif self.batch_size > min(
-            data_train_np_reps.shape[0], data_val_np.shape[0], data_test_np.shape[0]
-        ):
-            self.batch_size = min(
-                data_train_np_reps.shape[0], data_val_np.shape[0], data_test_np.shape[0]
-            )
+        if self.test_split is not None:
+            # split data into train, validation and test sets using proportion of 60%, 20%, 20%
+            skip_size = int(data_us.shape[0] * self.test_split)
+            data_train_np = data_usn[skip_size * 2 :]
+            data_val_np = data_usn[:skip_size]
+            data_test_np = data_usn[skip_size : skip_size * 2]
+            # Report split sizes
             print(
-                f"Batch size is set to {self.batch_size} to match the smallest dataset"
+                f"The train sample size before augmentation is {data_train_np.shape[0]}"
             )
-        elif self.batch_size < min(
-            data_train_np_reps.shape[0], data_val_np.shape[0], data_test_np.shape[0]
-        ):
-            print(
-                f"Validation and test data size is set to {self.batch_size} to match the batch size"
-            )
-            data_val_np = data_val_np[: self.batch_size]
-            data_test_np = data_test_np[: self.batch_size]
-        print("\n")
+            print(f"The validation sample size is {data_val_np.shape[0]}")
+            print(f"The test sample size is {data_test_np.shape[0]}")
+            # Augment data with random rotation and shift
+            data_train_np_reps = self._augment_data(data_train_np, self.n_repeats)
 
-        return data_train_np_reps, data_val_np, data_test_np
+            # Report split sizes
+            print(
+                f"The train sample size after augmentation is {data_train_np_reps.shape[0]}"
+            )
+
+            # Set batch size as the number of samples in the smallest dataset
+            if self.batch_size == None:
+                self.batch_size = min(
+                    data_train_np_reps.shape[0],
+                    data_val_np.shape[0],
+                    data_test_np.shape[0],
+                )
+                assert (
+                    data_val_np.shape[0] != 0
+                ), "Validation set is empty, you must determine batch_size manually, aborting..."
+                print(f"Batch size is {self.batch_size}")
+            elif self.batch_size > min(
+                data_train_np_reps.shape[0], data_val_np.shape[0], data_test_np.shape[0]
+            ):
+                self.batch_size = min(
+                    data_train_np_reps.shape[0],
+                    data_val_np.shape[0],
+                    data_test_np.shape[0],
+                )
+                print(
+                    f"Batch size is set to {self.batch_size} to match the smallest dataset"
+                )
+            elif self.batch_size < min(
+                data_train_np_reps.shape[0], data_val_np.shape[0], data_test_np.shape[0]
+            ):
+                print(
+                    f"Validation and test data size is set to {self.batch_size} to match the batch size"
+                )
+                data_val_np = data_val_np[: self.batch_size]
+                data_test_np = data_test_np[: self.batch_size]
+            print("\n")
+            data_train_np = data_train_np_reps
+
+        else:
+            data_train_np = data_usn
+            data_val_np = None
+            data_test_np = None
+
+        return data_train_np, data_val_np, data_test_np
 
     def _plot_fit_history(self, fit_history):
         """
@@ -1134,13 +1158,18 @@ class ApricotVAE(ApricotData, VAE):
 
         # validation_score = spatial_vae.evaluate(rf_test, rf_test)
 
-        # Get fid score
-        fid_score_test = self._get_fid_score(spatial_vae, rf_test, image_range=(0, 1))
-        print(f"FID score on test data: {fid_score_test}")
+        if rf_test is not None:
+            # Get fid score
+            fid_score_test = self._get_fid_score(
+                spatial_vae, rf_test, image_range=(0, 1)
+            )
+            print(f"FID score on test data: {fid_score_test}")
 
-        # get ssim score
-        ssim_score_test = self._get_ssim_score(spatial_vae, rf_test, image_range=(0, 1))
-        print(f"SSIM score on test data: {ssim_score_test}")
+            # get ssim score
+            ssim_score_test = self._get_ssim_score(
+                spatial_vae, rf_test, image_range=(0, 1)
+            )
+            print(f"SSIM score on test data: {ssim_score_test}")
 
         # fid_score_train = self._get_fid_score(spatial_vae, rf_training, image_range=(0, 1))
         # print(f'FID score on training data: {fid_score_train}')
