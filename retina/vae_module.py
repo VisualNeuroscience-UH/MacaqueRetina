@@ -26,6 +26,8 @@ import sys
 import pdb
 import os
 import time
+import datetime
+from pathlib import Path
 
 
 class Sampler(layers.Layer):
@@ -37,7 +39,6 @@ class Sampler(layers.Layer):
         epsilon = tf.random.normal(shape=(batch_size, z_size))
         z_dist = z_mean + tf.exp(0.5 * z_log_var) * epsilon
         # z_dist = z_mean # my autoencoder
-        pdb.set_trace()
         return z_dist
 
 
@@ -121,6 +122,7 @@ class VAE(keras.Model):
             self.val_loss_tracker,
         ]
 
+    @tf.function
     def train_step(self, data):
         mse = keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)
 
@@ -303,6 +305,7 @@ class TwoStageVAE(keras.Model):
             self.val_loss_tracker,
         ]
 
+    # @tf.function
     def train_step(self, data):
         mse = keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)
 
@@ -374,16 +377,16 @@ class ApricotVAE(ApricotData, VAE):
         )  # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
         # self.image_shape = (299, 299, 1) # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
         self.batch_size = 16  # None will take the batch size from test_split size. Note that the batch size affects training speed and loss values
-        self.epochs = 600
+        self.epochs = 20
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
-        self.verbose = 2  #  'auto', 0, 1, or 2. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch.
+        self.verbose = "auto"  #  'auto' necessary for graph creation. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch.
 
         # Preprocessing parameters
         self.gaussian_filter_size = None  # None or 0.5 or ... # Denoising gaussian filter size (in pixels). None does not apply filter
         self.n_pca_components = 32  # None or 32 # Number of PCA components to use for denoising. None does not apply PCA
 
         # Augment data. Final n samples =  n * (1 + n_repeats * 2): n is the original number of samples, 2 is the rot & shift
-        self.n_repeats = 10  # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
+        self.n_repeats = 0  # 10  # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
         self.angle_min = -30  # 30 # rotation int in degrees
         self.angle_max = 30  # 30
         self.shift_min = (
@@ -399,9 +402,34 @@ class ApricotVAE(ApricotData, VAE):
 
         # Eager mode works like normal python code. You can access variables better.
         # Graph mode postpones computations, but is more efficient.
-        tf.config.run_functions_eagerly(True)
+        tf.config.run_functions_eagerly(False)
 
+        self.output_path = Path("./retina/output")  # move  later to io
+        self.exp_folder = Path("vae")
+
+        self.tensorboard_callback = None
+        self._prep_logging()  # sets tensorboard_callback
         self._fit_all()
+
+    def _prep_logging(self):
+        """
+        Prepare local folder environment for tensorboard logging and model building
+        """
+
+        # current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        # train_log_dir = self.exp_folder.joinpath(current_time, "train")
+        # self.train_summary_writer = tf.summary.create_file_writer(str(train_log_dir))
+
+        # Folders
+        exp_folder = Path(self.output_path).joinpath(self.exp_folder)
+        Path.mkdir(exp_folder, parents=True, exist_ok=True)
+        # model_path = exp_folder.joinpath("model")
+        # model_path = Path.mkdir(model_path, parents=True, exist_ok=True)
+        self.tensorboard_callback = tf.keras.callbacks.TensorBoard(
+            log_dir=exp_folder,
+            histogram_freq=1,
+            write_graph=True,
+        )
 
     def _set_n_cpus(self, n_threads):
         # Set number of CPU cores to use for parallel processing
@@ -580,6 +608,7 @@ class ApricotVAE(ApricotData, VAE):
 
         vae = self._get_spatial_vae_model(val_data)
 
+        # pdb.set_trace()
         # Fit model
         fit_history = vae.fit(
             data,
@@ -587,6 +616,7 @@ class ApricotVAE(ApricotData, VAE):
             batch_size=self.batch_size,
             shuffle=True,
             verbose=self.verbose,
+            callbacks=self.tensorboard_callback,
         )
 
         return vae, fit_history
@@ -1117,31 +1147,31 @@ class ApricotVAE(ApricotData, VAE):
 
         # pdb.set_trace()
 
-        # Plot history of training and validation loss
-        self._plot_fit_history(fit_history)
+        # # Plot history of training and validation loss
+        # self._plot_fit_history(fit_history)
 
-        # Quality of fit
-        self.plot_latent_space(spatial_vae, n=5)
-        predictions, z_mean, z_log_var = spatial_vae.predict(rf_training)
-        # print(spatial_vae.evaluate(rf_test, rf_test))
+        # # Quality of fit
+        # self.plot_latent_space(spatial_vae, n=5)
+        # predictions, z_mean, z_log_var = spatial_vae.predict(rf_training)
+        # # print(spatial_vae.evaluate(rf_test, rf_test))
 
-        # Plot latent space
-        self._plot_z_mean_in_2D(z_mean)
+        # # Plot latent space
+        # self._plot_z_mean_in_2D(z_mean)
 
-        # Random sample from latent space
-        # SEURAAVA ON ILMEISESTI VÄÄRÄ TAPA SAADA RANDOM SAMPPELI LATENTISTA AVARUUDESTA.
-        # HOMMAA VARTEN LIENEE KUVAUS SEURAAVASSA: https://blog.tensorflow.org/2019/03/variational-autoencoders-with.html
-        z_random = spatial_vae.sampler(z_mean, z_log_var)
-        reconstruction = spatial_vae.decoder(z_random)
+        # # Random sample from latent space
+        # # SEURAAVA ON ILMEISESTI VÄÄRÄ TAPA SAADA RANDOM SAMPPELI LATENTISTA AVARUUDESTA.
+        # # HOMMAA VARTEN LIENEE KUVAUS SEURAAVASSA: https://blog.tensorflow.org/2019/03/variational-autoencoders-with.html
+        # z_random = spatial_vae.sampler(z_mean, z_log_var)
+        # reconstruction = spatial_vae.decoder(z_random)
 
-        # rf_validation_ds_np = self._to_numpy_array(rf_validation_ds)
-        n_samples = 10
-        self.plot_sample_images(
-            [rf_training, predictions, reconstruction.numpy()],
-            labels=["test", "pred", "randreco"],
-            n=n_samples,
-        )
-        # self.plot_sample_images(reconstruction.numpy())
+        # # rf_validation_ds_np = self._to_numpy_array(rf_validation_ds)
+        # n_samples = 10
+        # self.plot_sample_images(
+        #     [rf_training, predictions, reconstruction.numpy()],
+        #     labels=["test", "pred", "randreco"],
+        #     n=n_samples,
+        # )
+        # # self.plot_sample_images(reconstruction.numpy())
 
         plt.show()
         sys.exit()

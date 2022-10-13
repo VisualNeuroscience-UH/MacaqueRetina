@@ -7,9 +7,9 @@ import pdb
 import matplotlib.pyplot as plt
 
 
-'''
+"""
 Copied from https://keras.io/examples/generative/wgan_gp/
-'''
+"""
 
 
 class WGAN(keras.Model):
@@ -93,7 +93,7 @@ class WGAN(keras.Model):
                 fake_logits = self.discriminator(fake_images, training=True)
                 # Get the logits for the real images
                 real_logits = self.discriminator(real_images, training=True)
-                #TÄHÄN JÄIT, REAL IMG GETS MULTIPLE VALUES -- MISTÄ TULEE. VERTAILIT ORIGINAL JA TÄTÄ, JOTKA NÄYTTÄVÄT SAMANKOKOISILTA
+                # REAL IMG GETS MULTIPLE VALUES -- MISTÄ TULEE. VERTAILIT ORIGINAL JA TÄTÄ, JOTKA NÄYTTÄVÄT SAMANKOKOISILTA
                 # Calculate the discriminator loss using the fake and real image logits
                 d_cost = self.d_loss_fn(real_img=real_logits, fake_img=fake_logits)
                 # Calculate the gradient penalty
@@ -127,7 +127,6 @@ class WGAN(keras.Model):
         )
         return {"d_loss": d_loss, "g_loss": g_loss}
 
-
     def conv_block(
         self,
         x,
@@ -150,7 +149,6 @@ class WGAN(keras.Model):
         if use_dropout:
             x = layers.Dropout(drop_value)(x)
         return x
-
 
     def get_discriminator_model(self, img_shape=(32, 32, 3)):
         img_input = layers.Input(shape=img_shape)
@@ -236,7 +234,6 @@ class WGAN(keras.Model):
             x = layers.Dropout(drop_value)(x)
         return x
 
-
     def get_generator_model(self):
         noise = layers.Input(shape=(self.latent_dim,))
         x = layers.Dense(4 * 4 * 256, use_bias=False)(noise)
@@ -282,7 +279,6 @@ class WGAN(keras.Model):
         fake_loss = tf.reduce_mean(fake_img)
         return fake_loss - real_loss
 
-
     # Define the loss functions for the generator.
     def generator_loss(fake_img):
         return -tf.reduce_mean(fake_img)
@@ -305,7 +301,6 @@ class GANMonitor(keras.callbacks.Callback):
 
 
 class ApricotGAN:
-
     def __init__(self, train_images):
         # self.data_np = data_np
         self.epochs = 20
@@ -317,17 +312,17 @@ class ApricotGAN:
         # Set the number of epochs for trainining.
         self.epochs = 20
 
-
-        # Eager mode works like normal python code. You can access variables better. 
+        # Eager mode works like normal python code. You can access variables better.
         # Graph mode postpones computations, but is more efficient.
-        tf.config.run_functions_eagerly(True) 
-
+        tf.config.run_functions_eagerly(True)
 
         print(f"Number of examples: {len(train_images)}")
         print(f"Shape of the images in the dataset: {train_images.shape[1:]}")
 
         # Reshape each sample to (28, 28, 1) and normalize the pixel values in the [-1, 1] range
-        train_images = train_images.reshape(train_images.shape[0], *self.img_shape).astype("float32")
+        train_images = train_images.reshape(
+            train_images.shape[0], *self.img_shape
+        ).astype("float32")
         train_images = (train_images - 127.5) / 127.5
 
         # Instantiate the optimizer for both networks
@@ -352,7 +347,6 @@ class ApricotGAN:
         wgan.discriminator.summary()
         wgan.generator.summary()
 
-
         # Compile the wgan model
         wgan.compile(
             d_optimizer=discriminator_optimizer,
@@ -362,7 +356,12 @@ class ApricotGAN:
         )
 
         # Start training
-        wgan.fit(train_images, batch_size=self.batch_size, epochs=self.epochs, callbacks=[cbk])
+        wgan.fit(
+            train_images,
+            batch_size=self.batch_size,
+            epochs=self.epochs,
+            callbacks=[cbk],
+        )
 
 
 # from IPython.display import Image, display
@@ -388,5 +387,5 @@ if __name__ == "__main__":
     # display(Image("generated_img_1_19.png"))
     # display(Image("generated_img_2_19.png"))
 
-            # fashion_mnist = keras.datasets.fashion_mnist
-        # (train_images, train_labels), (test_images, test_labels) = fashion_mnist.load_data()
+    # fashion_mnist = keras.datasets.fashion_mnist
+    # (train_images, train_labels), (test_images, test_labels) = fashion_mnist.load_data()

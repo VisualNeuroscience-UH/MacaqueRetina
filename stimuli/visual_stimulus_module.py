@@ -529,7 +529,7 @@ class StimulusPattern:
 
         if self.context.my_stimulus_metadata["apply_cone_filter"] is True:
             pass
-        # TÄHÄN JÄIT. MUUTA  PHOTORESEPTOR KÄYTTÄMÄÄN MYÖS VIDEOKUVAA.
+        # MUUTA  PHOTORESEPTOR KÄYTTÄMÄÄN MYÖS VIDEOKUVAA.
         # TILAA VIDEOFILTTERÖINTI TÄSSÄ
 
         self._raw_intensity_from_data()
