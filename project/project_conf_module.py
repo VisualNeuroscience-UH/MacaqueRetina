@@ -317,7 +317,7 @@ if __name__ == "__main__":
 
     # PM.construct_retina.save_mosaic()
 
-    PM.construct_retina.show_build_process(show_all_spatial_fits=True)
+    # PM.construct_retina.show_build_process(show_all_spatial_fits=True)
 
     #################################
     ### Create stimulus ###
@@ -412,8 +412,6 @@ if __name__ == "__main__":
 
     # PM.working_retina.save_spikes_csv(filename='testi_spikes.csv') # => METADATA
     # PM.working_retina.save_structure_csv(filename='testi_structure.csv') # => METADATA
-
-    plt.show()
 
     #################################
     ### Project files & Utilities ###

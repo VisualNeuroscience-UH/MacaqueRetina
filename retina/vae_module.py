@@ -138,6 +138,15 @@ class VAE(keras.Model):
         reconstruction_loss = self.reconstruction_loss_tracker.result()
         kl_loss = self.kl_loss_tracker.result()
 
+        with self.summary_writer.as_default():
+            tf.summary.scalar("total_loss", total_loss, step=self.optimizer.iterations)
+            tf.summary.scalar(
+                "reconstruction_loss",
+                reconstruction_loss,
+                step=self.optimizer.iterations,
+            )
+            tf.summary.scalar("kl_loss", kl_loss, step=self.optimizer.iterations)
+
         # tf.print(f"***tf.print loss = {total_loss}", output_stream=sys.stdout)
         # print(f"***print loss = {total_loss}")
 
@@ -379,7 +388,7 @@ class ApricotVAE(ApricotData, VAE):
         self.batch_size = 16  # None will take the batch size from test_split size. Note that the batch size affects training speed and loss values
         self.epochs = 20
         self.test_split = 0.2  # None or 0.2  # Split data for validation and testing (both will take this fraction of data)
-        self.verbose = "auto"  #  'auto' necessary for graph creation. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch.
+        self.verbose = 1  #  1 or 'auto' necessary for graph creation. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch.
 
         # Preprocessing parameters
         self.gaussian_filter_size = None  # None or 0.5 or ... # Denoising gaussian filter size (in pixels). None does not apply filter
@@ -398,23 +407,27 @@ class ApricotVAE(ApricotData, VAE):
         tf.keras.utils.set_random_seed(self.random_seed)
 
         n_threads = 30
-        # self._set_n_cpus(n_threads)
+        self._set_n_cpus(n_threads)
 
         # Eager mode works like normal python code. You can access variables better.
         # Graph mode postpones computations, but is more efficient.
         # Graph mode also forces tensorflow to produce graph for tensorboard
-        tf.config.run_functions_eagerly(True)
+        tf.config.run_functions_eagerly(False)
 
         self.output_path = Path("./retina/output")  # move  later to io
         self.exp_folder = Path("vae")
 
         self.tensorboard_callback = None
-        self._prep_logging()  # sets tensorboard_callback
+        self._prep_tensorboard_logging()  # sets tensorboard_callback
         self._fit_all()
 
-    def _prep_logging(self):
+    def _prep_tensorboard_logging(self):
         """
         Prepare local folder environment for tensorboard logging and model building
+
+        Note that the tensoboard reset takes place only when quitting the terminal call
+        to tensorboard. You will see old graph, old scalars, if they are not overwritten
+        by new ones.
         """
 
         # Folders
@@ -614,20 +627,18 @@ class ApricotVAE(ApricotData, VAE):
 
         vae = self._get_spatial_vae_model(val_data)
 
-        # Attach summary file writer
-        # vae.summary_writer = self.summary_writer
+        # Attach summary file writer to model object
+        vae.summary_writer = self.summary_writer
 
-        with self.summary_writer.as_default():
-
-            # Fit model
-            fit_history = vae.fit(
-                data,
-                epochs=self.epochs,
-                batch_size=self.batch_size,
-                shuffle=True,
-                verbose=self.verbose,
-                callbacks=self.tensorboard_callback,
-            )
+        # Fit model
+        fit_history = vae.fit(
+            data,
+            epochs=self.epochs,
+            batch_size=self.batch_size,
+            shuffle=True,
+            verbose=self.verbose,
+            callbacks=self.tensorboard_callback,
+        )
 
         return vae, fit_history
 
@@ -1203,4 +1214,4 @@ class ApricotVAE(ApricotData, VAE):
         # # self.plot_sample_images(reconstruction.numpy())
 
         plt.show()
-        sys.exit()
+        # sys.exit()

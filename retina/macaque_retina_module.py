@@ -143,7 +143,7 @@ class ConstructRetina(RetinaMath):
         )  # Turn list to numpy array
         self.theta = np.asarray(sector_limits)  # Turn list to numpy array
         self.randomize_position = randomize_position
-        
+
         # If study concerns visual field within 4 mm (20 deg) of retinal eccentricity, the cubic fit for dendritic diameters fails close to fovea. Better limit it to more central part of the data
         if np.max(self.eccentricity_in_mm) <= 4:
             self.visual_field_fit_limit = 4
@@ -197,9 +197,10 @@ class ConstructRetina(RetinaMath):
             )
         elif self.model_type == "VAE":
             # Fit variational autoencoder to generate ganglion cells
-            self.vae_model = ApricotVAE(self.context.apricot_data_folder, gc_type, response_type)
+            self.vae_model = ApricotVAE(
+                self.context.apricot_data_folder, gc_type, response_type
+            )
             print("Back to ConstructRetina!")
-            pdb.set_trace()
 
         self.initialized = True
 
@@ -652,7 +653,7 @@ class ConstructRetina(RetinaMath):
 
         # parameter_names, data_all_viable_cells, bad_cell_indices = fitdata
         data_all_viable_cells = np.array(self.all_fits_df)
-        
+
         bad_cell_indices = np.where((self.all_fits_df == 0.0).all(axis=1))[0].tolist()
         parameter_names = self.all_fits_df.columns.tolist()
 
@@ -863,6 +864,7 @@ class ConstructRetina(RetinaMath):
 
         if self.initialized is False:
             self._initialize()
+        return  # temporary jump back to config file -- this time for profiling
 
         # -- First, place the ganglion cell midpoints
         # Run GC density fit to data, get func_params. Data from Perry_1984_Neurosci
@@ -993,7 +995,7 @@ class WorkingRetina(RetinaMath):
         fps = self.context.my_stimulus_options["fps"]
 
         self.model_type = self.context.my_retina["model_type"]
-        
+
         # Metadata for Apricot dataset. TODO move to project_conf module
         self.data_microm_per_pixel = 60
         self.data_filter_fps = 30  # Uncertain - "30 or 120 Hz"
