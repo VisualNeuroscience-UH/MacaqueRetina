@@ -1,4 +1,5 @@
 # Numerical
+import logging
 import numpy as np
 from scipy.ndimage import rotate, fourier_shift
 from scipy.interpolate import RectBivariateSpline
@@ -196,6 +197,34 @@ class TwoStageVAE(keras.Model):
         # self._build_decoder2()
         # self._build_loss()
 
+        # tf.debugging.set_log_device_placement(True)
+
+        # Additional loss function parameters
+        # self.loggamma_x = tf.compat.v1.get_variable(
+        #     "loggamma_x", [], tf.float32, tf.zeros_initializer()
+        # )
+        self.loggamma_x = tf.Variable(
+            initial_value=0.0,
+            trainable=True,
+            name="loggamma_x",
+            dtype=tf.float32,
+            shape=[],
+        )
+        # tf.Variable(
+        #     initial_value=None,
+        #     trainable=None,
+        #     validate_shape=True,
+        #     caching_device=None,
+        #     name=None,
+        #     variable_def=None,
+        #     dtype=None,
+        #     import_scope=None,
+        #     constraint=None,
+        #     synchronization=tf.VariableSynchronization.AUTO,
+        #     aggregation=tf.compat.v1.VariableAggregation.NONE,
+        #     shape=None
+        # )
+
         self.sampler = Sampler()
 
         self.total_loss_tracker = keras.metrics.Mean(name="total_loss")
@@ -204,8 +233,10 @@ class TwoStageVAE(keras.Model):
         )
         self.kl_loss_tracker = keras.metrics.Mean(name="kl_loss")
         self.val_loss_tracker = keras.metrics.Mean(name="val_loss")
-        self.loggamma_x_tracker = keras.metrics.Mean(name="loggamma_x")
-        self.loggamma_z_tracker = keras.metrics.Mean(name="loggamma_z")
+        # self.loggamma_x_tracker = keras.metrics.Mean(name="loggamma_x")
+        # self.gamma_x_tracker = keras.metrics.Mean(name="gamma_x")
+        # self.loggamma_z_tracker = keras.metrics.Mean(name="loggamma_z")
+        # self.z_tracker = keras.metrics.Mean(name="z")
 
     def _build_encoder1(self):
         encoder_inputs = keras.Input(shape=self.image_shape)
@@ -250,12 +281,6 @@ class TwoStageVAE(keras.Model):
             latent_inputs, decoder_outputs, name="stage1_decoder"
         )
         self.decoder.summary()
-
-        # Additional loss function parameters
-        self.loggamma_x = tf.compat.v1.get_variable(
-            "loggamma_x", [], tf.float32, tf.zeros_initializer()
-        )
-        self.gamma_x = tf.exp(self.loggamma_x)
 
     # def _build_decoder2(self):
     #     t = self.u
@@ -336,30 +361,46 @@ class TwoStageVAE(keras.Model):
             reduction=tf.keras.losses.Reduction.SUM
         )  # mse : loss = square(y_true - y_pred)
         HALF_LOG_TWO_PI = 0.91893  # np.log(2*np.pi)*0.5
+        self.gamma_x = tf.exp(self.loggamma_x, name="gamma_x")
+        batch_size = tf.cast(tf.shape(data)[0], tf.float32)
         with tf.GradientTape() as tape:
             z_mean, z_log_var = self.encoder(data)
             z = self.sampler(z_mean, z_log_var)  # tsvae compatible
             reconstruction = self.decoder(z)
             # tf.reduce_sum(tf.square((self.x - self.x_hat) / self.gamma_x) / 2.0 + self.loggamma_x + HALF_LOG_TWO_PI) / float(self.batch_size)
-            # reconstruction_loss = tf.reduce_sum(
-            #     (
-            #         tf.square((data - reconstruction) / self.gamma_x) / 2.0
-            #         + self.loggamma_x
-            #         + HALF_LOG_TWO_PI
-            #     )
-            # )
+            reconstruction_loss = (
+                tf.reduce_sum(
+                    (
+                        tf.square((data - reconstruction) / self.gamma_x) / 2.0
+                        + self.loggamma_x
+                        + HALF_LOG_TWO_PI
+                    )
+                )
+                / batch_size
+            )
 
-            reconstruction_loss = mse(data, reconstruction)
-            kl_loss = -0.5 * (
-                1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
-            )  # tsvae compatible (excluding div by batch size)
-            total_loss = reconstruction_loss + self.beta * tf.reduce_mean(kl_loss)
+            # reconstruction_loss = mse(data, reconstruction)
+            # tf.reduce_sum(tf.square(self.mu_z) + tf.square(self.sd_z) - 2 * self.logsd_z - 1) / 2.0 / float(self.batch_size)
+            kl_loss = (
+                -0.5
+                * tf.reduce_sum(1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
+                / batch_size
+            )  # tsvae compatible
+            total_loss = reconstruction_loss + self.beta * kl_loss
 
         grads = tape.gradient(total_loss, self.trainable_weights)
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
 
-        self.loggamma_x_tracker.update_state(self.loggamma_x)
-        self.loggamma_z_tracker.update_state(self.loggamma_z)
+        # update gamma_x
+        # self.gamma_x.assign(tf.exp(self.loggamma_x))
+        # self.gamma_x = tf.exp(self.loggamma_x)
+
+        # logging.info(f"reconstruction_loss_tmp.shape = {reconstruction_loss_tmp.shape}")
+        # logging.info(f"reconstruction_loss.shape = {reconstruction_loss.shape}")
+        # self.loggamma_x_tracker.update_state(self.loggamma_x)
+        # self.gamma_x_tracker.update_state(self.gamma_x)
+        # self.z_tracker.update_state(z)
+        # self.loggamma_z_tracker.update_state(self.loggamma_z)
         self.total_loss_tracker.update_state(total_loss)
         self.reconstruction_loss_tracker.update_state(reconstruction_loss)
         self.kl_loss_tracker.update_state(kl_loss)
@@ -376,6 +417,13 @@ class TwoStageVAE(keras.Model):
                 step=self.optimizer.iterations,
             )
             tf.summary.scalar("kl_loss", kl_loss, step=self.optimizer.iterations)
+            tf.summary.scalar(
+                "loggamma_x", self.loggamma_x, step=self.optimizer.iterations
+            )
+            tf.summary.scalar("gamma_x", self.gamma_x, step=self.optimizer.iterations)
+            tf.summary.histogram("z_mean", z_mean, step=self.optimizer.iterations)
+            tf.summary.histogram("z_log_var", z_log_var, step=self.optimizer.iterations)
+            tf.summary.histogram("z", z, step=self.optimizer.iterations)
 
         if self.val_data is not None:
             val_z_mean, _ = self.encoder(self.val_data)
@@ -414,7 +462,7 @@ class ApricotVAE(ApricotData, VAE):
         self.latent_space_plot_scale = 4  # Scale for plotting latent space
         self.beta = 1  # Beta parameter for KL loss. Overrides VAE class beta parameter
         self.vae_optimizer = keras.optimizers.Adam(
-            learning_rate=0.001
+            learning_rate=0.0001
         )  # default lr = 0.001
 
         self.image_shape = (
