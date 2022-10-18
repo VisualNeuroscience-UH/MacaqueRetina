@@ -38,8 +38,8 @@ class Sampler(layers.Layer):
         batch_size = tf.shape(z_mean)[0]
         z_size = tf.shape(z_mean)[1]
         epsilon = tf.random.normal(shape=(batch_size, z_size))
-        z_dist = z_mean + tf.exp(0.5 * z_log_var) * epsilon
-        # z_dist = z_mean # my autoencoder
+        z_dist = z_mean + tf.exp(0.5 * z_log_var) * epsilon  # tsvae compatible
+
         return z_dist
 
 
@@ -138,6 +138,7 @@ class VAE(keras.Model):
         reconstruction_loss = self.reconstruction_loss_tracker.result()
         kl_loss = self.kl_loss_tracker.result()
 
+        # log for tensorboard
         with self.summary_writer.as_default():
             tf.summary.scalar("total_loss", total_loss, step=self.optimizer.iterations)
             tf.summary.scalar(
@@ -146,12 +147,6 @@ class VAE(keras.Model):
                 step=self.optimizer.iterations,
             )
             tf.summary.scalar("kl_loss", kl_loss, step=self.optimizer.iterations)
-
-        # tf.print(f"***tf.print loss = {total_loss}", output_stream=sys.stdout)
-        # print(f"***print loss = {total_loss}")
-
-        # Within summary writer scope, we can use tf.summary
-        tf.summary.scalar("kl_loss", kl_loss, step=self.optimizer.iterations)
 
         if self.val_data is not None:
             val_z_mean, _ = self.encoder(self.val_data)
@@ -197,9 +192,9 @@ class TwoStageVAE(keras.Model):
 
         self._build_encoder1()
         self._build_decoder1()
-        self._build_encoder2()
-        self._build_decoder2()
-        self._build_loss()
+        # self._build_encoder2()
+        # self._build_decoder2()
+        # self._build_loss()
 
         self.sampler = Sampler()
 
@@ -209,6 +204,8 @@ class TwoStageVAE(keras.Model):
         )
         self.kl_loss_tracker = keras.metrics.Mean(name="kl_loss")
         self.val_loss_tracker = keras.metrics.Mean(name="val_loss")
+        self.loggamma_x_tracker = keras.metrics.Mean(name="loggamma_x")
+        self.loggamma_z_tracker = keras.metrics.Mean(name="loggamma_z")
 
     def _build_encoder1(self):
         encoder_inputs = keras.Input(shape=self.image_shape)
@@ -220,21 +217,23 @@ class TwoStageVAE(keras.Model):
         x = layers.Dense(16, activation="relu")(x)
         z_mean = layers.Dense(self.latent_dim, name="z_mean")(x)
         z_log_var = layers.Dense(self.latent_dim, name="z_log_var")(x)
-        self.encoder = keras.Model(encoder_inputs, [z_mean, z_log_var], name="encoder")
+        self.encoder = keras.Model(
+            encoder_inputs, [z_mean, z_log_var], name="stage1_encoder"
+        )
         self.encoder.summary()
 
-    def _build_encoder2(self):
-        t = self.z
-        for i in range(self.second_depth):
-            t = tf.layers.dense(t, self.second_dim, tf.nn.relu, name="fc" + str(i))
-        t = tf.concat([self.z, t], -1)
+    # def _build_encoder2(self):
+    #     t = self.z
+    #     for i in range(self.second_depth):
+    #         t = tf.layers.dense(t, self.second_dim, tf.nn.relu, name="fc" + str(i))
+    #     t = tf.concat([self.z, t], -1)
 
-        self.mu_u = tf.layers.dense(t, self.latent_dim, name="mu_u")
-        self.logsd_u = tf.layers.dense(t, self.latent_dim, name="logsd_u")
-        self.sd_u = tf.exp(self.logsd_u)
-        self.u = self.mu_u + self.sd_u * tf.random_normal(
-            [self.batch_size, self.latent_dim]
-        )
+    #     self.mu_u = tf.layers.dense(t, self.latent_dim, name="mu_u")
+    #     self.logsd_u = tf.layers.dense(t, self.latent_dim, name="logsd_u")
+    #     self.sd_u = tf.exp(self.logsd_u)
+    #     self.u = self.mu_u + self.sd_u * tf.random_normal(
+    #         [self.batch_size, self.latent_dim]
+    #     )
 
     def _build_decoder1(self):
         latent_inputs = keras.Input(shape=(self.latent_dim,))
@@ -247,57 +246,74 @@ class TwoStageVAE(keras.Model):
             x
         )
         decoder_outputs = layers.Conv2D(1, 3, activation="sigmoid", padding="same")(x)
-        self.decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
+        self.decoder = keras.Model(
+            latent_inputs, decoder_outputs, name="stage1_decoder"
+        )
         self.decoder.summary()
 
-    def _build_decoder2(self):
-        t = self.u
-        for i in range(self.second_depth):
-            t = tf.layers.dense(t, self.second_dim, tf.nn.relu, name="fc" + str(i))
-        t = tf.concat([self.u, t], -1)
-
-        self.z_hat = tf.layers.dense(t, self.latent_dim, name="z_hat")
-        self.loggamma_z = tf.get_variable(
-            "loggamma_z", [], tf.float32, tf.zeros_initializer()
+        # Additional loss function parameters
+        self.loggamma_x = tf.compat.v1.get_variable(
+            "loggamma_x", [], tf.float32, tf.zeros_initializer()
         )
-        self.gamma_z = tf.exp(self.loggamma_z)
+        self.gamma_x = tf.exp(self.loggamma_x)
 
-    def _build_loss(self):
-        HALF_LOG_TWO_PI = 0.91893  # np.log(2*np.pi)*0.5
+    # def _build_decoder2(self):
+    #     t = self.u
+    #     for i in range(self.second_depth):
+    #         t = tf.layers.dense(t, self.second_dim, tf.nn.relu, name="fc" + str(i))
+    #     t = tf.concat([self.u, t], -1)
 
-        self.kl_loss1 = (
-            tf.reduce_sum(
-                tf.square(self.mu_z) + tf.square(self.sd_z) - 2 * self.logsd_z - 1
-            )
-            / 2.0
-            / float(self.batch_size)
-        )
-        if not self.cross_entropy_loss:
-            self.gen_loss1 = tf.reduce_sum(
-                tf.square((self.x - self.x_hat) / self.gamma_x) / 2.0
-                + self.loggamma_x
-                + HALF_LOG_TWO_PI
-            ) / float(self.batch_size)
-        else:
-            self.gen_loss1 = -tf.reduce_sum(
-                self.x * tf.log(tf.maximum(self.x_hat, 1e-8))
-                + (1 - self.x) * tf.log(tf.maximum(1 - self.x_hat, 1e-8))
-            ) / float(self.batch_size)
-        self.loss1 = self.kl_loss1 + self.gen_loss1
+    #     self.z_hat = tf.layers.dense(t, self.latent_dim, name="z_hat")
+    #     self.loggamma_z = tf.get_variable(
+    #         "loggamma_z", [], tf.float32, tf.zeros_initializer()
+    #     )
+    #     self.gamma_z = tf.exp(self.loggamma_z)
 
-        self.kl_loss2 = (
-            tf.reduce_sum(
-                tf.square(self.mu_u) + tf.square(self.sd_u) - 2 * self.logsd_u - 1
-            )
-            / 2.0
-            / float(self.batch_size)
-        )
-        self.gen_loss2 = tf.reduce_sum(
-            tf.square((self.z - self.z_hat) / self.gamma_z) / 2.0
-            + self.loggamma_z
-            + HALF_LOG_TWO_PI
-        ) / float(self.batch_size)
-        self.loss2 = self.kl_loss2 + self.gen_loss2
+    # def _build_loss(self):
+    #     HALF_LOG_TWO_PI = 0.91893  # np.log(2*np.pi)*0.5
+
+    #     # self.kl_loss1 = (
+    #     #     tf.reduce_sum(
+    #     #         tf.square(self.mu_z) + tf.square(self.sd_z) - 2 * self.logsd_z - 1
+    #     #     )
+    #     #     / 2.0
+    #     #     / float(self.batch_size)
+    #     # )
+    #     self.kl_loss1 = tf.reduce_sum(
+    #         -0.5 * (1 + 2 * self.logsd_z - tf.square(self.mu_z) - tf.square(self.sd_z))
+    #     )
+
+    #     self.kl_loss2 = tf.reduce_sum(
+    #         -0.5
+    #         * (1 + self.z_log_var - tf.square(self.z_mean) - tf.exp(self.z_log_var))
+    #     )
+
+    #     if not self.cross_entropy_loss:
+    #         self.gen_loss1 = tf.reduce_sum(
+    #             tf.square((self.x - self.x_hat) / self.gamma_x) / 2.0
+    #             + self.loggamma_x
+    #             + HALF_LOG_TWO_PI
+    #         ) / float(self.batch_size)
+    #     else:
+    #         self.gen_loss1 = -tf.reduce_sum(
+    #             self.x * tf.log(tf.maximum(self.x_hat, 1e-8))
+    #             + (1 - self.x) * tf.log(tf.maximum(1 - self.x_hat, 1e-8))
+    #         ) / float(self.batch_size)
+    #     self.loss1 = self.kl_loss1 + self.gen_loss1
+
+    #     self.kl_loss2 = (
+    #         tf.reduce_sum(
+    #             tf.square(self.mu_u) + tf.square(self.sd_u) - 2 * self.logsd_u - 1
+    #         )
+    #         / 2.0
+    #         / float(self.batch_size)
+    #     )
+    #     self.gen_loss2 = tf.reduce_sum(
+    #         tf.square((self.z - self.z_hat) / self.gamma_z) / 2.0
+    #         + self.loggamma_z
+    #         + HALF_LOG_TWO_PI
+    #     ) / float(self.batch_size)
+    #     self.loss2 = self.kl_loss2 + self.gen_loss2
 
     def call(self, inputs):
         z_mean, z_log_var = self.encoder(inputs)
@@ -316,28 +332,50 @@ class TwoStageVAE(keras.Model):
 
     # @tf.function
     def train_step(self, data):
-        mse = keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)
-
+        mse = keras.losses.MeanSquaredError(
+            reduction=tf.keras.losses.Reduction.SUM
+        )  # mse : loss = square(y_true - y_pred)
+        HALF_LOG_TWO_PI = 0.91893  # np.log(2*np.pi)*0.5
         with tf.GradientTape() as tape:
             z_mean, z_log_var = self.encoder(data)
-            z = self.sampler(z_mean, z_log_var)
+            z = self.sampler(z_mean, z_log_var)  # tsvae compatible
             reconstruction = self.decoder(z)
+            # tf.reduce_sum(tf.square((self.x - self.x_hat) / self.gamma_x) / 2.0 + self.loggamma_x + HALF_LOG_TWO_PI) / float(self.batch_size)
+            # reconstruction_loss = tf.reduce_sum(
+            #     (
+            #         tf.square((data - reconstruction) / self.gamma_x) / 2.0
+            #         + self.loggamma_x
+            #         + HALF_LOG_TWO_PI
+            #     )
+            # )
+
             reconstruction_loss = mse(data, reconstruction)
-            # Correspond to kl_loss1 in original two-stage model, except:
-            # 2 * self.logsd_z => z_log_var;
-            # reduce_sum => reduce_mean in the nex stage;
-            # no division w/ self.batch_size
-            kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
+            kl_loss = -0.5 * (
+                1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
+            )  # tsvae compatible (excluding div by batch size)
             total_loss = reconstruction_loss + self.beta * tf.reduce_mean(kl_loss)
 
         grads = tape.gradient(total_loss, self.trainable_weights)
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
+
+        self.loggamma_x_tracker.update_state(self.loggamma_x)
+        self.loggamma_z_tracker.update_state(self.loggamma_z)
         self.total_loss_tracker.update_state(total_loss)
         self.reconstruction_loss_tracker.update_state(reconstruction_loss)
         self.kl_loss_tracker.update_state(kl_loss)
         total_loss = self.total_loss_tracker.result()
         reconstruction_loss = self.reconstruction_loss_tracker.result()
         kl_loss = self.kl_loss_tracker.result()
+
+        # log for tensorboard
+        with self.summary_writer.as_default():
+            tf.summary.scalar("total_loss", total_loss, step=self.optimizer.iterations)
+            tf.summary.scalar(
+                "reconstruction_loss",
+                reconstruction_loss,
+                step=self.optimizer.iterations,
+            )
+            tf.summary.scalar("kl_loss", kl_loss, step=self.optimizer.iterations)
 
         if self.val_data is not None:
             val_z_mean, _ = self.encoder(self.val_data)
@@ -385,8 +423,8 @@ class ApricotVAE(ApricotData, VAE):
             1,
         )  # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
         # self.image_shape = (299, 299, 1) # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
-        self.batch_size = 16  # None will take the batch size from test_split size. Note that the batch size affects training speed and loss values
-        self.epochs = 20
+        self.batch_size = 512  # None will take the batch size from test_split size. Note that the batch size affects training speed and loss values
+        self.epochs = 5
         self.test_split = 0.2  # None or 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.verbose = 1  #  1 or 'auto' necessary for graph creation. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch.
 
@@ -611,10 +649,12 @@ class ApricotVAE(ApricotData, VAE):
         """
 
         # Build model
-        vae = VAE(
+        # vae = VAE(
+        #     image_shape=self.image_shape, latent_dim=self.latent_dim, val_data=val_data
+        # )
+        vae = TwoStageVAE(
             image_shape=self.image_shape, latent_dim=self.latent_dim, val_data=val_data
         )
-        # vae = TwoStageVAE(image_shape=self.image_shape, latent_dim=self.latent_dim, val_data=val_data)
         # change beta
         vae.beta = self.beta
 
@@ -1154,13 +1194,16 @@ class ApricotVAE(ApricotData, VAE):
 
     def _fit_all(self):
 
-        # Get numpy array of data in correct dimensions
-        gc_spatial_data_np = self._get_spatial_apricot_data()
+        # # Get numpy array of data in correct dimensions
+        # gc_spatial_data_np = self._get_spatial_apricot_data()
 
-        # # Process input data for training and validation dataset objects
-        rf_training, rf_val, rf_test = self._input_processing_pipe(gc_spatial_data_np)
+        # # # Process input data for training and validation dataset objects
+        # rf_training, rf_val, rf_test = self._input_processing_pipe(gc_spatial_data_np)
 
-        # rf_training = self._get_mnist_data()
+        rf_training = self._get_mnist_data()
+        rf_training = rf_training[:6000]
+        rf_test = rf_val = None
+        # pdb.set_trace()
 
         spatial_vae, fit_history = self._fit_spatial_vae(rf_training, rf_val)
         # spatial_vae, validation_data, fit_history = self._k_fold_cross_validation(rf_training, n_folds=5)
