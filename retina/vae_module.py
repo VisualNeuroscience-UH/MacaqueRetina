@@ -472,16 +472,16 @@ class ApricotVAE(ApricotData, VAE):
         )  # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
         # self.image_shape = (299, 299, 1) # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
         self.batch_size = 512  # None will take the batch size from test_split size. Note that the batch size affects training speed and loss values
-        self.epochs = 5
+        self.epochs = 200
         self.test_split = 0.2  # None or 0.2  # Split data for validation and testing (both will take this fraction of data)
-        self.verbose = 1  #  1 or 'auto' necessary for graph creation. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch.
+        self.verbose = 2  #  1 or 'auto' necessary for graph creation. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch.
 
         # Preprocessing parameters
         self.gaussian_filter_size = None  # None or 0.5 or ... # Denoising gaussian filter size (in pixels). None does not apply filter
         self.n_pca_components = 32  # None or 32 # Number of PCA components to use for denoising. None does not apply PCA
 
         # Augment data. Final n samples =  n * (1 + n_repeats * 2): n is the original number of samples, 2 is the rot & shift
-        self.n_repeats = 0  # 10  # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
+        self.n_repeats = 10  # 10  # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
         self.angle_min = -30  # 30 # rotation int in degrees
         self.angle_max = 30  # 30
         self.shift_min = (
