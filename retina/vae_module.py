@@ -223,17 +223,17 @@ class TwoStageVAE(keras.Model):
         x = layers.Dense(16, activation="relu")(x)
         z_mean = layers.Dense(self.latent_dim, name="z_mean")(x)
         z_log_var = layers.Dense(self.latent_dim, name="z_log_var")(x)
-        self.stage1_encoder = keras.Model(
-            inputs=encoder_inputs, outputs=[z_mean, z_log_var], name="stage1_encoder"
+        self.encoder_stage1 = keras.Model(
+            inputs=encoder_inputs, outputs=[z_mean, z_log_var], name="encoder_stage1"
         )
-        self.stage1_encoder.summary()
+        self.encoder_stage1.summary()
 
-        self.stage1_encoder.loggamma_x = tf.Variable(
-        initial_value=0.0,
-        trainable=True,
-        name="loggamma_x",
-        dtype=tf.float32,
-        shape=[],
+        self.encoder_stage1.loggamma_x = tf.Variable(
+            initial_value=0.0,
+            trainable=True,
+            name="loggamma_x",
+            dtype=tf.float32,
+            shape=[],
         )
 
     def _build_encoder2(self):
@@ -243,17 +243,17 @@ class TwoStageVAE(keras.Model):
         x = layers.Dense(16, activation="relu", name="fc3")(x)
         u_mean = layers.Dense(self.latent_dim, name="u_mean")(x)
         u_log_var = layers.Dense(self.latent_dim, name="u_log_var")(x)
-        self.stage2_encoder = keras.Model(
-            inputs=encoder_inputs, outputs=[u_mean, u_log_var], name="stage2_encoder"
+        self.encoder_stage2 = keras.Model(
+            inputs=encoder_inputs, outputs=[u_mean, u_log_var], name="encoder_stage2"
         )
-        self.stage2_encoder.summary()
+        self.encoder_stage2.summary()
 
-        self.stage2_encoder.loggamma_z = tf.Variable(
-        initial_value=0.0,
-        trainable=False,
-        name="loggamma_z",
-        dtype=tf.float32,
-        shape=[],
+        self.encoder_stage2.loggamma_z = tf.Variable(
+            initial_value=0.0,
+            trainable=False,
+            name="loggamma_z",
+            dtype=tf.float32,
+            shape=[],
         )
 
     def _build_decoder1(self):
@@ -267,10 +267,10 @@ class TwoStageVAE(keras.Model):
             x
         )
         decoder_outputs = layers.Conv2D(1, 3, activation="sigmoid", padding="same")(x)
-        self.stage1_decoder = keras.Model(
-            inputs=latent_inputs, outputs=decoder_outputs, name="stage1_decoder"
+        self.decoder_stage1 = keras.Model(
+            inputs=latent_inputs, outputs=decoder_outputs, name="decoder_stage1"
         )
-        self.stage1_decoder.summary()
+        self.decoder_stage1.summary()
 
     def _build_decoder2(self):
         latent_inputs = keras.Input(shape=(self.latent_dim,))
@@ -278,22 +278,22 @@ class TwoStageVAE(keras.Model):
         x = layers.Dense(16, activation="relu", name="fc2")(x)
         x = layers.Dense(16, activation="relu", name="fc3")(x)
         z_hat = layers.Dense(self.latent_dim, name="z_hat")(x)
-        self.stage2_decoder = keras.Model(
-            inputs=latent_inputs, outputs=z_hat, name="stage2_decoder"
+        self.decoder_stage2 = keras.Model(
+            inputs=latent_inputs, outputs=z_hat, name="decoder_stage2"
         )
-        self.stage2_decoder.summary()
+        self.decoder_stage2.summary()
 
     def call(self, inputs):
         if self.model_stage == "Stage1":
-            z_mean, z_log_var = self.stage1_encoder(inputs)
-            z_random = self.sampler([z_mean, z_log_var])
-            reconstruction = self.stage1_decoder(z_random)
-            return reconstruction
+            z_mean, z_log_var = self.encoder_stage1(inputs)
+            z_random = self.sampler(z_mean, z_log_var)
+            reconstruction = self.decoder_stage1(z_random)
+            return reconstruction, z_mean, z_log_var
         elif self.model_stage == "Stage2":
-            u_mean, u_log_var = self.stage2_encoder(inputs)
-            u_random = self.sampler([u_mean, u_log_var])
-            z_hat = self.stage2_decoder(u_random)
-            return z_hat
+            u_mean, u_log_var = self.encoder_stage2(inputs)
+            u_random = self.sampler(u_mean, u_log_var)
+            z_hat = self.decoder_stage2(u_random)
+            return z_hat, u_mean, u_log_var
 
     @property
     def metrics(self):
@@ -319,25 +319,24 @@ class TwoStageVAE(keras.Model):
             reduction=tf.keras.losses.Reduction.SUM
         )  # mse : loss = square(y_true - y_pred)
         if self.model_stage == "Stage1":
-            self.gamma_x = tf.exp(self.stage1_encoder.loggamma_x, name="gamma_x")
+            self.gamma_x = tf.exp(self.encoder_stage1.loggamma_x, name="gamma_x")
             batch_size = tf.cast(tf.shape(data)[0], tf.float32)
             with tf.GradientTape() as tape:
-                z_mean, z_log_var = self.stage1_encoder(data)
+                z_mean, z_log_var = self.encoder_stage1(data)
                 z = self.sampler(z_mean, z_log_var)  # tsvae compatible
-                reconstruction = self.stage1_decoder(z)
-                # tf.reduce_sum(tf.square((self.x - self.x_hat) / self.gamma_x) / 2.0 + self.loggamma_x + HALF_LOG_TWO_PI) / float(self.batch_size)
+                reconstruction = self.decoder_stage1(z)
+
                 reconstruction_loss = (
                     tf.reduce_sum(
                         (
                             tf.square((data - reconstruction) / self.gamma_x) / 2.0
-                            + self.stage1_encoder.loggamma_x
+                            + self.encoder_stage1.loggamma_x
                             + HALF_LOG_TWO_PI
                         )
                     )
                     / batch_size
                 )
 
-                # tf.reduce_sum(tf.square(self.mu_z) + tf.square(self.sd_z) - 2 * self.logsd_z - 1) / 2.0 / float(self.batch_size)
                 kl_loss = (
                     -0.5
                     * tf.reduce_sum(
@@ -369,7 +368,9 @@ class TwoStageVAE(keras.Model):
                 )
                 tf.summary.scalar("kl_loss", kl_loss, step=self.optimizer.iterations)
                 tf.summary.scalar(
-                    "loggamma_x", self.stage1_encoder.loggamma_x, step=self.optimizer.iterations
+                    "loggamma_x",
+                    self.encoder_stage1.loggamma_x,
+                    step=self.optimizer.iterations,
                 )
                 tf.summary.scalar(
                     "gamma_x", self.gamma_x, step=self.optimizer.iterations
@@ -383,8 +384,8 @@ class TwoStageVAE(keras.Model):
             # Validation. Note the different loss function -- no gamma_x.
             # This is, however, compatible with the validation loss of VAE
             if self.val_data is not None:
-                val_z_mean, _ = self.stage1_encoder(self.val_data)
-                val_reconstruction = self.stage1_decoder(val_z_mean)
+                val_z_mean, _ = self.encoder_stage1(self.val_data)
+                val_reconstruction = self.decoder_stage1(val_z_mean)
                 val_loss = mse(self.val_data, val_reconstruction)
                 self.val_loss_tracker.update_state(val_loss)
                 val_loss = self.val_loss_tracker.result()
@@ -400,18 +401,18 @@ class TwoStageVAE(keras.Model):
 
         elif self.model_stage == "Stage2":
 
-            self.gamma_z = tf.exp(self.stage2_encoder.loggamma_z, name="gamma_z")
+            self.gamma_z = tf.exp(self.encoder_stage2.loggamma_z, name="gamma_z")
             batch_size = tf.cast(tf.shape(data)[0], tf.float32)
 
             with tf.GradientTape() as tape:
-                u_mean, u_log_var = self.stage2_encoder(data)
+                u_mean, u_log_var = self.encoder_stage2(data)
                 u = self.sampler(u_mean, u_log_var)
-                reconstruction = self.stage2_decoder(u)
+                reconstruction = self.decoder_stage2(u)
                 reconstruction_loss_stage2 = (
                     tf.reduce_sum(
                         (
                             tf.square((data - reconstruction) / self.gamma_z) / 2.0
-                            + self.stage2_encoder.loggamma_z
+                            + self.encoder_stage2.loggamma_z
                             + HALF_LOG_TWO_PI
                         )
                     )
@@ -462,7 +463,9 @@ class TwoStageVAE(keras.Model):
                     step=self.optimizer.iterations,
                 )
                 tf.summary.scalar(
-                    "loggamma_z", self.stage2_encoder.loggamma_z, step=self.optimizer.iterations
+                    "loggamma_z",
+                    self.encoder_stage2.loggamma_z,
+                    step=self.optimizer.iterations,
                 )
                 tf.summary.scalar(
                     "gamma_z", self.gamma_z, step=self.optimizer.iterations
@@ -476,9 +479,9 @@ class TwoStageVAE(keras.Model):
             # For the second stage, validation data equals the posterior
             # of the image validation data from the first stage.
             if self.val_data is not None:
-                val_z_mean, _ = self.stage1_encoder(self.val_data)
-                val_u_mean, _ = self.stage2_encoder(val_z_mean)
-                val_reconstruction = self.stage2_decoder(val_u_mean)
+                val_z_mean, _ = self.encoder_stage1(self.val_data)
+                val_u_mean, _ = self.encoder_stage2(val_z_mean)
+                val_reconstruction = self.decoder_stage2(val_u_mean)
                 val_loss = mse(val_z_mean, val_reconstruction)
                 self.val_loss_stage2_tracker.update_state(val_loss)
                 val_loss_stage2 = self.val_loss_stage2_tracker.result()
@@ -491,34 +494,6 @@ class TwoStageVAE(keras.Model):
                 "kl_loss_stage2": kl_loss_stage2,
                 "val_reconstruction_loss_stage2": val_loss_stage2,
             }
-
-    # def set_variable_trainable_status(self, name=None, trainable=None):
-    #     assert (
-    #         name is not None and trainable is not None
-    #     ), "Name and trainable must be specified, aborting..."
-
-    #     pdb.set_trace()
-    #     var_list = tf.trainable_variables()
-    #     # print(var_list)
-        # # [<tf.Variable 'v1:0' shape=(2, 2) dtype=float32_ref>,
-        # #  <tf.Variable 'v2:0' shape=(2, 2) dtype=float32_ref>]
-
-        # tf.get_default_graph().clear_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
-
-        # cleared_var_list = tf.trainable_variables()
-        # print(cleared_var_list)
-        # # []
-
-        # tf.add_to_collection(tf.GraphKeys.TRAINABLE_VARIABLES, var_list[0])
-
-        # updated_var_list = tf.trainable_variables()
-        # print(updated_var_list)
-        # # [<tf.Variable 'v1:0' shape=(2, 2) dtype=float32_ref>]
-
-        # Another way is to use var_list keyword argument of the optimizer and pass those variables you want to be updated during training (during execution of the train_op):
-
-        # optimizer = tf.train.GradientDescentOptimizer(0.01)
-        # train_op = optimizer.minimize(loss, var_list=[v1])
 
 
 class ApricotVAE(ApricotData, VAE):
@@ -558,7 +533,7 @@ class ApricotVAE(ApricotData, VAE):
         self.batch_size = 512  # None will take the batch size from test_split size. Note that the batch size affects training speed and loss values
         self.batch_size_stage2 = 512  # Only used for TwoStageVAE
         self.epochs = 10
-        self.epochs_stage2 = 10  # Only used for TwoStageVAE
+        self.epochs_stage2 = 20  # Only used for TwoStageVAE
         self.test_split = 0.2  # None or 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.verbose = 2  #  1 or 'auto' necessary for graph creation. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch.
 
@@ -643,6 +618,11 @@ class ApricotVAE(ApricotData, VAE):
         grid_x = np.linspace(-scale, scale, n)
         grid_y = np.linspace(-scale, scale, n)[::-1]
 
+        if self.model_type == "VAE":
+            predictor = vae.decoder.predict
+        elif self.model_type == "TwoStageVAE":
+            predictor = vae.decoder_stage1.predict
+
         for i, yi in enumerate(grid_y):
             for j, xi in enumerate(grid_x):
                 z_sample = np.array([[xi, yi]])
@@ -653,7 +633,7 @@ class ApricotVAE(ApricotData, VAE):
                     )
                     # z_sample = np.concatenate((z_sample, np.ones((1, self.latent_dim - 2))), axis=1)
                 print(f"z_sample: {z_sample}")
-                x_decoded = vae.decoder.predict(z_sample)
+                x_decoded = predictor(z_sample)
                 digit = x_decoded[0].reshape(digit_size, digit_size)
                 figure[
                     i * digit_size : (i + 1) * digit_size,
@@ -805,7 +785,7 @@ class ApricotVAE(ApricotData, VAE):
 
     def _fit_spatial_vae(self, data, val_data):
 
-        vae = self._get_spatial_vae_model(val_data)
+        vae = self._get_spatial_vae_model(val_data=val_data)
 
         # Attach summary file writer to model object
         vae.summary_writer = self.summary_writer
@@ -813,8 +793,8 @@ class ApricotVAE(ApricotData, VAE):
         if self.model_type == "TwoStageVAE":
             vae.model_stage = "Stage1"
             # Set encoder_stage2 and decoder_stage2 weights to non-trainable status
-            vae.stage2_encoder.trainable = False
-            vae.stage2_decoder.trainable = False
+            vae.encoder_stage2.trainable = False
+            vae.decoder_stage2.trainable = False
 
         # Compile model
         vae.compile(optimizer=self.optimizer_stage1)
@@ -833,7 +813,7 @@ class ApricotVAE(ApricotData, VAE):
         # Thus no separate loop is needed as in tf1 version in method extract_posterior
         if self.model_type == "TwoStageVAE":
             vae.model_stage = "Stage2"
-            z_mean, z_log_var = vae.stage1_encoder.predict(
+            z_mean, z_log_var = vae.encoder_stage1.predict(
                 data, batch_size=self.batch_size
             )
 
@@ -842,15 +822,10 @@ class ApricotVAE(ApricotData, VAE):
             z_N01_sample = Sampler()(z_mean, z_log_var)
 
             # Switch trainable weights to stage2
-            vae.stage2_encoder.trainable = True
-            vae.stage2_decoder.trainable = True
-            # vae.loggamma_z.trainable = True
-            vae.stage1_encoder.trainable = False
-            vae.stage1_decoder.trainable = False
-            # vae.loggamma_x.trainable = False
-
-            # vae.set_variable_trainable_status(name="loggamma_z", trainable=True)
-            # vae.set_variable_trainable_status(name="loggamma_x", trainable=False)
+            vae.encoder_stage1.trainable = False
+            vae.decoder_stage1.trainable = False
+            vae.encoder_stage2.trainable = True
+            vae.decoder_stage2.trainable = True
 
             # Compile model
             vae.compile(optimizer=self.optimizer_stage2)
@@ -866,6 +841,9 @@ class ApricotVAE(ApricotData, VAE):
                 verbose=self.verbose,
                 callbacks=self.tensorboard_callback,
             )
+
+            # Set model stage back to 1 for evaluation
+            vae.model_stage = "Stage1"
 
         return vae, fit_history, fit_history_stage2
 
@@ -1387,9 +1365,9 @@ class ApricotVAE(ApricotData, VAE):
         # # # Process input data for training and validation dataset objects
         # rf_training, rf_val, rf_test = self._input_processing_pipe(gc_spatial_data_np)
 
-        rf_training = self._get_mnist_data()
-        rf_training = rf_training[:6000]
-        rf_test = rf_val = None
+        rf_all = self._get_mnist_data()
+        rf_training = rf_all[:6000]
+        rf_test = rf_val = rf_all[6000:8000]  # None
 
         spatial_vae, fit_history, fit_history_stage2 = self._fit_spatial_vae(
             rf_training, rf_val
@@ -1400,6 +1378,7 @@ class ApricotVAE(ApricotData, VAE):
 
         # validation_score = spatial_vae.evaluate(rf_test, rf_test)
 
+        # pdb.set_trace()
         if rf_test is not None:
             # Get fid score
             fid_score_test = self._get_fid_score(
@@ -1419,28 +1398,31 @@ class ApricotVAE(ApricotData, VAE):
         # # Plot history of training and validation loss
         # self._plot_fit_history(fit_history)
 
-        # # Quality of fit
-        # self.plot_latent_space(spatial_vae, n=5)
-        # predictions, z_mean, z_log_var = spatial_vae.predict(rf_training)
-        # # print(spatial_vae.evaluate(rf_test, rf_test))
+        # Quality of fit
+        self.plot_latent_space(spatial_vae, n=5)
+        predictions, z_mean, z_log_var = spatial_vae.predict(rf_training)
+        # print(spatial_vae.evaluate(rf_test, rf_test))
 
-        # # Plot latent space
-        # self._plot_z_mean_in_2D(z_mean)
+        # Plot latent space
+        self._plot_z_mean_in_2D(z_mean)
 
         # # Random sample from latent space
         # # SEURAAVA ON ILMEISESTI VÄÄRÄ TAPA SAADA RANDOM SAMPPELI LATENTISTA AVARUUDESTA.
         # # HOMMAA VARTEN LIENEE KUVAUS SEURAAVASSA: https://blog.tensorflow.org/2019/03/variational-autoencoders-with.html
-        # z_random = spatial_vae.sampler(z_mean, z_log_var)
-        # reconstruction = spatial_vae.decoder(z_random)
+        z_random = spatial_vae.sampler(z_mean, z_log_var)
+        if self.model_type == "VAE":
+            reconstruction = spatial_vae.decoder(z_random)
+        elif self.model_type == "TwoStageVAE":
+            reconstruction = spatial_vae.decoder_stage1(z_random)
 
-        # # rf_validation_ds_np = self._to_numpy_array(rf_validation_ds)
-        # n_samples = 10
-        # self.plot_sample_images(
-        #     [rf_training, predictions, reconstruction.numpy()],
-        #     labels=["test", "pred", "randreco"],
-        #     n=n_samples,
-        # )
-        # # self.plot_sample_images(reconstruction.numpy())
+        # rf_validation_ds_np = self._to_numpy_array(rf_validation_ds)
+        n_samples = 10
+        self.plot_sample_images(
+            [rf_training, predictions, reconstruction.numpy()],
+            labels=["test", "pred", "randreco"],
+            n=n_samples,
+        )
+        # self.plot_sample_images(reconstruction.numpy())
 
         plt.show()
         # sys.exit()
