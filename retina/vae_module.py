@@ -1,5 +1,4 @@
 # Numerical
-import logging
 import numpy as np
 from scipy.ndimage import rotate, fourier_shift
 from scipy.interpolate import RectBivariateSpline
@@ -30,6 +29,7 @@ import time
 import datetime
 from pathlib import Path
 import shutil
+import logging
 
 
 class Sampler(layers.Layer):
@@ -197,12 +197,6 @@ class TwoStageVAE(keras.Model):
         # self._build_decoder2()
         # self._build_loss()
 
-        # tf.debugging.set_log_device_placement(True)
-
-        # Additional loss function parameters
-        # self.loggamma_x = tf.compat.v1.get_variable(
-        #     "loggamma_x", [], tf.float32, tf.zeros_initializer()
-        # )
         self.loggamma_x = tf.Variable(
             initial_value=0.0,
             trainable=True,
@@ -210,20 +204,6 @@ class TwoStageVAE(keras.Model):
             dtype=tf.float32,
             shape=[],
         )
-        # tf.Variable(
-        #     initial_value=None,
-        #     trainable=None,
-        #     validate_shape=True,
-        #     caching_device=None,
-        #     name=None,
-        #     variable_def=None,
-        #     dtype=None,
-        #     import_scope=None,
-        #     constraint=None,
-        #     synchronization=tf.VariableSynchronization.AUTO,
-        #     aggregation=tf.compat.v1.VariableAggregation.NONE,
-        #     shape=None
-        # )
 
         self.sampler = Sampler()
 
@@ -233,10 +213,6 @@ class TwoStageVAE(keras.Model):
         )
         self.kl_loss_tracker = keras.metrics.Mean(name="kl_loss")
         self.val_loss_tracker = keras.metrics.Mean(name="val_loss")
-        # self.loggamma_x_tracker = keras.metrics.Mean(name="loggamma_x")
-        # self.gamma_x_tracker = keras.metrics.Mean(name="gamma_x")
-        # self.loggamma_z_tracker = keras.metrics.Mean(name="loggamma_z")
-        # self.z_tracker = keras.metrics.Mean(name="z")
 
     def _build_encoder1(self):
         encoder_inputs = keras.Input(shape=self.image_shape)
@@ -248,10 +224,10 @@ class TwoStageVAE(keras.Model):
         x = layers.Dense(16, activation="relu")(x)
         z_mean = layers.Dense(self.latent_dim, name="z_mean")(x)
         z_log_var = layers.Dense(self.latent_dim, name="z_log_var")(x)
-        self.encoder = keras.Model(
-            encoder_inputs, [z_mean, z_log_var], name="stage1_encoder"
+        self.stage1_encoder = keras.Model(
+            inputs=encoder_inputs, outputs=[z_mean, z_log_var], name="stage1_encoder"
         )
-        self.encoder.summary()
+        self.stage1_encoder.summary()
 
     # def _build_encoder2(self):
     #     t = self.z
@@ -278,7 +254,7 @@ class TwoStageVAE(keras.Model):
         )
         decoder_outputs = layers.Conv2D(1, 3, activation="sigmoid", padding="same")(x)
         self.decoder = keras.Model(
-            latent_inputs, decoder_outputs, name="stage1_decoder"
+            inputs=latent_inputs, outputs=decoder_outputs, name="stage1_decoder"
         )
         self.decoder.summary()
 
@@ -340,8 +316,36 @@ class TwoStageVAE(keras.Model):
     #     ) / float(self.batch_size)
     #     self.loss2 = self.kl_loss2 + self.gen_loss2
 
+    # def extract_posterior(self, x):
+    # num_sample = np.shape(x)[0]
+    # num_iter = math.ceil(float(num_sample) / float(self.batch_size))
+    # x_extend = np.concatenate([x, x[0 : self.batch_size]], 0)
+    # mu_z, sd_z = [], []
+    # for i in range(num_iter):
+    #     mu_z_batch, sd_z_batch = sess.run(
+    #         [self.mu_z, self.sd_z],
+    #         feed_dict={
+    #             self.raw_x: x_extend[
+    #                 i * self.batch_size : (i + 1) * self.batch_size
+    #             ],
+    #             self.is_training: False,
+    #         },
+    #     )
+    #     mu_z.append(mu_z_batch)
+    #     sd_z.append(sd_z_batch)
+    # mu_z = np.concatenate(mu_z, 0)[0:num_sample]
+    # sd_z = np.concatenate(sd_z, 0)[0:num_sample]
+    # # tf.logging.info('Extract posterior: mu_z = %s, sd_z = %s', str(np.shape(mu_z)), str(np.shape(sd_z)))
+    # print(
+    #     "Extract posterior: mu_z = %s, sd_z = %s",
+    #     str(np.shape(mu_z)),
+    #     str(np.shape(sd_z)),
+    # )
+    # # tf.print('***Extract posterior: mu_z = %s, sd_z = %s' % (str(np.shape(mu_z)), str(np.shape(sd_z))))
+    # return mu_z, sd_z
+
     def call(self, inputs):
-        z_mean, z_log_var = self.encoder(inputs)
+        z_mean, z_log_var = self.stage1_encoder(inputs)
         z_random = self.sampler(z_mean, z_log_var)
         reconstruction = self.decoder(z_random)
         return reconstruction, z_mean, z_log_var
@@ -364,7 +368,7 @@ class TwoStageVAE(keras.Model):
         self.gamma_x = tf.exp(self.loggamma_x, name="gamma_x")
         batch_size = tf.cast(tf.shape(data)[0], tf.float32)
         with tf.GradientTape() as tape:
-            z_mean, z_log_var = self.encoder(data)
+            z_mean, z_log_var = self.stage1_encoder(data)
             z = self.sampler(z_mean, z_log_var)  # tsvae compatible
             reconstruction = self.decoder(z)
             # tf.reduce_sum(tf.square((self.x - self.x_hat) / self.gamma_x) / 2.0 + self.loggamma_x + HALF_LOG_TWO_PI) / float(self.batch_size)
@@ -426,7 +430,7 @@ class TwoStageVAE(keras.Model):
             tf.summary.histogram("z", z, step=self.optimizer.iterations)
 
         if self.val_data is not None:
-            val_z_mean, _ = self.encoder(self.val_data)
+            val_z_mean, _ = self.stage1_encoder(self.val_data)
             val_reconstruction = self.decoder(val_z_mean)
             val_loss = mse(self.val_data, val_reconstruction)
             self.val_loss_tracker.update_state(val_loss)
@@ -464,6 +468,7 @@ class ApricotVAE(ApricotData, VAE):
         self.vae_optimizer = keras.optimizers.Adam(
             learning_rate=0.0001
         )  # default lr = 0.001
+        self.model_type = "TwoStageVAE"  # TwoStageVAE or VAE
 
         self.image_shape = (
             28,
@@ -472,7 +477,7 @@ class ApricotVAE(ApricotData, VAE):
         )  # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
         # self.image_shape = (299, 299, 1) # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
         self.batch_size = 512  # None will take the batch size from test_split size. Note that the batch size affects training speed and loss values
-        self.epochs = 200
+        self.epochs = 10
         self.test_split = 0.2  # None or 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.verbose = 2  #  1 or 'auto' necessary for graph creation. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch.
 
@@ -697,12 +702,21 @@ class ApricotVAE(ApricotData, VAE):
         """
 
         # Build model
-        # vae = VAE(
-        #     image_shape=self.image_shape, latent_dim=self.latent_dim, val_data=val_data
-        # )
-        vae = TwoStageVAE(
-            image_shape=self.image_shape, latent_dim=self.latent_dim, val_data=val_data
-        )
+        if self.model_type == "VAE":
+            vae = VAE(
+                image_shape=self.image_shape,
+                latent_dim=self.latent_dim,
+                val_data=val_data,
+            )
+        elif self.model_type == "TwoStageVAE":
+            vae = TwoStageVAE(
+                image_shape=self.image_shape,
+                latent_dim=self.latent_dim,
+                val_data=val_data,
+            )
+        else:
+            raise ValueError("Model type not recognized, aborting...")
+
         # change beta
         vae.beta = self.beta
 
@@ -727,6 +741,14 @@ class ApricotVAE(ApricotData, VAE):
             verbose=self.verbose,
             callbacks=self.tensorboard_callback,
         )
+
+        # Extract posterior. For tf2, model.predict -method handles the batch size.
+        # Thus no separate loop is needed as in tf1 version in method extract_posterior
+        if self.model_type == "TwoStageVAE":
+            z_mean, z_log_var = vae.stage1_encoder.predict(
+                data, batch_size=self.batch_size
+            )
+        pdb.set_trace()
 
         return vae, fit_history
 
