@@ -318,9 +318,9 @@ class TwoStageVAE(keras.Model):
         mse = keras.losses.MeanSquaredError(
             reduction=tf.keras.losses.Reduction.SUM
         )  # mse : loss = square(y_true - y_pred)
+        batch_size = tf.cast(tf.shape(data)[0], tf.float32)
         if self.model_stage == "Stage1":
             self.gamma_x = tf.exp(self.encoder_stage1.loggamma_x, name="gamma_x")
-            batch_size = tf.cast(tf.shape(data)[0], tf.float32)
             with tf.GradientTape() as tape:
                 z_mean, z_log_var = self.encoder_stage1(data)
                 z = self.sampler(z_mean, z_log_var)  # tsvae compatible
@@ -402,7 +402,6 @@ class TwoStageVAE(keras.Model):
         elif self.model_stage == "Stage2":
 
             self.gamma_z = tf.exp(self.encoder_stage2.loggamma_z, name="gamma_z")
-            batch_size = tf.cast(tf.shape(data)[0], tf.float32)
 
             with tf.GradientTape() as tape:
                 u_mean, u_log_var = self.encoder_stage2(data)
@@ -1357,6 +1356,44 @@ class ApricotVAE(ApricotData, VAE):
 
         return ssim_score.numpy().mean()
 
+    def _generate_from_latent_space(self, model, n_samples=10):
+
+        if self.model_type == "VAE":
+            z_random = np.random.normal(0, 1, [n_samples, self.latent_dim])
+            reconstruction = model.decoder(z_random)
+        elif self.model_type == "TwoStageVAE":
+            model.model_stage = "Stage2"
+            # u ~ N(0, I)
+            u_random = np.random.normal(0, 1, [n_samples, self.latent_dim])
+            # z ~ N(f_2(u), \gamma_z I)
+            z_hat = model.decoder_stage2.predict(u_random)
+            gamma_z = tf.exp(model.encoder_stage2.loggamma_z, name="gamma_z")
+
+            # z, gamma_z = sess.run([self.z_hat, self.gamma_z], feed_dict={self.u: u, self.is_training: False})
+            z_random = z_hat + gamma_z * np.random.normal(
+                0, 1, [n_samples, self.latent_dim]
+            )
+            reconstruction = model.decoder_stage1(z_random)
+
+        return reconstruction
+        #     def generate(self, sess, num_sample, stage=2):
+        # num_iter = math.ceil(float(num_sample) / float(self.batch_size))
+        # gen_samples = []
+        # for i in range(num_iter):
+        #     if stage == 2:
+        #         # u ~ N(0, I)
+        #         u = np.random.normal(0, 1, [self.batch_size, self.latent_dim])
+        #         # z ~ N(f_2(u), \gamma_z I)
+        #         z, gamma_z = sess.run([self.z_hat, self.gamma_z], feed_dict={self.u: u, self.is_training: False})
+        #         z = z + gamma_z * np.random.normal(0, 1, [self.batch_size, self.latent_dim])
+        #     else:
+        #         z = np.random.normal(0, 1, [self.batch_size, self.latent_dim])
+        #     # x = f_1(z)
+        #     x = sess.run(self.x_hat, feed_dict={self.z: z, self.is_training: False})
+        #     gen_samples.append(x)
+        # gen_samples = np.concatenate(gen_samples, 0)
+        # return gen_samples[0:num_sample]
+
     def _fit_all(self):
 
         # # Get numpy array of data in correct dimensions
@@ -1366,8 +1403,8 @@ class ApricotVAE(ApricotData, VAE):
         # rf_training, rf_val, rf_test = self._input_processing_pipe(gc_spatial_data_np)
 
         rf_all = self._get_mnist_data()
-        rf_training = rf_all[:6000]
-        rf_test = rf_val = rf_all[6000:8000]  # None
+        rf_training = rf_all[:60000]
+        rf_test = rf_val = rf_all[60000:62000]  # None
 
         spatial_vae, fit_history, fit_history_stage2 = self._fit_spatial_vae(
             rf_training, rf_val
@@ -1392,37 +1429,34 @@ class ApricotVAE(ApricotData, VAE):
             )
             print(f"SSIM score on test data: {ssim_score_test}")
 
-        # fid_score_train = self._get_fid_score(spatial_vae, rf_training, image_range=(0, 1))
-        # print(f'FID score on training data: {fid_score_train}')
-
-        # # Plot history of training and validation loss
-        # self._plot_fit_history(fit_history)
+        # Plot history of training and validation loss
+        self._plot_fit_history(fit_history)
+        self._plot_fit_history(fit_history_stage2)
 
         # Quality of fit
         self.plot_latent_space(spatial_vae, n=5)
-        predictions, z_mean, z_log_var = spatial_vae.predict(rf_training)
-        # print(spatial_vae.evaluate(rf_test, rf_test))
+
+        # Get a random sample of size n_samples from the data
+        n_samples = 1000
+
+        random_sample = np.random.choice(rf_training.shape[0], n_samples, replace=False)
+        rf_sample = rf_training[random_sample]
+
+        predictions, z_mean, z_log_var = spatial_vae.predict(rf_sample)
 
         # Plot latent space
         self._plot_z_mean_in_2D(z_mean)
 
         # # Random sample from latent space
-        # # SEURAAVA ON ILMEISESTI VÄÄRÄ TAPA SAADA RANDOM SAMPPELI LATENTISTA AVARUUDESTA.
-        # # HOMMAA VARTEN LIENEE KUVAUS SEURAAVASSA: https://blog.tensorflow.org/2019/03/variational-autoencoders-with.html
-        z_random = spatial_vae.sampler(z_mean, z_log_var)
-        if self.model_type == "VAE":
-            reconstruction = spatial_vae.decoder(z_random)
-        elif self.model_type == "TwoStageVAE":
-            reconstruction = spatial_vae.decoder_stage1(z_random)
+        reconstruction = self._generate_from_latent_space(
+            model=spatial_vae, n_samples=n_samples
+        )
 
         # rf_validation_ds_np = self._to_numpy_array(rf_validation_ds)
-        n_samples = 10
         self.plot_sample_images(
-            [rf_training, predictions, reconstruction.numpy()],
+            [rf_sample, predictions, reconstruction.numpy()],
             labels=["test", "pred", "randreco"],
-            n=n_samples,
+            n=10,
         )
-        # self.plot_sample_images(reconstruction.numpy())
 
         plt.show()
-        # sys.exit()
