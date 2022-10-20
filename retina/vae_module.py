@@ -193,14 +193,21 @@ class TwoStageVAE(keras.Model):
 
         self._build_encoder1()
         self._build_decoder1()
-        # self._build_encoder2()
-        # self._build_decoder2()
+        self._build_encoder2()
+        self._build_decoder2()
         # self._build_loss()
 
         self.loggamma_x = tf.Variable(
             initial_value=0.0,
             trainable=True,
             name="loggamma_x",
+            dtype=tf.float32,
+            shape=[],
+        )
+        self.loggamma_z = tf.Variable(
+            initial_value=0.0,
+            trainable=True,
+            name="loggamma_z",
             dtype=tf.float32,
             shape=[],
         )
@@ -213,6 +220,13 @@ class TwoStageVAE(keras.Model):
         )
         self.kl_loss_tracker = keras.metrics.Mean(name="kl_loss")
         self.val_loss_tracker = keras.metrics.Mean(name="val_loss")
+
+        self.total_loss_stage2_tracker = keras.metrics.Mean(name="total_loss_stage2")
+        self.reconstruction_loss_stage2_tracker = keras.metrics.Mean(
+            name="reconstruction_loss_stage2"
+        )
+        self.kl_loss_stage2_tracker = keras.metrics.Mean(name="kl_loss_stage2")
+        self.val_loss_stage2_tracker = keras.metrics.Mean(name="val_loss_stage2")
 
     def _build_encoder1(self):
         encoder_inputs = keras.Input(shape=self.image_shape)
@@ -229,18 +243,17 @@ class TwoStageVAE(keras.Model):
         )
         self.stage1_encoder.summary()
 
-    # def _build_encoder2(self):
-    #     t = self.z
-    #     for i in range(self.second_depth):
-    #         t = tf.layers.dense(t, self.second_dim, tf.nn.relu, name="fc" + str(i))
-    #     t = tf.concat([self.z, t], -1)
-
-    #     self.mu_u = tf.layers.dense(t, self.latent_dim, name="mu_u")
-    #     self.logsd_u = tf.layers.dense(t, self.latent_dim, name="logsd_u")
-    #     self.sd_u = tf.exp(self.logsd_u)
-    #     self.u = self.mu_u + self.sd_u * tf.random_normal(
-    #         [self.batch_size, self.latent_dim]
-    #     )
+    def _build_encoder2(self):
+        encoder_inputs = keras.Input(shape=self.latent_dim)
+        x = layers.Dense(16, activation="relu", name="fc1")(encoder_inputs)
+        x = layers.Dense(16, activation="relu", name="fc2")(x)
+        x = layers.Dense(16, activation="relu", name="fc3")(x)
+        u_mean = layers.Dense(self.latent_dim, name="u_mean")(x)
+        u_log_var = layers.Dense(self.latent_dim, name="u_log_var")(x)
+        self.stage2_encoder = keras.Model(
+            inputs=encoder_inputs, outputs=[u_mean, u_log_var], name="stage2_encoder"
+        )
+        self.stage2_encoder.summary()
 
     def _build_decoder1(self):
         latent_inputs = keras.Input(shape=(self.latent_dim,))
@@ -253,101 +266,26 @@ class TwoStageVAE(keras.Model):
             x
         )
         decoder_outputs = layers.Conv2D(1, 3, activation="sigmoid", padding="same")(x)
-        self.decoder = keras.Model(
+        self.stage1_decoder = keras.Model(
             inputs=latent_inputs, outputs=decoder_outputs, name="stage1_decoder"
         )
-        self.decoder.summary()
+        self.stage1_decoder.summary()
 
-    # def _build_decoder2(self):
-    #     t = self.u
-    #     for i in range(self.second_depth):
-    #         t = tf.layers.dense(t, self.second_dim, tf.nn.relu, name="fc" + str(i))
-    #     t = tf.concat([self.u, t], -1)
-
-    #     self.z_hat = tf.layers.dense(t, self.latent_dim, name="z_hat")
-    #     self.loggamma_z = tf.get_variable(
-    #         "loggamma_z", [], tf.float32, tf.zeros_initializer()
-    #     )
-    #     self.gamma_z = tf.exp(self.loggamma_z)
-
-    # def _build_loss(self):
-    #     HALF_LOG_TWO_PI = 0.91893  # np.log(2*np.pi)*0.5
-
-    #     # self.kl_loss1 = (
-    #     #     tf.reduce_sum(
-    #     #         tf.square(self.mu_z) + tf.square(self.sd_z) - 2 * self.logsd_z - 1
-    #     #     )
-    #     #     / 2.0
-    #     #     / float(self.batch_size)
-    #     # )
-    #     self.kl_loss1 = tf.reduce_sum(
-    #         -0.5 * (1 + 2 * self.logsd_z - tf.square(self.mu_z) - tf.square(self.sd_z))
-    #     )
-
-    #     self.kl_loss2 = tf.reduce_sum(
-    #         -0.5
-    #         * (1 + self.z_log_var - tf.square(self.z_mean) - tf.exp(self.z_log_var))
-    #     )
-
-    #     if not self.cross_entropy_loss:
-    #         self.gen_loss1 = tf.reduce_sum(
-    #             tf.square((self.x - self.x_hat) / self.gamma_x) / 2.0
-    #             + self.loggamma_x
-    #             + HALF_LOG_TWO_PI
-    #         ) / float(self.batch_size)
-    #     else:
-    #         self.gen_loss1 = -tf.reduce_sum(
-    #             self.x * tf.log(tf.maximum(self.x_hat, 1e-8))
-    #             + (1 - self.x) * tf.log(tf.maximum(1 - self.x_hat, 1e-8))
-    #         ) / float(self.batch_size)
-    #     self.loss1 = self.kl_loss1 + self.gen_loss1
-
-    #     self.kl_loss2 = (
-    #         tf.reduce_sum(
-    #             tf.square(self.mu_u) + tf.square(self.sd_u) - 2 * self.logsd_u - 1
-    #         )
-    #         / 2.0
-    #         / float(self.batch_size)
-    #     )
-    #     self.gen_loss2 = tf.reduce_sum(
-    #         tf.square((self.z - self.z_hat) / self.gamma_z) / 2.0
-    #         + self.loggamma_z
-    #         + HALF_LOG_TWO_PI
-    #     ) / float(self.batch_size)
-    #     self.loss2 = self.kl_loss2 + self.gen_loss2
-
-    # def extract_posterior(self, x):
-    # num_sample = np.shape(x)[0]
-    # num_iter = math.ceil(float(num_sample) / float(self.batch_size))
-    # x_extend = np.concatenate([x, x[0 : self.batch_size]], 0)
-    # mu_z, sd_z = [], []
-    # for i in range(num_iter):
-    #     mu_z_batch, sd_z_batch = sess.run(
-    #         [self.mu_z, self.sd_z],
-    #         feed_dict={
-    #             self.raw_x: x_extend[
-    #                 i * self.batch_size : (i + 1) * self.batch_size
-    #             ],
-    #             self.is_training: False,
-    #         },
-    #     )
-    #     mu_z.append(mu_z_batch)
-    #     sd_z.append(sd_z_batch)
-    # mu_z = np.concatenate(mu_z, 0)[0:num_sample]
-    # sd_z = np.concatenate(sd_z, 0)[0:num_sample]
-    # # tf.logging.info('Extract posterior: mu_z = %s, sd_z = %s', str(np.shape(mu_z)), str(np.shape(sd_z)))
-    # print(
-    #     "Extract posterior: mu_z = %s, sd_z = %s",
-    #     str(np.shape(mu_z)),
-    #     str(np.shape(sd_z)),
-    # )
-    # # tf.print('***Extract posterior: mu_z = %s, sd_z = %s' % (str(np.shape(mu_z)), str(np.shape(sd_z))))
-    # return mu_z, sd_z
+    def _build_decoder2(self):
+        latent_inputs = keras.Input(shape=(self.latent_dim,))
+        x = layers.Dense(16, activation="relu", name="fc1")(latent_inputs)
+        x = layers.Dense(16, activation="relu", name="fc2")(x)
+        x = layers.Dense(16, activation="relu", name="fc3")(x)
+        z_hat = layers.Dense(self.latent_dim, name="z_hat")(x)
+        self.stage2_decoder = keras.Model(
+            inputs=latent_inputs, outputs=z_hat, name="stage2_decoder"
+        )
+        self.stage2_decoder.summary()
 
     def call(self, inputs):
         z_mean, z_log_var = self.stage1_encoder(inputs)
         z_random = self.sampler(z_mean, z_log_var)
-        reconstruction = self.decoder(z_random)
+        reconstruction = self.stage1_decoder(z_random)
         return reconstruction, z_mean, z_log_var
 
     @property
@@ -361,89 +299,183 @@ class TwoStageVAE(keras.Model):
 
     # @tf.function
     def train_step(self, data):
+        HALF_LOG_TWO_PI = 0.91893  # np.log(2*np.pi)*0.5
         mse = keras.losses.MeanSquaredError(
             reduction=tf.keras.losses.Reduction.SUM
         )  # mse : loss = square(y_true - y_pred)
-        HALF_LOG_TWO_PI = 0.91893  # np.log(2*np.pi)*0.5
-        self.gamma_x = tf.exp(self.loggamma_x, name="gamma_x")
-        batch_size = tf.cast(tf.shape(data)[0], tf.float32)
-        with tf.GradientTape() as tape:
-            z_mean, z_log_var = self.stage1_encoder(data)
-            z = self.sampler(z_mean, z_log_var)  # tsvae compatible
-            reconstruction = self.decoder(z)
-            # tf.reduce_sum(tf.square((self.x - self.x_hat) / self.gamma_x) / 2.0 + self.loggamma_x + HALF_LOG_TWO_PI) / float(self.batch_size)
-            reconstruction_loss = (
-                tf.reduce_sum(
-                    (
-                        tf.square((data - reconstruction) / self.gamma_x) / 2.0
-                        + self.loggamma_x
-                        + HALF_LOG_TWO_PI
+        if self.model_stage == "Stage1":
+            self.gamma_x = tf.exp(self.loggamma_x, name="gamma_x")
+            batch_size = tf.cast(tf.shape(data)[0], tf.float32)
+            with tf.GradientTape() as tape:
+                z_mean, z_log_var = self.stage1_encoder(data)
+                z = self.sampler(z_mean, z_log_var)  # tsvae compatible
+                reconstruction = self.stage1_decoder(z)
+                # tf.reduce_sum(tf.square((self.x - self.x_hat) / self.gamma_x) / 2.0 + self.loggamma_x + HALF_LOG_TWO_PI) / float(self.batch_size)
+                reconstruction_loss = (
+                    tf.reduce_sum(
+                        (
+                            tf.square((data - reconstruction) / self.gamma_x) / 2.0
+                            + self.loggamma_x
+                            + HALF_LOG_TWO_PI
+                        )
                     )
+                    / batch_size
                 )
-                / batch_size
+
+                # tf.reduce_sum(tf.square(self.mu_z) + tf.square(self.sd_z) - 2 * self.logsd_z - 1) / 2.0 / float(self.batch_size)
+                kl_loss = (
+                    -0.5
+                    * tf.reduce_sum(
+                        1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
+                    )
+                    / batch_size
+                )  # tsvae compatible
+                total_loss = reconstruction_loss + self.beta * kl_loss
+
+            grads = tape.gradient(total_loss, self.trainable_weights)
+            self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
+
+            self.total_loss_tracker.update_state(total_loss)
+            self.reconstruction_loss_tracker.update_state(reconstruction_loss)
+            self.kl_loss_tracker.update_state(kl_loss)
+            total_loss = self.total_loss_tracker.result()
+            reconstruction_loss = self.reconstruction_loss_tracker.result()
+            kl_loss = self.kl_loss_tracker.result()
+
+            # log for tensorboard
+            with self.summary_writer.as_default():
+                tf.summary.scalar(
+                    "total_loss", total_loss, step=self.optimizer.iterations
+                )
+                tf.summary.scalar(
+                    "reconstruction_loss",
+                    reconstruction_loss,
+                    step=self.optimizer.iterations,
+                )
+                tf.summary.scalar("kl_loss", kl_loss, step=self.optimizer.iterations)
+                tf.summary.scalar(
+                    "loggamma_x", self.loggamma_x, step=self.optimizer.iterations
+                )
+                tf.summary.scalar(
+                    "gamma_x", self.gamma_x, step=self.optimizer.iterations
+                )
+                tf.summary.histogram("z_mean", z_mean, step=self.optimizer.iterations)
+                tf.summary.histogram(
+                    "z_log_var", z_log_var, step=self.optimizer.iterations
+                )
+                tf.summary.histogram("z", z, step=self.optimizer.iterations)
+
+            # Validation. Note the different loss function -- no gamma_x.
+            # This is, however, compatible with the validation loss of VAE
+            if self.val_data is not None:
+                val_z_mean, _ = self.stage1_encoder(self.val_data)
+                val_reconstruction = self.stage1_decoder(val_z_mean)
+                val_loss = mse(self.val_data, val_reconstruction)
+                self.val_loss_tracker.update_state(val_loss)
+                val_loss = self.val_loss_tracker.result()
+            else:
+                val_loss = 0.0
+
+            return {
+                "total_loss": total_loss,
+                "reconstruction_loss": reconstruction_loss,
+                "kl_loss": kl_loss,
+                "val_reconstruction_loss": val_loss,
+            }
+
+        elif self.model_stage == "Stage2":
+
+            self.gamma_z = tf.exp(self.loggamma_z, name="gamma_z")
+            batch_size = tf.cast(tf.shape(data)[0], tf.float32)
+
+            with tf.GradientTape() as tape:
+                u_mean, u_log_var = self.stage2_encoder(data)
+                u = self.sampler(u_mean, u_log_var)
+                reconstruction = self.stage2_decoder(u)
+                reconstruction_loss_stage2 = (
+                    tf.reduce_sum(
+                        (
+                            tf.square((data - reconstruction) / self.gamma_z) / 2.0
+                            + self.loggamma_z
+                            + HALF_LOG_TWO_PI
+                        )
+                    )
+                    / batch_size
+                )
+
+                # tf.reduce_sum(tf.square(self.mu_z) + tf.square(self.sd_z) - 2 * self.logsd_z - 1) / 2.0 / float(self.batch_size)
+                kl_loss_stage2 = (
+                    -0.5
+                    * tf.reduce_sum(
+                        1 + u_log_var - tf.square(u_mean) - tf.exp(u_log_var)
+                    )
+                    / batch_size
+                )
+                total_loss_stage2 = (
+                    reconstruction_loss_stage2 + self.beta * kl_loss_stage2
+                )
+
+            grads = tape.gradient(total_loss_stage2, self.trainable_weights)
+            self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
+
+            self.total_loss_stage2_tracker.update_state(total_loss_stage2)
+            self.reconstruction_loss_stage2_tracker.update_state(
+                reconstruction_loss_stage2
             )
-
-            # reconstruction_loss = mse(data, reconstruction)
-            # tf.reduce_sum(tf.square(self.mu_z) + tf.square(self.sd_z) - 2 * self.logsd_z - 1) / 2.0 / float(self.batch_size)
-            kl_loss = (
-                -0.5
-                * tf.reduce_sum(1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
-                / batch_size
-            )  # tsvae compatible
-            total_loss = reconstruction_loss + self.beta * kl_loss
-
-        grads = tape.gradient(total_loss, self.trainable_weights)
-        self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
-
-        # update gamma_x
-        # self.gamma_x.assign(tf.exp(self.loggamma_x))
-        # self.gamma_x = tf.exp(self.loggamma_x)
-
-        # logging.info(f"reconstruction_loss_tmp.shape = {reconstruction_loss_tmp.shape}")
-        # logging.info(f"reconstruction_loss.shape = {reconstruction_loss.shape}")
-        # self.loggamma_x_tracker.update_state(self.loggamma_x)
-        # self.gamma_x_tracker.update_state(self.gamma_x)
-        # self.z_tracker.update_state(z)
-        # self.loggamma_z_tracker.update_state(self.loggamma_z)
-        self.total_loss_tracker.update_state(total_loss)
-        self.reconstruction_loss_tracker.update_state(reconstruction_loss)
-        self.kl_loss_tracker.update_state(kl_loss)
-        total_loss = self.total_loss_tracker.result()
-        reconstruction_loss = self.reconstruction_loss_tracker.result()
-        kl_loss = self.kl_loss_tracker.result()
-
-        # log for tensorboard
-        with self.summary_writer.as_default():
-            tf.summary.scalar("total_loss", total_loss, step=self.optimizer.iterations)
-            tf.summary.scalar(
-                "reconstruction_loss",
-                reconstruction_loss,
-                step=self.optimizer.iterations,
+            self.kl_loss_stage2_tracker.update_state(kl_loss_stage2)
+            total_loss_stage2 = self.total_loss_stage2_tracker.result()
+            reconstruction_loss_stage2 = (
+                self.reconstruction_loss_stage2_tracker.result()
             )
-            tf.summary.scalar("kl_loss", kl_loss, step=self.optimizer.iterations)
-            tf.summary.scalar(
-                "loggamma_x", self.loggamma_x, step=self.optimizer.iterations
-            )
-            tf.summary.scalar("gamma_x", self.gamma_x, step=self.optimizer.iterations)
-            tf.summary.histogram("z_mean", z_mean, step=self.optimizer.iterations)
-            tf.summary.histogram("z_log_var", z_log_var, step=self.optimizer.iterations)
-            tf.summary.histogram("z", z, step=self.optimizer.iterations)
+            kl_loss_stage2 = self.kl_loss_stage2_tracker.result()
 
-        if self.val_data is not None:
-            val_z_mean, _ = self.stage1_encoder(self.val_data)
-            val_reconstruction = self.decoder(val_z_mean)
-            val_loss = mse(self.val_data, val_reconstruction)
-            self.val_loss_tracker.update_state(val_loss)
-            val_loss = self.val_loss_tracker.result()
-        else:
-            val_loss = 0.0
+            # log for tensorboard
+            with self.summary_writer.as_default():
+                tf.summary.scalar(
+                    "total_loss_stage2",
+                    total_loss_stage2,
+                    step=self.optimizer.iterations,
+                )
+                tf.summary.scalar(
+                    "reconstruction_loss_stage2",
+                    reconstruction_loss_stage2,
+                    step=self.optimizer.iterations,
+                )
+                tf.summary.scalar(
+                    "kl_loss_stage2",
+                    kl_loss_stage2,
+                    step=self.optimizer.iterations,
+                )
+                tf.summary.scalar(
+                    "loggamma_z", self.loggamma_z, step=self.optimizer.iterations
+                )
+                tf.summary.scalar(
+                    "gamma_z", self.gamma_z, step=self.optimizer.iterations
+                )
+                tf.summary.histogram("u_mean", u_mean, step=self.optimizer.iterations)
+                tf.summary.histogram(
+                    "u_log_var", u_log_var, step=self.optimizer.iterations
+                )
+                tf.summary.histogram("u", u, step=self.optimizer.iterations)
 
-        return {
-            "total_loss": total_loss,
-            "reconstruction_loss": reconstruction_loss,
-            "kl_loss": kl_loss,
-            "val_reconstruction_loss": val_loss,
-        }
+            # For the second stage, validation data equals the posterior
+            # of the image validation data from the first stage.
+            if self.val_data is not None:
+                val_z_mean, _ = self.stage1_encoder(self.val_data)
+                val_u_mean, _ = self.stage2_encoder(val_z_mean)
+                val_reconstruction = self.stage2_decoder(val_u_mean)
+                val_loss = mse(val_z_mean, val_reconstruction)
+                self.val_loss_stage2_tracker.update_state(val_loss)
+                val_loss_stage2 = self.val_loss_stage2_tracker.result()
+            else:
+                val_loss_stage2 = 0.0
+
+            return {
+                "total_loss_stage2": total_loss_stage2,
+                "reconstruction_loss_stage2": reconstruction_loss_stage2,
+                "kl_loss_stage2": kl_loss_stage2,
+                "val_reconstruction_loss_stage2": val_loss_stage2,
+            }
 
 
 class ApricotVAE(ApricotData, VAE):
@@ -465,10 +497,14 @@ class ApricotVAE(ApricotData, VAE):
         self.latent_dim = 32  # 2
         self.latent_space_plot_scale = 4  # Scale for plotting latent space
         self.beta = 1  # Beta parameter for KL loss. Overrides VAE class beta parameter
-        self.vae_optimizer = keras.optimizers.Adam(
+
+        self.model_type = "TwoStageVAE"  # TwoStageVAE or VAE
+        self.optimizer_stage1 = keras.optimizers.Adam(
             learning_rate=0.0001
         )  # default lr = 0.001
-        self.model_type = "TwoStageVAE"  # TwoStageVAE or VAE
+        self.optimizer_stage2 = keras.optimizers.Adam(
+            learning_rate=0.0001
+        )  # Only used for TwoStageVAE
 
         self.image_shape = (
             28,
@@ -477,7 +513,9 @@ class ApricotVAE(ApricotData, VAE):
         )  # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
         # self.image_shape = (299, 299, 1) # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
         self.batch_size = 512  # None will take the batch size from test_split size. Note that the batch size affects training speed and loss values
+        self.batch_size_stage2 = 512  # Only used for TwoStageVAE
         self.epochs = 10
+        self.epochs_stage2 = 10  # Only used for TwoStageVAE
         self.test_split = 0.2  # None or 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.verbose = 2  #  1 or 'auto' necessary for graph creation. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch.
 
@@ -720,9 +758,6 @@ class ApricotVAE(ApricotData, VAE):
         # change beta
         vae.beta = self.beta
 
-        # Compile model
-        vae.compile(optimizer=self.vae_optimizer)
-
         return vae
 
     def _fit_spatial_vae(self, data, val_data):
@@ -731,6 +766,12 @@ class ApricotVAE(ApricotData, VAE):
 
         # Attach summary file writer to model object
         vae.summary_writer = self.summary_writer
+
+        if self.model_type == "TwoStageVAE":
+            vae.model_stage = "Stage1"
+
+        # Compile model
+        vae.compile(optimizer=self.optimizer_stage1)
 
         # Fit model
         fit_history = vae.fit(
@@ -745,8 +786,31 @@ class ApricotVAE(ApricotData, VAE):
         # Extract posterior. For tf2, model.predict -method handles the batch size.
         # Thus no separate loop is needed as in tf1 version in method extract_posterior
         if self.model_type == "TwoStageVAE":
+            vae.model_stage = "Stage2"
             z_mean, z_log_var = vae.stage1_encoder.predict(
                 data, batch_size=self.batch_size
+            )
+
+            # We take a normally distributed sample from the latent space
+            # Note that SD = np.exp(0.5 * np.log(VAR))
+            n_samples = z_mean.shape[0]
+            z_N01_sample = z_mean + np.exp(0.5 * z_log_var) * np.random.normal(
+                0, 1, [n_samples, self.latent_dim]
+            )  # sample from the latent space
+
+            # Compile model
+            vae.compile(optimizer=self.optimizer_stage2)
+
+            # Fit model, second stage. Now the data
+            # comprises the normally distributed sample from the
+            # latent space of the first stage
+            fit_history_stage2 = vae.fit(
+                z_N01_sample,
+                epochs=self.epochs_stage2,
+                batch_size=self.batch_size_stage2,
+                shuffle=True,
+                verbose=self.verbose,
+                callbacks=self.tensorboard_callback,
             )
         pdb.set_trace()
 
@@ -1273,7 +1337,6 @@ class ApricotVAE(ApricotData, VAE):
         rf_training = self._get_mnist_data()
         rf_training = rf_training[:6000]
         rf_test = rf_val = None
-        # pdb.set_trace()
 
         spatial_vae, fit_history = self._fit_spatial_vae(rf_training, rf_val)
         # spatial_vae, validation_data, fit_history = self._k_fold_cross_validation(rf_training, n_folds=5)
@@ -1297,8 +1360,6 @@ class ApricotVAE(ApricotData, VAE):
 
         # fid_score_train = self._get_fid_score(spatial_vae, rf_training, image_range=(0, 1))
         # print(f'FID score on training data: {fid_score_train}')
-
-        # pdb.set_trace()
 
         # # Plot history of training and validation loss
         # self._plot_fit_history(fit_history)
