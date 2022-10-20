@@ -515,7 +515,7 @@ class ApricotVAE(ApricotData, VAE):
         self.latent_space_plot_scale = 4  # Scale for plotting latent space
         self.beta = 1  # Beta parameter for KL loss. Overrides VAE class beta parameter
 
-        self.model_type = "TwoStageVAE"  # TwoStageVAE or VAE
+        self.model_type = "VAE"  # TwoStageVAE or VAE
         self.optimizer_stage1 = keras.optimizers.Adam(
             learning_rate=0.0001
         )  # default lr = 0.001
@@ -531,6 +531,14 @@ class ApricotVAE(ApricotData, VAE):
         # self.image_shape = (299, 299, 1) # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
         self.batch_size = 512  # None will take the batch size from test_split size. Note that the batch size affects training speed and loss values
         self.batch_size_stage2 = 512  # Only used for TwoStageVAE
+
+        # TÄHÄN JÄIT: TAVALLISEN VAEN GENERAATIO VARMAAN HYÖTYISI
+        # BATCH NORMALISAATIOSTA TAI MUUSTA TAVASTA JOSSA
+        # RANDOM SAMPPELI OSUISI PAREMMIN LATENTTIIN AVARUUTEEN
+        # TSEKKAA KOODI, TSEKKAA TB PARAMETRIT RISTIIN TF1 VERSION KANSSA
+        # ELI HARKITSE BATCH NORM LAYER MOLEMPIIN MALLEIIHN
+        # KATSO SAATKO YLEISTETTYÄ AIKAAN
+
         self.epochs = 10
         self.epochs_stage2 = 20  # Only used for TwoStageVAE
         self.test_split = 0.2  # None or 0.2  # Split data for validation and testing (both will take this fraction of data)
@@ -844,7 +852,9 @@ class ApricotVAE(ApricotData, VAE):
             # Set model stage back to 1 for evaluation
             vae.model_stage = "Stage1"
 
-        return vae, fit_history, fit_history_stage2
+            return vae, fit_history, fit_history_stage2
+
+        return vae, fit_history
 
     def _get_spatial_apricot_data(self):
         """
@@ -1227,7 +1237,8 @@ class ApricotVAE(ApricotData, VAE):
         plt.xlabel("epoch")
         plt.legend(keys, loc="upper left")
 
-        val_min = min(fit_history.history["val_reconstruction_loss"])
+        [v_l_key] = [v for v in keys if "val_reconstruction_loss" in v]
+        val_min = min(fit_history.history[v_l_key])
         # plot horizontal dashed red line at the minimum of val_reconstruction_loss
         plt.axhline(val_min, color="r", linestyle="dashed", linewidth=1)
 
@@ -1376,23 +1387,6 @@ class ApricotVAE(ApricotData, VAE):
             reconstruction = model.decoder_stage1(z_random)
 
         return reconstruction
-        #     def generate(self, sess, num_sample, stage=2):
-        # num_iter = math.ceil(float(num_sample) / float(self.batch_size))
-        # gen_samples = []
-        # for i in range(num_iter):
-        #     if stage == 2:
-        #         # u ~ N(0, I)
-        #         u = np.random.normal(0, 1, [self.batch_size, self.latent_dim])
-        #         # z ~ N(f_2(u), \gamma_z I)
-        #         z, gamma_z = sess.run([self.z_hat, self.gamma_z], feed_dict={self.u: u, self.is_training: False})
-        #         z = z + gamma_z * np.random.normal(0, 1, [self.batch_size, self.latent_dim])
-        #     else:
-        #         z = np.random.normal(0, 1, [self.batch_size, self.latent_dim])
-        #     # x = f_1(z)
-        #     x = sess.run(self.x_hat, feed_dict={self.z: z, self.is_training: False})
-        #     gen_samples.append(x)
-        # gen_samples = np.concatenate(gen_samples, 0)
-        # return gen_samples[0:num_sample]
 
     def _fit_all(self):
 
@@ -1404,18 +1398,14 @@ class ApricotVAE(ApricotData, VAE):
 
         rf_all = self._get_mnist_data()
         rf_training = rf_all[:60000]
-        rf_test = rf_val = rf_all[60000:62000]  # None
+        rf_test = rf_val = rf_all[60000:61000]  # None
 
-        spatial_vae, fit_history, fit_history_stage2 = self._fit_spatial_vae(
-            rf_training, rf_val
-        )
+        # spatial_vae, fit_history, fit_history_stage2 = self._fit_spatial_vae(
+        #     rf_training, rf_val
+        # )
+        spatial_vae, fit_history = self._fit_spatial_vae(rf_training, rf_val)
         # spatial_vae, validation_data, fit_history = self._k_fold_cross_validation(rf_training, n_folds=5)
 
-        # print(f'Validation score: {validation_data[0]} +/- {validation_data[1]}')
-
-        # validation_score = spatial_vae.evaluate(rf_test, rf_test)
-
-        # pdb.set_trace()
         if rf_test is not None:
             # Get fid score
             fid_score_test = self._get_fid_score(
@@ -1431,7 +1421,7 @@ class ApricotVAE(ApricotData, VAE):
 
         # Plot history of training and validation loss
         self._plot_fit_history(fit_history)
-        self._plot_fit_history(fit_history_stage2)
+        # self._plot_fit_history(fit_history_stage2)
 
         # Quality of fit
         self.plot_latent_space(spatial_vae, n=5)
