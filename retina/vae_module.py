@@ -539,7 +539,7 @@ class ApricotVAE(ApricotData, VAE):
         # ELI HARKITSE BATCH NORM LAYER MOLEMPIIN MALLEIIHN
         # KATSO SAATKO YLEISTETTYÄ AIKAAN
 
-        self.epochs = 10
+        self.epochs = 2000
         self.epochs_stage2 = 20  # Only used for TwoStageVAE
         self.test_split = 0.2  # None or 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.verbose = 2  #  1 or 'auto' necessary for graph creation. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch.
@@ -1390,21 +1390,28 @@ class ApricotVAE(ApricotData, VAE):
 
     def _fit_all(self):
 
-        # # Get numpy array of data in correct dimensions
-        # gc_spatial_data_np = self._get_spatial_apricot_data()
+        # Get numpy array of data in correct dimensions
+        gc_spatial_data_np = self._get_spatial_apricot_data()
 
-        # # # Process input data for training and validation dataset objects
-        # rf_training, rf_val, rf_test = self._input_processing_pipe(gc_spatial_data_np)
+        # # Process input data for training and validation dataset objects
+        rf_training, rf_val, rf_test = self._input_processing_pipe(gc_spatial_data_np)
 
-        rf_all = self._get_mnist_data()
-        rf_training = rf_all[:60000]
-        rf_test = rf_val = rf_all[60000:61000]  # None
+        # rf_all = self._get_mnist_data()
+        # rf_training = rf_all[:60000]
+        # rf_test = rf_val = rf_all[60000:61000]  # None
 
-        # spatial_vae, fit_history, fit_history_stage2 = self._fit_spatial_vae(
-        #     rf_training, rf_val
-        # )
-        spatial_vae, fit_history = self._fit_spatial_vae(rf_training, rf_val)
-        # spatial_vae, validation_data, fit_history = self._k_fold_cross_validation(rf_training, n_folds=5)
+        if self.model_type == "VAE":
+            spatial_vae, fit_history = self._fit_spatial_vae(rf_training, rf_val)
+            # spatial_vae, validation_data, fit_history = self._k_fold_cross_validation(rf_training, n_folds=5)
+
+            # Plot history of training and validation loss
+            self._plot_fit_history(fit_history)
+
+        elif self.model_type == "TwoStageVAE":
+            spatial_vae, fit_history, fit_history_stage2 = self._fit_spatial_vae(
+                rf_training, rf_val
+            )
+            self._plot_fit_history(fit_history_stage2)
 
         if rf_test is not None:
             # Get fid score
@@ -1418,10 +1425,6 @@ class ApricotVAE(ApricotData, VAE):
                 spatial_vae, rf_test, image_range=(0, 1)
             )
             print(f"SSIM score on test data: {ssim_score_test}")
-
-        # Plot history of training and validation loss
-        self._plot_fit_history(fit_history)
-        # self._plot_fit_history(fit_history_stage2)
 
         # Quality of fit
         self.plot_latent_space(spatial_vae, n=5)
