@@ -60,37 +60,11 @@ class VAE(keras.Model):
         # Init attribute for validation. We lack custom fit() method, so we need to pass validation data to train_step()
         self.val_data = val_data
 
-        """
-        Build encoder
-        """
+        self.encoder = self._build_encoder(
+            latent_dim=latent_dim, image_shape=image_shape
+        )
 
-        encoder_inputs = keras.Input(shape=image_shape)
-        x = layers.Conv2D(16, 3, activation="relu", strides=2, padding="same")(
-            encoder_inputs
-        )
-        x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(x)
-        x = layers.Flatten()(x)
-        x = layers.Dense(16, activation="relu")(x)
-        z_mean = layers.Dense(latent_dim, name="z_mean")(x)
-        z_log_var = layers.Dense(latent_dim, name="z_log_var")(x)
-        self.encoder = keras.Model(encoder_inputs, [z_mean, z_log_var], name="encoder")
-        self.encoder.summary()
-
-        """
-        Build decoder
-        """
-        latent_inputs = keras.Input(shape=(latent_dim,))
-        x = layers.Dense(7 * 7 * 32, activation="relu")(latent_inputs)
-        x = layers.Reshape((7, 7, 32))(x)
-        x = layers.Conv2DTranspose(32, 3, activation="relu", strides=2, padding="same")(
-            x
-        )
-        x = layers.Conv2DTranspose(16, 3, activation="relu", strides=2, padding="same")(
-            x
-        )
-        decoder_outputs = layers.Conv2D(1, 3, activation="sigmoid", padding="same")(x)
-        self.decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
-        self.decoder.summary()
+        self.decoder = self._build_decoder(latent_dim)
 
         self.sampler = Sampler()
 
@@ -101,6 +75,54 @@ class VAE(keras.Model):
         )
         self.kl_loss_tracker = keras.metrics.Mean(name="kl_loss")
         self.val_loss_tracker = keras.metrics.Mean(name="val_loss")
+
+    def _build_encoder(self, image_shape=None, latent_dim=None):
+        """
+        Build encoder
+        """
+        assert (
+            image_shape is not None
+        ), "Argument image_shape  must be specified, aborting..."
+        assert (
+            latent_dim is not None
+        ), "Argument latent_dim must be specified, aborting..."
+
+        encoder_inputs = keras.Input(shape=image_shape)
+        x = layers.Conv2D(16, 3, activation="relu", strides=2, padding="same")(
+            encoder_inputs
+        )
+        x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(x)
+        x = layers.Flatten()(x)
+        x = layers.Dense(16, activation="relu")(x)
+        z_mean = layers.Dense(latent_dim, name="z_mean")(x)
+        z_log_var = layers.Dense(latent_dim, name="z_log_var")(x)
+        encoder = keras.Model(encoder_inputs, [z_mean, z_log_var], name="encoder")
+        encoder.summary()
+
+        return encoder
+
+    def _build_decoder(self, latent_dim=None):
+        """
+        Build decoder
+        """
+        assert (
+            latent_dim is not None
+        ), "Argument latent_dim must be specified, aborting..."
+
+        latent_inputs = keras.Input(shape=(latent_dim,))
+        x = layers.Dense(7 * 7 * 32, activation="relu")(latent_inputs)
+        x = layers.Reshape((7, 7, 32))(x)
+        x = layers.Conv2DTranspose(32, 3, activation="relu", strides=2, padding="same")(
+            x
+        )
+        x = layers.Conv2DTranspose(16, 3, activation="relu", strides=2, padding="same")(
+            x
+        )
+        decoder_outputs = layers.Conv2D(1, 3, activation="sigmoid", padding="same")(x)
+        decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
+        decoder.summary()
+
+        return decoder
 
     def call(self, inputs):
         z_mean, z_log_var = self.encoder(inputs)
