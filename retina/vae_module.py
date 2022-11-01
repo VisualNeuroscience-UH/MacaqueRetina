@@ -31,6 +31,7 @@ import datetime
 from pathlib import Path
 import shutil
 import logging
+import json
 
 
 class Sampler(layers.Layer):
@@ -574,7 +575,7 @@ class TwoStageVAE(keras.Model):
             }
 
 
-class ApricotVAE(ApricotData, VAE):
+class ApricotVAE(ApricotData):
     """
     Class for creating model for variational autoencoder from  Apricot data
     """
@@ -595,7 +596,7 @@ class ApricotVAE(ApricotData, VAE):
         self.beta = 1  # Beta parameter for KL loss. Overrides VAE class beta parameter
 
         self.model_type = "VAE"  # TwoStageVAE or VAE
-        self.batch_normalization = True
+        self.batch_normalization = False
         self.optimizer_stage1 = keras.optimizers.Adam(
             learning_rate=0.0001
         )  # default lr = 0.001
@@ -619,7 +620,7 @@ class ApricotVAE(ApricotData, VAE):
         # ELI HARKITSE BATCH NORM LAYER MOLEMPIIN MALLEIIHN
         # KATSO SAATKO YLEISTETTYÄ AIKAAN
 
-        self.epochs = 1000
+        self.epochs = 10
         self.epochs_stage2 = 20  # Only used for TwoStageVAE
         self.test_split = 0.2  # None or 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.verbose = 2  #  1 or 'auto' necessary for graph creation. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch.
@@ -650,10 +651,37 @@ class ApricotVAE(ApricotData, VAE):
 
         self.output_path = Path("./retina/output")  # move  later to io
         self.exp_folder = Path("vae")
+        self.metadata_folder = Path("/home/simo/Documents/Analysis/")
 
         self.tensorboard_callback = None
         self._prep_tensorboard_logging()  # sets tensorboard_callback
         self._fit_all()
+
+        self._save_metadata()
+
+    def _save_metadata(self):
+        """
+        From the self object save all string, scalar or None attributes to
+        a text file at the metadata_folder.
+        """
+        metadata = {}
+        for attr in dir(self):
+            if not attr.startswith("_"):
+                try:
+                    value = getattr(self, attr)
+                except:
+                    pdb.set_trace()
+                if isinstance(value, (str, int, float, type(None))):
+                    metadata[attr] = value
+        # Append short time stamp to metadata file name
+        time_stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        metadata_file = f"metadata_{time_stamp}.txt"
+        metadata_path = self.metadata_folder / self.exp_folder / metadata_file
+        # Create folder if it does not exist
+        if not metadata_path.parent.exists():
+            metadata_path.parent.mkdir(parents=True)
+        with open(metadata_path, "w") as f:
+            json.dump(metadata, f, indent=4)
 
     def _prep_tensorboard_logging(self):
         """
