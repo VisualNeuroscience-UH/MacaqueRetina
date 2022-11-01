@@ -1,4 +1,5 @@
 # Numerical
+from cv2 import BFMatcher_create
 import numpy as np
 from scipy.ndimage import rotate, fourier_shift
 from scipy.interpolate import RectBivariateSpline
@@ -45,7 +46,14 @@ class Sampler(layers.Layer):
 
 
 class VAE(keras.Model):
-    def __init__(self, image_shape=None, latent_dim=None, val_data=None, **kwargs):
+    def __init__(
+        self,
+        image_shape=None,
+        latent_dim=None,
+        val_data=None,
+        batch_normalization=False,
+        **kwargs,
+    ):
         # super(VAE, self).__init__(**kwargs)
         super().__init__(**kwargs)
 
@@ -59,6 +67,7 @@ class VAE(keras.Model):
         # self.beta = 1.0
         # Init attribute for validation. We lack custom fit() method, so we need to pass validation data to train_step()
         self.val_data = val_data
+        self.batch_normalization = batch_normalization
 
         self.encoder = self._build_encoder(
             latent_dim=latent_dim, image_shape=image_shape
@@ -88,10 +97,23 @@ class VAE(keras.Model):
         ), "Argument latent_dim must be specified, aborting..."
 
         encoder_inputs = keras.Input(shape=image_shape)
-        x = layers.Conv2D(16, 3, activation="relu", strides=2, padding="same")(
-            encoder_inputs
-        )
-        x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(x)
+
+        if self.batch_normalization is True:
+            x = layers.Conv2D(16, 3, strides=2, padding="same", use_bias=False)(
+                encoder_inputs
+            )
+            x = layers.BatchNormalization()(x)
+            x = layers.Activation("relu")(x)
+
+            x = layers.Conv2D(32, 3, strides=2, padding="same", use_bias=False)(x)
+            x = layers.BatchNormalization()(x)
+            x = layers.Activation("relu")(x)
+        elif self.batch_normalization is False:
+            x = layers.Conv2D(16, 3, activation="relu", strides=2, padding="same")(
+                encoder_inputs
+            )
+            x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(x)
+
         x = layers.Flatten()(x)
         x = layers.Dense(16, activation="relu")(x)
         z_mean = layers.Dense(latent_dim, name="z_mean")(x)
@@ -112,12 +134,27 @@ class VAE(keras.Model):
         latent_inputs = keras.Input(shape=(latent_dim,))
         x = layers.Dense(7 * 7 * 32, activation="relu")(latent_inputs)
         x = layers.Reshape((7, 7, 32))(x)
-        x = layers.Conv2DTranspose(32, 3, activation="relu", strides=2, padding="same")(
-            x
-        )
-        x = layers.Conv2DTranspose(16, 3, activation="relu", strides=2, padding="same")(
-            x
-        )
+
+        if self.batch_normalization is True:
+            x = layers.Conv2DTranspose(
+                32, 3, strides=2, padding="same", use_bias=False
+            )(x)
+            x = layers.BatchNormalization()(x)
+            x = layers.Activation("relu")(x)
+
+            x = layers.Conv2DTranspose(
+                16, 3, strides=2, padding="same", use_bias=False
+            )(x)
+            x = layers.BatchNormalization()(x)
+            x = layers.Activation("relu")(x)
+        elif self.batch_normalization is False:
+            x = layers.Conv2DTranspose(
+                32, 3, activation="relu", strides=2, padding="same"
+            )(x)
+            x = layers.Conv2DTranspose(
+                16, 3, activation="relu", strides=2, padding="same"
+            )(x)
+
         decoder_outputs = layers.Conv2D(1, 3, activation="sigmoid", padding="same")(x)
         decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
         decoder.summary()
@@ -195,7 +232,14 @@ class TwoStageVAE(keras.Model):
     Model available at https://github.com/daib13/TwoStageVAE
     """
 
-    def __init__(self, image_shape=None, latent_dim=None, val_data=None, **kwargs):
+    def __init__(
+        self,
+        image_shape=None,
+        latent_dim=None,
+        val_data=None,
+        batch_normalization=False,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
 
         assert (
@@ -207,6 +251,7 @@ class TwoStageVAE(keras.Model):
 
         # Init attribute for validation. We lack custom fit() method, so we need to pass validation data to train_step()
         self.val_data = val_data
+        self.batch_normalization = batch_normalization
 
         self.image_shape = image_shape
         self.latent_dim = latent_dim
@@ -237,10 +282,22 @@ class TwoStageVAE(keras.Model):
 
     def _build_encoder1(self):
         encoder_inputs = keras.Input(shape=self.image_shape)
-        x = layers.Conv2D(16, 3, activation="relu", strides=2, padding="same")(
-            encoder_inputs
-        )
-        x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(x)
+
+        if self.batch_normalization is True:
+            x = layers.Conv2D(16, 3, strides=2, padding="same", use_bias=False)(
+                encoder_inputs
+            )
+            x = layers.BatchNormalization()(x)
+            x = layers.Activation("relu")(x)
+            x = layers.Conv2D(32, 3, strides=2, padding="same", use_bias=False)(x)
+            x = layers.BatchNormalization()(x)
+            x = layers.Activation("relu")(x)
+        elif self.batch_normalization is False:
+            x = layers.Conv2D(16, 3, activation="relu", strides=2, padding="same")(
+                encoder_inputs
+            )
+            x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(x)
+
         x = layers.Flatten()(x)
         x = layers.Dense(16, activation="relu")(x)
         z_mean = layers.Dense(self.latent_dim, name="z_mean")(x)
@@ -538,6 +595,7 @@ class ApricotVAE(ApricotData, VAE):
         self.beta = 1  # Beta parameter for KL loss. Overrides VAE class beta parameter
 
         self.model_type = "VAE"  # TwoStageVAE or VAE
+        self.batch_normalization = True
         self.optimizer_stage1 = keras.optimizers.Adam(
             learning_rate=0.0001
         )  # default lr = 0.001
@@ -561,7 +619,7 @@ class ApricotVAE(ApricotData, VAE):
         # ELI HARKITSE BATCH NORM LAYER MOLEMPIIN MALLEIIHN
         # KATSO SAATKO YLEISTETTYÄ AIKAAN
 
-        self.epochs = 2000
+        self.epochs = 1000
         self.epochs_stage2 = 20  # Only used for TwoStageVAE
         self.test_split = 0.2  # None or 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.verbose = 2  #  1 or 'auto' necessary for graph creation. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch.
@@ -797,12 +855,14 @@ class ApricotVAE(ApricotData, VAE):
                 image_shape=self.image_shape,
                 latent_dim=self.latent_dim,
                 val_data=val_data,
+                batch_normalization=self.batch_normalization,
             )
         elif self.model_type == "TwoStageVAE":
             vae = TwoStageVAE(
                 image_shape=self.image_shape,
                 latent_dim=self.latent_dim,
                 val_data=val_data,
+                batch_normalization=self.batch_normalization,
             )
         else:
             raise ValueError("Model type not recognized, aborting...")
