@@ -1,3 +1,4 @@
 .vscode/
 results_temp/
 __pycache__
+./retina/output

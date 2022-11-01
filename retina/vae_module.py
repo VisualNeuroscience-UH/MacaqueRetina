@@ -595,7 +595,7 @@ class ApricotVAE(ApricotData):
         self.latent_space_plot_scale = 4  # Scale for plotting latent space
         self.beta = 1  # Beta parameter for KL loss. Overrides VAE class beta parameter
 
-        self.model_type = "VAE"  # TwoStageVAE or VAE
+        self.model_type = "TwoStageVAE"  # TwoStageVAE or VAE
         self.batch_normalization = False
         self.optimizer_stage1 = keras.optimizers.Adam(
             learning_rate=0.0001
@@ -620,8 +620,8 @@ class ApricotVAE(ApricotData):
         # ELI HARKITSE BATCH NORM LAYER MOLEMPIIN MALLEIIHN
         # KATSO SAATKO YLEISTETTYÄ AIKAAN
 
-        self.epochs = 10
-        self.epochs_stage2 = 20  # Only used for TwoStageVAE
+        self.epochs = 1000
+        self.epochs_stage2 = 1050  # Only used for TwoStageVAE
         self.test_split = 0.2  # None or 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.verbose = 2  #  1 or 'auto' necessary for graph creation. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch.
 
@@ -1521,6 +1521,7 @@ class ApricotVAE(ApricotData):
             spatial_vae, fit_history, fit_history_stage2 = self._fit_spatial_vae(
                 rf_training, rf_val
             )
+            self._plot_fit_history(fit_history)
             self._plot_fit_history(fit_history_stage2)
 
         if rf_test is not None:
