@@ -410,9 +410,9 @@ class TwoStageVAE(keras.Model):
             if self.val_data is not None:
                 val_z_mean, _ = self.encoder_stage1(self.val_data)
                 val_u_mean, _ = self.encoder_stage2(val_z_mean)
-                val_reconstruction = self.decoder_stage2(val_u_mean)
-                val_loss = mse(val_z_mean, val_reconstruction)
-                self.val_loss_stage2_tracker.update_state(val_loss)
+                val_reconstruction2 = self.decoder_stage2(val_u_mean)
+                val_loss2 = mse(val_z_mean, val_reconstruction2)
+                self.val_loss_stage2_tracker.update_state(val_loss2)
                 return self.val_loss_stage2_tracker.result()
             else:
                 return 0.0
@@ -571,6 +571,7 @@ class TwoStageVAE(keras.Model):
                 "kl_loss_stage2": kl_loss_stage2,
                 "val_reconstruction_loss": val_loss_stage1(),
                 "val_reconstruction_loss_stage2": val_loss_stage2(),
+                # "val_reconstruction_loss_stage2": val_loss_stage1(),
             }
 
 
@@ -597,11 +598,14 @@ class ApricotVAE(ApricotData):
         self.model_type = "TwoStageVAE"  # TwoStageVAE or VAE
         self.batch_normalization = True
         self.optimizer_stage1 = keras.optimizers.Adam(
-            learning_rate=0.001
+            learning_rate=0.0001
         )  # default lr = 0.001
         self.optimizer_stage2 = keras.optimizers.Adam(
-            learning_rate=0.001
+            learning_rate=0.0001
         )  # Only used for TwoStageVAE
+
+        # lr rate change from tf1
+        # lr = args.lr if args.lr_epochs <= 0 else args.lr * math.pow(args.lr_fac, math.floor(float(epoch) / float(args.lr_epochs)))
 
         self.image_shape = (
             28,
@@ -612,15 +616,13 @@ class ApricotVAE(ApricotData):
         self.batch_size = 512  # None will take the batch size from test_split size. Note that the batch size affects training speed and loss values
         self.batch_size_stage2 = 512  # Only used for TwoStageVAE
 
-        # TÄHÄN JÄIT: TAVALLISEN VAEN GENERAATIO VARMAAN HYÖTYISI
-        # BATCH NORMALISAATIOSTA TAI MUUSTA TAVASTA JOSSA
-        # RANDOM SAMPPELI OSUISI PAREMMIN LATENTTIIN AVARUUTEEN
+        # TÄHÄN JÄIT:
+        # KS lines 607-608: implementoi lr change käyttäen learning rate scheduleria ja loggaa se tensorboardiin
         # TSEKKAA KOODI, TSEKKAA TB PARAMETRIT RISTIIN TF1 VERSION KANSSA
-        # ELI HARKITSE BATCH NORM LAYER MOLEMPIIN MALLEIIHN
         # KATSO SAATKO YLEISTETTYÄ AIKAAN
 
-        self.epochs = 10
-        self.epochs_stage2 = 15  # Only used for TwoStageVAE
+        self.epochs = 500
+        self.epochs_stage2 = 500  # Only used for TwoStageVAE
         self.test_split = 0.2  # None or 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.verbose = 2  #  1 or 'auto' necessary for graph creation. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch.
 
@@ -1499,15 +1501,15 @@ class ApricotVAE(ApricotData):
 
     def _fit_all(self):
 
-        # Get numpy array of data in correct dimensions
-        gc_spatial_data_np = self._get_spatial_apricot_data()
+        # # Get numpy array of data in correct dimensions
+        # gc_spatial_data_np = self._get_spatial_apricot_data()
 
-        # # Process input data for training and validation dataset objects
-        rf_training, rf_val, rf_test = self._input_processing_pipe(gc_spatial_data_np)
+        # # # Process input data for training and validation dataset objects
+        # rf_training, rf_val, rf_test = self._input_processing_pipe(gc_spatial_data_np)
 
-        # rf_all = self._get_mnist_data()
-        # rf_training = rf_all[:60000]
-        # rf_test = rf_val = rf_all[60000:61000]  # None
+        rf_all = self._get_mnist_data()
+        rf_training = rf_all[:6000]
+        rf_test = rf_val = rf_all[60000:61000]  # None
 
         if self.model_type == "VAE":
             spatial_vae, fit_history = self._fit_spatial_vae(rf_training, rf_val)
