@@ -68,5 +68,6 @@
         "Watanabe",
         "xlocs",
         "xsmooth"
-    ]
+    ],
+    "python.analysis.typeCheckingMode": "off"
 }

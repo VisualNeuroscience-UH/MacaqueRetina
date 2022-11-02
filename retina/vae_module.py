@@ -597,8 +597,8 @@ class ApricotVAE(ApricotData):
 
         self.model_type = "TwoStageVAE"  # TwoStageVAE or VAE
         self.batch_normalization = True
-        self.lr_epochs = 5 # at these epoch intervals, learning rate will be divided by half. Applies to TwoStageVae only
-        self.lr = 0.001
+        self.lr_epochs = 5 # 150 at these epoch intervals, learning rate will be divided by half. Applies to TwoStageVae only
+        self.lr = 0.0001
         self.optimizer_stage1 = keras.optimizers.Adam(
             learning_rate=self.lr
         )  # default lr = 0.001
@@ -615,16 +615,15 @@ class ApricotVAE(ApricotData):
             1,
         )  # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
         # self.image_shape = (299, 299, 1) # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
-        self.batch_size = 512  # None will take the batch size from test_split size. Note that the batch size affects training speed and loss values
-        self.batch_size_stage2 = 512  # Only used for TwoStageVAE
+        self.batch_size = 512 # 512  # None will take the batch size from test_split size. Note that the batch size affects training speed and loss values
+        self.batch_size_stage2 = 512 # 512  # Only used for TwoStageVAE
 
         # TÄHÄN JÄIT:
-        # KS lines 607-608: implementoi lr change käyttäen learning rate scheduleria ja loggaa se tensorboardiin
         # TSEKKAA KOODI, TSEKKAA TB PARAMETRIT RISTIIN TF1 VERSION KANSSA
         # KATSO SAATKO YLEISTETTYÄ AIKAAN
 
-        self.epochs = 20
-        self.epochs_stage2 = 5  # Only used for TwoStageVAE
+        self.epochs = 10
+        self.epochs_stage2 = 10 # Only used for TwoStageVAE
         self.test_split = 0.2  # None or 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.verbose = 2  #  1 or 'auto' necessary for graph creation. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch.
 
@@ -633,7 +632,7 @@ class ApricotVAE(ApricotData):
         self.n_pca_components = 32  # None or 32 # Number of PCA components to use for denoising. None does not apply PCA
 
         # Augment data. Final n samples =  n * (1 + n_repeats * 2): n is the original number of samples, 2 is the rot & shift
-        self.n_repeats = 0  # 10  # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
+        self.n_repeats = 10  # 10  # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
         self.angle_min = -30  # 30 # rotation int in degrees
         self.angle_max = 30  # 30
         self.shift_min = (
@@ -694,6 +693,8 @@ class ApricotVAE(ApricotData):
         Note that the tensoboard reset takes place only when quitting the terminal call
         to tensorboard. You will see old graph, old scalars, if they are not overwritten
         by new ones.
+
+        Scalar logger x-axis is (Ndata/batch_size) * epochs
         """
 
         # Folders
