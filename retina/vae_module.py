@@ -600,11 +600,21 @@ class ApricotVAE(ApricotData):
         self.lr_epochs = 5 # at these epoch intervals, learning rate will be divided by half. Applies to TwoStageVae only
         self.lr = 0.001
         self.optimizer_stage1 = keras.optimizers.Adam(
+<<<<<<< HEAD
             learning_rate=self.lr
         )  # default lr = 0.001
         self.optimizer_stage2 = keras.optimizers.Adam(
             learning_rate=self.lr
+=======
+            learning_rate=0.0001
+        )  # default lr = 0.001
+        self.optimizer_stage2 = keras.optimizers.Adam(
+            learning_rate=0.0001
+>>>>>>> 6fbd51c5a1caf2df2d6d90b5a4502ddf779f59b7
         )  # Only used for TwoStageVAE
+
+        # lr rate change from tf1
+        # lr = args.lr if args.lr_epochs <= 0 else args.lr * math.pow(args.lr_fac, math.floor(float(epoch) / float(args.lr_epochs)))
 
         self.image_shape = (
             28,
@@ -620,8 +630,13 @@ class ApricotVAE(ApricotData):
         # TSEKKAA KOODI, TSEKKAA TB PARAMETRIT RISTIIN TF1 VERSION KANSSA
         # KATSO SAATKO YLEISTETTYÄ AIKAAN
 
+<<<<<<< HEAD
         self.epochs = 20
         self.epochs_stage2 = 5  # Only used for TwoStageVAE
+=======
+        self.epochs = 500
+        self.epochs_stage2 = 500  # Only used for TwoStageVAE
+>>>>>>> 6fbd51c5a1caf2df2d6d90b5a4502ddf779f59b7
         self.test_split = 0.2  # None or 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.verbose = 2  #  1 or 'auto' necessary for graph creation. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch.
 
