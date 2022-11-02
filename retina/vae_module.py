@@ -597,11 +597,13 @@ class ApricotVAE(ApricotData):
 
         self.model_type = "TwoStageVAE"  # TwoStageVAE or VAE
         self.batch_normalization = True
+        self.lr_epochs = 5 # at these epoch intervals, learning rate will be divided by half. Applies to TwoStageVae only
+        self.lr = 0.001
         self.optimizer_stage1 = keras.optimizers.Adam(
-            learning_rate=0.0001
+            learning_rate=self.lr
         )  # default lr = 0.001
         self.optimizer_stage2 = keras.optimizers.Adam(
-            learning_rate=0.0001
+            learning_rate=self.lr
         )  # Only used for TwoStageVAE
 
         self.image_shape = (
@@ -618,7 +620,7 @@ class ApricotVAE(ApricotData):
         # TSEKKAA KOODI, TSEKKAA TB PARAMETRIT RISTIIN TF1 VERSION KANSSA
         # KATSO SAATKO YLEISTETTYÄ AIKAAN
 
-        self.epochs = 5
+        self.epochs = 20
         self.epochs_stage2 = 5  # Only used for TwoStageVAE
         self.test_split = 0.2  # None or 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.verbose = 2  #  1 or 'auto' necessary for graph creation. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch.
@@ -657,17 +659,6 @@ class ApricotVAE(ApricotData):
 
         self._save_metadata()
 
-    # def _lr_scheduler(self, epoch, lr):
-    #     # Learning rate scheduler for the 2-stage vae.
-    #     # This cuts learning rate by half after lr_epochs number of epochs is reached
-    #     # This is reflected onto loggamma
-    #     lr_updated = (
-    #         self.lr
-    #         if self.lr_epochs is None
-    #         else self.lr * np.power(0.5, np.floor(float(epoch) / float(self.lr_epochs)))
-    #     )
-
-    #     return lr_updated
 
     def _save_metadata(self):
         """
@@ -719,16 +710,28 @@ class ApricotVAE(ApricotData):
             write_graph=True,
         ))
 
-        # self.tensorboard_callback.append(
-        #     tf.keras.callbacks.TensorBoard(
-        #         log_dir=exp_folder,
-        #         histogram_freq=1,
-        #         write_graph=True,
-        #     )
-        # )
-
         # This creates new scalar/time series line in tensorboard
         self.summary_writer = tf.summary.create_file_writer(str(exp_folder))
+
+    def _prep_lr_scheduler(self):
+        """
+        Prepare learning rate scheduler for the 2-stage vae.
+        """
+        def lr_scheduler(epoch, lr):
+            # Learning rate scheduler for the 2-stage vae.
+            # This cuts learning rate by half after lr_epochs number of epochs is reached
+            # This is reflected onto loggamma
+            lr_updated = (
+                self.lr
+                if self.lr_epochs is None
+                else self.lr * np.power(0.5, np.floor(float(epoch) / float(self.lr_epochs)))
+            )
+
+            return lr_updated
+        
+        self.tensorboard_callback.append(tf.keras.callbacks.LearningRateScheduler(
+            lr_scheduler, verbose=0)
+        )
 
     def _set_n_cpus(self, n_threads):
         # Set number of CPU cores to use for parallel processing
@@ -930,6 +933,7 @@ class ApricotVAE(ApricotData):
             # Set encoder_stage2 and decoder_stage2 weights to non-trainable status
             vae.encoder_stage2.trainable = False
             vae.decoder_stage2.trainable = False
+            self._prep_lr_scheduler() # appends lr_scheduler to fit callbacks
 
         # Compile model
         vae.compile(optimizer=self.optimizer_stage1)
