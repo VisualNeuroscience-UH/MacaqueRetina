@@ -1,0 +1,25 @@
+ret310 installation--run the following commands and note the notes:
+conda create --name ret310 python=3.10
+conda activate ret310
+conda install -c conda-forge cudatoolkit=11.2 cudnn=8.1.0
+mkdir -p $CONDA_PREFIX/etc/conda/activate.d
+echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib/' > $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
+# NOTE check that the above command create the env_vars.sh file, create manually if it did not
+pip install --upgrade pip
+pip install tensorflow==2.9 # 2.10 partially defunc
+# Verify installations
+python -c "import tensorflow as tf; print(tf.reduce_sum(tf.random.normal([1000, 1000])))"
+python -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
+conda config --add channels conda-forge
+conda config --add channels jamespreed
+conda install brian2=2.5.1
+conda install notebook scikit-learn pytest conda-minify scikit-image matplotlib tqdm
+# cd to cxsystem2 repo
+pip install -U -e .
+# confirm installation
+cxsystem2 # should give usage
+pip install opencv-python
+pip install colorednoise
+# pyqt5 will be wrongly installed, giving error, need to re-install
+pip uninstall pyqt5
+pip install pyqt5

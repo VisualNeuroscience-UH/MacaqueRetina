@@ -1,5 +1,5 @@
 # Numerical
-from cv2 import BFMatcher_create
+# from cv2 import BFMatcher_create
 import numpy as np
 from scipy.ndimage import rotate, fourier_shift
 from scipy.interpolate import RectBivariateSpline
@@ -569,7 +569,7 @@ class TwoStageVAE(keras.Model):
                 "total_loss_stage2": total_loss_stage2,
                 "reconstruction_loss_stage2": reconstruction_loss_stage2,
                 "kl_loss_stage2": kl_loss_stage2,
-                "val_reconstruction_loss": val_loss_stage1(),
+                # "val_reconstruction_loss": val_loss_stage1(),
                 "val_reconstruction_loss_stage2": val_loss_stage2(),
                 # "val_reconstruction_loss_stage2": val_loss_stage1(),
             }
@@ -651,7 +651,7 @@ class ApricotVAE(ApricotData):
         self.exp_folder = Path("vae")
         self.metadata_folder = Path("/home/simo/Documents/Analysis/")
 
-        self.tensorboard_callback = None
+        self.tensorboard_callback = []
         self._prep_tensorboard_logging()  # sets tensorboard_callback
         self._fit_all()
 
@@ -713,11 +713,11 @@ class ApricotVAE(ApricotData):
             else:
                 f.unlink()
 
-        self.tensorboard_callback = tf.keras.callbacks.TensorBoard(
+        self.tensorboard_callback.append(tf.keras.callbacks.TensorBoard(
             log_dir=exp_folder,
             histogram_freq=1,
             write_graph=True,
-        )
+        ))
 
         # self.tensorboard_callback.append(
         #     tf.keras.callbacks.TensorBoard(
