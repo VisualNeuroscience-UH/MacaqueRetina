@@ -41,12 +41,14 @@ class ProjectManager(ProjectBase, ProjectUtilities):
     def __init__(self, **all_properties):
         """
         Main project manager.
-        In init we construct other classes and inject necessary dependencies. This class is allowed to house project-dependent data and methods.
+        In init we construct other classes and inject necessary dependencies. 
+        This class is allowed to house project-dependent data and methods.
         """
 
         context = Context(all_properties)
 
-        # Get correct context attributes. Empty properties return all existing project attributes to context. That is what we want for the project manager
+        # Get correct context attributes. Empty properties return all existing project 
+        # attributes to context. That is what we want for the project manager
         self.context = context.set_context()
 
         data_io = DataIO(context)
@@ -95,7 +97,12 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         self.construct_retina = ConstructRetina(context, data_io, viz)
         self.working_retina = WorkingRetina(context, data_io, viz)
 
-        analog_input = AnalogInput(context, data_io, viz, wr_initialize = self.working_retina._initialize, get_w_z_coords = self.working_retina.get_w_z_coords)
+        analog_input = AnalogInput(
+            context, 
+            data_io, viz, 
+            wr_initialize = self.working_retina._initialize, 
+            get_w_z_coords = self.working_retina.get_w_z_coords)
+            
         self.analog_input = analog_input
         
 
