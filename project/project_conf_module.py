@@ -5,10 +5,9 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import sys
 import pdb
-import math
-import os
 
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.append(Path(__file__).resolve().parent.parent)
+
 
 # This computer git repos
 from project.project_manager_module import ProjectManager
@@ -109,7 +108,7 @@ my_retina = {
     "model_density": 1.0,
     "randomize_position": 0.05,
     "stimulus_center": 4.45 + 0j,
-    "model_type": "VAE",  # "FIT" or "VAE" for variational autoencoder
+    "model_type": "FIT",  # "FIT" or "VAE" for variational autoencoder
 }
 
 
@@ -313,7 +312,7 @@ if __name__ == "__main__":
 
     # options are defined in my_retina_options
 
-    PM.construct_retina.build()
+    # PM.construct_retina.build()
 
     # PM.construct_retina.save_mosaic()
 
@@ -325,7 +324,7 @@ if __name__ == "__main__":
 
     # options are defined in my_stimulus_options
     # stimulus video will be saved on output_folder in mp4 format (viewing and hdf5 format (for reloading)
-    # PM.stimulate.make_stimulus_video()
+    PM.stimulate.make_stimulus_video()
 
     ##############################
     ### Create analog stimulus ###
@@ -365,7 +364,7 @@ if __name__ == "__main__":
 
     # # # If you want to load with object, it is possible by:
     # PM.working_retina.load_stimulus(PM.stimulate)
-    # PM.working_retina.load_stimulus()
+    PM.working_retina.load_stimulus()
 
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
     # ret.load_stimulus(movie)# => METADATA
@@ -374,11 +373,11 @@ if __name__ == "__main__":
     ### Show single ganglion cell response ###
     #################################
 
-    # example_gc = 2  # int or 'None'
-    # PM.working_retina.convolve_stimulus(example_gc)
+    example_gc = 2  # int or 'None'
+    PM.working_retina.convolve_stimulus(example_gc)
 
     # PM.viz.show_spatiotemporal_filter(PM.working_retina)
-    # PM.viz.show_convolved_stimulus(PM.working_retina)
+    PM.viz.show_convolved_stimulus(PM.working_retina)
 
     #################################
     ### Run multiple trials for single cell ###
