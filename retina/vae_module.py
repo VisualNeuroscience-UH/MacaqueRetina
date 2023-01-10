@@ -67,6 +67,8 @@ class VAE(keras.Model):
 
         # self.beta = 1.0
         # Init attribute for validation. We lack custom fit() method, so we need to pass validation data to train_step()
+        self.mystep = 0
+        
         self.val_data = val_data
         self.batch_normalization = batch_normalization
 
@@ -137,8 +139,10 @@ class VAE(keras.Model):
         ), "Argument latent_dim must be specified, aborting..."
 
         latent_inputs = keras.Input(shape=(latent_dim,))
-        x = layers.Dense(7 * 7 * 32, activation="relu")(latent_inputs)
-        x = layers.Reshape((7, 7, 32))(x)
+        # x = layers.Dense(7 * 7 * 32, activation="relu")(latent_inputs)
+        # x = layers.Reshape((7, 7, 32))(x)
+        x = layers.Dense(7 * 7 * 64, activation="relu")(latent_inputs)
+        x = layers.Reshape((7, 7, 64))(x)
 
         if self.batch_normalization is True:
             x = layers.Conv2DTranspose(
@@ -190,6 +194,7 @@ class VAE(keras.Model):
     # @tf.function
     def train_step(self, data):
         mse = keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)
+            
 
         with tf.GradientTape() as tape:
             z_mean, z_log_var = self.encoder(data)
@@ -197,6 +202,11 @@ class VAE(keras.Model):
             reconstruction = self.decoder(z)
             reconstruction_loss = mse(data, reconstruction)
 
+            # reconstruction_loss = tf.reduce_mean(
+            #         tf.reduce_sum(
+            #             keras.losses.binary_crossentropy(data, reconstruction), axis=(1, 2)
+            #         )
+            # )
             kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
             total_loss = reconstruction_loss + self.beta * tf.reduce_mean(kl_loss)
 
@@ -223,6 +233,11 @@ class VAE(keras.Model):
             val_z_mean, _ = self.encoder(self.val_data)
             val_reconstruction = self.decoder(val_z_mean)
             val_loss = mse(self.val_data, val_reconstruction)
+            # val_loss = tf.reduce_mean(
+            #         tf.reduce_sum(
+            #             keras.losses.binary_crossentropy(self.val_data, val_reconstruction), axis=(1, 2)
+            #         )
+            # )
             self.val_loss_tracker.update_state(val_loss)
         else:
             val_loss = 0.0
@@ -601,14 +616,14 @@ class ApricotVAE(ApricotData):
         # self.bad_data_indices = self.spatial_filter_data[2]
 
         # Set common VAE model parameters
-        self.latent_dim = 2  # 2 32
-        self.latent_space_plot_scale = 4  # Scale for plotting latent space
+        self.latent_dim = 8  # 2 32
+        self.latent_space_plot_scale = 2  # Scale for plotting latent space
         self.beta = 1  # Beta parameter for KL loss. Overrides VAE class beta parameter
 
         self.model_type = "VAE"  # TwoStageVAE or VAE
         self.batch_normalization = False
         self.lr_epochs = 5 # 150 at these epoch intervals, learning rate will be divided by half. Applies to TwoStageVae only
-        self.lr = 0.0001
+        self.lr = 0.001 # 0.0001
         self.optimizer_stage1 = keras.optimizers.Adam(
             learning_rate=self.lr
         )  # default lr = 0.001
@@ -619,12 +634,9 @@ class ApricotVAE(ApricotData):
         # lr rate change from tf1
         # lr = args.lr if args.lr_epochs <= 0 else args.lr * math.pow(args.lr_fac, math.floor(float(epoch) / float(args.lr_epochs)))
 
-        self.image_shape = (
-            28,
-            28,
-            1,
-        )  # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
-        # self.image_shape = (299, 299, 1) # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
+        # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
+        self.image_shape = (28, 28, 1,)  
+        # self.image_shape = (299, 299, 1) 
         self.batch_size = 128 # 512  # None will take the batch size from test_split size. Note that the batch size affects training speed and loss values
         self.batch_size_stage2 = 512 # 512  # Only used for TwoStageVAE
 
@@ -632,7 +644,7 @@ class ApricotVAE(ApricotData):
         # TSEKKAA KOODI, TSEKKAA TB PARAMETRIT RISTIIN TF1 VERSION KANSSA
         # KATSO SAATKO YLEISTETTYÄ AIKAAN
 
-        self.epochs = 30
+        self.epochs = 600
         self.epochs_stage2 = 0 # Only used for TwoStageVAE
         self.test_split = 0.2  # None or 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.verbose = 2  #  1 or 'auto' necessary for graph creation. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch.
@@ -642,9 +654,9 @@ class ApricotVAE(ApricotData):
         self.n_pca_components = 32  # None or 32 # Number of PCA components to use for denoising. None does not apply PCA
 
         # Augment data. Final n samples =  n * (1 + n_repeats * 2): n is the original number of samples, 2 is the rot & shift
-        self.n_repeats = 0  # 10  # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
-        self.angle_min = -30  # 30 # rotation int in degrees
-        self.angle_max = 30  # 30
+        self.n_repeats = 50 # 10  # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
+        self.angle_min = -10  # 30 # rotation int in degrees
+        self.angle_max = 10  # 30
         self.shift_min = (
             -5
         )  # 5 # shift int in pixels (upsampled space, rand int for both x and y)
@@ -671,7 +683,6 @@ class ApricotVAE(ApricotData):
 
         self._save_metadata()
 
-
     def _save_metadata(self):
         """
         From the self object save all string, scalar or None attributes to
@@ -683,7 +694,7 @@ class ApricotVAE(ApricotData):
                 try:
                     value = getattr(self, attr)
                 except:
-                    pdb.set_trace()
+                    pass
                 if isinstance(value, (str, int, float, type(None))):
                     metadata[attr] = value
         # Append short time stamp to metadata file name
@@ -808,13 +819,16 @@ class ApricotVAE(ApricotData):
         # set title as "latent space"
         plt.title("latent space")
 
-    def plot_label_clusters(self, vae, data, labels):
+    def plot_label_clusters(self, vae, data, labels=None):
         '''Display a 2D plot of the digit classes in the latent space'''
 
         # z_mean, _, _ = vae.encoder.predict(data)
         z_mean, _ = vae.encoder.predict(data)
         plt.figure(figsize=(12, 10))
-        plt.scatter(z_mean[:, 0], z_mean[:, 1], c=labels, cmap="viridis")
+        if labels is not None:
+            plt.scatter(z_mean[:, 0], z_mean[:, 1], c=labels, cmap="tab10")
+        else:
+            plt.scatter(z_mean[:, 0], z_mean[:, 1])
         plt.colorbar()
         plt.xlabel("z[0]")
         plt.ylabel("z[1]")
@@ -1044,6 +1058,9 @@ class ApricotVAE(ApricotData):
         Rotate and repeat datasets
         """
 
+        if n_repeats <= 1 or n_repeats is None:
+            return np_array
+
         def _random_rotate_image(image, rot_angle):
 
             assert (
@@ -1225,7 +1242,7 @@ class ApricotVAE(ApricotData):
         # Get inverse PCA transformation
         pca_inv = pca.inverse_transform(pca.transform(data_2D_np))
 
-        # Resahpe to 3D
+        # Reshape to 3D
         data_pca = pca_inv.reshape(data.shape[0], data.shape[1], data.shape[2])
 
         return data_pca.astype("float32"), pca
@@ -1560,18 +1577,17 @@ class ApricotVAE(ApricotData):
 
     def _fit_all(self):
 
-        # # Get numpy array of data in correct dimensions
-        # gc_spatial_data_np = self._get_spatial_apricot_data()
+        # Get numpy array of data in correct dimensions
+        gc_spatial_data_np = self._get_spatial_apricot_data()
 
-        # # # Process input data for training and validation dataset objects
-        # rf_training, rf_val, rf_test = self._input_processing_pipe(gc_spatial_data_np)
+        # # Process input data for training and validation dataset objects
+        rf_training, rf_val, rf_test = self._input_processing_pipe(gc_spatial_data_np)
 
-        rf_all, mnist_targets = self._get_mnist_data()
-        # pdb.set_trace()
-        rf_training = rf_all[:60000]
-        rf_target = mnist_targets[:60000]
-        rf_test = rf_all[60000:65000]  # None
-        rf_val = rf_all[65000:70000]  # None
+        # rf_all, mnist_targets = self._get_mnist_data()
+        # rf_training = rf_all[:60000]
+        # rf_target = mnist_targets[:60000]
+        # rf_test = rf_all[60000:65000]  # None
+        # rf_val = rf_all[65000:70000]  # None
 
         if self.model_type == "VAE":
             spatial_vae, fit_history = self._fit_spatial_vae(rf_training, rf_val)
@@ -1601,10 +1617,11 @@ class ApricotVAE(ApricotData):
             print(f"SSIM score on test data: {ssim_score_test}")
 
         # Quality of fit
-        self.plot_latent_space(spatial_vae, n=5)
+        self.plot_latent_space(spatial_vae, n=20)
 
         # Plot latent space, previously plot_z_mean_in_2D(z_mean)
-        self.plot_label_clusters(spatial_vae, rf_training, rf_target)
+        # self.plot_label_clusters(spatial_vae, rf_training, rf_target)
+        self.plot_label_clusters(spatial_vae, rf_training, labels=None)
 
         # Get a random sample of size n_samples from the data
         n_samples = 1000
