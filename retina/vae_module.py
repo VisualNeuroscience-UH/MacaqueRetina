@@ -616,7 +616,7 @@ class ApricotVAE(ApricotData):
         # self.bad_data_indices = self.spatial_filter_data[2]
 
         # Set common VAE model parameters
-        self.latent_dim = 8  # 2 32
+        self.latent_dim = 4  # 2 32
         self.latent_space_plot_scale = 2  # Scale for plotting latent space
         self.beta = 1  # Beta parameter for KL loss. Overrides VAE class beta parameter
 
@@ -641,26 +641,27 @@ class ApricotVAE(ApricotData):
         self.batch_size_stage2 = 512 # 512  # Only used for TwoStageVAE
 
         # TÄHÄN JÄIT:
+        # Yksinkertaista mallia 64=> 32
         # TSEKKAA KOODI, TSEKKAA TB PARAMETRIT RISTIIN TF1 VERSION KANSSA
         # KATSO SAATKO YLEISTETTYÄ AIKAAN
 
-        self.epochs = 600
+        self.epochs = 300
         self.epochs_stage2 = 0 # Only used for TwoStageVAE
         self.test_split = 0.2  # None or 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.verbose = 2  #  1 or 'auto' necessary for graph creation. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch.
 
         # Preprocessing parameters
         self.gaussian_filter_size = None  # None or 0.5 or ... # Denoising gaussian filter size (in pixels). None does not apply filter
-        self.n_pca_components = 32  # None or 32 # Number of PCA components to use for denoising. None does not apply PCA
+        self.n_pca_components = 16  # None or 32 # Number of PCA components to use for denoising. None does not apply PCA
 
         # Augment data. Final n samples =  n * (1 + n_repeats * 2): n is the original number of samples, 2 is the rot & shift
-        self.n_repeats = 50 # 10  # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
+        self.n_repeats = 100 # 10  # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
         self.angle_min = -10  # 30 # rotation int in degrees
         self.angle_max = 10  # 30
         self.shift_min = (
-            -5
+            -3
         )  # 5 # shift int in pixels (upsampled space, rand int for both x and y)
-        self.shift_max = 5  # 5
+        self.shift_max = 3  # 5
 
         self.random_seed = 42
         tf.keras.utils.set_random_seed(self.random_seed)
