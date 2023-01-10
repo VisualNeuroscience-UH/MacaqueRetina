@@ -3,7 +3,7 @@
 import numpy as np
 from scipy.ndimage import rotate, fourier_shift
 from scipy.interpolate import RectBivariateSpline
-from scipy import linalg
+# from scipy import linalg
 
 # Machine learning
 import tensorflow as tf
@@ -23,14 +23,14 @@ from retina.apricot_fitter_module import ApricotData
 from retina.fid_module import FrechetInceptionDistance
 
 # Builtin
-import sys
+# import sys
 import pdb
 import os
-import time
+# import time
 import datetime
 from pathlib import Path
 import shutil
-import logging
+# import logging
 import json
 
 
@@ -110,10 +110,14 @@ class VAE(keras.Model):
             x = layers.BatchNormalization()(x)
             x = layers.Activation("relu")(x)
         elif self.batch_normalization is False:
-            x = layers.Conv2D(16, 3, activation="relu", strides=2, padding="same")(
+            # x = layers.Conv2D(16, 3, activation="relu", strides=2, padding="same")(
+            #     encoder_inputs
+            # )
+            # x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(x)
+            x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(
                 encoder_inputs
             )
-            x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(x)
+            x = layers.Conv2D(64, 3, activation="relu", strides=2, padding="same")(x)
 
         x = layers.Flatten()(x)
         x = layers.Dense(16, activation="relu")(x)
@@ -149,11 +153,17 @@ class VAE(keras.Model):
             x = layers.BatchNormalization()(x)
             x = layers.Activation("relu")(x)
         elif self.batch_normalization is False:
+            # x = layers.Conv2DTranspose(
+            #     32, 3, activation="relu", strides=2, padding="same"
+            # )(x)
+            # x = layers.Conv2DTranspose(
+            #     16, 3, activation="relu", strides=2, padding="same"
+            # )(x)
             x = layers.Conv2DTranspose(
-                32, 3, activation="relu", strides=2, padding="same"
+                64, 3, activation="relu", strides=2, padding="same"
             )(x)
             x = layers.Conv2DTranspose(
-                16, 3, activation="relu", strides=2, padding="same"
+                32, 3, activation="relu", strides=2, padding="same"
             )(x)
 
         decoder_outputs = layers.Conv2D(1, 3, activation="sigmoid", padding="same")(x)
@@ -591,12 +601,12 @@ class ApricotVAE(ApricotData):
         # self.bad_data_indices = self.spatial_filter_data[2]
 
         # Set common VAE model parameters
-        self.latent_dim = 32  # 2
+        self.latent_dim = 2  # 2 32
         self.latent_space_plot_scale = 4  # Scale for plotting latent space
         self.beta = 1  # Beta parameter for KL loss. Overrides VAE class beta parameter
 
-        self.model_type = "TwoStageVAE"  # TwoStageVAE or VAE
-        self.batch_normalization = True
+        self.model_type = "VAE"  # TwoStageVAE or VAE
+        self.batch_normalization = False
         self.lr_epochs = 5 # 150 at these epoch intervals, learning rate will be divided by half. Applies to TwoStageVae only
         self.lr = 0.0001
         self.optimizer_stage1 = keras.optimizers.Adam(
@@ -615,15 +625,15 @@ class ApricotVAE(ApricotData):
             1,
         )  # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
         # self.image_shape = (299, 299, 1) # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
-        self.batch_size = 512 # 512  # None will take the batch size from test_split size. Note that the batch size affects training speed and loss values
+        self.batch_size = 128 # 512  # None will take the batch size from test_split size. Note that the batch size affects training speed and loss values
         self.batch_size_stage2 = 512 # 512  # Only used for TwoStageVAE
 
         # TÄHÄN JÄIT:
         # TSEKKAA KOODI, TSEKKAA TB PARAMETRIT RISTIIN TF1 VERSION KANSSA
         # KATSO SAATKO YLEISTETTYÄ AIKAAN
 
-        self.epochs = 10
-        self.epochs_stage2 = 10 # Only used for TwoStageVAE
+        self.epochs = 30
+        self.epochs_stage2 = 0 # Only used for TwoStageVAE
         self.test_split = 0.2  # None or 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.verbose = 2  #  1 or 'auto' necessary for graph creation. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch.
 
@@ -632,7 +642,7 @@ class ApricotVAE(ApricotData):
         self.n_pca_components = 32  # None or 32 # Number of PCA components to use for denoising. None does not apply PCA
 
         # Augment data. Final n samples =  n * (1 + n_repeats * 2): n is the original number of samples, 2 is the rot & shift
-        self.n_repeats = 10  # 10  # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
+        self.n_repeats = 0  # 10  # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
         self.angle_min = -30  # 30 # rotation int in degrees
         self.angle_max = 30  # 30
         self.shift_min = (
@@ -772,7 +782,7 @@ class ApricotVAE(ApricotData):
                         (z_sample, np.zeros((1, self.latent_dim - 2))), axis=1
                     )
                     # z_sample = np.concatenate((z_sample, np.ones((1, self.latent_dim - 2))), axis=1)
-                print(f"z_sample: {z_sample}")
+                # print(f"z_sample: {z_sample}")
                 x_decoded = predictor(z_sample)
                 digit = x_decoded[0].reshape(digit_size, digit_size)
                 figure[
@@ -791,11 +801,23 @@ class ApricotVAE(ApricotData):
         plt.xlabel("z[0]")
         plt.ylabel("z[1]")
         plt.imshow(figure, cmap="Greys_r")
+        # plt.imshow(figure)
 
         plt.figure()
         plt.hist(figure.flatten(), bins=30, density=True)
         # set title as "latent space"
         plt.title("latent space")
+
+    def plot_label_clusters(self, vae, data, labels):
+        '''Display a 2D plot of the digit classes in the latent space'''
+
+        # z_mean, _, _ = vae.encoder.predict(data)
+        z_mean, _ = vae.encoder.predict(data)
+        plt.figure(figsize=(12, 10))
+        plt.scatter(z_mean[:, 0], z_mean[:, 1], c=labels, cmap="viridis")
+        plt.colorbar()
+        plt.xlabel("z[0]")
+        plt.ylabel("z[1]")
 
     def plot_sample_images(self, image_array, labels=None, n=10, sample=None):
         """
@@ -1389,10 +1411,14 @@ class ApricotVAE(ApricotData):
         plt.title("Latent space")
 
     def _get_mnist_data(self):
-        (x_train, _), (x_test, _) = keras.datasets.mnist.load_data()
+        (x_train, y_train), (x_test, y_test) = keras.datasets.mnist.load_data()
+
         mnist_digits = np.concatenate([x_train, x_test], axis=0)
         mnist_digits = np.expand_dims(mnist_digits, -1).astype("float32") / 255
-        return mnist_digits
+
+        mnist_targets = np.concatenate([y_train, y_test], axis=0)
+
+        return mnist_digits, mnist_targets
 
     def _k_fold_cross_validation(self, data_np, n_folds=3):
         """
@@ -1454,6 +1480,7 @@ class ApricotVAE(ApricotData):
     def _get_fid_score(self, model, fid_data, image_range):
         """
         Calculate the FID score for the model
+
         """
         # Construct inception model
         fid = FrechetInceptionDistance(
@@ -1487,7 +1514,14 @@ class ApricotVAE(ApricotData):
 
     def _get_ssim_score(self, model, ssim_data, image_range):
         """
-        Calculate the SSIM score for the model
+        Calculate the structural similarity score (SSIM) for the model.
+        The SSIM is a function of differences between luminance, contrast, and structure.
+        The structure is a measure of the local correlation between pixels. 
+        
+        This function is based on the standard SSIM implementation from: 
+        Wang, Z., Bovik, A. C., Sheikh, H. R., & Simoncelli, E. P. (2004) 
+        Image quality assessment: from error visibility to structural similarity. 
+        IEEE transactions on image processing. 
         """
         # Get the predicted image given the data as input
         generated_val, _, _ = model.predict(ssim_data)
@@ -1532,9 +1566,12 @@ class ApricotVAE(ApricotData):
         # # # Process input data for training and validation dataset objects
         # rf_training, rf_val, rf_test = self._input_processing_pipe(gc_spatial_data_np)
 
-        rf_all = self._get_mnist_data()
-        rf_training = rf_all[:6000]
-        rf_test = rf_val = rf_all[60000:61000]  # None
+        rf_all, mnist_targets = self._get_mnist_data()
+        # pdb.set_trace()
+        rf_training = rf_all[:60000]
+        rf_target = mnist_targets[:60000]
+        rf_test = rf_all[60000:65000]  # None
+        rf_val = rf_all[65000:70000]  # None
 
         if self.model_type == "VAE":
             spatial_vae, fit_history = self._fit_spatial_vae(rf_training, rf_val)
@@ -1566,6 +1603,9 @@ class ApricotVAE(ApricotData):
         # Quality of fit
         self.plot_latent_space(spatial_vae, n=5)
 
+        # Plot latent space, previously plot_z_mean_in_2D(z_mean)
+        self.plot_label_clusters(spatial_vae, rf_training, rf_target)
+
         # Get a random sample of size n_samples from the data
         n_samples = 1000
 
@@ -1573,9 +1613,6 @@ class ApricotVAE(ApricotData):
         rf_sample = rf_training[random_sample]
 
         predictions, z_mean, z_log_var = spatial_vae.predict(rf_sample)
-
-        # Plot latent space
-        self._plot_z_mean_in_2D(z_mean)
 
         # # Random sample from latent space
         reconstruction = self._generate_from_latent_space(

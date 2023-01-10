@@ -22,12 +22,12 @@ import brian2.units as b2u
 from cxsystem2.core.tools import write_to_file, load_from_file
 from retina.apricot_fitter_module import ApricotFits
 from retina.retina_math_module import RetinaMath
-#from retina.vae_module import ApricotVAE
+from retina.vae_module import ApricotVAE
 
 # Builtin
-import sys
+# import sys
 from pathlib import Path
-import os
+# import os
 from copy import deepcopy
 import pdb
 
