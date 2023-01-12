@@ -27,6 +27,7 @@ from retina.vae_module import ApricotVAE
 # Builtin
 # import sys
 from pathlib import Path
+
 # import os
 from copy import deepcopy
 import pdb
@@ -73,10 +74,20 @@ class ConstructRetina(RetinaMath):
     def _initialize(self, fits_from_file=None):
 
         """
-        Initialize the ganglion cell mosaic
+        Initialize the ganglion cell mosaic.
+        -sets ConstructRetina instance parameters from conf file my_retina
+        -inits gc_df to hold the final ganglion cell mosaics
+        If the model_type if FIT:
+            Calls ApricotFits to fit RF parameters to the data
 
-        :param gc_type: 'parasol' or 'midget'
-        :param fits_from_file: path to a file containing the fits
+        Parameters
+        ----------
+        fits_from_file : str
+            Path to a file containing the fits. If None, fits are computed from scratch
+
+        Returns
+        -------
+        None
         """
 
         my_retina = self.context.my_retina
@@ -104,7 +115,7 @@ class ConstructRetina(RetinaMath):
         ), "Wrong type or length of theta, aborting"
         assert model_density <= 1.0, "Density should be <=1.0, aborting"
 
-        # GC type specifications self.gc_proportion
+        # Calculate self.gc_proportion from GC type specifications
         gc_type = gc_type.lower()
         response_type = response_type.lower()
         if all([gc_type == "parasol", response_type == "on"]):
@@ -150,28 +161,28 @@ class ConstructRetina(RetinaMath):
         else:
             self.visual_field_fit_limit = np.inf
 
+        # Initialize pandas dataframe to hold the ganglion cells (one per row) and all their parameters in one place
+        columns = [
+            "positions_eccentricity",
+            "positions_polar_angle",
+            "eccentricity_group_index",
+            "semi_xc",
+            "semi_yc",
+            "xy_aspect_ratio",
+            "amplitudes",
+            "sur_ratio",
+            "orientation_center",
+        ]
+        self.gc_df = pd.DataFrame(columns=columns)
+
         if self.model_type == "FIT":
             self.dendr_diam_model = "quadratic"  # 'linear' # 'quadratic' # cubic
 
             # If surround is fixed, the surround position, semi_x, semi_y (aspect_ratio) and orientation are the same as center params. This appears to give better results.
             self.surround_fixed = 1
 
-            # Initialize pandas dataframe to hold the ganglion cells (one per row) and all their parameters in one place
-            columns = [
-                "positions_eccentricity",
-                "positions_polar_angle",
-                "eccentricity_group_index",
-                "semi_xc",
-                "semi_yc",
-                "xy_aspect_ratio",
-                "amplitudes",
-                "sur_ratio",
-                "orientation_center",
-            ]
-            self.gc_df = pd.DataFrame(columns=columns)
-
-            # Set stimulus stuff
-            self.stimulus_video = None
+            # # Set stimulus stuff
+            # self.stimulus_video = None
 
             # Make or read fits
             if fits_from_file is None:
@@ -858,8 +869,15 @@ class ConstructRetina(RetinaMath):
 
     def build(self):
         """
-        Builds the receptive field mosaic
-        :return:
+        Builds the receptive field mosaic. This is the main function to call.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
         """
 
         if self.initialized is False:
@@ -917,7 +935,17 @@ class ConstructRetina(RetinaMath):
         print("Built RGC mosaic with %d cells" % n_rgc)
 
     def save_mosaic(self, filename=None):
+        """
+        Save the mosaic to a csv file
 
+        Parameters
+        ----------
+        filename : pathlib Path object, str or None
+
+        Returns
+        -------
+        None
+        """
         output_folder = self.context.output_folder
 
         # Create output folder if it does not exist, with parents

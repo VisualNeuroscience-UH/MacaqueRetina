@@ -645,7 +645,7 @@ class ApricotVAE(ApricotData):
         # TSEKKAA KOODI, TSEKKAA TB PARAMETRIT RISTIIN TF1 VERSION KANSSA
         # KATSO SAATKO YLEISTETTYÄ AIKAAN
 
-        self.epochs = 300
+        self.epochs = 50
         self.epochs_stage2 = 0 # Only used for TwoStageVAE
         self.test_split = 0.2  # None or 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.verbose = 2  #  1 or 'auto' necessary for graph creation. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch.

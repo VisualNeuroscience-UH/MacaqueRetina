@@ -414,7 +414,6 @@ if __name__ == "__main__":
     # PM.working_retina.save_spikes_csv(filename='testi_spikes.csv') # => METADATA
     # PM.working_retina.save_structure_csv(filename='testi_structure.csv') # => METADATA
 
-
     """
     ### Housekeeping ###. Do not comment out.
     """
