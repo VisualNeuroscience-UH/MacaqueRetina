@@ -112,14 +112,14 @@ class VAE(keras.Model):
             x = layers.BatchNormalization()(x)
             x = layers.Activation("relu")(x)
         elif self.batch_normalization is False:
-            # x = layers.Conv2D(16, 3, activation="relu", strides=2, padding="same")(
-            #     encoder_inputs
-            # )
-            # x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(x)
-            x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(
+            x = layers.Conv2D(16, 3, activation="relu", strides=2, padding="same")(
                 encoder_inputs
             )
-            x = layers.Conv2D(64, 3, activation="relu", strides=2, padding="same")(x)
+            x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(x)
+            # x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(
+            #     encoder_inputs
+            # )
+            # x = layers.Conv2D(64, 3, activation="relu", strides=2, padding="same")(x)
 
         x = layers.Flatten()(x)
         x = layers.Dense(16, activation="relu")(x)
@@ -139,10 +139,10 @@ class VAE(keras.Model):
         ), "Argument latent_dim must be specified, aborting..."
 
         latent_inputs = keras.Input(shape=(latent_dim,))
-        # x = layers.Dense(7 * 7 * 32, activation="relu")(latent_inputs)
-        # x = layers.Reshape((7, 7, 32))(x)
-        x = layers.Dense(7 * 7 * 64, activation="relu")(latent_inputs)
-        x = layers.Reshape((7, 7, 64))(x)
+        x = layers.Dense(7 * 7 * 32, activation="relu")(latent_inputs)
+        x = layers.Reshape((7, 7, 32))(x)
+        # x = layers.Dense(7 * 7 * 64, activation="relu")(latent_inputs)
+        # x = layers.Reshape((7, 7, 64))(x)
 
         if self.batch_normalization is True:
             x = layers.Conv2DTranspose(
@@ -157,18 +157,18 @@ class VAE(keras.Model):
             x = layers.BatchNormalization()(x)
             x = layers.Activation("relu")(x)
         elif self.batch_normalization is False:
-            # x = layers.Conv2DTranspose(
-            #     32, 3, activation="relu", strides=2, padding="same"
-            # )(x)
-            # x = layers.Conv2DTranspose(
-            #     16, 3, activation="relu", strides=2, padding="same"
-            # )(x)
-            x = layers.Conv2DTranspose(
-                64, 3, activation="relu", strides=2, padding="same"
-            )(x)
             x = layers.Conv2DTranspose(
                 32, 3, activation="relu", strides=2, padding="same"
             )(x)
+            x = layers.Conv2DTranspose(
+                16, 3, activation="relu", strides=2, padding="same"
+            )(x)
+            # x = layers.Conv2DTranspose(
+            #     64, 3, activation="relu", strides=2, padding="same"
+            # )(x)
+            # x = layers.Conv2DTranspose(
+            #     32, 3, activation="relu", strides=2, padding="same"
+            # )(x)
 
         decoder_outputs = layers.Conv2D(1, 3, activation="sigmoid", padding="same")(x)
         decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
