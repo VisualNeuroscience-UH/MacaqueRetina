@@ -369,7 +369,7 @@ class ConstructRetina(RetinaMath):
 
         return dendr_diam_parameters
 
-    def _place_spatial_receptive_fields(
+    def _create_spatial_receptive_fields(
         self,
         spatial_statistics_dict,
         dendr_diam_vs_eccentricity_parameters_dict,
@@ -902,8 +902,8 @@ class ConstructRetina(RetinaMath):
                 self._fit_dendritic_diameter_vs_eccentricity()
             )
 
-            # Construct spatial receptive fields. Centers are saved in the object
-            self._place_spatial_receptive_fields(
+            # Create spatial receptive fields.
+            self._create_spatial_receptive_fields(
                 spatial_statistics_dict,
                 dendr_diam_vs_eccentricity_parameters_dict,
             )
@@ -920,9 +920,13 @@ class ConstructRetina(RetinaMath):
 
             # Finally, get non-spatial parameters
             temporal_statistics_df = self._fit_temporal_statistics()
-            self._create_temporal_filters(temporal_statistics_df)
+
+            # Create temporal receptive fields
+            self._create_temporal_filters(temporal_statistics_df, distribution="gamma")
 
             td_shape, td_loc, td_scale = self._fit_tonic_drives()
+
+            # Create tonic drive
             self.gc_df["tonicdrive"] = self._get_random_samples(
                 td_shape, td_loc, td_scale, n_rgc, "gamma"
             )
