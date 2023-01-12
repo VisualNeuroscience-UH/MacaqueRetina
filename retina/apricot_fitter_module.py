@@ -1,5 +1,6 @@
 """ 
-These classes fit spike-triggered average (STA) data from retinal ganglion cells (RGC) to functions expressed as the difference of two 2-dimensional elliptical Gaussians (DoG, Difference of Gaussians).
+These classes fit spike-triggered average (STA) data from retinal ganglion cells (RGC) to functions 
+expressed as the difference of two 2-dimensional elliptical Gaussians (DoG, Difference of Gaussians).
 
 The derived parameters are used to create artificial RGC mosaics and receptive fields (RFs).
 
@@ -71,11 +72,11 @@ class ApricotData:
         else:
             raise NotImplementedError("Unknown cell type or response type, aborting")
 
+        # Read nonspatial data. Data type is numpy nd array, but it includes a lot of metadata.
         filepath = self.apricot_data_folder / self.filename_nonspatial
-
         raw_data = sio.loadmat(filepath)  # , squeeze_me=True)
-
         self.data = raw_data["mosaicGLM"][0]
+
         self.n_cells = len(self.data)
         self.inverted_data_indices = self._get_inverted_indices()
 
@@ -185,8 +186,16 @@ class ApricotData:
         """
         Computes the pixelwise sum of the values in the rank-1 spatial filters.
 
-        :param remove_bad_data_indices: bool
-        :return:
+        Parameters
+        ----------
+        remove_bad_data_indices : bool
+            If True, the sums for the bad data indices are set to zero.
+
+        Returns
+        -------
+        filter_sums : pandas Dataframe from np.ndarray
+            Array of shape (n_cells, 3) where each row is the sum of the positive, negative, and
+            total values of the spatial filter for that cell.
         """
         space_rk1 = self._read_space_rk1()
 

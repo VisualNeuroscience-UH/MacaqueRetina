@@ -3,6 +3,7 @@
 import numpy as np
 from scipy.ndimage import rotate, fourier_shift
 from scipy.interpolate import RectBivariateSpline
+
 # from scipy import linalg
 
 # Machine learning
@@ -26,10 +27,12 @@ from retina.fid_module import FrechetInceptionDistance
 # import sys
 import pdb
 import os
+
 # import time
 import datetime
 from pathlib import Path
 import shutil
+
 # import logging
 import json
 
@@ -68,7 +71,7 @@ class VAE(keras.Model):
         # self.beta = 1.0
         # Init attribute for validation. We lack custom fit() method, so we need to pass validation data to train_step()
         self.mystep = 0
-        
+
         self.val_data = val_data
         self.batch_normalization = batch_normalization
 
@@ -194,7 +197,6 @@ class VAE(keras.Model):
     # @tf.function
     def train_step(self, data):
         mse = keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)
-            
 
         with tf.GradientTape() as tape:
             z_mean, z_log_var = self.encoder(data)
@@ -622,8 +624,8 @@ class ApricotVAE(ApricotData):
 
         self.model_type = "VAE"  # TwoStageVAE or VAE
         self.batch_normalization = False
-        self.lr_epochs = 5 # 150 at these epoch intervals, learning rate will be divided by half. Applies to TwoStageVae only
-        self.lr = 0.001 # 0.0001
+        self.lr_epochs = 5  # 150 at these epoch intervals, learning rate will be divided by half. Applies to TwoStageVae only
+        self.lr = 0.001  # 0.0001
         self.optimizer_stage1 = keras.optimizers.Adam(
             learning_rate=self.lr
         )  # default lr = 0.001
@@ -635,10 +637,14 @@ class ApricotVAE(ApricotData):
         # lr = args.lr if args.lr_epochs <= 0 else args.lr * math.pow(args.lr_fac, math.floor(float(epoch) / float(args.lr_epochs)))
 
         # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
-        self.image_shape = (28, 28, 1,)  
-        # self.image_shape = (299, 299, 1) 
-        self.batch_size = 128 # 512  # None will take the batch size from test_split size. Note that the batch size affects training speed and loss values
-        self.batch_size_stage2 = 512 # 512  # Only used for TwoStageVAE
+        self.image_shape = (
+            28,
+            28,
+            1,
+        )
+        # self.image_shape = (299, 299, 1)
+        self.batch_size = 128  # 512  # None will take the batch size from test_split size. Note that the batch size affects training speed and loss values
+        self.batch_size_stage2 = 512  # 512  # Only used for TwoStageVAE
 
         # TÄHÄN JÄIT:
         # Yksinkertaista mallia 64=> 32
@@ -646,7 +652,7 @@ class ApricotVAE(ApricotData):
         # KATSO SAATKO YLEISTETTYÄ AIKAAN
 
         self.epochs = 50
-        self.epochs_stage2 = 0 # Only used for TwoStageVAE
+        self.epochs_stage2 = 0  # Only used for TwoStageVAE
         self.test_split = 0.2  # None or 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.verbose = 2  #  1 or 'auto' necessary for graph creation. Verbosity mode. 0 = silent, 1 = progress bar, 2 = one line per epoch.
 
@@ -655,7 +661,7 @@ class ApricotVAE(ApricotData):
         self.n_pca_components = 16  # None or 32 # Number of PCA components to use for denoising. None does not apply PCA
 
         # Augment data. Final n samples =  n * (1 + n_repeats * 2): n is the original number of samples, 2 is the rot & shift
-        self.n_repeats = 100 # 10  # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
+        self.n_repeats = 100  # 10  # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
         self.angle_min = -10  # 30 # rotation int in degrees
         self.angle_max = 10  # 30
         self.shift_min = (
@@ -730,11 +736,13 @@ class ApricotVAE(ApricotData):
             else:
                 f.unlink()
 
-        self.tensorboard_callback.append(tf.keras.callbacks.TensorBoard(
-            log_dir=exp_folder,
-            histogram_freq=1,
-            write_graph=True,
-        ))
+        self.tensorboard_callback.append(
+            tf.keras.callbacks.TensorBoard(
+                log_dir=exp_folder,
+                histogram_freq=1,
+                write_graph=True,
+            )
+        )
 
         # This creates new scalar/time series line in tensorboard
         self.summary_writer = tf.summary.create_file_writer(str(exp_folder))
@@ -743,6 +751,7 @@ class ApricotVAE(ApricotData):
         """
         Prepare learning rate scheduler for the 2-stage vae.
         """
+
         def lr_scheduler(epoch, lr):
             # Learning rate scheduler for the 2-stage vae.
             # This cuts learning rate by half after lr_epochs number of epochs is reached
@@ -750,13 +759,14 @@ class ApricotVAE(ApricotData):
             lr_updated = (
                 self.lr
                 if self.lr_epochs is None
-                else self.lr * np.power(0.5, np.floor(float(epoch) / float(self.lr_epochs)))
+                else self.lr
+                * np.power(0.5, np.floor(float(epoch) / float(self.lr_epochs)))
             )
 
             return lr_updated
-        
-        self.tensorboard_callback.append(tf.keras.callbacks.LearningRateScheduler(
-            lr_scheduler, verbose=0)
+
+        self.tensorboard_callback.append(
+            tf.keras.callbacks.LearningRateScheduler(lr_scheduler, verbose=0)
         )
 
     def _set_n_cpus(self, n_threads):
@@ -821,7 +831,7 @@ class ApricotVAE(ApricotData):
         plt.title("latent space")
 
     def plot_label_clusters(self, vae, data, labels=None):
-        '''Display a 2D plot of the digit classes in the latent space'''
+        """Display a 2D plot of the digit classes in the latent space"""
 
         # z_mean, _, _ = vae.encoder.predict(data)
         z_mean, _ = vae.encoder.predict(data)
@@ -974,7 +984,7 @@ class ApricotVAE(ApricotData):
             # Set encoder_stage2 and decoder_stage2 weights to non-trainable status
             vae.encoder_stage2.trainable = False
             vae.decoder_stage2.trainable = False
-            self._prep_lr_scheduler() # appends lr_scheduler to fit callbacks
+            self._prep_lr_scheduler()  # appends lr_scheduler to fit callbacks
 
         # Compile model
         vae.compile(optimizer=self.optimizer_stage1)
@@ -1534,12 +1544,12 @@ class ApricotVAE(ApricotData):
         """
         Calculate the structural similarity score (SSIM) for the model.
         The SSIM is a function of differences between luminance, contrast, and structure.
-        The structure is a measure of the local correlation between pixels. 
-        
-        This function is based on the standard SSIM implementation from: 
-        Wang, Z., Bovik, A. C., Sheikh, H. R., & Simoncelli, E. P. (2004) 
-        Image quality assessment: from error visibility to structural similarity. 
-        IEEE transactions on image processing. 
+        The structure is a measure of the local correlation between pixels.
+
+        This function is based on the standard SSIM implementation from:
+        Wang, Z., Bovik, A. C., Sheikh, H. R., & Simoncelli, E. P. (2004)
+        Image quality assessment: from error visibility to structural similarity.
+        IEEE transactions on image processing.
         """
         # Get the predicted image given the data as input
         generated_val, _, _ = model.predict(ssim_data)
@@ -1580,7 +1590,7 @@ class ApricotVAE(ApricotData):
 
         # Get numpy array of data in correct dimensions
         gc_spatial_data_np = self._get_spatial_apricot_data()
-
+        pdb.set_trace()
         # # Process input data for training and validation dataset objects
         rf_training, rf_val, rf_test = self._input_processing_pipe(gc_spatial_data_np)
 
