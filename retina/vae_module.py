@@ -37,7 +37,7 @@ test_dataset.transform = test_transform
 m = len(train_dataset)
 
 train_data, val_data = random_split(train_dataset, [int(m - m * 0.2), int(m * 0.2)])
-batch_size = 256
+batch_size = 32  # 256
 
 train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size)
 valid_loader = torch.utils.data.DataLoader(val_data, batch_size=batch_size)
@@ -259,7 +259,7 @@ from sklearn.manifold import TSNE
 import seaborn as sns
 
 plt.figure(figsize=(10, 10))
-sns.scatterplot(
+sns.relplot(
     data=encoded_samples,
     x="Enc. Variable 0",
     y="Enc. Variable 1",
@@ -269,7 +269,7 @@ sns.scatterplot(
 tsne = TSNE(n_components=2)
 tsne_results = tsne.fit_transform(encoded_samples.drop(["label"], axis=1))
 
-ax0 = sns.scatterplot(
+ax0 = sns.relplot(
     # data=tsne_results,
     x=tsne_results[:, 0],
     y=tsne_results[:, 1],

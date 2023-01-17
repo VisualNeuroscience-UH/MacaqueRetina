@@ -29,9 +29,8 @@ $RECYCLE.BIN/
 # =========================
 
 .vscode/
-results_temp/
-__pycache__
-retina/output/
+*__pycache__
+*.pytest_cache
 *.ipynb_checkpoints
 
 *.pyc
@@ -39,6 +38,11 @@ retina/output/
 docs/_build/
 docs/build/
 
+retina/output/
+
 # Ipython notebook checkpoint folders
 *.ipynb_checkpoints
 
+retina/_vae_module.py
+retina/dataset/
+retina/old_stuff/
