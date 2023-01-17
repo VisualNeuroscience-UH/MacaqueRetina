@@ -30,7 +30,7 @@ The spatiotemporal receptive fields for the four cell types (parasol & midget, O
 
 Chichilnisky_2002_JNeurosci states that L-ON (parasol) cells have on average 21% larger RFs than L-OFF cells. He also shows that OFF cells have more nonlinear response to input, which is not implemented currently (a no-brainer to implement if necessary).
 
-NOTE: bad cell indices and metadata hard coded from Chichilnisky apricot data at apricot_fitter_module ApricotData class. 
+NOTE: bad cell indices and metadata hard coded from Chichilnisky apricot data at apricot_fit_module ApricotData class. 
 For another data set change metadata, visualize fits and change the bad cells.
 NOTE: Visual stimulus video default options are hard coded at visual_stimulus_module.VideoBaseClass class.
 NOTE: If eccentricity stays under 20 deg, dendritic diameter data fitted up to 25 deg only (better fit close to fovea)

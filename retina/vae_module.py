@@ -16,10 +16,10 @@ from tqdm import tqdm
 import pdb
 
 
-class Vae(nn.Module):
+class VAE(nn.Module):
     """Variational Autoencoder class"""
 
-    def __init__(*args, **kwargs):
+    def __init__(self, apricot_data_folder, gc_type, response_type):
         pass
 
     def __call__(self, *args, **kwargs):

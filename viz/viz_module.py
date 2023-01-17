@@ -13,6 +13,7 @@ import brian2.units as b2u
 # Viz
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
+
 # from tqdm import tqdm
 # import seaborn as sns
 
@@ -26,7 +27,7 @@ class Viz:
     """
     Methods to viz_module the retina
 
-    Some methods import object instance as call parameter (ConstructRetina, WorkingRetina, etc). 
+    Some methods import object instance as call parameter (ConstructRetina, WorkingRetina, etc).
     """
 
     cmap = "gist_earth"  # viridis or cividis would be best for color-blind
@@ -74,64 +75,67 @@ class Viz:
 
         return is_valid
 
-
-    # ApricotFits visualization
+    # ApricotFit visualization
     def show_temporal_filter_response(
         self,
         mosaic,
     ):
-        '''
+        """
         Show temporal filter response for each cell.
-        '''
+        """
         temporal_filters_to_show = mosaic.temporal_filters_to_show
-        xdata = temporal_filters_to_show['xdata']
-        xdata_finer = temporal_filters_to_show['xdata_finer']
-        title = temporal_filters_to_show['title']
-        
-        
+        xdata = temporal_filters_to_show["xdata"]
+        xdata_finer = temporal_filters_to_show["xdata_finer"]
+        title = temporal_filters_to_show["title"]
+
         # get cell_ixs
-        cell_ixs_list = [ci for ci in temporal_filters_to_show.keys() if ci.startswith('cell_ix_')]
+        cell_ixs_list = [
+            ci for ci in temporal_filters_to_show.keys() if ci.startswith("cell_ix_")
+        ]
 
         for this_cell_ix in cell_ixs_list:
-            ydata = temporal_filters_to_show[f'{this_cell_ix}']['ydata']
-            y_fit = temporal_filters_to_show[f'{this_cell_ix}']['y_fit']
+            ydata = temporal_filters_to_show[f"{this_cell_ix}"]["ydata"]
+            y_fit = temporal_filters_to_show[f"{this_cell_ix}"]["y_fit"]
             plt.scatter(xdata, ydata)
             plt.plot(
                 xdata_finer,
                 y_fit,
                 c="grey",
             )
-        
+
         N_cells = len(cell_ixs_list)
-        plt.title(f'{title} ({N_cells} cells)')
+        plt.title(f"{title} ({N_cells} cells)")
 
-    def show_spatial_filter_response(
-        self,
-        mosaic):
-        
-        spatial_filters_to_show  = mosaic.spatial_filters_to_show
+    def show_spatial_filter_response(self, mosaic):
 
-        data_all_viable_cells = spatial_filters_to_show['data_all_viable_cells']
-        x_grid = spatial_filters_to_show['x_grid']
-        y_grid = spatial_filters_to_show['y_grid']
-        surround_model = spatial_filters_to_show['surround_model']
-        pixel_array_shape_x = spatial_filters_to_show['pixel_array_shape_x']
-        pixel_array_shape_y = spatial_filters_to_show['pixel_array_shape_y']
+        spatial_filters_to_show = mosaic.spatial_filters_to_show
+
+        data_all_viable_cells = spatial_filters_to_show["data_all_viable_cells"]
+        x_grid = spatial_filters_to_show["x_grid"]
+        y_grid = spatial_filters_to_show["y_grid"]
+        surround_model = spatial_filters_to_show["surround_model"]
+        pixel_array_shape_x = spatial_filters_to_show["pixel_array_shape_x"]
+        pixel_array_shape_y = spatial_filters_to_show["pixel_array_shape_y"]
 
         # get cell_ixs
-        cell_ixs_list = [ci for ci in spatial_filters_to_show.keys() if ci.startswith('cell_ix_')]
+        cell_ixs_list = [
+            ci for ci in spatial_filters_to_show.keys() if ci.startswith("cell_ix_")
+        ]
 
         for this_cell_ix in cell_ixs_list:
             imshow_cmap = "bwr"
             ellipse_edgecolor = "black"
 
-            this_cell_ix_numerical = int(this_cell_ix.split('_')[-1])
+            this_cell_ix_numerical = int(this_cell_ix.split("_")[-1])
             popt = data_all_viable_cells[this_cell_ix_numerical, :]
-            data_array = spatial_filters_to_show[this_cell_ix]['data_array']
-            suptitle = spatial_filters_to_show[this_cell_ix]['suptitle']
+            data_array = spatial_filters_to_show[this_cell_ix]["data_array"]
+            suptitle = spatial_filters_to_show[this_cell_ix]["suptitle"]
 
             fig, (ax1, ax2) = plt.subplots(figsize=(8, 3), ncols=2)
-            plt.suptitle(suptitle, fontsize=10,)
+            plt.suptitle(
+                suptitle,
+                fontsize=10,
+            )
             cen = ax1.imshow(
                 data_array,
                 vmin=-0.1,
@@ -226,7 +230,6 @@ class Viz:
             fig.colorbar(sur, ax=ax2)
             plt.show()
 
-
     # ConstructRetina visualization
     def show_gc_positions_and_density(self, mosaic):
         """
@@ -235,8 +238,8 @@ class Viz:
         ConstructRetina call.
         """
 
-        rho = mosaic.gc_df['positions_eccentricity'].to_numpy()
-        phi = mosaic.gc_df['positions_polar_angle'].to_numpy()
+        rho = mosaic.gc_df["positions_eccentricity"].to_numpy()
+        phi = mosaic.gc_df["positions_polar_angle"].to_numpy()
         gc_density_func_params = mosaic.gc_density_func_params
 
         # to cartesian
@@ -303,7 +306,7 @@ class Viz:
         xcoord, ycoord = self.pol2cart(rho, phi)
 
         fig, ax = plt.subplots(nrows=1, ncols=1)
-        ax.plot(xcoord.flatten(), ycoord.flatten(), "b.", label = mosaic.gc_type)
+        ax.plot(xcoord.flatten(), ycoord.flatten(), "b.", label=mosaic.gc_type)
 
         if mosaic.surround_fixed:
             # gc_rf_models parameters:'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio', 'orientation_center'
@@ -341,7 +344,9 @@ class Viz:
         ConstructRetina call.
         """
         ydata = mosaic.spatial_statistics_to_show["ydata"]
-        spatial_statistics_dict = mosaic.spatial_statistics_to_show["spatial_statistics_dict"]
+        spatial_statistics_dict = mosaic.spatial_statistics_to_show[
+            "spatial_statistics_dict"
+        ]
         model_fit_data = mosaic.spatial_statistics_to_show["model_fit_data"]
 
         distributions = [key for key in spatial_statistics_dict.keys()]
@@ -430,9 +435,9 @@ class Viz:
             )
 
     def show_dendrite_diam_vs_ecc(self, mosaic):
-        '''
+        """
         ConstructRetina call.
-        '''
+        """
         data_all_x = mosaic.dendrite_diam_vs_ecc_to_show["data_all_x"]
         data_all_y = mosaic.dendrite_diam_vs_ecc_to_show["data_all_y"]
         polynomials = mosaic.dendrite_diam_vs_ecc_to_show["polynomials"]
@@ -502,17 +507,19 @@ class Viz:
         plt.title(title)
 
     def show_temp_stat(self, mosaic):
-        '''
+        """
         Show the temporal statistics of the mosaic.
         ConstructRetina call.
-        '''
+        """
 
-        temporal_filter_parameters = mosaic.temp_stat_to_show["temporal_filter_parameters"]
+        temporal_filter_parameters = mosaic.temp_stat_to_show[
+            "temporal_filter_parameters"
+        ]
         distrib_params = mosaic.temp_stat_to_show["distrib_params"]
-        suptitle = mosaic.temp_stat_to_show["suptitle"]   
+        suptitle = mosaic.temp_stat_to_show["suptitle"]
         all_fits_df = mosaic.temp_stat_to_show["all_fits_df"]
         good_data_indices = mosaic.temp_stat_to_show["good_data_indices"]
-        
+
         plt.subplots(2, 3)
         plt.suptitle(suptitle)
         for i, param_name in enumerate(temporal_filter_parameters):
@@ -531,9 +538,9 @@ class Viz:
             ax.set_title(param_name)
 
     def show_tonic_drives(self, mosaic):
-        '''
+        """
         ConstructRetina call.
-        '''
+        """
         xs = mosaic.tonic_drives_to_show["xs"]
         pdf = mosaic.tonic_drives_to_show["pdf"]
         tonicdrive_array = mosaic.tonic_drives_to_show["tonicdrive_array"]
@@ -545,10 +552,10 @@ class Viz:
         plt.xlabel("Tonic drive (a.u.)")
 
     def show_build_process(self, mosaic, show_all_spatial_fits=False):
-        '''
+        """
         Visualize retina mosaic build process.
-        '''
-        
+        """
+
         # If show_all_spatial_fits is true, show the spatial fits
         if show_all_spatial_fits is True:
             self.show_spatial_filter_response(mosaic)
@@ -556,13 +563,12 @@ class Viz:
 
         self.show_temporal_filter_response(mosaic)
 
-        self.show_gc_positions_and_density(mosaic) 
+        self.show_gc_positions_and_density(mosaic)
         self.visualize_mosaic(mosaic)
         self.show_spatial_statistics(mosaic)
         self.show_dendrite_diam_vs_ecc(mosaic)
         self.show_temp_stat(mosaic)
         self.show_tonic_drives(mosaic)
-
 
     # WorkingRetina visualization
     def show_stimulus_with_gcs(self, retina, frame_number=0, ax=None, example_gc=5):
@@ -633,9 +639,7 @@ class Viz:
         # Set right y tick labels (mm)
         ax2 = ax.twinx()  # instantiate a second axes that shares the same x-axis
         ax2.tick_params(axis="y")
-        right_y_labels = np.round(
-            (locs / pix_per_deg) / deg_per_mm, decimals=2
-        )
+        right_y_labels = np.round((locs / pix_per_deg) / deg_per_mm, decimals=2)
         plt.yticks(ticks=locs, labels=right_y_labels)
         ax2.set_ylabel("mm")
 
@@ -687,9 +691,9 @@ class Viz:
         plt.yticks([])
 
     def plot_tf_amplitude_response(self, retina, cell_index, ax=None):
-        '''
+        """
         WorkingRetina call.
-        '''
+        """
         tf = retina._create_temporal_filter(cell_index)
         data_filter_duration = retina.data_filter_duration
 
@@ -740,11 +744,10 @@ class Viz:
         :return:
         """
         # get stimulus intensities
-        stimulus_cropped = retina._get_cropped_video(
-            cell_index, contrast=False) 
+        stimulus_cropped = retina._get_cropped_video(cell_index, contrast=False)
         stimulus_video = retina.stimulus_video
         spatial_filter_sidelen = retina.spatial_filter_sidelen
-        
+
         n_frames = stimulus_video.video_n_frames
         sidelen = spatial_filter_sidelen
         signal = np.zeros(n_frames)
@@ -772,8 +775,7 @@ class Viz:
         :return:
         """
         # get stimulus intensities
-        stimulus_cropped = retina._get_cropped_video(
-            cell_index, contrast=False)  
+        stimulus_cropped = retina._get_cropped_video(cell_index, contrast=False)
         stimulus_video = retina.stimulus_video
 
         n_frames = stimulus_video.video_n_frames
@@ -793,9 +795,9 @@ class Viz:
         ax.set_ylim([0, 1])
 
     def show_gc_responses(self, retina):
-        '''
+        """
         WorkingRetina call.
-        '''
+        """
         n_trials = retina.gc_responses_to_show["n_trials"]
         n_cells = retina.gc_responses_to_show["n_cells"]
         all_spiketrains = retina.gc_responses_to_show["all_spiketrains"]
@@ -803,7 +805,7 @@ class Viz:
         duration = retina.gc_responses_to_show["duration"]
         generator_potential = retina.gc_responses_to_show["generator_potential"]
         video_dt = retina.gc_responses_to_show["video_dt"]
-        tvec_new = retina.gc_responses_to_show["tvec_new"]        
+        tvec_new = retina.gc_responses_to_show["tvec_new"]
 
         # Prepare data for manual visualization
         if n_trials > 1 and n_cells == 1:
@@ -859,12 +861,11 @@ class Viz:
 
         plt.legend()
 
-    def show_spatiotemporal_filter(
-        self, retina):
+    def show_spatiotemporal_filter(self, retina):
 
-        '''
+        """
         WorkingRetina call.
-        '''
+        """
 
         spatial_filter = retina.spatiotemporal_filter_to_show["spatial_filter"]
         cell_index = retina.spatiotemporal_filter_to_show["cell_index"]
@@ -888,9 +889,9 @@ class Viz:
         plt.tight_layout()
 
     def show_convolved_stimulus(self, retina):
-        '''
+        """
         WorkingRetina call.
-        '''
+        """
 
         cell_index = retina.convolved_stimulus_to_show["cell_index"]
         generator_potential = retina.convolved_stimulus_to_show["generator_potential"]
@@ -914,12 +915,11 @@ class Viz:
         plt.xlabel("Time (s)]")
         plt.ylabel("Firing rate (Hz)]")
 
-
     # PhotoReceptor visualization
     def show_cone_response(self, image, image_after_optics, cone_response):
-        '''
+        """
         PhotoReceptor call.
-        '''
+        """
         fig, ax = plt.subplots(nrows=2, ncols=3)
         axs = ax.ravel()
         axs[0].hist(image.flatten(), 20)
@@ -931,9 +931,7 @@ class Viz:
         axs[5].imshow(cone_response, cmap="Greys")
 
     def plot_analog_stimulus(self, analog_input):
-        data=analog_input.Input
+        data = analog_input.Input
 
         plt.figure()
         plt.plot(data.T)
-
-

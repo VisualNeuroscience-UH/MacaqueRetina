@@ -22,7 +22,7 @@ import brian2.units as b2u
 # Local
 from cxsystem2.core.tools import write_to_file, load_from_file
 
-# from retina.apricot_fitter_module import ApricotFits
+# from retina.apricot_fit_module import ApricotFit
 from retina.retina_math_module import RetinaMath
 
 # from retina.vae_module import ApricotVAE
@@ -81,7 +81,7 @@ import pdb
 #         -sets ConstructRetina instance parameters from conf file my_retina
 #         -inits gc_df to hold the final ganglion cell mosaics
 #         If the model_type if FIT:
-#             Calls ApricotFits to fit RF parameters to the data
+#             Calls ApricotFit to fit RF parameters to the data
 
 #         Parameters
 #         ----------
@@ -189,12 +189,12 @@ import pdb
 
 #             # Make or read fits
 #             if fits_from_file is None:
-#                 # init and call -- only connection to apricot_fitter_module
+#                 # init and call -- only connection to apricot_fit_module
 #                 (
 #                     self.all_fits_df,
 #                     self.temporal_filters_to_show,
 #                     self.spatial_filters_to_show,
-#                 ) = ApricotFits(
+#                 ) = ApricotFit(
 #                     self.context.apricot_data_folder, gc_type, response_type
 #                 ).get_fits()
 #             else:

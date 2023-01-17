@@ -21,9 +21,12 @@ from tqdm import tqdm
 
 # Local
 # from cxsystem2.core.tools import write_to_file, load_from_file
-from retina.apricot_fitter_module import ApricotFits
+from retina.apricot_fit_module import ApricotFit
 from retina.retina_math_module import RetinaMath
-from retina.vae_module import ApricotVAE
+
+# from retina.vae_module import ApricotVAE
+from retina.vae_module import VAE
+from retina.gan_module import GAN
 
 # Builtin
 # import sys
@@ -79,7 +82,7 @@ class ConstructRetina(RetinaMath):
         -sets ConstructRetina instance parameters from conf file my_retina
         -inits gc_df to hold the final ganglion cell mosaics
         If the model_type if FIT:
-            Calls ApricotFits to fit RF parameters to the data
+            Calls ApricotFit to fit RF parameters to the data
 
         Parameters
         ----------
@@ -187,12 +190,12 @@ class ConstructRetina(RetinaMath):
 
             # Make or read fits
             if fits_from_file is None:
-                # init and call -- only connection to apricot_fitter_module
+                # init and call -- only connection to apricot_fit_module
                 (
                     self.all_fits_df,
                     self.temporal_filters_to_show,
                     self.spatial_filters_to_show,
-                ) = ApricotFits(
+                ) = ApricotFit(
                     self.context.apricot_data_folder, gc_type, response_type
                 ).get_fits()
             else:
@@ -207,12 +210,24 @@ class ConstructRetina(RetinaMath):
             self.good_data_indices = np.setdiff1d(
                 range(self.n_cells_data), self.bad_data_indices
             )
+        # elif self.model_type == "VAE":
+        #     # Fit variational autoencoder to generate ganglion cells
+        #     self.vae_model = ApricotVAE(
+        #         self.context.apricot_data_folder, gc_type, response_type
+        #     )
+        #     print("Back to ConstructRetina!")
         elif self.model_type == "VAE":
             # Fit variational autoencoder to generate ganglion cells
-            self.vae_model = ApricotVAE(
+            self.vae_model = VAE(
                 self.context.apricot_data_folder, gc_type, response_type
             )
-            print("Back to ConstructRetina!")
+            print("Back from VAE!")
+        elif self.model_type == "GAN":
+            # Fit variational autoencoder to generate ganglion cells
+            self.vae_model = GAN(
+                self.context.apricot_data_folder, gc_type, response_type
+            )
+            print("Back from GAN!")
 
         self.initialized = True
 

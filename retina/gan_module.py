@@ -16,10 +16,11 @@ from tqdm import tqdm
 import pdb
 
 
-class Gan(nn.Module):
+class GAN(nn.Module):
     """Generative Adversarial Network class"""
 
-    def __init__(*args, **kwargs):
+    def __init__(self, apricot_data_folder, gc_type, response_type):
+        
         pass
 
     def __call__(self, *args, **kwargs):

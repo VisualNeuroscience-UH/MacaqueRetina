@@ -5,12 +5,13 @@ from context.context_module import Context
 from data_io.data_io_module import DataIO
 from analysis.analysis_module import Analysis
 from viz.viz_module import Viz
-from  retina.macaque_retina_module import ConstructRetina, WorkingRetina, PhotoReceptor
+from retina.working_retina_module import ConstructRetina, WorkingRetina, PhotoReceptor
 from retina.retina_math_module import RetinaMath
 from stimuli.visual_stimulus_module import ConstructStimulus, AnalogInput
 
 # Builtin
 import pdb
+
 # import time
 # import shlex
 # import subprocess
@@ -35,32 +36,29 @@ Simo Vanni 2022
 
 
 class ProjectManager(ProjectBase, ProjectUtilities):
-
-
-
     def __init__(self, **all_properties):
         """
         Main project manager.
-        In init we construct other classes and inject necessary dependencies. 
+        In init we construct other classes and inject necessary dependencies.
         This class is allowed to house project-dependent data and methods.
         """
 
         context = Context(all_properties)
 
-        # Get correct context attributes. Empty properties return all existing project 
+        # Get correct context attributes. Empty properties return all existing project
         # attributes to context. That is what we want for the project manager
         self.context = context.set_context()
 
         data_io = DataIO(context)
         self.data_io = data_io
-        
+
         cones = PhotoReceptor(context, data_io)
         self.cones = cones
 
-        stimulate = ConstructStimulus(context, data_io, cones) 
+        stimulate = ConstructStimulus(context, data_io, cones)
         self.stimulate = stimulate
 
-        # natural_image = NaturalImage(context, data_io, cones) 
+        # natural_image = NaturalImage(context, data_io, cones)
         # self.natural_image = natural_image
 
         ana = Analysis(
@@ -74,9 +72,9 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         )
 
         self.ana = ana
-        
+
         retina_math = RetinaMath()
-        
+
         viz = Viz(
             # Interfaces
             context,
@@ -84,12 +82,12 @@ class ProjectManager(ProjectBase, ProjectUtilities):
             ana,
             # Dictionaries
             # Methods, which are needed also elsewhere
-            round_to_n_significant = self.round_to_n_significant,
-            DoG2D_fixed_surround = retina_math.DoG2D_fixed_surround,
-            DoG2D_independent_surround = retina_math.DoG2D_independent_surround,
-            pol2cart = retina_math.pol2cart,
-            gauss_plus_baseline = retina_math.gauss_plus_baseline,
-            sector2area = retina_math.sector2area,
+            round_to_n_significant=self.round_to_n_significant,
+            DoG2D_fixed_surround=retina_math.DoG2D_fixed_surround,
+            DoG2D_independent_surround=retina_math.DoG2D_independent_surround,
+            pol2cart=retina_math.pol2cart,
+            gauss_plus_baseline=retina_math.gauss_plus_baseline,
+            sector2area=retina_math.sector2area,
         )
 
         self.viz = viz
@@ -98,14 +96,14 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         self.working_retina = WorkingRetina(context, data_io, viz)
 
         analog_input = AnalogInput(
-            context, 
-            data_io, viz, 
-            wr_initialize = self.working_retina._initialize, 
-            get_w_z_coords = self.working_retina.get_w_z_coords)
-            
-        self.analog_input = analog_input
-        
+            context,
+            data_io,
+            viz,
+            wr_initialize=self.working_retina._initialize,
+            get_w_z_coords=self.working_retina.get_w_z_coords,
+        )
 
+        self.analog_input = analog_input
 
     @property
     def context(self):
@@ -184,5 +182,6 @@ class ProjectManager(ProjectBase, ProjectUtilities):
             raise AttributeError(
                 "Trying to set improper analog_input. analog_input must be a AnalogInput instance."
             )
+
 
 # if __name__=='__main__':
