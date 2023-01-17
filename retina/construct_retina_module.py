@@ -210,6 +210,7 @@ class ConstructRetina(RetinaMath):
             self.good_data_indices = np.setdiff1d(
                 range(self.n_cells_data), self.bad_data_indices
             )
+            print("Back from FIT!")
         # elif self.model_type == "VAE":
         #     # Fit variational autoencoder to generate ganglion cells
         #     self.vae_model = ApricotVAE(
@@ -667,7 +668,9 @@ class ConstructRetina(RetinaMath):
         # Save cell position data to current ganglion cell object
         self.gc_df["positions_eccentricity"] = matrix_eccentricity_randomized_all
         self.gc_df["positions_polar_angle"] = matrix_polar_angle_randomized_all
-        self.gc_df["eccentricity_group_index"] = gc_eccentricity_group_index.astype(int)
+        self.gc_df["eccentricity_group_index"] = gc_eccentricity_group_index.astype(
+            np.uint32
+        )
         self.sector_surface_area_all = np.asarray(sector_surface_area_all)
 
         # Pass the GC object to self, because the Viz class is not inherited
@@ -898,7 +901,7 @@ class ConstructRetina(RetinaMath):
 
         if self.initialized is False:
             self._initialize()
-        return  # temporary jump back to config file -- this time for profiling
+        # return  # temporary jump back to config file -- this time for profiling
 
         # -- First, place the ganglion cell midpoints
         # Run GC density fit to data, get func_params. Data from Perry_1984_Neurosci

@@ -782,7 +782,7 @@ class Viz:
         signal = np.zeros(n_frames)
 
         # unsigned int will overflow when frame_max + frame_min = 256
-        stimulus_cropped = stimulus_cropped.astype(np.int16)
+        stimulus_cropped = stimulus_cropped.astype(np.uint16)
         for t in range(n_frames):
             frame_min = np.min(stimulus_cropped[:, :, t])
             frame_max = np.max(stimulus_cropped[:, :, t])

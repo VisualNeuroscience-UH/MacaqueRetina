@@ -252,7 +252,7 @@ class DataIO(DataIOBase):
                     path + key, data=item, compression="gzip", compression_opts=6
                 )
             elif isinstance(
-                item, (np.int64, np.float64, str, bytes, int, tuple, float)
+                item, (np.uint64, np.float64, str, bytes, int, tuple, float)
             ):
                 h5file[path + key] = item
             elif isinstance(item, dict):
@@ -277,7 +277,7 @@ class DataIO(DataIOBase):
         ans = {}
         for key, item in h5file[path].items():
             if isinstance(item, h5py._hl.dataset.Dataset):
-                ans[key] = item[()] # was ans[key] = item.value
+                ans[key] = item[()]  # was ans[key] = item.value
             elif isinstance(item, h5py._hl.group.Group):
                 ans[key] = self._recursively_load_dict_contents_from_group(
                     h5file, path + key + "/"
@@ -328,10 +328,10 @@ class DataIO(DataIOBase):
         video.release()
 
     def _check_output_folder(self):
-        '''
+        """
         Create output directory if it does not exist.
         Return full path to output directory.
-        '''
+        """
         parent_path = Path.joinpath(self.context.path, self.context.output_folder)
         if not Path(parent_path).exists():
             Path(parent_path).mkdir(parents=True)
@@ -339,16 +339,16 @@ class DataIO(DataIOBase):
         return parent_path
 
     def _get_filename_stem_and_suffix(self, filename):
-        '''
+        """
         Get filename stem and suffix.
-        '''
+        """
         filename_stem = Path(filename).stem
         filename_suffix = Path(filename).suffix
         return filename_stem, filename_suffix
 
     def get_video_full_name(self, filename):
         """
-        Add full path to video name. 
+        Add full path to video name.
 
         Then check if video name has correct extension.
         If not, add correct extension.
@@ -364,7 +364,7 @@ class DataIO(DataIOBase):
 
         filename_stem, filename_suffix = self._get_filename_stem_and_suffix(filename)
 
-        if filename_suffix in ["mp4", "avi"]:
+        if filename_suffix in [".mp4", ".avi"]:
             fullpath_filename = Path.joinpath(
                 parent_path, filename_stem + filename_suffix
             )
@@ -378,7 +378,7 @@ class DataIO(DataIOBase):
         return fullpath_filename
 
     def save_stimulus_to_videofile(self, filename, stimulus):
-        """ 
+        """
         Save stimulus to videofile. This saves two different files.
         1. A video file in mp4 or comparable video format for viewing.
         2. A hdf5 file for reloading.
@@ -440,43 +440,60 @@ class DataIO(DataIOBase):
         stem_extension = filename_stem + filename_extension
 
         fullpath_filename = Path.joinpath(parent_path, stem_extension + ".hdf5")
-        
+
         self.save_array_to_hdf5(fullpath_filename, cone_response)
 
     def load_cone_response_from_hdf5(self, filename):
-        '''
+        """
         Load cone response from hdf5 file.
         :param filename: hdf5 file name
         :return: cone response
-        '''
-        
+        """
+
         parent_path = self.context.output_folder
-        
+
         filename_stem, filename_suffix = self._get_filename_stem_and_suffix(filename)
         if filename_suffix in ["hdf5"]:
-            fullpath_filename = Path.joinpath(parent_path, filename_stem + filename_suffix)
+            fullpath_filename = Path.joinpath(
+                parent_path, filename_stem + filename_suffix
+            )
         else:
             fullpath_filename = Path.joinpath(parent_path, filename_stem + ".hdf5")
 
         cone_response = self.load_array_from_hdf5(fullpath_filename)
-        
+
         return cone_response
 
+    def save_analog_stimulus(
+        self,
+        filename_out=None,
+        Input=None,
+        z_coord=None,
+        w_coord=None,
+        frameduration=None,
+    ):
 
-    def save_analog_stimulus(self, filename_out = None, Input = None, z_coord = None, w_coord = None, frameduration = None):
-
-        assert all([filename_out is not None, Input is not None, z_coord is not None, w_coord is not None, frameduration is not None]), \
-            'Some input missing from save_analog_stimulus, aborting...'
+        assert all(
+            [
+                filename_out is not None,
+                Input is not None,
+                z_coord is not None,
+                w_coord is not None,
+                frameduration is not None,
+            ]
+        ), "Some input missing from save_analog_stimulus, aborting..."
 
         total_duration = Input.shape[1] * frameduration / 1000
         # mat['stimulus'].shape should be (Nunits, Ntimepoints)
-        mat_out_dict = {'z_coord': z_coord, 
-                        'w_coord': w_coord, 
-                        'stimulus':Input, 
-                        'frameduration':frameduration,
-                        'stimulus_duration_in_seconds':total_duration}
+        mat_out_dict = {
+            "z_coord": z_coord,
+            "w_coord": w_coord,
+            "stimulus": Input,
+            "frameduration": frameduration,
+            "stimulus_duration_in_seconds": total_duration,
+        }
 
         filename_out_full = self.context.output_folder.joinpath(filename_out)
-        
+
         sio.savemat(filename_out_full, mat_out_dict)
-        print(f'Duration of stimulus is {total_duration} seconds')
+        print(f"Duration of stimulus is {total_duration} seconds")

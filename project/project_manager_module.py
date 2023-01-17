@@ -5,7 +5,8 @@ from context.context_module import Context
 from data_io.data_io_module import DataIO
 from analysis.analysis_module import Analysis
 from viz.viz_module import Viz
-from retina.working_retina_module import ConstructRetina, WorkingRetina, PhotoReceptor
+from retina.construct_retina_module import ConstructRetina
+from retina.working_retina_module import WorkingRetina, PhotoReceptor
 from retina.retina_math_module import RetinaMath
 from stimuli.visual_stimulus_module import ConstructStimulus, AnalogInput
 
@@ -28,8 +29,8 @@ Module on retina management
 
 We use dependency injection to make the code more modular and easier to test.
 It means that during construction here at the manager level, we can inject
-an object instance to constructor of a "client". Thus the constructed "client" is holding the injected
-object instance.
+an object instance to constructor of a "client", which becomes an attribute
+of the instance.
 
 Simo Vanni 2022
 """
