@@ -65,7 +65,7 @@ class RetinaMath:
         y = radius * np.sin(theta)
         return (x, y)
 
-    # ApricotFit method
+    # Fit method
     def DoG2D_independent_surround(
         self,
         xy_tuple,
@@ -135,7 +135,7 @@ class RetinaMath:
         y = p * (t / tau) ** (n) * np.exp(-n * (t / tau - 1))
         return y
 
-    # ApricotFit & WorkingRetina method
+    # Fit & WorkingRetina method
     def DoG2D_fixed_surround(
         self,
         xy_tuple,

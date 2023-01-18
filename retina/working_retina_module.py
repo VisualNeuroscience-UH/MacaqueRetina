@@ -22,7 +22,7 @@ import brian2.units as b2u
 # Local
 from cxsystem2.core.tools import write_to_file, load_from_file
 
-# from retina.apricot_fit_module import ApricotFit
+# from retina.fit_module import Fit
 from retina.retina_math_module import RetinaMath
 
 # from retina.vae_module import ApricotVAE

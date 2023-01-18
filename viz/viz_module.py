@@ -75,7 +75,7 @@ class Viz:
 
         return is_valid
 
-    # ApricotFit visualization
+    # Fit visualization
     def show_temporal_filter_response(
         self,
         mosaic,

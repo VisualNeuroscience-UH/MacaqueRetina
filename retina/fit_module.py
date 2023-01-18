@@ -26,7 +26,7 @@ from retina.apricot_data_module import ApricotData
 import pdb
 
 
-class ApricotFit(ApricotData, RetinaMath):
+class Fit(ApricotData, RetinaMath):
     """
     Methods for deriving spatial and temporal receptive field parameters from the apricot dataset (Field_2010)
     Call get_fits method to return the fits from the instance object self.all_fits
@@ -455,5 +455,5 @@ class ApricotFit(ApricotData, RetinaMath):
 
 # if __name__ == '__main__':
 
-#     a = ApricotFit('parasol', 'on')
+#     a = Fit('parasol', 'on')
 #     a._fit_temporal_filters(show_temporal_filter_response=True, normalize_before_fit=True)

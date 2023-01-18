@@ -119,7 +119,7 @@ class ApricotData:
             space_rk1, (self.n_cells, 13**2)
         )  # Spatial filter is 13x13 pixels in the Apricot dataset
 
-    # Called from ApricotFit
+    # Called from Fit
     def read_spatial_filter_data(self):
 
         filepath = self.apricot_data_folder / self.spatial_filename

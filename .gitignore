@@ -46,3 +46,4 @@ retina/output/
 retina/_vae_module.py
 retina/dataset/
 retina/old_stuff/
+*dataset/
