@@ -53,7 +53,7 @@ if __name__ == "__main__":
     m = len(train_dataset)
 
     train_data, val_data = random_split(train_dataset, [int(m - m * 0.2), int(m * 0.2)])
-    batch_size = 32  # 256
+    batch_size = 4096  # 256
 
     train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size)
     valid_loader = torch.utils.data.DataLoader(val_data, batch_size=batch_size)

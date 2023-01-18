@@ -66,8 +66,8 @@ if sys.platform == "linux":
     # git_repo_root = r"/opt2/Git_Repos/MacaqueRetina"
     # root_path = "/opt2/Models"  # isosisko
 elif sys.platform == "win32":
-    root_path = r"C:\Users\Simo\Laskenta\Models"
-    git_repo_root = Path(r"C:\Users\Simo\Laskenta\Git_Repos\MacaqueRetina_Git")
+    root_path = r"C:\Users\simov\Laskenta\Models"
+    git_repo_root = Path(r"C:\Users\simov\Laskenta\GitRepos\MacaqueRetina")
 
 
 """
