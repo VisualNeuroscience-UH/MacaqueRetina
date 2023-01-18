@@ -1,5 +1,4 @@
 # Numerical
-# from fileinput import filename
 import numpy as np
 import scipy.optimize as opt
 import scipy.io as sio
@@ -185,38 +184,27 @@ class ConstructRetina(RetinaMath):
             # If surround is fixed, the surround position, semi_x, semi_y (aspect_ratio) and orientation are the same as center params. This appears to give better results.
             self.surround_fixed = 1
 
-            # # Set stimulus stuff
-            # self.stimulus_video = None
-
             # Make or read fits
             if fits_from_file is None:
-                # init and call -- only connection to fit_module
                 (
-                    self.all_fits_df,
+                    self.statistics_df,
+                    self.good_data_indices,
+                    self.bad_data_indices,
+                    self.mean_center_sd,
+                    self.mean_surround_sd,
                     self.temporal_filters_to_show,
                     self.spatial_filters_to_show,
                 ) = Fit(
                     self.context.apricot_data_folder, gc_type, response_type
-                ).get_fits()
+                ).get_statistics()
             else:
+                # probably obsolete 230118 SV
                 self.all_fits_df = pd.read_csv(
                     fits_from_file, header=0, index_col=0
                 ).fillna(0.0)
 
-            self.n_cells_data = len(self.all_fits_df)
-            self.bad_data_indices = np.where((self.all_fits_df == 0.0).all(axis=1))[
-                0
-            ].tolist()
-            self.good_data_indices = np.setdiff1d(
-                range(self.n_cells_data), self.bad_data_indices
-            )
             print("Back from FIT!")
-        # elif self.model_type == "VAE":
-        #     # Fit variational autoencoder to generate ganglion cells
-        #     self.vae_model = ApricotVAE(
-        #         self.context.apricot_data_folder, gc_type, response_type
-        #     )
-        #     print("Back to ConstructRetina!")
+
         elif self.model_type == "VAE":
             # Fit variational autoencoder to generate ganglion cells
             self.vae_model = VAE(
@@ -388,7 +376,6 @@ class ConstructRetina(RetinaMath):
 
     def _create_spatial_receptive_fields(
         self,
-        spatial_statistics_dict,
         dendr_diam_vs_eccentricity_parameters_dict,
     ):
         """
@@ -430,22 +417,18 @@ class ConstructRetina(RetinaMath):
             polynomial_order = 3
 
         # Set parameters for all cells
-        n_cells = len(gc_eccentricity)
-        n_parameters = len(spatial_statistics_dict.keys())
-        gc_rf_models = np.zeros((n_cells, n_parameters))
-        for index, key in enumerate(spatial_statistics_dict.keys()):
-            shape = spatial_statistics_dict[key]["shape"]
-            loc = spatial_statistics_dict[key]["loc"]
-            scale = spatial_statistics_dict[key]["scale"]
-            distribution = spatial_statistics_dict[key]["distribution"]
-            gc_rf_models[:, index] = self._get_random_samples(
+        n_cells = len(self.gc_df)
+        spatial_df = self.statistics_df[self.statistics_df["domain"] == "spatial"]
+        for param_name, row in spatial_df.iterrows():
+            shape, loc, scale, distribution, _ = row
+            self.gc_df[param_name] = self._get_random_samples(
                 shape, loc, scale, n_cells, distribution
             )
 
         # Calculate RF diameter scaling factor for all ganglion cells
         # Area of RF = Scaling_factor * Random_factor * Area of ellipse(semi_xc,semi_yc), solve Scaling_factor.
         area_of_ellipse = self.ellipse2area(
-            gc_rf_models[:, 0], gc_rf_models[:, 1]
+            self.gc_df["semi_xc"], self.gc_df["semi_yc"]
         )  # Units are pixels for the Chichilnisky data
 
         """
@@ -468,31 +451,26 @@ class ConstructRetina(RetinaMath):
         random_normal_distribution1 = 1 + np.random.normal(
             scale=scale_random_distribution, size=n_cells
         )
+
         semi_xc = (
             np.sqrt(area_scaling_factors_coverage1)
-            * gc_rf_models[:, 0]
+            * self.gc_df["semi_xc"]
             * random_normal_distribution1
         )
         random_normal_distribution2 = 1 + np.random.normal(
             scale=scale_random_distribution, size=n_cells
         )  # second randomization
+
         semi_yc = (
             np.sqrt(area_scaling_factors_coverage1)
-            * gc_rf_models[:, 1]
+            * self.gc_df["semi_yc"]
             * random_normal_distribution2
         )
 
         # Scale from micrometers to millimeters and return to numpy matrix
-        gc_rf_models[:, 0] = semi_xc / 1000
-        gc_rf_models[:, 1] = semi_yc / 1000
+        self.gc_df["semi_xc"] = semi_xc / 1000
+        self.gc_df["semi_yc"] = semi_yc / 1000
 
-        # Save to ganglion cell dataframe. Keep it explicit to avoid unknown complexity
-        self.gc_df["semi_xc"] = gc_rf_models[:, 0]
-        self.gc_df["semi_yc"] = gc_rf_models[:, 1]
-        self.gc_df["xy_aspect_ratio"] = gc_rf_models[:, 2]
-        self.gc_df["amplitudes"] = gc_rf_models[:, 3]
-        self.gc_df["sur_ratio"] = gc_rf_models[:, 4]
-        # self.gc_df['orientation_center'] = gc_rf_models[:, 5]
         self.gc_df["orientation_center"] = self.gc_df[
             "positions_polar_angle"
         ]  # plus some noise here
@@ -504,10 +482,13 @@ class ConstructRetina(RetinaMath):
         """
         Place ganglion cell center positions to retina
 
-        :param gc_density_func_params:
-        :param show_build_process: True/False (default False)
+        Creates self.gc_df: pandas.DataFrame with columns:
+            positions_eccentricity, positions_polar_angle, eccentricity_group_index
 
-        :returns matrix_eccentricity_randomized_all, matrix_orientation_surround_randomized_all
+        Parameters
+        ----------
+        gc_density_func_params: dict
+            Dictionary with parameters for the density function
         """
 
         # Place cells inside one polar sector with density according to mid-ecc
@@ -676,195 +657,21 @@ class ConstructRetina(RetinaMath):
         # Pass the GC object to self, because the Viz class is not inherited
         self.gc_density_func_params = gc_density_func_params
 
-    def _fit_spatial_statistics(self):
-        """
-        Collect spatial statistics from Chichilnisky receptive field data
-        """
+    def _create_temporal_receptive_fields(self):
 
-        # parameter_names, data_all_viable_cells, bad_cell_indices = fitdata
-        data_all_viable_cells = np.array(self.all_fits_df)
-
-        bad_cell_indices = np.where((self.all_fits_df == 0.0).all(axis=1))[0].tolist()
-        parameter_names = self.all_fits_df.columns.tolist()
-
-        all_viable_cells = np.delete(data_all_viable_cells, bad_cell_indices, 0)
-
-        chichilnisky_data_df = pd.DataFrame(
-            data=all_viable_cells, columns=parameter_names
-        )
-
-        # Save stats description to gc object
-        self.rf_datafit_description_series = chichilnisky_data_df.describe()
-
-        # Calculate xy_aspect_ratio
-        xy_aspect_ratio_pd_series = (
-            chichilnisky_data_df["semi_yc"] / chichilnisky_data_df["semi_xc"]
-        )
-        xy_aspect_ratio_pd_series.rename("xy_aspect_ratio")
-        chichilnisky_data_df["xy_aspect_ratio"] = xy_aspect_ratio_pd_series
-
-        rf_parameter_names = [
-            "semi_xc",
-            "semi_yc",
-            "xy_aspect_ratio",
-            "amplitudes",
-            "sur_ratio",
-            "orientation_center",
-        ]
-        self.rf_parameter_names = rf_parameter_names  # For reference
-        n_distributions = len(rf_parameter_names)
-        shape = np.zeros(
-            [n_distributions - 1]
-        )  # orientation_center has two shape parameters, below alpha and beta
-        loc = np.zeros([n_distributions])
-        scale = np.zeros([n_distributions])
-        ydata = np.zeros([len(all_viable_cells), n_distributions])
-        x_model_fit = np.zeros([100, n_distributions])
-        y_model_fit = np.zeros([100, n_distributions])
-
-        # Create dict for statistical parameters
-        spatial_statistics_dict = {}
-
-        # Model 'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio' rf_parameter_names with a gamma function.
-        for index, distribution in enumerate(rf_parameter_names[:-1]):
-            # fit the rf_parameter_names, get the PDF distribution using the parameters
-            ydata[:, index] = chichilnisky_data_df[distribution]
-            shape[index], loc[index], scale[index] = stats.gamma.fit(
-                ydata[:, index], loc=0
-            )
-            x_model_fit[:, index] = np.linspace(
-                stats.gamma.ppf(
-                    0.001, shape[index], loc=loc[index], scale=scale[index]
-                ),
-                stats.gamma.ppf(
-                    0.999, shape[index], loc=loc[index], scale=scale[index]
-                ),
-                100,
-            )
-            y_model_fit[:, index] = stats.gamma.pdf(
-                x=x_model_fit[:, index],
-                a=shape[index],
-                loc=loc[index],
-                scale=scale[index],
-            )
-
-            # Collect parameters
-            spatial_statistics_dict[distribution] = {
-                "shape": shape[index],
-                "loc": loc[index],
-                "scale": scale[index],
-                "distribution": "gamma",
-            }
-
-        # Model orientation distribution with beta function.
-        index += 1
-        ydata[:, index] = chichilnisky_data_df[rf_parameter_names[-1]]
-        a_parameter, b_parameter, loc[index], scale[index] = stats.beta.fit(
-            ydata[:, index], 0.6, 0.6, loc=0
-        )  # initial guess for a_parameter and b_parameter is 0.6
-        x_model_fit[:, index] = np.linspace(
-            stats.beta.ppf(
-                0.001, a_parameter, b_parameter, loc=loc[index], scale=scale[index]
-            ),
-            stats.beta.ppf(
-                0.999, a_parameter, b_parameter, loc=loc[index], scale=scale[index]
-            ),
-            100,
-        )
-        y_model_fit[:, index] = stats.beta.pdf(
-            x=x_model_fit[:, index],
-            a=a_parameter,
-            b=b_parameter,
-            loc=loc[index],
-            scale=scale[index],
-        )
-        spatial_statistics_dict[rf_parameter_names[-1]] = {
-            "shape": (a_parameter, b_parameter),
-            "loc": loc[index],
-            "scale": scale[index],
-            "distribution": "beta",
-        }
-
-        self.spatial_statistics_to_show = {
-            "ydata": ydata,
-            "spatial_statistics_dict": spatial_statistics_dict,
-            "model_fit_data": (x_model_fit, y_model_fit),
-        }
-
-        # Return stats for RF creation
-        return spatial_statistics_dict
-
-    def _fit_tonic_drives(self):
-        tonicdrive_array = np.array(
-            self.all_fits_df.iloc[self.good_data_indices].tonicdrive
-        )
-        shape, loc, scale = stats.gamma.fit(tonicdrive_array)
-
-        x_min, x_max = stats.gamma.ppf([0.001, 0.999], a=shape, loc=loc, scale=scale)
-        xs = np.linspace(x_min, x_max, 100)
-        pdf = stats.gamma.pdf(xs, a=shape, loc=loc, scale=scale)
-        title = self.gc_type + " " + self.response_type
-
-        self.tonic_drives_to_show = {
-            "xs": xs,
-            "pdf": pdf,
-            "tonicdrive_array": tonicdrive_array,
-            "title": title,
-        }
-
-        return shape, loc, scale
-
-    def _fit_temporal_statistics(self):
-        temporal_filter_parameters = ["n", "p1", "p2", "tau1", "tau2"]
-        distrib_params = np.zeros((len(temporal_filter_parameters), 3))
-
-        for i, param_name in enumerate(temporal_filter_parameters):
-            param_array = np.array(
-                self.all_fits_df.iloc[self.good_data_indices][param_name]
-            )
-            shape, loc, scale = stats.gamma.fit(param_array)
-            distrib_params[i, :] = [shape, loc, scale]
-
-        self.temp_stat_to_show = {
-            "temporal_filter_parameters": temporal_filter_parameters,
-            "distrib_params": distrib_params,
-            "suptitle": self.gc_type + " " + self.response_type,
-            "all_fits_df": self.all_fits_df,
-            "good_data_indices": self.good_data_indices,
-        }
-
-        return pd.DataFrame(
-            distrib_params,
-            index=temporal_filter_parameters,
-            columns=["shape", "loc", "scale"],
-        )
-
-    def _create_temporal_filters(self, distrib_params_df, distribution="gamma"):
-
-        n_rgc = len(self.gc_df)
-
-        for param_name, row in distrib_params_df.iterrows():
-            shape, loc, scale = row
+        n_cells = len(self.gc_df)
+        temporal_df = self.statistics_df[self.statistics_df["domain"] == "temporal"]
+        for param_name, row in temporal_df.iterrows():
+            shape, loc, scale, distribution, _ = row
             self.gc_df[param_name] = self._get_random_samples(
-                shape, loc, scale, n_rgc, distribution
+                shape, loc, scale, n_cells, distribution
             )
 
     def _scale_both_amplitudes(self):
         """
         Scale center and surround amplitudes so that the spatial RF volume is comparable to that of data.
         Second step of scaling is done before convolving with the stimulus.
-        :return:
         """
-
-        df = self.all_fits_df.iloc[self.good_data_indices]
-        data_pixel_len = 0.06  # in mm; pixel length 60 micrometers in dataset
-
-        # Get mean center and surround RF size from data in millimeters
-        mean_center_sd = np.mean(np.sqrt(df.semi_xc * df.semi_yc)) * data_pixel_len
-        mean_surround_sd = (
-            np.mean(np.sqrt((df.sur_ratio**2 * df.semi_xc * df.semi_yc)))
-            * data_pixel_len
-        )
 
         # For each model cell, set center amplitude as data_cen_mean**2 / sigma_x * sigma_y
         # For each model cell, scale surround amplitude by data_sur_mean**2 / sur_sigma_x * sur_sigma_y
@@ -875,7 +682,7 @@ class ConstructRetina(RetinaMath):
         # amplitudes = np.zeros(n_rgc)
 
         for i in range(n_rgc):
-            amplitudec[i] = mean_center_sd**2 / (
+            amplitudec[i] = self.mean_center_sd**2 / (
                 self.gc_df.iloc[i].semi_xc * self.gc_df.iloc[i].semi_yc
             )
 
@@ -885,6 +692,17 @@ class ConstructRetina(RetinaMath):
         self.gc_df["relative_sur_amplitude"] = (
             self.gc_df["amplitudes"] / self.gc_df["amplitudec"]
         )
+
+    def _create_tonic_drive(self):
+        """
+        Create tonic drive for each cell.
+        """
+        tonic_df = self.statistics_df[self.statistics_df["domain"] == "tonic"]
+        for param_name, row in tonic_df.iterrows():
+            shape, loc, scale, distribution, _ = row
+            self.gc_df[param_name] = self._get_random_samples(
+                shape, loc, scale, len(self.gc_df), distribution
+            )
 
     def build(self):
         """
@@ -913,7 +731,6 @@ class ConstructRetina(RetinaMath):
         if self.model_type == "FIT":
             # -- Second, endow cells with spatial receptive fields
             # Collect spatial statistics for receptive fields
-            spatial_statistics_dict = self._fit_spatial_statistics()
 
             # Get fit parameters for dendritic field diameter with respect to eccentricity. Linear and quadratic fit.
             # Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
@@ -923,12 +740,11 @@ class ConstructRetina(RetinaMath):
 
             # Create spatial receptive fields.
             self._create_spatial_receptive_fields(
-                spatial_statistics_dict,
                 dendr_diam_vs_eccentricity_parameters_dict,
             )
 
             # Scale center and surround amplitude so that Gaussian volume is preserved
-            self._scale_both_amplitudes()  # TODO - what was the purpose of this?
+            self._scale_both_amplitudes()  # TODO - what was the purpose of this? Working retina uses amplitudec
 
             # At this point the spatial receptive fields are ready.
             # The positions are in gc_eccentricity, gc_polar_angle, and the rf parameters in gc_rf_models
@@ -937,18 +753,10 @@ class ConstructRetina(RetinaMath):
             # Summarize RF semi_xc and semi_yc as "RF radius" (geometric mean)
             self.gc_df["rf_radius"] = np.sqrt(self.gc_df.semi_xc * self.gc_df.semi_yc)
 
-            # Finally, get non-spatial parameters
-            temporal_statistics_df = self._fit_temporal_statistics()
+            self._create_temporal_receptive_fields()
 
-            # Create temporal receptive fields
-            self._create_temporal_filters(temporal_statistics_df, distribution="gamma")
+            self._create_tonic_drive()
 
-            td_shape, td_loc, td_scale = self._fit_tonic_drives()
-
-            # Create tonic drive
-            self.gc_df["tonicdrive"] = self._get_random_samples(
-                td_shape, td_loc, td_scale, n_rgc, "gamma"
-            )
         elif self.model_type == "VAE":
             # Use the generative variational autoencoder model to provide spatial and temporal receptive fields
             pass

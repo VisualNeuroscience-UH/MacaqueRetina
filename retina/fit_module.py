@@ -13,6 +13,7 @@ Only low resolution spatial RF maps are used here.
 import numpy as np
 import scipy.optimize as opt
 from scipy.optimize import curve_fit
+import scipy.stats as stats
 import pandas as pd
 
 # Viz
@@ -29,7 +30,7 @@ import pdb
 class Fit(ApricotData, RetinaMath):
     """
     Methods for deriving spatial and temporal receptive field parameters from the apricot dataset (Field_2010)
-    Call get_fits method to return the fits from the instance object self.all_fits
+    Call get_fits method to return the fits from the instance object self.all_data_fits_df
     """
 
     def __init__(self, apricot_data_folder, gc_type, response_type, _fit_all=True):
@@ -417,7 +418,7 @@ class Fit(ApricotData, RetinaMath):
     def _fit_all(self):
         """
         Fits spatial, temporal and tonic drive parameters to the ApricotData
-        Returns the fits as self.all_fits which is an instance object attribute.
+        Returns the fits as self.all_data_fits_df which is an instance object attribute.
         """
         spatial_fits = self._fit_spatial_filters(
             surround_model=1,
@@ -431,7 +432,7 @@ class Fit(ApricotData, RetinaMath):
         tonicdrives = pd.DataFrame(self.read_tonicdrive(), columns=["tonicdrive"])
 
         # Collect everything into one big dataframe
-        self.all_fits = pd.concat(
+        self.all_data_fits_df = pd.concat(
             [
                 spatial_fits,
                 spatial_filter_sums,
@@ -444,13 +445,265 @@ class Fit(ApricotData, RetinaMath):
 
     def get_fits(self):
         return (
-            self.all_fits,
+            self.all_data_fits_df,
             self.temporal_filters_to_show,
             self.spatial_filters_to_show,
         )
 
     def save(self, filepath):
-        self.all_fits.to_csv(filepath)
+        self.all_data_fits_df.to_csv(filepath)
+
+    def _fit_spatial_statistics(self):
+        """
+        Collect spatial statistics from Chichilnisky receptive field data
+        """
+
+        # parameter_names, data_all_viable_cells, bad_cell_indices = fitdata
+        data_all_viable_cells = np.array(self.all_data_fits_df)
+
+        bad_cell_indices = np.where((self.all_data_fits_df == 0.0).all(axis=1))[
+            0
+        ].tolist()
+        parameter_names = self.all_data_fits_df.columns.tolist()
+
+        all_viable_cells = np.delete(data_all_viable_cells, bad_cell_indices, 0)
+
+        chichilnisky_data_df = pd.DataFrame(
+            data=all_viable_cells, columns=parameter_names
+        )
+
+        # Save stats description to gc object
+        self.rf_datafit_description_series = chichilnisky_data_df.describe()
+
+        # Calculate xy_aspect_ratio
+        xy_aspect_ratio_pd_series = (
+            chichilnisky_data_df["semi_yc"] / chichilnisky_data_df["semi_xc"]
+        )
+        xy_aspect_ratio_pd_series.rename("xy_aspect_ratio")
+        chichilnisky_data_df["xy_aspect_ratio"] = xy_aspect_ratio_pd_series
+
+        rf_parameter_names = [
+            "semi_xc",
+            "semi_yc",
+            "xy_aspect_ratio",
+            "amplitudes",
+            "sur_ratio",
+            "orientation_center",
+        ]
+        self.rf_parameter_names = rf_parameter_names  # For reference
+        n_distributions = len(rf_parameter_names)
+        shape = np.zeros(
+            [n_distributions - 1]
+        )  # orientation_center has two shape parameters, below alpha and beta
+        loc = np.zeros([n_distributions])
+        scale = np.zeros([n_distributions])
+        ydata = np.zeros([len(all_viable_cells), n_distributions])
+        x_model_fit = np.zeros([100, n_distributions])
+        y_model_fit = np.zeros([100, n_distributions])
+
+        # Create dict for statistical parameters
+        spatial_statistics_dict = {}
+
+        # Model 'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio' rf_parameter_names with a gamma function.
+        for index, distribution in enumerate(rf_parameter_names[:-1]):
+            # fit the rf_parameter_names, get the PDF distribution using the parameters
+            ydata[:, index] = chichilnisky_data_df[distribution]
+            shape[index], loc[index], scale[index] = stats.gamma.fit(
+                ydata[:, index], loc=0
+            )
+            x_model_fit[:, index] = np.linspace(
+                stats.gamma.ppf(
+                    0.001, shape[index], loc=loc[index], scale=scale[index]
+                ),
+                stats.gamma.ppf(
+                    0.999, shape[index], loc=loc[index], scale=scale[index]
+                ),
+                100,
+            )
+            y_model_fit[:, index] = stats.gamma.pdf(
+                x=x_model_fit[:, index],
+                a=shape[index],
+                loc=loc[index],
+                scale=scale[index],
+            )
+
+            # Collect parameters
+            spatial_statistics_dict[distribution] = {
+                "shape": shape[index],
+                "loc": loc[index],
+                "scale": scale[index],
+                "distribution": "gamma",
+            }
+
+        # Model orientation distribution with beta function.
+        index += 1
+        ydata[:, index] = chichilnisky_data_df[rf_parameter_names[-1]]
+        a_parameter, b_parameter, loc[index], scale[index] = stats.beta.fit(
+            ydata[:, index], 0.6, 0.6, loc=0
+        )  # initial guess for a_parameter and b_parameter is 0.6
+        x_model_fit[:, index] = np.linspace(
+            stats.beta.ppf(
+                0.001, a_parameter, b_parameter, loc=loc[index], scale=scale[index]
+            ),
+            stats.beta.ppf(
+                0.999, a_parameter, b_parameter, loc=loc[index], scale=scale[index]
+            ),
+            100,
+        )
+        y_model_fit[:, index] = stats.beta.pdf(
+            x=x_model_fit[:, index],
+            a=a_parameter,
+            b=b_parameter,
+            loc=loc[index],
+            scale=scale[index],
+        )
+        spatial_statistics_dict[rf_parameter_names[-1]] = {
+            "shape": (a_parameter, b_parameter),
+            "loc": loc[index],
+            "scale": scale[index],
+            "distribution": "beta",
+        }
+
+        self.spatial_statistics_to_show = {
+            "ydata": ydata,
+            "spatial_statistics_dict": spatial_statistics_dict,
+            "model_fit_data": (x_model_fit, y_model_fit),
+        }
+
+        spatial_statistics_df = pd.DataFrame.from_dict(
+            spatial_statistics_dict, orient="index"
+        )
+        spatial_statistics_df["domain"] = "spatial"
+
+        # Return stats for RF creation
+        return spatial_statistics_df
+
+    def _fit_temporal_statistics(self):
+        temporal_filter_parameters = ["n", "p1", "p2", "tau1", "tau2"]
+        distrib_params = np.zeros((len(temporal_filter_parameters), 3))
+
+        for i, param_name in enumerate(temporal_filter_parameters):
+            param_array = np.array(
+                self.all_data_fits_df.iloc[self.good_data_indices][param_name]
+            )
+            shape, loc, scale = stats.gamma.fit(param_array)
+            distrib_params[i, :] = [shape, loc, scale]
+
+        self.temp_stat_to_show = {
+            "temporal_filter_parameters": temporal_filter_parameters,
+            "distrib_params": distrib_params,
+            "suptitle": self.gc_type + " " + self.response_type,
+            "all_data_fits_df_df": self.all_data_fits_df,
+            "good_data_indices": self.good_data_indices,
+        }
+
+        temporal_statistics_df = pd.DataFrame(
+            distrib_params,
+            index=temporal_filter_parameters,
+            columns=["shape", "loc", "scale"],
+        )
+
+        temporal_statistics_df["distribution"] = "gamma"
+        temporal_statistics_df["domain"] = "temporal"
+
+        return temporal_statistics_df
+
+    def _fit_tonicdrive_statistics(self):
+        tonicdrive_array = np.array(
+            self.all_data_fits_df.iloc[self.good_data_indices].tonicdrive
+        )
+        shape, loc, scale = stats.gamma.fit(tonicdrive_array)
+
+        x_min, x_max = stats.gamma.ppf([0.001, 0.999], a=shape, loc=loc, scale=scale)
+        xs = np.linspace(x_min, x_max, 100)
+        pdf = stats.gamma.pdf(xs, a=shape, loc=loc, scale=scale)
+        title = self.gc_type + " " + self.response_type
+
+        self.tonic_drives_to_show = {
+            "xs": xs,
+            "pdf": pdf,
+            "tonicdrive_array": tonicdrive_array,
+            "title": title,
+        }
+
+        td_df = pd.DataFrame.from_dict(
+            {
+                "tonicdrive": {
+                    "shape": shape,
+                    "loc": loc,
+                    "scale": scale,
+                    "distribution": "gamma",
+                    "domain": "tonic",
+                }
+            },
+            orient="index",
+        )
+
+        return td_df
+
+    def _get_center_surround_sd(self):
+        """
+        Get center and surround amplitudes so that the spatial RF volume scaling.
+        """
+        df = self.all_data_fits_df.iloc[self.good_data_indices]
+        data_pixel_len = 0.06  # in mm; pixel length 60 micrometers in dataset
+
+        # Get mean center and surround RF size from data in millimeters
+        mean_center_sd = np.mean(np.sqrt(df.semi_xc * df.semi_yc)) * data_pixel_len
+        mean_surround_sd = (
+            np.mean(np.sqrt((df.sur_ratio**2 * df.semi_xc * df.semi_yc)))
+            * data_pixel_len
+        )
+        return mean_center_sd, mean_surround_sd
+
+
+    def get_statistics(self):
+        """
+        Start from self.all_data_fits_df and compute statistics
+
+        Get good data indices
+        Get statistics for spatial filters of good data indices
+        Get statistics for temporal filters of good data indices
+        Get statistics for tonic drives of good data indices
+
+        Return statistics as a dataframe, where
+        indices are the parameter names
+        columns are shape, loc, scale, distribution ('gamma', 'beta'), domain (spatial, temporal, tonic)
+        """
+        self.n_cells_data = len(self.all_data_fits_df)
+        self.bad_data_indices = np.where((self.all_data_fits_df == 0.0).all(axis=1))[
+            0
+        ].tolist()
+        self.good_data_indices = np.setdiff1d(
+            range(self.n_cells_data), self.bad_data_indices
+        )
+
+        # Get statistics for spatial filters of good data indices
+        spatial_statistics_df = self._fit_spatial_statistics()
+
+        # Get statistics for temporal filters of good data indices
+        temporal_statistics_df = self._fit_temporal_statistics()
+
+        # Get statistics for tonic drives of good data indices
+        tonicdrive_statistics_df = self._fit_tonicdrive_statistics()
+
+        # get center and surround sd
+        mean_center_sd, mean_surround_sd = self._get_center_surround_sd()
+
+        # Collect everything into one big dataframe
+        statistics_df = pd.concat(
+            [spatial_statistics_df, temporal_statistics_df, tonicdrive_statistics_df],
+            axis=0,
+        )
+        return (
+            statistics_df,
+            self.good_data_indices,
+            self.bad_data_indices,
+            mean_center_sd,
+            mean_surround_sd,
+            self.temporal_filters_to_show,
+            self.spatial_filters_to_show,
+        )
 
 
 # if __name__ == '__main__':
