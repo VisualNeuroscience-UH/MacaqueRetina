@@ -9,7 +9,7 @@ import pdb
 # sys.path.append(Path(__file__).resolve().parent.parent)
 
 
-# This computer git repos
+# Local
 from project.project_manager_module import ProjectManager
 
 # from project_manager_module import ProjectManager

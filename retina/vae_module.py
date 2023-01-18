@@ -1,7 +1,9 @@
+# Numerical
 import matplotlib.pyplot as plt  # plotting library
 import numpy as np  # this module is useful to work with numerical arrays
 import pandas as pd
 
+# Pytorch
 # import random
 import torch
 import torchvision
@@ -11,8 +13,13 @@ from torch import nn
 import torch.nn.functional as F
 import torch.optim as optim
 
+# Viz
 from tqdm import tqdm
 
+# Local
+from retina.apricot_data_module import ApricotData
+
+# Builtin
 import pdb
 
 

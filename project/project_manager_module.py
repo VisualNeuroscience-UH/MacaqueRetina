@@ -1,4 +1,4 @@
-# This computer git repos
+# Local
 from project.project_base_module import ProjectBase
 from project.project_utilities_module import ProjectUtilities
 from context.context_module import Context
