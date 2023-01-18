@@ -11,18 +11,10 @@ Only low resolution spatial RF maps are used here.
 
 # Numerical
 import numpy as np
-
-# import scipy.optimize as opt
 import scipy.io as sio
-
-# from scipy.optimize import curve_fit
 import pandas as pd
 
-# Viz
-# from tqdm import tqdm
-
 # Local
-# from retina.retina_math_module import RetinaMath
 
 # Builtin
 import pdb
