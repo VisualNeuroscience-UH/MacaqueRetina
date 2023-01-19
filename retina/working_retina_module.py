@@ -803,8 +803,11 @@ class WorkingRetina(RetinaMath):
         This file can be used in ViSimpl:
         visimpl.AppImage -csv parasol_structure.csv parasol_spikes.csv
 
-        :param filename: str
-        :return:
+        Parameters
+        ----------
+        filename: str, optional
+            Name of the file to save the spikes to. If None, the filename will be
+            generated automatically.
         """
         assert (
             len(self.simulated_spiketrains) > 0

@@ -40,6 +40,29 @@ class ConstructRetina(RetinaMath):
     """
     Create the ganglion cell mosaic.
     All spatial parameters are saved to the dataframe *gc_df*
+
+    Attributes
+    ----------
+    gc_type : str
+        Type of ganglion cell, either "parasol" or "midget"
+    response_type : str
+        Type of response, either "on" or "off"
+    eccentricity : list
+        List of two floats, the eccentricity limits in degrees
+    eccentricity_in_mm : list
+        List of two floats, the eccentricity limits in mm
+    theta : list
+        Numpy array two floats, the sector limits in degrees
+    randomize_position : bool
+        Whether to randomize the position of the ganglion cells
+    deg_per_mm : float
+        Degrees per mm
+    model_type : str
+        Type of model, either "FIT", "VAE" or "GAN"
+    gc_proportion : float
+        Proportion of ganglion cells to be created
+    gc_df : pd.DataFrame
+        Dataframe containing the ganglion cell mosaic
     """
 
     _properties_list = [
@@ -56,6 +79,7 @@ class ConstructRetina(RetinaMath):
 
     def __init__(self, context, data_io, viz) -> None:
 
+        # Dependency injection at ProjectManager construction
         self._context = context.set_context(self._properties_list)
         self._data_io = data_io
         self._viz = viz
@@ -78,19 +102,17 @@ class ConstructRetina(RetinaMath):
 
         """
         Initialize the ganglion cell mosaic.
-        -sets ConstructRetina instance parameters from conf file my_retina
-        -inits gc_df to hold the final ganglion cell mosaics
-        If the model_type if FIT:
-            Calls Fit to fit RF parameters to the data
+            First: sets ConstructRetina instance parameters from conf file my_retina
+            Second: creates empty gc_df to hold the final ganglion cell mosaics
+            Third: gets gc creation model according to model_type
+                Calls Fit, VAE or GAN classes
+
+        See class attributes for more details.
 
         Parameters
         ----------
         fits_from_file : str
             Path to a file containing the fits. If None, fits are computed from scratch
-
-        Returns
-        -------
-        None
         """
 
         my_retina = self.context.my_retina
@@ -706,20 +728,11 @@ class ConstructRetina(RetinaMath):
 
     def build(self):
         """
-        Builds the receptive field mosaic. This is the main function to call.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
+        Builds the receptive field mosaic. This is the main method to call.
         """
 
         if self.initialized is False:
             self._initialize()
-        # return  # temporary jump back to config file -- this time for profiling
 
         # -- First, place the ganglion cell midpoints
         # Run GC density fit to data, get func_params. Data from Perry_1984_Neurosci
@@ -728,17 +741,14 @@ class ConstructRetina(RetinaMath):
         # Place ganglion cells to desired retina.
         self._place_gc_units(gc_density_func_params)
 
+        # Get fit parameters for dendritic field diameter with respect to eccentricity. Linear and quadratic fit.
+        # Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
+        dendr_diam_vs_eccentricity_parameters_dict = (
+            self._fit_dendritic_diameter_vs_eccentricity()
+        )
+
         if self.model_type == "FIT":
             # -- Second, endow cells with spatial receptive fields
-            # Collect spatial statistics for receptive fields
-
-            # Get fit parameters for dendritic field diameter with respect to eccentricity. Linear and quadratic fit.
-            # Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
-            dendr_diam_vs_eccentricity_parameters_dict = (
-                self._fit_dendritic_diameter_vs_eccentricity()
-            )
-
-            # Create spatial receptive fields.
             self._create_spatial_receptive_fields(
                 dendr_diam_vs_eccentricity_parameters_dict,
             )
@@ -748,22 +758,27 @@ class ConstructRetina(RetinaMath):
 
             # At this point the spatial receptive fields are ready.
             # The positions are in gc_eccentricity, gc_polar_angle, and the rf parameters in gc_rf_models
-            n_rgc = len(self.gc_df)
 
             # Summarize RF semi_xc and semi_yc as "RF radius" (geometric mean)
             self.gc_df["rf_radius"] = np.sqrt(self.gc_df.semi_xc * self.gc_df.semi_yc)
 
+            # -- Third, endow cells with temporal receptive fields
             self._create_temporal_receptive_fields()
 
+            # -- Fourth, endow cells with tonic drive
             self._create_tonic_drive()
 
         elif self.model_type == "VAE":
             # Use the generative variational autoencoder model to provide spatial and temporal receptive fields
             pass
+        elif self.model_type == "GAN":
+            # Use the generative adversarial network model to provide spatial and temporal receptive fields
+            pass
         else:
             raise ValueError("Model type not recognized")
 
-        print("Built RGC mosaic with %d cells" % n_rgc)
+        n_rgc = len(self.gc_df)
+        print(f"Built RGC mosaic with {n_rgc} cells")
 
     def save_mosaic(self, filename=None):
         """
@@ -772,10 +787,7 @@ class ConstructRetina(RetinaMath):
         Parameters
         ----------
         filename : pathlib Path object, str or None
-
-        Returns
-        -------
-        None
+            If None, the default filename is used.
         """
         output_folder = self.context.output_folder
 
