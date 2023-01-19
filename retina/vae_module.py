@@ -2,6 +2,7 @@
 import matplotlib.pyplot as plt  # plotting library
 import numpy as np  # this module is useful to work with numerical arrays
 import pandas as pd
+from sklearn.manifold import TSNE
 
 # Pytorch
 # import random
@@ -16,6 +17,7 @@ import torch.nn.functional as F
 
 # Viz
 from tqdm import tqdm
+import seaborn as sns
 
 # Local
 from retina.apricot_data_module import ApricotData
@@ -25,12 +27,92 @@ from pathlib import Path
 import pdb
 
 
+class VariationalEncoder(nn.Module):
+    def __init__(self, latent_dims, device):
+        # super(VariationalEncoder, self).__init__()
+        super().__init__()
+
+        self.device = device
+        self.conv1 = nn.Conv2d(1, 8, 3, stride=2, padding=1)
+        self.conv2 = nn.Conv2d(8, 16, 3, stride=2, padding=1)
+        self.batch2 = nn.BatchNorm2d(16)
+        self.conv3 = nn.Conv2d(16, 32, 3, stride=2, padding=0)
+        self.linear1 = nn.Linear(3 * 3 * 32, 128)
+        self.linear2 = nn.Linear(128, latent_dims)
+        self.linear3 = nn.Linear(128, latent_dims)
+
+        self.N = torch.distributions.Normal(0, 1)
+        self.N.loc = self.N.loc.cuda()  # hack to get sampling on the GPU
+        self.N.scale = self.N.scale.cuda()
+        self.kl = 0
+
+    def forward(self, x):
+        x = x.to(self.device)
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.batch2(self.conv2(x)))
+        x = F.relu(self.conv3(x))
+        x = torch.flatten(x, start_dim=1)
+        x = F.relu(self.linear1(x))
+        mu = self.linear2(x)
+        sigma = torch.exp(self.linear3(x))
+        z = mu + sigma * self.N.sample(mu.shape)
+        self.kl = (sigma**2 + mu**2 - torch.log(sigma) - 1 / 2).sum()
+        return z
+
+
+class Decoder(nn.Module):
+    def __init__(self, latent_dims):
+        super().__init__()
+
+        self.decoder_lin = nn.Sequential(
+            nn.Linear(latent_dims, 128),
+            nn.ReLU(True),
+            nn.Linear(128, 3 * 3 * 32),
+            nn.ReLU(True),
+        )
+
+        self.unflatten = nn.Unflatten(dim=1, unflattened_size=(32, 3, 3))
+
+        self.decoder_conv = nn.Sequential(
+            nn.ConvTranspose2d(32, 16, 3, stride=2, output_padding=0),
+            nn.BatchNorm2d(16),
+            nn.ReLU(True),
+            nn.ConvTranspose2d(16, 8, 3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(8),
+            nn.ReLU(True),
+            nn.ConvTranspose2d(8, 1, 3, stride=2, padding=1, output_padding=1),
+        )
+
+    def forward(self, x):
+        x = self.decoder_lin(x)
+        x = self.unflatten(x)
+        x = self.decoder_conv(x)
+        x = torch.sigmoid(x)
+        return x
+
+
+class VariationalAutoencoder(nn.Module):
+    def __init__(self, latent_dims, device):
+        super().__init__()
+
+        self.device = device
+        self.encoder = VariationalEncoder(latent_dims=latent_dims, device=self.device)
+        # self.encoder = self.variational_encoder(latent_dims)
+        self.decoder = Decoder(latent_dims)
+        # self.decoder = self.variational_decoder(latent_dims)
+
+    def forward(self, x):
+        x = x.to(self.device)
+        z = self.encoder(x)
+        return self.decoder(z)
+
+
 class VAE(nn.Module):
     """Variational Autoencoder class"""
 
     # def __init__(self, apricot_data_folder, gc_type, response_type):
     def __init__(self):
-
+        super().__init__()
         # Set common VAE model parameters
         self.latent_dim = 4
         self.latent_space_plot_scale = 2  # Scale for plotting latent space
@@ -61,6 +143,12 @@ class VAE(nn.Module):
         self.shift_max = 3  # 5
 
         self.random_seed = 42
+
+        self.device = (
+            torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        )
+        # self.variational_encoder = self.VariationalEncoder(self.latent_dim)
+        # self.decoder = self.Decoder(self.latent_dim)
         # n_threads = 30
         # self._set_n_cpus(n_threads)
 
@@ -125,122 +213,60 @@ class VAE(nn.Module):
 
         return gc_spatial_data_np
 
+    def _prep_minst_example(self):
+        data_dir = "dataset"
 
-if __name__ == "__main__":
+        train_dataset = torchvision.datasets.MNIST(data_dir, train=True, download=True)
+        test_dataset = torchvision.datasets.MNIST(data_dir, train=False, download=True)
 
-    tmpself = VAE()
-    data_dir = "dataset"
+        train_transform = transforms.Compose(
+            [
+                transforms.ToTensor(),
+            ]
+        )
 
-    train_dataset = torchvision.datasets.MNIST(data_dir, train=True, download=True)
-    test_dataset = torchvision.datasets.MNIST(data_dir, train=False, download=True)
+        test_transform = transforms.Compose(
+            [
+                transforms.ToTensor(),
+            ]
+        )
 
-    train_transform = transforms.Compose(
-        [
-            transforms.ToTensor(),
-        ]
-    )
+        train_dataset.transform = train_transform
+        test_dataset.transform = test_transform
+        self.test_dataset = test_dataset
 
-    test_transform = transforms.Compose(
-        [
-            transforms.ToTensor(),
-        ]
-    )
+        m = len(train_dataset)
 
-    train_dataset.transform = train_transform
-    test_dataset.transform = test_transform
+        train_data, val_data = random_split(
+            train_dataset, [int(m - m * 0.2), int(m * 0.2)]
+        )
+        batch_size = tmpself.batch_size  # 256
 
-    m = len(train_dataset)
+        train_loader = DataLoader(train_data, batch_size=batch_size)
+        valid_loader = DataLoader(val_data, batch_size=batch_size)
+        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
 
-    train_data, val_data = random_split(train_dataset, [int(m - m * 0.2), int(m * 0.2)])
-    batch_size = tmpself.batch_size  # 256
+        self.train_loader = train_loader
+        self.valid_loader = valid_loader
+        self.test_loader = test_loader
 
-    train_loader = DataLoader(train_data, batch_size=batch_size)
-    valid_loader = DataLoader(val_data, batch_size=batch_size)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+    def _prep_training(self):
+        ### Set the random seed for reproducible results
+        torch.manual_seed(self.random_seed)
 
-    class VariationalEncoder(nn.Module):
-        def __init__(self, latent_dims):
-            super(VariationalEncoder, self).__init__()
-            self.conv1 = nn.Conv2d(1, 8, 3, stride=2, padding=1)
-            self.conv2 = nn.Conv2d(8, 16, 3, stride=2, padding=1)
-            self.batch2 = nn.BatchNorm2d(16)
-            self.conv3 = nn.Conv2d(16, 32, 3, stride=2, padding=0)
-            self.linear1 = nn.Linear(3 * 3 * 32, 128)
-            self.linear2 = nn.Linear(128, latent_dims)
-            self.linear3 = nn.Linear(128, latent_dims)
+        self.vae = VariationalAutoencoder(
+            latent_dims=self.latent_dim, device=self.device
+        )
 
-            self.N = torch.distributions.Normal(0, 1)
-            self.N.loc = self.N.loc.cuda()  # hack to get sampling on the GPU
-            self.N.scale = self.N.scale.cuda()
-            self.kl = 0
+        self.optim = torch.optim.Adam(
+            self.vae.parameters(), lr=self.lr, weight_decay=1e-5
+        )
 
-        def forward(self, x):
-            x = x.to(device)
-            x = F.relu(self.conv1(x))
-            x = F.relu(self.batch2(self.conv2(x)))
-            x = F.relu(self.conv3(x))
-            x = torch.flatten(x, start_dim=1)
-            x = F.relu(self.linear1(x))
-            mu = self.linear2(x)
-            sigma = torch.exp(self.linear3(x))
-            z = mu + sigma * self.N.sample(mu.shape)
-            self.kl = (sigma**2 + mu**2 - torch.log(sigma) - 1 / 2).sum()
-            return z
-
-    class Decoder(nn.Module):
-        def __init__(self, latent_dims):
-            super().__init__()
-
-            self.decoder_lin = nn.Sequential(
-                nn.Linear(latent_dims, 128),
-                nn.ReLU(True),
-                nn.Linear(128, 3 * 3 * 32),
-                nn.ReLU(True),
-            )
-
-            self.unflatten = nn.Unflatten(dim=1, unflattened_size=(32, 3, 3))
-
-            self.decoder_conv = nn.Sequential(
-                nn.ConvTranspose2d(32, 16, 3, stride=2, output_padding=0),
-                nn.BatchNorm2d(16),
-                nn.ReLU(True),
-                nn.ConvTranspose2d(16, 8, 3, stride=2, padding=1, output_padding=1),
-                nn.BatchNorm2d(8),
-                nn.ReLU(True),
-                nn.ConvTranspose2d(8, 1, 3, stride=2, padding=1, output_padding=1),
-            )
-
-        def forward(self, x):
-            x = self.decoder_lin(x)
-            x = self.unflatten(x)
-            x = self.decoder_conv(x)
-            x = torch.sigmoid(x)
-            return x
-
-    class VariationalAutoencoder(nn.Module):
-        def __init__(self, latent_dims):
-            super(VariationalAutoencoder, self).__init__()
-            self.encoder = VariationalEncoder(latent_dims)
-            self.decoder = Decoder(latent_dims)
-
-        def forward(self, x):
-            x = x.to(device)
-            z = self.encoder(x)
-            return self.decoder(z)
-
-    ### Set the random seed for reproducible results
-    torch.manual_seed(tmpself.random_seed)
-
-    vae = VariationalAutoencoder(latent_dims=tmpself.latent_dim)
-
-    optim = torch.optim.Adam(vae.parameters(), lr=tmpself.lr, weight_decay=1e-5)
-
-    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-    print(f"Selected device: {device}")
-    vae.to(device)
+        print(f"Selected device: {self.device}")
+        self.vae.to(self.device)
 
     ### Training function
-    def train_epoch(vae, device, dataloader, optimizer):
+    def _train_epoch(self, vae, device, dataloader, optimizer):
         # Set train mode for both the encoder and the decoder
         vae.train()
         train_loss = 0.0
@@ -262,9 +288,8 @@ if __name__ == "__main__":
 
         return train_loss / len(dataloader.dataset)
 
-        ### Testing function
-
-    def test_epoch(vae, device, dataloader):
+    ### Testing function
+    def _test_epoch(self, vae, device, dataloader):
         # Set evaluation mode for encoder and decoder
         vae.eval()
         val_loss = 0.0
@@ -281,13 +306,13 @@ if __name__ == "__main__":
 
         return val_loss / len(dataloader.dataset)
 
-    def plot_ae_outputs(encoder, decoder, n=10):
+    def _plot_ae_outputs(self, encoder, decoder, n=10):
         plt.figure(figsize=(16, 4.5))
-        targets = test_dataset.targets.numpy()
+        targets = self.test_dataset.targets.numpy()
         t_idx = {i: np.where(targets == i)[0][0] for i in range(n)}
         for i in range(n):
             ax = plt.subplot(2, n, i + 1)
-            img = test_dataset[t_idx[i]][0].unsqueeze(0).to(device)
+            img = self.test_dataset[t_idx[i]][0].unsqueeze(0).to(tmpself.device)
             encoder.eval()
             decoder.eval()
             with torch.no_grad():
@@ -305,31 +330,44 @@ if __name__ == "__main__":
                 ax.set_title("Reconstructed images")
         # plt.show()
 
+
+if __name__ == "__main__":
+
+    tmpself = VAE()
+
+    tmpself._prep_minst_example()
+
+    tmpself._prep_training()
+
     num_epochs = 5
 
     for epoch in range(num_epochs):
-        train_loss = train_epoch(vae, device, train_loader, optim)
-        val_loss = test_epoch(vae, device, valid_loader)
+        train_loss = tmpself._train_epoch(
+            tmpself.vae, tmpself.device, tmpself.train_loader, tmpself.optim
+        )
+        val_loss = tmpself._test_epoch(
+            tmpself.vae, tmpself.device, tmpself.valid_loader
+        )
         print(
             "\n EPOCH {}/{} \t train loss {:.3f} \t val loss {:.3f}".format(
                 epoch + 1, num_epochs, train_loss, val_loss
             )
         )
-    plot_ae_outputs(vae.encoder, vae.decoder, n=10)
+    tmpself._plot_ae_outputs(tmpself.vae.encoder, tmpself.vae.decoder, n=10)
 
     def show_image(img):
         npimg = img.numpy()
         plt.imshow(np.transpose(npimg, (1, 2, 0)))
 
-    vae.eval()
+    tmpself.vae.eval()
 
     with torch.no_grad():
 
         # sample latent vectors from the normal distribution
-        latent = torch.randn(128, tmpself.latent_dim, device=device)
+        latent = torch.randn(128, tmpself.latent_dim, device=tmpself.device)
 
         # reconstruct images from the latent vectors
-        img_recon = vae.decoder(latent)
+        img_recon = tmpself.vae.decoder(latent)
         img_recon = img_recon.cpu()
 
         fig, ax = plt.subplots(figsize=(20, 8.5))
@@ -337,13 +375,13 @@ if __name__ == "__main__":
         # plt.show()
 
     encoded_samples = []
-    for sample in tqdm(test_dataset):
-        img = sample[0].unsqueeze(0).to(device)
+    for sample in tqdm(tmpself.test_dataset):
+        img = sample[0].unsqueeze(0).to(tmpself.device)
         label = sample[1]
         # Encode image
-        vae.eval()
+        tmpself.vae.eval()
         with torch.no_grad():
-            encoded_img = vae.encoder(img)
+            encoded_img = tmpself.vae.encoder(img)
         # Append to list
         encoded_img = encoded_img.flatten().cpu().numpy()
         encoded_sample = {
@@ -354,9 +392,6 @@ if __name__ == "__main__":
 
     encoded_samples = pd.DataFrame(encoded_samples)
     encoded_samples
-
-    from sklearn.manifold import TSNE
-    import seaborn as sns
 
     plt.figure(figsize=(10, 10))
     sns.relplot(
