@@ -9,9 +9,11 @@ from sklearn.manifold import TSNE
 import torch
 import torchvision
 from torchvision import transforms
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, Subset, random_split
 from torch import nn
 import torch.nn.functional as F
+
+# import torch.utils.data.Subset as Subset
 
 # import torch.optim as optim
 
@@ -110,8 +112,8 @@ class VariationalAutoencoder(nn.Module):
 class VAE(nn.Module):
     """Variational Autoencoder class"""
 
-    # def __init__(self, apricot_data_folder, gc_type, response_type):
-    def __init__(self):
+    def __init__(self, apricot_data_folder, gc_type, response_type):
+        # def __init__(self):
         super().__init__()
         # Set common VAE model parameters
         self.latent_dim = 4
@@ -126,7 +128,7 @@ class VAE(nn.Module):
         )
 
         self.batch_size = 256  # None will take the batch size from test_split size.
-        self.epochs = 50
+        self.epochs = 2
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
 
         # Preprocessing parameters
@@ -181,11 +183,23 @@ class VAE(nn.Module):
         # # Save latent space to self.latent_space
         # # Save reconstruction to self.reconstruction
 
-    # def __call__(self, *args, **kwargs):
-    #     return self
+        self._prep_minst_example()
 
-    # def __getattr__(self, *args, **kwargs):
-    #     return self
+        self._prep_training()
+
+        self._train()
+
+        self._plot_ae_outputs(self.vae.encoder, self.vae.decoder, n=10)
+
+        self.vae.eval()
+
+        self._reconstruct_random_images()
+
+        encoded_samples = self._get_encoded_samples()
+
+        self._plot_latent_space(encoded_samples)
+
+        self._plot_tsne_space(encoded_samples)
 
     def _get_spatial_apricot_data(self):
         """
@@ -216,9 +230,6 @@ class VAE(nn.Module):
     def _prep_minst_example(self):
         data_dir = "dataset"
 
-        train_dataset = torchvision.datasets.MNIST(data_dir, train=True, download=True)
-        test_dataset = torchvision.datasets.MNIST(data_dir, train=False, download=True)
-
         train_transform = transforms.Compose(
             [
                 transforms.ToTensor(),
@@ -231,8 +242,22 @@ class VAE(nn.Module):
             ]
         )
 
-        train_dataset.transform = train_transform
-        test_dataset.transform = test_transform
+        _train_dataset = torchvision.datasets.MNIST(
+            data_dir, train=True, download=True, transform=train_transform
+        )
+        _test_dataset = torchvision.datasets.MNIST(
+            data_dir, train=False, download=True, transform=test_transform
+        )
+
+        # Cut for testing. It is disappointing how complex this needs to be.
+        train_indices = torch.arange(6000)
+        test_indices = torch.arange(1000)
+        train_dataset = Subset(_train_dataset, train_indices)
+        test_dataset = Subset(_test_dataset, test_indices)
+        test_dataset.targets = torch.from_numpy(
+            np.fromiter((_test_dataset.targets[i] for i in test_indices), int)
+        )  # Add targets for the plotting
+
         self.test_dataset = test_dataset
 
         m = len(train_dataset)
@@ -240,7 +265,7 @@ class VAE(nn.Module):
         train_data, val_data = random_split(
             train_dataset, [int(m - m * 0.2), int(m * 0.2)]
         )
-        batch_size = tmpself.batch_size  # 256
+        batch_size = self.batch_size  # 256
 
         train_loader = DataLoader(train_data, batch_size=batch_size)
         valid_loader = DataLoader(val_data, batch_size=batch_size)
@@ -312,7 +337,7 @@ class VAE(nn.Module):
         t_idx = {i: np.where(targets == i)[0][0] for i in range(n)}
         for i in range(n):
             ax = plt.subplot(2, n, i + 1)
-            img = self.test_dataset[t_idx[i]][0].unsqueeze(0).to(tmpself.device)
+            img = self.test_dataset[t_idx[i]][0].unsqueeze(0).to(self.device)
             encoder.eval()
             decoder.eval()
             with torch.no_grad():
@@ -328,87 +353,101 @@ class VAE(nn.Module):
             ax.get_yaxis().set_visible(False)
             if i == n // 2:
                 ax.set_title("Reconstructed images")
-        # plt.show()
+
+    def _train(self):
+
+        for epoch in range(self.epochs):
+            train_loss = self._train_epoch(
+                self.vae, self.device, self.train_loader, self.optim
+            )
+            val_loss = self._test_epoch(self.vae, self.device, self.valid_loader)
+            print(
+                f"\n EPOCH {epoch + 1}/{self.epochs} \t train loss {train_loss:.3f} \t val loss {val_loss:.3f}"
+            )
+
+    def _reconstruct_random_images(self):
+        with torch.no_grad():
+
+            # sample latent vectors from the normal distribution
+            latent = torch.randn(128, self.latent_dim, device=self.device)
+
+            # reconstruct images from the latent vectors
+            img_recon = self.vae.decoder(latent)
+            img_recon = img_recon.cpu()
+
+            fig, ax = plt.subplots(figsize=(20, 8.5))
+            self._show_image(torchvision.utils.make_grid(img_recon.data[:100], 10, 5))
+
+    def _show_image(self, img):
+        npimg = img.numpy()
+        # plt.imshow(np.transpose(npimg, (1, 2, 0)), interpolation="nearest")
+        plt.imshow(np.transpose(npimg, (1, 2, 0)))
+
+    def _get_encoded_samples(self):
+        encoded_samples = []
+        for sample in tqdm(self.test_dataset):
+            img = sample[0].unsqueeze(0).to(self.device)
+            label = sample[1]
+            # Encode image
+            self.vae.eval()
+            with torch.no_grad():
+                encoded_img = self.vae.encoder(img)
+            # Append to list
+            encoded_img = encoded_img.flatten().cpu().numpy()
+            encoded_sample = {
+                f"Enc. Variable {i}": enc for i, enc in enumerate(encoded_img)
+            }
+            encoded_sample["label"] = label
+            encoded_samples.append(encoded_sample)
+
+        encoded_samples = pd.DataFrame(encoded_samples)
+
+        return encoded_samples
+
+    def _plot_latent_space(self, encoded_samples):
+        sns.relplot(
+            data=encoded_samples,
+            x="Enc. Variable 0",
+            y="Enc. Variable 1",
+            hue=encoded_samples.label.astype(str),
+        )
+        plt.title("Encoded samples")
+
+    def _plot_tsne_space(self, encoded_samples):
+        tsne = TSNE(n_components=2)
+        tsne_results = tsne.fit_transform(encoded_samples.drop(["label"], axis=1))
+
+        ax0 = sns.relplot(
+            # data=tsne_results,
+            x=tsne_results[:, 0],
+            y=tsne_results[:, 1],
+            hue=encoded_samples.label.astype(str),
+        )
+        ax0.set(xlabel="tsne-2d-one", ylabel="tsne-2d-two")
+        plt.title("TSNE plot of encoded samples")
 
 
 if __name__ == "__main__":
 
-    tmpself = VAE()
+    pass
+    # tmpself = VAE()
 
-    tmpself._prep_minst_example()
+    # tmpself._prep_minst_example()
 
-    tmpself._prep_training()
+    # tmpself._prep_training()
 
-    num_epochs = 5
+    # tmpself._train()
 
-    for epoch in range(num_epochs):
-        train_loss = tmpself._train_epoch(
-            tmpself.vae, tmpself.device, tmpself.train_loader, tmpself.optim
-        )
-        val_loss = tmpself._test_epoch(
-            tmpself.vae, tmpself.device, tmpself.valid_loader
-        )
-        print(
-            "\n EPOCH {}/{} \t train loss {:.3f} \t val loss {:.3f}".format(
-                epoch + 1, num_epochs, train_loss, val_loss
-            )
-        )
-    tmpself._plot_ae_outputs(tmpself.vae.encoder, tmpself.vae.decoder, n=10)
+    # tmpself._plot_ae_outputs(tmpself.vae.encoder, tmpself.vae.decoder, n=10)
 
-    def show_image(img):
-        npimg = img.numpy()
-        plt.imshow(np.transpose(npimg, (1, 2, 0)))
+    # tmpself.vae.eval()
 
-    tmpself.vae.eval()
+    # tmpself._reconstruct_random_images()
 
-    with torch.no_grad():
+    # encoded_samples = tmpself._get_encoded_samples()
 
-        # sample latent vectors from the normal distribution
-        latent = torch.randn(128, tmpself.latent_dim, device=tmpself.device)
+    # tmpself._plot_latent_space(encoded_samples)
 
-        # reconstruct images from the latent vectors
-        img_recon = tmpself.vae.decoder(latent)
-        img_recon = img_recon.cpu()
+    # tmpself._plot_tsne_space(encoded_samples)
 
-        fig, ax = plt.subplots(figsize=(20, 8.5))
-        show_image(torchvision.utils.make_grid(img_recon.data[:100], 10, 5))
-        # plt.show()
-
-    encoded_samples = []
-    for sample in tqdm(tmpself.test_dataset):
-        img = sample[0].unsqueeze(0).to(tmpself.device)
-        label = sample[1]
-        # Encode image
-        tmpself.vae.eval()
-        with torch.no_grad():
-            encoded_img = tmpself.vae.encoder(img)
-        # Append to list
-        encoded_img = encoded_img.flatten().cpu().numpy()
-        encoded_sample = {
-            f"Enc. Variable {i}": enc for i, enc in enumerate(encoded_img)
-        }
-        encoded_sample["label"] = label
-        encoded_samples.append(encoded_sample)
-
-    encoded_samples = pd.DataFrame(encoded_samples)
-    encoded_samples
-
-    plt.figure(figsize=(10, 10))
-    sns.relplot(
-        data=encoded_samples,
-        x="Enc. Variable 0",
-        y="Enc. Variable 1",
-        hue=encoded_samples.label.astype(str),
-    )
-
-    tsne = TSNE(n_components=2)
-    tsne_results = tsne.fit_transform(encoded_samples.drop(["label"], axis=1))
-
-    ax0 = sns.relplot(
-        # data=tsne_results,
-        x=tsne_results[:, 0],
-        y=tsne_results[:, 1],
-        hue=encoded_samples.label.astype(str),
-    )
-    ax0.set(xlabel="tsne-2d-one", ylabel="tsne-2d-two")
-    plt.show()
+    # plt.show()
