@@ -127,7 +127,7 @@ class VAE(nn.Module):
             1,
         )
 
-        self.batch_size = 256  # None will take the batch size from test_split size.
+        self.batch_size = 16  # None will take the batch size from test_split size.
         self.epochs = 2
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
 
@@ -151,41 +151,24 @@ class VAE(nn.Module):
         )
         # self.variational_encoder = self.VariationalEncoder(self.latent_dim)
         # self.decoder = self.Decoder(self.latent_dim)
-        # n_threads = 30
-        # self._set_n_cpus(n_threads)
 
-        # self._fit_all()
-        # self._save_metadata()
+        self._prep_apricot_data(apricot_data_folder, gc_type, response_type)
+        # self._prep_minst_data()
 
-        # # Get experimental data
-        # self.apricot_data = ApricotData(apricot_data_folder, gc_type, response_type)
-        # gc_spatial_data_np = self._get_spatial_apricot_data()
+        # Create dataloaders
 
-        # # Transform to tensor
-        # gc_spatial_data_tensor = torch.from_numpy(gc_spatial_data_np).float()
-
-        # # Split into train and test
-        # gc_train, gc_test = random_split(
-        #     gc_spatial_data_tensor,
-        #     [
-        #         int(len(gc_spatial_data_tensor) * (1 - self.test_split)),
-        #         int(len(gc_spatial_data_tensor) * self.test_split),
-        #     ],
-        # )
-        # # Create dataloaders
-
-        # # pdb.set_trace()
-        # # Create model
-        # # Create optimizer
-        # # Create loss function
-        # # Train
-        # # Save model to self.model
-        # # Save latent space to self.latent_space
-        # # Save reconstruction to self.reconstruction
-
-        self._prep_minst_example()
+        # pdb.set_trace()
+        # Create model
+        # Create optimizer
+        # Create loss function
+        # Train
+        # Save model to self.model
+        # Save latent space to self.latent_space
+        # Save reconstruction to self.reconstruction
 
         self._prep_training()
+
+        print(self.vae)
 
         self._train()
 
@@ -227,7 +210,83 @@ class VAE(nn.Module):
 
         return gc_spatial_data_np
 
-    def _prep_minst_example(self):
+    def _prep_apricot_data(self, apricot_data_folder, gc_type, response_type):
+        """
+        Prep apricot data for training
+
+        Parameters
+        ----------
+        apricot_data_folder : str
+            Path to apricot data folder
+        gc_type : str
+            Type of ganglion cell to use. Options are 'on' or 'off'
+        response_type : str
+            Type of response to use. Options are 'mean' or 'peak'
+
+        Returns
+        -------
+
+        """
+
+        # TÄHÄN JÄIT: OPETTELE DATASET JA DATALOADER, MUKAANLUKIEN TRANSFORMS
+
+        train_transform = transforms.Compose(
+            [
+                transforms.ToTensor(),
+            ]
+        )
+
+        test_transform = transforms.Compose(
+            [
+                transforms.ToTensor(),
+            ]
+        )
+
+        # Get experimental data
+        self.apricot_data = ApricotData(apricot_data_folder, gc_type, response_type)
+        gc_spatial_data_np = self._get_spatial_apricot_data()
+
+        # Transform to tensor
+        gc_spatial_data_tensor = torch.from_numpy(gc_spatial_data_np).float()
+
+        gc_spatial_data_tensor = gc_spatial_data_tensor.to(self.device)
+
+        # Split into train and test
+        gc_train, gc_test = random_split(
+            gc_spatial_data_tensor,
+            [
+                int(len(gc_spatial_data_tensor) * (1 - self.test_split)),
+                int(len(gc_spatial_data_tensor) * self.test_split),
+            ],
+        )
+
+        test_dataset = gc_test
+        # pdb.set_trace()
+        # test_dataset.targets = torch.ones(len(test_dataset))  # dummy
+        self.test_dataset = test_dataset
+
+        # Split into train and validation
+        train_data, val_data = random_split(
+            gc_train,
+            [
+                int(np.round(len(gc_train) * (1 - self.test_split))),
+                int(np.round(len(gc_train) * self.test_split)),
+            ],
+        )
+
+        # m = len(gc_train)
+
+        # train_data, val_data = random_split(gc_train, [int(m - m * 0.2), int(m * 0.2)])
+
+        train_loader = DataLoader(train_data, batch_size=self.batch_size)
+        valid_loader = DataLoader(val_data, batch_size=self.batch_size)
+        test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=True)
+
+        self.train_loader = train_loader
+        self.valid_loader = valid_loader
+        self.test_loader = test_loader
+
+    def _prep_minst_data(self):
         data_dir = "dataset"
 
         train_transform = transforms.Compose(
@@ -265,11 +324,10 @@ class VAE(nn.Module):
         train_data, val_data = random_split(
             train_dataset, [int(m - m * 0.2), int(m * 0.2)]
         )
-        batch_size = self.batch_size  # 256
 
-        train_loader = DataLoader(train_data, batch_size=batch_size)
-        valid_loader = DataLoader(val_data, batch_size=batch_size)
-        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+        train_loader = DataLoader(train_data, batch_size=self.batch_size)
+        valid_loader = DataLoader(val_data, batch_size=self.batch_size)
+        test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=True)
 
         self.train_loader = train_loader
         self.valid_loader = valid_loader
@@ -296,7 +354,9 @@ class VAE(nn.Module):
         vae.train()
         train_loss = 0.0
         # Iterate the dataloader (we do not need the label values, this is unsupervised learning)
-        for x, _ in dataloader:
+        # pdb.set_trace()
+        # for x, _ in dataloader: # MNIST
+        for x in dataloader:  # Apricot
             # Move tensor to the proper device
             x = x.to(device)
             x_hat = vae(x)
@@ -430,24 +490,3 @@ class VAE(nn.Module):
 if __name__ == "__main__":
 
     pass
-    # tmpself = VAE()
-
-    # tmpself._prep_minst_example()
-
-    # tmpself._prep_training()
-
-    # tmpself._train()
-
-    # tmpself._plot_ae_outputs(tmpself.vae.encoder, tmpself.vae.decoder, n=10)
-
-    # tmpself.vae.eval()
-
-    # tmpself._reconstruct_random_images()
-
-    # encoded_samples = tmpself._get_encoded_samples()
-
-    # tmpself._plot_latent_space(encoded_samples)
-
-    # tmpself._plot_tsne_space(encoded_samples)
-
-    # plt.show()
