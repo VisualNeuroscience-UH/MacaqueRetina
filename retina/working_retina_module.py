@@ -69,8 +69,31 @@ class WorkingRetina(RetinaMath):
 
     def _initialize(self):
         """
+        Initialize the retina object.
+        The variable gc_dataframe contains the ganglion cell parameters;
+            positions are retinal coordinates
+            positions_eccentricity in mm
+            positions_polar_angle in degrees
 
-        :param gc_dataframe: Ganglion cell parameters; positions are retinal coordinates; positions_eccentricity in mm, positions_polar_angle in degrees
+        Attributes:
+            gc_type (str): Ganglion cell type
+            response_type (str): Response type
+            deg_per_mm (float): Degrees per mm
+            stimulus_center (list): Center of stimulus in visual space
+            stimulus_width_pix (int): Width of stimulus in pixels
+            stimulus_height_pix (int): Height of stimulus in pixels
+            pix_per_deg (float): Pixels per degree
+            fps (float): Frames per second
+            model_type (str): Model type
+            data_microm_per_pixel (float): Micrometers per pixel
+            data_filter_fps (float): Timesteps per second in data
+            data_filter_timesteps (int): Timesteps in data
+            data_filter_duration (float): Filter duration
+            gc_df (DataFrame): Ganglion cell parameters
+            gc_df_pixspace (DataFrame): Ganglion cell parameters in pixel space
+            spatial_filter_sidelen (int): Spatial filter side length
+            microm_per_pix (float): Micrometers per pixel
+
         """
 
         # Read fitted parameters from file
@@ -146,10 +169,21 @@ class WorkingRetina(RetinaMath):
         Converts visual space coordinates (in degrees; x=eccentricity, y=elevation) to pixel space coordinates.
         In pixel space, coordinates (q,r) correspond to matrix locations, ie. (0,0) is top-left.
 
-        :param x: eccentricity (deg)
-        :param y: elevation (deg)
-        :return:
+        Parameters
+        ----------
+        x : float
+            eccentricity (deg)
+        y : float
+            elevation (deg)
+
+        Returns
+        -------
+        q : float
+            pixel space x-coordinate
+        r : float
+            pixel space y-coordinate
         """
+
         video_width_px = self.stimulus_width_pix  # self.stimulus_video.video_width
         video_height_px = self.stimulus_height_pix  # self.stimulus_video.video_height
         pix_per_deg = self.pix_per_deg  # self.stimulus_video.pix_per_deg
@@ -499,7 +533,7 @@ class WorkingRetina(RetinaMath):
 
     def create_spatiotemporal_filter(self, cell_index, called_from_loop=False):
         """
-        Returns the outer product of the spatial and temporal filters
+        Returns the outer product of the spatial and temporal filters in stimulus space.
 
         Parameters
         ----------
@@ -603,14 +637,20 @@ class WorkingRetina(RetinaMath):
         """
         Runs the LNP pipeline for a single ganglion cell (spiking by Brian2)
 
-        :param cell_index: int or None. If None, run all cells
-        :param n_trials: int
-        :param show_gc_response: bool
-        :param save_data: bool
-        :param spike_generator_model: str, 'refractory' or 'poisson'
-        :param return_monitor: bool, whether to return a raw Brian2 SpikeMonitor
-        :param filename: str
-        :return:
+        Parameters
+        ----------
+        cell_index : int or None, optional
+            Index of the cell to run. If None, run all cells. The default is None.
+        n_trials : int, optional
+            Number of trials to run. The default is 1.
+        save_data : bool, optional
+            Whether to save the data. The default is False.
+        spike_generator_model : str, optional
+            'refractory' or 'poisson'. The default is 'refractory'.
+        return_monitor : bool, optional
+            Whether to return a raw Brian2 SpikeMonitor. The default is False.
+        filename : str, optional
+            Filename to save the data to. The default is None.
         """
 
         # Save spike generation model
@@ -836,8 +876,11 @@ class WorkingRetina(RetinaMath):
         """
         Saves x,y coordinates of model cells to a csv file (for use in ViSimpl).
 
-        :param filename: str
-        :return:
+        Parameters
+        ----------
+        filename: str, optional
+            Name of the file to save the structure to. If None, the filename will be
+            generated automatically.
         """
         if filename is None:
             filename = self.gc_type + "_" + self.response_type + "_structure.csv"
