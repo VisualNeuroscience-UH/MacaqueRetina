@@ -199,9 +199,9 @@ class ConstructRetina(RetinaMath):
             "orientation_center",
         ]
         self.gc_df = pd.DataFrame(columns=columns)
+        self.dendr_diam_model = "quadratic"  # 'linear' # 'quadratic' # cubic
 
         if self.model_type == "FIT":
-            self.dendr_diam_model = "quadratic"  # 'linear' # 'quadratic' # cubic
 
             # If surround is fixed, the surround position, semi_x, semi_y (aspect_ratio) and orientation are the same as center params. This appears to give better results.
             self.surround_fixed = 1

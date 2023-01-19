@@ -112,7 +112,7 @@ my_retina = {
     "model_density": 1.0,
     "randomize_position": 0.05,
     "stimulus_center": 4.45 + 0j,
-    "model_type": "FIT",  # "FIT", "VAE" for variational autoencoder, or GAN for generative adversarial network.
+    "model_type": "VAE",  # "FIT", "VAE" for variational autoencoder, or GAN for generative adversarial network.
 }
 
 

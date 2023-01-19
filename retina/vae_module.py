@@ -11,7 +11,8 @@ from torchvision import transforms
 from torch.utils.data import DataLoader, random_split
 from torch import nn
 import torch.nn.functional as F
-import torch.optim as optim
+
+# import torch.optim as optim
 
 # Viz
 from tqdm import tqdm
@@ -20,35 +21,114 @@ from tqdm import tqdm
 from retina.apricot_data_module import ApricotData
 
 # Builtin
+from pathlib import Path
 import pdb
 
 
 class VAE(nn.Module):
     """Variational Autoencoder class"""
 
-    def __init__(self, apricot_data_folder, gc_type, response_type):
-        # Get experimental data
-        # Transform to tensor
-        # Split into train and test
-        # Create dataloaders
-        # Create model
-        # Create optimizer
-        # Create loss function
-        # Train
-        # Save model to self.model
-        # Save latent space to self.latent_space
-        # Save reconstruction to self.reconstruction
+    # def __init__(self, apricot_data_folder, gc_type, response_type):
+    def __init__(self):
 
-        pass        
+        # Set common VAE model parameters
+        self.latent_dim = 4
+        self.latent_space_plot_scale = 2  # Scale for plotting latent space
+        self.lr = 0.001
 
-    def __call__(self, *args, **kwargs):
-        return self
+        # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
+        self.image_shape = (
+            28,
+            28,
+            1,
+        )
 
-    def __getattr__(self, *args, **kwargs):
-        return self
+        self.batch_size = 256  # None will take the batch size from test_split size.
+        self.epochs = 50
+        self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
+
+        # Preprocessing parameters
+        self.gaussian_filter_size = None  # None or 0.5 or ... # Denoising gaussian filter size (in pixels). None does not apply filter
+        self.n_pca_components = 16  # None or 32 # Number of PCA components to use for denoising. None does not apply PCA
+
+        # Augment data. Final n samples =  n * (1 + n_repeats * 2): n is the original number of samples, 2 is the rot & shift
+        self.n_repeats = 100  # 10  # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
+        self.angle_min = -10  # 30 # rotation int in degrees
+        self.angle_max = 10  # 30
+        self.shift_min = (
+            -3
+        )  # 5 # shift int in pixels (upsampled space, rand int for both x and y)
+        self.shift_max = 3  # 5
+
+        self.random_seed = 42
+        # n_threads = 30
+        # self._set_n_cpus(n_threads)
+
+        # self._fit_all()
+        # self._save_metadata()
+
+        # # Get experimental data
+        # self.apricot_data = ApricotData(apricot_data_folder, gc_type, response_type)
+        # gc_spatial_data_np = self._get_spatial_apricot_data()
+
+        # # Transform to tensor
+        # gc_spatial_data_tensor = torch.from_numpy(gc_spatial_data_np).float()
+
+        # # Split into train and test
+        # gc_train, gc_test = random_split(
+        #     gc_spatial_data_tensor,
+        #     [
+        #         int(len(gc_spatial_data_tensor) * (1 - self.test_split)),
+        #         int(len(gc_spatial_data_tensor) * self.test_split),
+        #     ],
+        # )
+        # # Create dataloaders
+
+        # # pdb.set_trace()
+        # # Create model
+        # # Create optimizer
+        # # Create loss function
+        # # Train
+        # # Save model to self.model
+        # # Save latent space to self.latent_space
+        # # Save reconstruction to self.reconstruction
+
+    # def __call__(self, *args, **kwargs):
+    #     return self
+
+    # def __getattr__(self, *args, **kwargs):
+    #     return self
+
+    def _get_spatial_apricot_data(self):
+        """
+        Get spatial ganglion cell data from file using the apricot_data method read_spatial_filter_data()
+
+        Returns
+        -------
+        gc_spatial_data_np : np.ndarray
+            Spatial data with shape (n_gc, 1, ydim, xdim), pytorch format
+        """
+        (
+            gc_spatial_data_np_orig,
+            _,
+            bad_data_indices,
+        ) = self.apricot_data.read_spatial_filter_data()
+
+        # drop bad data
+        gc_spatial_data_np = np.delete(
+            gc_spatial_data_np_orig, bad_data_indices, axis=2
+        )
+
+        # reshape  pytorch (n_samples, 1, xdim, ydim)
+        gc_spatial_data_np = np.moveaxis(gc_spatial_data_np, 2, 0)
+        gc_spatial_data_np = np.expand_dims(gc_spatial_data_np, axis=1)
+
+        return gc_spatial_data_np
 
 
 if __name__ == "__main__":
+
+    tmpself = VAE()
     data_dir = "dataset"
 
     train_dataset = torchvision.datasets.MNIST(data_dir, train=True, download=True)
@@ -72,13 +152,11 @@ if __name__ == "__main__":
     m = len(train_dataset)
 
     train_data, val_data = random_split(train_dataset, [int(m - m * 0.2), int(m * 0.2)])
-    batch_size = 4096  # 256
+    batch_size = tmpself.batch_size  # 256
 
-    train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size)
-    valid_loader = torch.utils.data.DataLoader(val_data, batch_size=batch_size)
-    test_loader = torch.utils.data.DataLoader(
-        test_dataset, batch_size=batch_size, shuffle=True
-    )
+    train_loader = DataLoader(train_data, batch_size=batch_size)
+    valid_loader = DataLoader(val_data, batch_size=batch_size)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
 
     class VariationalEncoder(nn.Module):
         def __init__(self, latent_dims):
@@ -151,15 +229,11 @@ if __name__ == "__main__":
             return self.decoder(z)
 
     ### Set the random seed for reproducible results
-    torch.manual_seed(0)
+    torch.manual_seed(tmpself.random_seed)
 
-    d = 4
+    vae = VariationalAutoencoder(latent_dims=tmpself.latent_dim)
 
-    vae = VariationalAutoencoder(latent_dims=d)
-
-    lr = 1e-3
-
-    optim = torch.optim.Adam(vae.parameters(), lr=lr, weight_decay=1e-5)
+    optim = torch.optim.Adam(vae.parameters(), lr=tmpself.lr, weight_decay=1e-5)
 
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     print(f"Selected device: {device}")
@@ -252,7 +326,7 @@ if __name__ == "__main__":
     with torch.no_grad():
 
         # sample latent vectors from the normal distribution
-        latent = torch.randn(128, d, device=device)
+        latent = torch.randn(128, tmpself.latent_dim, device=device)
 
         # reconstruct images from the latent vectors
         img_recon = vae.decoder(latent)
