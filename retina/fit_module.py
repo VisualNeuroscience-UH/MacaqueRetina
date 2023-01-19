@@ -3,10 +3,6 @@ These classes fit spike-triggered average (STA) data from retinal ganglion cells
 expressed as the difference of two 2-dimensional elliptical Gaussians (DoG, Difference of Gaussians).
 
 The derived parameters are used to create artificial RGC mosaics and receptive fields (RFs).
-
-Data courtesy of The Chichilnisky Lab <http://med.stanford.edu/chichilnisky.html>
-Data paper: Field GD et al. (2010). Nature 467(7316):673-7.
-Only low resolution spatial RF maps are used here.
 """
 
 # Numerical
@@ -37,15 +33,31 @@ class Fit(ApricotData, RetinaMath):
 
         super().__init__(apricot_data_folder, gc_type, response_type)
         if _fit_all is True:
+            # Fit spatial and temporal filters and tonic drive values to experimental data.
             self._fit_all()
 
     def _fit_temporal_filters(self, normalize_before_fit=False):
         """
-        Fits each temporal filter to a function consisting of the difference of two cascades of lowpass filters. This follows Chichilnisky&Kalmar 2002 JNeurosci.
+        Fits each temporal filter to a function consisting of the difference of two cascades of lowpass filters.
+        This follows Chichilnisky&Kalmar 2002 JNeurosci. Uses retinal spike triggered average (STA) data.
 
-        :return dataframe: concatenated parameters_df, error_df
-        :set self.temporal_filters_to_show: dict of temporal filters to show with viz
+        Parameters
+        ----------
+        normalize_before_fit : bool
+            If True, normalize each temporal filter before fitting.
+            If False, fit the raw temporal filters.
+
+        Attributes
+        ----------
+        self.temporal_filters_to_show : dict
+            Dictionary of temporal filters to show with viz
+
+        Returns
+        -------
+        fitted_parameters : np.ndarray
+            Array of shape (n_cells, 5) containing the fitted parameters for each cell.
         """
+
         # shape (n_cells, 15); 15 time points @ 30 Hz (500 ms)
         if normalize_before_fit is True:
             temporal_filters = self.read_temporal_filter_data(
@@ -116,18 +128,23 @@ class Fit(ApricotData, RetinaMath):
         semi_x_always_major=True,
     ):
         """
-        Fits a function consisting of the difference of two 2-dimensional elliptical Gaussian functions to
-        retinal spike triggered average (STA) data. The show_spatial_filter_response parameter will show
-        each DoG fit in order to search for bad cell fits and data.
+        Fit spatial filters to a difference of Gaussians (DoG) model. Uses retinal spike triggered average (STA) data.
 
         Parameters
         ----------
-        surround_model : int, optional, 0=fit center and surround separately, 1=surround midpoint same as center midpoint, by default 1
-        semi_x_always_major : bool, optional, whether to rotate Gaussians so that semi_x is always the semimajor/longer axis, by default True
+        surround_model : int, optional
+            0=fit center and surround separately, 1=surround midpoint same as center midpoint, by default 1
+        semi_x_always_major : bool, optional
+            Whether to rotate Gaussians so that semi_x is always the semimajor/longer axis, by default True
+
+        Attributes
+        ----------
+        self.spatial_filters_to_show : dict
+            Dictionary of spatial filters to show with viz
 
         Returns
         -------
-        dataframe with spatial parameters and errors
+        dataframe with spatial parameters and errors for each cell (n_cells, 8)
 
         """
 
@@ -383,7 +400,6 @@ class Fit(ApricotData, RetinaMath):
                 "suptitle": f"celltype={self.gc_type}, responsetype={self.response_type}, cell_ix={cell_index}",
             }
 
-        # FOR loop ends here
         spatial_filters_to_show["data_all_viable_cells"] = data_all_viable_cells
 
         # Finally build a dataframe of the fitted parameters
@@ -417,7 +433,7 @@ class Fit(ApricotData, RetinaMath):
 
     def _fit_all(self):
         """
-        Fits spatial, temporal and tonic drive parameters to the ApricotData
+        Fits spatial, temporal and tonic drive parameters to the experimental data.
         Returns the fits as self.all_data_fits_df which is an instance object attribute.
         """
         spatial_fits = self._fit_spatial_filters(
@@ -443,19 +459,18 @@ class Fit(ApricotData, RetinaMath):
             axis=1,
         )
 
-    def get_fits(self):
-        return (
-            self.all_data_fits_df,
-            self.temporal_filters_to_show,
-            self.spatial_filters_to_show,
-        )
-
     def save(self, filepath):
         self.all_data_fits_df.to_csv(filepath)
 
     def _fit_spatial_statistics(self):
         """
-        Collect spatial statistics from Chichilnisky receptive field data
+        Fit spatial statistics of the spatial filter parameters. Returns gamma distribution parameters,
+        except for orientation where it returns beta distribution parameters.
+
+        Returns
+        -------
+        spatial_statistics_df : pd.DataFrame
+            Dataframe with spatial statistics
         """
 
         # parameter_names, data_all_viable_cells, bad_cell_indices = fitdata
@@ -468,19 +483,17 @@ class Fit(ApricotData, RetinaMath):
 
         all_viable_cells = np.delete(data_all_viable_cells, bad_cell_indices, 0)
 
-        chichilnisky_data_df = pd.DataFrame(
-            data=all_viable_cells, columns=parameter_names
-        )
+        spatial_data_df = pd.DataFrame(data=all_viable_cells, columns=parameter_names)
 
         # Save stats description to gc object
-        self.rf_datafit_description_series = chichilnisky_data_df.describe()
+        self.rf_datafit_description_series = spatial_data_df.describe()
 
         # Calculate xy_aspect_ratio
         xy_aspect_ratio_pd_series = (
-            chichilnisky_data_df["semi_yc"] / chichilnisky_data_df["semi_xc"]
+            spatial_data_df["semi_yc"] / spatial_data_df["semi_xc"]
         )
         xy_aspect_ratio_pd_series.rename("xy_aspect_ratio")
-        chichilnisky_data_df["xy_aspect_ratio"] = xy_aspect_ratio_pd_series
+        spatial_data_df["xy_aspect_ratio"] = xy_aspect_ratio_pd_series
 
         rf_parameter_names = [
             "semi_xc",
@@ -507,7 +520,7 @@ class Fit(ApricotData, RetinaMath):
         # Model 'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio' rf_parameter_names with a gamma function.
         for index, distribution in enumerate(rf_parameter_names[:-1]):
             # fit the rf_parameter_names, get the PDF distribution using the parameters
-            ydata[:, index] = chichilnisky_data_df[distribution]
+            ydata[:, index] = spatial_data_df[distribution]
             shape[index], loc[index], scale[index] = stats.gamma.fit(
                 ydata[:, index], loc=0
             )
@@ -537,7 +550,7 @@ class Fit(ApricotData, RetinaMath):
 
         # Model orientation distribution with beta function.
         index += 1
-        ydata[:, index] = chichilnisky_data_df[rf_parameter_names[-1]]
+        ydata[:, index] = spatial_data_df[rf_parameter_names[-1]]
         a_parameter, b_parameter, loc[index], scale[index] = stats.beta.fit(
             ydata[:, index], 0.6, 0.6, loc=0
         )  # initial guess for a_parameter and b_parameter is 0.6
@@ -579,6 +592,15 @@ class Fit(ApricotData, RetinaMath):
         return spatial_statistics_df
 
     def _fit_temporal_statistics(self):
+        """
+        Fit temporal statistics of the temporal filter parameters. Uses gamma distribution.
+
+        Returns
+        -------
+        temporal_statistics_df : pd.DataFrame
+            Dataframe with temporal statistics.
+        """
+
         temporal_filter_parameters = ["n", "p1", "p2", "tau1", "tau2"]
         distrib_params = np.zeros((len(temporal_filter_parameters), 3))
 
@@ -609,6 +631,15 @@ class Fit(ApricotData, RetinaMath):
         return temporal_statistics_df
 
     def _fit_tonicdrive_statistics(self):
+        """
+        Fit tonic drive statistics to tonic drive value fits. Uses gamma distribution.
+
+        Returns
+        -------
+        tonicdrive_statistics_df : pandas.DataFrame
+            DataFrame with tonic drive statistics.
+        """
+
         tonicdrive_array = np.array(
             self.all_data_fits_df.iloc[self.good_data_indices].tonicdrive
         )
@@ -644,31 +675,44 @@ class Fit(ApricotData, RetinaMath):
     def _get_center_surround_sd(self):
         """
         Get center and surround amplitudes so that the spatial RF volume scaling.
+
+        Return
+        ------
+        mean_center_sd : float
+            Mean center standard deviation in millimeters
+        mean_surround_sd : float
+            Mean surround standard deviation in millimeters
         """
         df = self.all_data_fits_df.iloc[self.good_data_indices]
-        data_pixel_len = 0.06  # in mm; pixel length 60 micrometers in dataset
 
         # Get mean center and surround RF size from data in millimeters
-        mean_center_sd = np.mean(np.sqrt(df.semi_xc * df.semi_yc)) * data_pixel_len
+        mean_center_sd = np.mean(np.sqrt(df.semi_xc * df.semi_yc)) * self.DATA_PIXEL_LEN
         mean_surround_sd = (
             np.mean(np.sqrt((df.sur_ratio**2 * df.semi_xc * df.semi_yc)))
-            * data_pixel_len
+            * self.DATA_PIXEL_LEN
         )
         return mean_center_sd, mean_surround_sd
 
-
     def get_statistics(self):
         """
-        Start from self.all_data_fits_df and compute statistics
+        Statistical receptive field model from data.
 
-        Get good data indices
-        Get statistics for spatial filters of good data indices
-        Get statistics for temporal filters of good data indices
-        Get statistics for tonic drives of good data indices
-
-        Return statistics as a dataframe, where
-        indices are the parameter names
-        columns are shape, loc, scale, distribution ('gamma', 'beta'), domain (spatial, temporal, tonic)
+        Return
+        ------
+        statistics_df : pd.DataFrame
+            Statistical model parameters for spatial, temporal, and tonic filters
+            Indices are the parameter names
+            Columns are shape, loc, scale, distribution ('gamma', 'beta'), domain ('spatial', 'temporal', 'tonic')
+        good_data_indices
+        bad_data_indices
+        mean_center_sd : float
+            Mean center standard deviation in millimeters
+        mean_surround_sd : float
+            Mean surround standard deviation in millimeters
+        temporal_filters_to_show : dict
+            Dictionary with temporal filter parameters and distributions
+        spatial_filters_to_show : dict
+            Dictionary with spatial filter parameters and distributions
         """
         self.n_cells_data = len(self.all_data_fits_df)
         self.bad_data_indices = np.where((self.all_data_fits_df == 0.0).all(axis=1))[

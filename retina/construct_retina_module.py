@@ -235,7 +235,7 @@ class ConstructRetina(RetinaMath):
             print("Back from VAE!")
         elif self.model_type == "GAN":
             # Fit variational autoencoder to generate ganglion cells
-            self.vae_model = GAN(
+            self.gan_model = GAN(
                 self.context.apricot_data_folder, gc_type, response_type
             )
             print("Back from GAN!")

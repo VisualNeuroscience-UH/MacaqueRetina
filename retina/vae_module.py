@@ -27,7 +27,19 @@ class VAE(nn.Module):
     """Variational Autoencoder class"""
 
     def __init__(self, apricot_data_folder, gc_type, response_type):
-        pass
+        # Get experimental data
+        # Transform to tensor
+        # Split into train and test
+        # Create dataloaders
+        # Create model
+        # Create optimizer
+        # Create loss function
+        # Train
+        # Save model to self.model
+        # Save latent space to self.latent_space
+        # Save reconstruction to self.reconstruction
+
+        pass        
 
     def __call__(self, *args, **kwargs):
         return self

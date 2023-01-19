@@ -1,9 +1,5 @@
 """ 
-These classes fit spike-triggered average (STA) data from retinal ganglion cells (RGC) to functions 
-expressed as the difference of two 2-dimensional elliptical Gaussians (DoG, Difference of Gaussians).
-
-The derived parameters are used to create artificial RGC mosaics and receptive fields (RFs).
-
+Read data from the Apricot dataset.
 Data courtesy of The Chichilnisky Lab <http://med.stanford.edu/chichilnisky.html>
 Data paper: Field GD et al. (2010). Nature 467(7316):673-7.
 Only low resolution spatial RF maps are used here.
@@ -32,6 +28,8 @@ class ApricotData:
         response_type = response_type.lower()
         self.gc_type = gc_type
         self.response_type = response_type
+
+        self.DATA_PIXEL_LEN = 0.06  # in mm; pixel length 60 micrometers in dataset
 
         # Define filenames
         # Spatial data are read from a separate mat file that have been derived from the originals.
