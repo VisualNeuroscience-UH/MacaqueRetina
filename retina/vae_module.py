@@ -229,6 +229,13 @@ class VAE(nn.Module):
         """
 
         # TÄHÄN JÄIT: OPETTELE DATASET JA DATALOADER, MUKAANLUKIEN TRANSFORMS
+        # DATASET: https://pytorch.org/docs/stable/data.html#torch.utils.data.Dataset
+        # Get one item at a time with __getitem__ and get the length with __len__
+        # One item contains the image and the label
+        # You need to implement custom dataset for your data
+        # Create label at __getitem__ instead of "annotations.csv", e.g. https://www.kaggle.com/abhishek/very-simple-pytorch-training-0-59
+        # DATALOADER: https://pytorch.org/docs/stable/data.html#torch.utils.data.DataLoader
+        # API for PyTorch data loading utilities. It represents a Python iterable over a dataset.
 
         train_transform = transforms.Compose(
             [
