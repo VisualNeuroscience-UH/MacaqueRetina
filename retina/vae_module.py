@@ -29,6 +29,59 @@ from pathlib import Path
 import pdb
 
 
+class ApricotDataset(torch.utils.data.Dataset):
+    def __init__(self, apricot_data_folder, gc_type, response_type):
+
+        self.apricot_data = ApricotData(apricot_data_folder, gc_type, response_type)
+        self.data = self._get_spatial_apricot_data()
+
+        # TÄHÄN JÄIT: SISÄLLYTÄ LAMBDA FUNKTIO TRANSFORM COMPOSE OSIOON, JOSSA LAMBDA SKAALAA KUVAN 0-1 VÄLILLE
+        # TARKISTA DIMSIT
+        # feat_min, feat_max = feature_range
+        # data_std = (data - data.min()) / (data.max() - data.min())
+        # data_scaled = data_std * (feat_max - feat_min) + feat_min
+
+        self.transform = transforms.Compose(
+            [
+                transforms.ToTensor(),
+            ]
+        )
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        image = self.data[idx]
+        # image = self.transform(image)
+        return image
+
+    def _get_spatial_apricot_data(self):
+        """
+        Get spatial ganglion cell data from file using the apricot_data method read_spatial_filter_data()
+
+        Returns
+        -------
+        gc_spatial_data_np : np.ndarray
+            Spatial data with shape (n_gc, 1, ydim, xdim), pytorch format
+        """
+        (
+            gc_spatial_data_np_orig,
+            _,
+            bad_data_indices,
+        ) = self.apricot_data.read_spatial_filter_data()
+
+        # drop bad data
+        gc_spatial_data_np = np.delete(
+            gc_spatial_data_np_orig, bad_data_indices, axis=2
+        )
+
+        # reshape  pytorch (n_samples, 1, xdim, ydim)
+        gc_spatial_data_np = np.moveaxis(gc_spatial_data_np, 2, 0)
+        gc_spatial_data_np = np.expand_dims(gc_spatial_data_np, axis=1)
+
+        return gc_spatial_data_np
+
+
 class VariationalEncoder(nn.Module):
     def __init__(self, latent_dims, device):
         # super(VariationalEncoder, self).__init__()
@@ -184,32 +237,6 @@ class VAE(nn.Module):
 
         self._plot_tsne_space(encoded_samples)
 
-    def _get_spatial_apricot_data(self):
-        """
-        Get spatial ganglion cell data from file using the apricot_data method read_spatial_filter_data()
-
-        Returns
-        -------
-        gc_spatial_data_np : np.ndarray
-            Spatial data with shape (n_gc, 1, ydim, xdim), pytorch format
-        """
-        (
-            gc_spatial_data_np_orig,
-            _,
-            bad_data_indices,
-        ) = self.apricot_data.read_spatial_filter_data()
-
-        # drop bad data
-        gc_spatial_data_np = np.delete(
-            gc_spatial_data_np_orig, bad_data_indices, axis=2
-        )
-
-        # reshape  pytorch (n_samples, 1, xdim, ydim)
-        gc_spatial_data_np = np.moveaxis(gc_spatial_data_np, 2, 0)
-        gc_spatial_data_np = np.expand_dims(gc_spatial_data_np, axis=1)
-
-        return gc_spatial_data_np
-
     def _prep_apricot_data(self, apricot_data_folder, gc_type, response_type):
         """
         Prep apricot data for training
@@ -237,26 +264,16 @@ class VAE(nn.Module):
         # DATALOADER: https://pytorch.org/docs/stable/data.html#torch.utils.data.DataLoader
         # API for PyTorch data loading utilities. It represents a Python iterable over a dataset.
 
-        train_transform = transforms.Compose(
-            [
-                transforms.ToTensor(),
-            ]
-        )
-
-        test_transform = transforms.Compose(
-            [
-                transforms.ToTensor(),
-            ]
-        )
+        # # Get experimental data
+        # self.apricot_data = ApricotData(apricot_data_folder, gc_type, response_type)
+        # gc_spatial_data_np = self._get_spatial_apricot_data()
+        # # Transform to tensor
+        # gc_spatial_data_tensor = torch.from_numpy(gc_spatial_data_np).float()
 
         # Get experimental data
-        self.apricot_data = ApricotData(apricot_data_folder, gc_type, response_type)
-        gc_spatial_data_np = self._get_spatial_apricot_data()
-
-        # Transform to tensor
-        gc_spatial_data_tensor = torch.from_numpy(gc_spatial_data_np).float()
-
-        gc_spatial_data_tensor = gc_spatial_data_tensor.to(self.device)
+        gc_spatial_dataset = ApricotDataset(apricot_data_folder, gc_type, response_type)
+        pdb.set_trace()
+        # gc_spatial_data_tensor = gc_spatial_data_tensor.to(self.device)
 
         # Split into train and test
         gc_train, gc_test = random_split(
@@ -314,7 +331,7 @@ class VAE(nn.Module):
         _test_dataset = torchvision.datasets.MNIST(
             data_dir, train=False, download=True, transform=test_transform
         )
-
+        pdb.set_trace()
         # Cut for testing. It is disappointing how complex this needs to be.
         train_indices = torch.arange(6000)
         test_indices = torch.arange(1000)
