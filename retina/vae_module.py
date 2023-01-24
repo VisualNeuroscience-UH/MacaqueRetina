@@ -30,6 +30,17 @@ import pdb
 
 
 class ApricotDataset(torch.utils.data.Dataset):
+    """
+    Apricot dataset class for Pytorch.
+
+    The constructor reads the data from the ApricotData class and stores it as
+    tensors of shape (n_cells, channels, height, width). While the constructor
+    is called with particular gc_type and response_type, all data is retrieved
+    and thus the __getitem__ method can be called with any index. This enables
+    teaching the network with all data. The gc_type and response_type are, however,
+    logged into the ApricotDataset instance object.
+    """
+
     def __init__(self, apricot_data_folder, gc_type, response_type):
 
         self.apricot_data_folder = apricot_data_folder
@@ -325,56 +336,33 @@ class VAE(nn.Module):
 
         """
 
-        # TÄHÄN JÄIT: OPETTELE DATASET JA DATALOADER, MUKAANLUKIEN TRANSFORMS
-        # DATASET: https://pytorch.org/docs/stable/data.html#torch.utils.data.Dataset
-        # Get one item at a time with __getitem__ and get the length with __len__
-        # One item contains the image and the label
-        # You need to implement custom dataset for your data
-        # Create label at __getitem__ instead of "annotations.csv", e.g. https://www.kaggle.com/abhishek/very-simple-pytorch-training-0-59
-        # DATALOADER: https://pytorch.org/docs/stable/data.html#torch.utils.data.DataLoader
-        # API for PyTorch data loading utilities. It represents a Python iterable over a dataset.
-
-        # # Get experimental data
-        # self.apricot_data = ApricotData(apricot_data_folder, gc_type, response_type)
-        # gc_spatial_data_np = self._get_spatial_apricot_data()
-        # # Transform to tensor
-        # gc_spatial_data_tensor = torch.from_numpy(gc_spatial_data_np).float()
-
         # Get experimental data
-        gc_spatial_dataset = ApricotDataset(apricot_data_folder, gc_type, response_type)
-        pdb.set_trace()
+        gc_spatial_ds = ApricotDataset(apricot_data_folder, gc_type, response_type)
         # gc_spatial_data_tensor = gc_spatial_data_tensor.to(self.device)
 
-        # Split into train and test
-        gc_train, gc_test = random_split(
-            gc_spatial_data_tensor,
+        # Split into training and validation and a separate test dataset
+        train_val_ds, test_ds = random_split(
+            gc_spatial_ds,
             [
-                int(len(gc_spatial_data_tensor) * (1 - self.test_split)),
-                int(len(gc_spatial_data_tensor) * self.test_split),
+                int(len(gc_spatial_ds) * (1 - self.test_split)),
+                int(len(gc_spatial_ds) * self.test_split),
             ],
         )
 
-        test_dataset = gc_test
-        # pdb.set_trace()
-        # test_dataset.targets = torch.ones(len(test_dataset))  # dummy
-        self.test_dataset = test_dataset
+        self.test_ds = test_ds
 
         # Split into train and validation
-        train_data, val_data = random_split(
-            gc_train,
+        train_ds, val_ds = random_split(
+            train_val_ds,
             [
-                int(np.round(len(gc_train) * (1 - self.test_split))),
-                int(np.round(len(gc_train) * self.test_split)),
+                int(np.round(len(train_val_ds) * (1 - self.test_split))),
+                int(np.round(len(train_val_ds) * self.test_split)),
             ],
         )
 
-        # m = len(gc_train)
-
-        # train_data, val_data = random_split(gc_train, [int(m - m * 0.2), int(m * 0.2)])
-
-        train_loader = DataLoader(train_data, batch_size=self.batch_size)
-        valid_loader = DataLoader(val_data, batch_size=self.batch_size)
-        test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=True)
+        train_loader = DataLoader(train_ds, batch_size=self.batch_size)
+        valid_loader = DataLoader(val_ds, batch_size=self.batch_size)
+        test_loader = DataLoader(test_ds, batch_size=self.batch_size, shuffle=True)
 
         self.train_loader = train_loader
         self.valid_loader = valid_loader
@@ -395,33 +383,31 @@ class VAE(nn.Module):
             ]
         )
 
-        _train_dataset = torchvision.datasets.MNIST(
+        _train_ds = torchvision.datasets.MNIST(
             data_dir, train=True, download=True, transform=train_transform
         )
-        _test_dataset = torchvision.datasets.MNIST(
+        _test_ds = torchvision.datasets.MNIST(
             data_dir, train=False, download=True, transform=test_transform
         )
         pdb.set_trace()
         # Cut for testing. It is disappointing how complex this needs to be.
         train_indices = torch.arange(6000)
         test_indices = torch.arange(1000)
-        train_dataset = Subset(_train_dataset, train_indices)
-        test_dataset = Subset(_test_dataset, test_indices)
-        test_dataset.targets = torch.from_numpy(
-            np.fromiter((_test_dataset.targets[i] for i in test_indices), int)
+        train_val_ds = Subset(_train_ds, train_indices)
+        test_ds = Subset(_test_ds, test_indices)
+        test_ds.targets = torch.from_numpy(
+            np.fromiter((_test_ds.targets[i] for i in test_indices), int)
         )  # Add targets for the plotting
 
-        self.test_dataset = test_dataset
+        self.test_ds = test_ds
 
-        m = len(train_dataset)
+        m = len(train_val_ds)
 
-        train_data, val_data = random_split(
-            train_dataset, [int(m - m * 0.2), int(m * 0.2)]
-        )
+        train_ds, val_ds = random_split(train_val_ds, [int(m - m * 0.2), int(m * 0.2)])
 
-        train_loader = DataLoader(train_data, batch_size=self.batch_size)
-        valid_loader = DataLoader(val_data, batch_size=self.batch_size)
-        test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=True)
+        train_loader = DataLoader(train_ds, batch_size=self.batch_size)
+        valid_loader = DataLoader(val_ds, batch_size=self.batch_size)
+        test_loader = DataLoader(test_ds, batch_size=self.batch_size, shuffle=True)
 
         self.train_loader = train_loader
         self.valid_loader = valid_loader
@@ -487,11 +473,11 @@ class VAE(nn.Module):
 
     def _plot_ae_outputs(self, encoder, decoder, n=10):
         plt.figure(figsize=(16, 4.5))
-        targets = self.test_dataset.targets.numpy()
+        targets = self.test_ds.targets.numpy()
         t_idx = {i: np.where(targets == i)[0][0] for i in range(n)}
         for i in range(n):
             ax = plt.subplot(2, n, i + 1)
-            img = self.test_dataset[t_idx[i]][0].unsqueeze(0).to(self.device)
+            img = self.test_ds[t_idx[i]][0].unsqueeze(0).to(self.device)
             encoder.eval()
             decoder.eval()
             with torch.no_grad():
@@ -539,7 +525,7 @@ class VAE(nn.Module):
 
     def _get_encoded_samples(self):
         encoded_samples = []
-        for sample in tqdm(self.test_dataset):
+        for sample in tqdm(self.test_ds):
             img = sample[0].unsqueeze(0).to(self.device)
             label = sample[1]
             # Encode image
