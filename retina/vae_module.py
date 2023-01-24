@@ -41,7 +41,9 @@ class ApricotDataset(torch.utils.data.Dataset):
     logged into the ApricotDataset instance object.
     """
 
-    def __init__(self, apricot_data_folder, gc_type, response_type):
+    def __init__(
+        self, apricot_data_folder, gc_type, response_type, augmentation_dict=None
+    ):
 
         self.apricot_data_folder = apricot_data_folder
         self.gc_type = gc_type.lower()
@@ -53,10 +55,20 @@ class ApricotDataset(torch.utils.data.Dataset):
         self.labels = labels
         self.label_name_dict = label_name_dict
 
+        if augmentation_dict is None:
+            augmentation_dict = {
+                "rotation": 0,
+                "translation": None,
+            }
+
         self.transform = transforms.Compose(
             [
                 transforms.Lambda(self._feature_scaling),
                 transforms.Resize((28, 28)),
+                transforms.RandomAffine(
+                    augmentation_dict["rotation"],
+                    translate=augmentation_dict["translation"],
+                ),
             ]
         )
 
@@ -291,7 +303,7 @@ class VAE(nn.Module):
 
         # Create dataloaders
 
-        # pdb.set_trace()
+        pdb.set_trace()
         # Create model
         # Create optimizer
         # Create loss function
@@ -320,7 +332,12 @@ class VAE(nn.Module):
 
     def _prep_apricot_data(self, apricot_data_folder, gc_type, response_type):
         """
-        Prep apricot data for training
+        Prep apricot data for training. This includes:
+        - Loading data
+        - Splitting into training, validation and testing
+        - Augmenting data
+        - Preprocessing data
+        - Creating dataloaders
 
         Parameters
         ----------
@@ -335,6 +352,9 @@ class VAE(nn.Module):
         -------
 
         """
+
+        # TÄHÄN JÄIT: Redo the dataset: SEPARATE TRAINING (WITH AUGMENTATION) AND VALIDATION (WITHOUT AUGMENTATION) DATASETS
+        # CAN THE VAE AND CLASSIFICATION BE COMBINED? (TRAINING THE VAE WITH THE CLASSIFICATION LOSS)
 
         # Get experimental data
         gc_spatial_ds = ApricotDataset(apricot_data_folder, gc_type, response_type)
@@ -358,6 +378,22 @@ class VAE(nn.Module):
                 int(np.round(len(train_val_ds) * (1 - self.test_split))),
                 int(np.round(len(train_val_ds) * self.test_split)),
             ],
+        )
+
+        # Get n items for the three sets
+        self.n_train = len(train_ds)
+        self.n_val = len(val_ds)
+        self.n_test = len(test_ds)
+
+        # Augment data
+        pdb.set_trace()
+        train_ds = AugmentedDataset(
+            train_ds,
+            self.n_repeats,
+            self.angle_min,
+            self.angle_max,
+            self.shift_min,
+            self.shift_max,
         )
 
         train_loader = DataLoader(train_ds, batch_size=self.batch_size)
@@ -389,7 +425,7 @@ class VAE(nn.Module):
         _test_ds = torchvision.datasets.MNIST(
             data_dir, train=False, download=True, transform=test_transform
         )
-        pdb.set_trace()
+
         # Cut for testing. It is disappointing how complex this needs to be.
         train_indices = torch.arange(6000)
         test_indices = torch.arange(1000)
