@@ -64,6 +64,14 @@ class ApricotData:
         else:
             raise NotImplementedError("Unknown cell type or response type, aborting")
 
+        # Make a key-value dictionary for labeling the data
+        self.data_labels = {
+            "parasol_on": 0,
+            "parasol_off": 1,
+            "midget_on": 2,
+            "midget_off": 3,
+        }
+
         # Read nonspatial data. Data type is numpy nd array, but it includes a lot of metadata.
         filepath = self.apricot_data_folder / self.filename_nonspatial
         raw_data = sio.loadmat(filepath)  # , squeeze_me=True)
@@ -74,8 +82,8 @@ class ApricotData:
 
         self.metadata = {
             "data_microm_per_pix": 60,
-            "data_spatialfilter_width": 13,
             "data_spatialfilter_height": 13,
+            "data_spatialfilter_width": 13,
             "data_fps": 30,  # Uncertain - "30 or 120 Hz"
             "data_temporalfilter_samples": 15,
         }

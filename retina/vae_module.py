@@ -32,18 +32,20 @@ import pdb
 class ApricotDataset(torch.utils.data.Dataset):
     def __init__(self, apricot_data_folder, gc_type, response_type):
 
-        self.apricot_data = ApricotData(apricot_data_folder, gc_type, response_type)
-        self.data = self._get_spatial_apricot_data()
+        self.apricot_data_folder = apricot_data_folder
+        self.gc_type = gc_type.lower()
+        self.response_type = response_type.lower()
 
-        # TÄHÄN JÄIT: SISÄLLYTÄ LAMBDA FUNKTIO TRANSFORM COMPOSE OSIOON, JOSSA LAMBDA SKAALAA KUVAN 0-1 VÄLILLE
-        # TARKISTA DIMSIT
-        # feat_min, feat_max = feature_range
-        # data_std = (data - data.min()) / (data.max() - data.min())
-        # data_scaled = data_std * (feat_max - feat_min) + feat_min
+        # Get all data from ApricotData class as tensors of shape (n_cells, channels, height, width)
+        data, labels, label_name_dict = self._get_spatial_apricot_data()
+        self.data = data
+        self.labels = labels
+        self.label_name_dict = label_name_dict
 
         self.transform = transforms.Compose(
             [
-                transforms.ToTensor(),
+                transforms.Lambda(self._feature_scaling),
+                transforms.Resize((28, 28)),
             ]
         )
 
@@ -51,9 +53,36 @@ class ApricotDataset(torch.utils.data.Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
+        """
+        Ideally, no data pre-processing steps should be coded anywhere in the whole model training pipeline but for this method.
+        """
+
         image = self.data[idx]
-        # image = self.transform(image)
-        return image
+        image = self.transform(image)
+        label = self.labels[idx]
+        return image, label
+
+    def _feature_scaling(self, data):
+        """
+        Scale data to range [0, 1]]
+
+        Parameters
+        ----------
+        data : np.ndarray
+            Data to be scaled
+
+        Returns
+        -------
+        data_scaled : np.ndarray
+            Scaled data
+        """
+
+        feature_range = (0, 1)
+        feat_min, feat_max = feature_range
+        data_std = (data - data.min()) / (data.max() - data.min())
+        data_scaled = data_std * (feat_max - feat_min) + feat_min
+
+        return data_scaled
 
     def _get_spatial_apricot_data(self):
         """
@@ -64,22 +93,63 @@ class ApricotDataset(torch.utils.data.Dataset):
         gc_spatial_data_np : np.ndarray
             Spatial data with shape (n_gc, 1, ydim, xdim), pytorch format
         """
-        (
-            gc_spatial_data_np_orig,
-            _,
-            bad_data_indices,
-        ) = self.apricot_data.read_spatial_filter_data()
 
-        # drop bad data
-        gc_spatial_data_np = np.delete(
-            gc_spatial_data_np_orig, bad_data_indices, axis=2
+        self.apricot_data = ApricotData(
+            self.apricot_data_folder, self.gc_type, self.response_type
         )
 
-        # reshape  pytorch (n_samples, 1, xdim, ydim)
-        gc_spatial_data_np = np.moveaxis(gc_spatial_data_np, 2, 0)
-        gc_spatial_data_np = np.expand_dims(gc_spatial_data_np, axis=1)
+        # Get all data for learning
+        gc_types = [
+            key[: key.find("_")] for key in self.apricot_data.data_labels.keys()
+        ]
+        response_types = [
+            key[key.find("_") + 1 :] for key in self.apricot_data.data_labels.keys()
+        ]
+        response_labels = [value for value in self.apricot_data.data_labels.values()]
 
-        return gc_spatial_data_np
+        collated_gc_spatial_data_np = np.empty(
+            (
+                0,
+                1,
+                self.apricot_data.metadata["data_spatialfilter_height"],
+                self.apricot_data.metadata["data_spatialfilter_width"],
+            )
+        )
+        collated_labels = np.empty((0, 1), dtype=int)
+
+        for gc_type, response_type, label in zip(
+            gc_types, response_types, response_labels
+        ):
+
+            apricot_data = ApricotData(self.apricot_data_folder, gc_type, response_type)
+
+            (
+                gc_spatial_data_np_orig,
+                _,
+                bad_data_indices,
+            ) = apricot_data.read_spatial_filter_data()
+
+            # drop bad data
+            gc_spatial_data_np = np.delete(
+                gc_spatial_data_np_orig, bad_data_indices, axis=2
+            )
+
+            # reshape  pytorch (n_samples, 1, xdim, ydim)
+            gc_spatial_data_np = np.moveaxis(gc_spatial_data_np, 2, 0)
+            gc_spatial_data_np = np.expand_dims(gc_spatial_data_np, axis=1)
+
+            # collate data
+            collated_gc_spatial_data_np = np.concatenate(
+                (collated_gc_spatial_data_np, gc_spatial_data_np), axis=0
+            )
+            labels = np.full((gc_spatial_data_np.shape[0], 1), label)
+            collated_labels = np.concatenate((collated_labels, labels), axis=0)
+
+            # Covert to tensors
+            collated_gc_spatial_data_t = torch.from_numpy(collated_gc_spatial_data_np)
+            collated_labels_t = torch.from_numpy(collated_labels)
+
+        return collated_gc_spatial_data_t, collated_labels_t, apricot_data.data_labels
 
 
 class VariationalEncoder(nn.Module):
