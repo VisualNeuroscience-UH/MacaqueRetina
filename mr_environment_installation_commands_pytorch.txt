@@ -1,0 +1,22 @@
+ret_pt installation--run the following commands and note the notes:
+conda create --name ret_pt python=3.10
+conda activate ret_pt
+#Linux w/ cuda 11.7 & pytorch nightly
+pip3 install numpy --pre torch torchvision torchaudio --force-reinstall --index-url https://download.pytorch.org/whl/nightly/cu117
+# Windows without cuda/nvidia gpu
+#conda install pytorch torchvision torchaudio cpuonly -c pytorch
+conda install pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia
+pip install ipython
+conda config --add channels conda-forge
+conda config --add channels jamespreed
+conda install brian2=2.5.1
+conda install notebook jupyterlab scikit-learn pytest conda-minify scikit-image matplotlib tqdm
+# cd to cxsystem2 repo
+pip install -U -e .
+# confirm installation
+cxsystem2 # should give usage
+pip install opencv-python
+pip install colorednoise
+pip install h5py # does not work with conda 230116 SV
+pip install black
+pip install tensorboard

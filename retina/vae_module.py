@@ -285,7 +285,7 @@ class VAE(nn.Module):
         )
 
         self.batch_size = 512  # None will take the batch size from test_split size.
-        self.epochs = 200
+        self.epochs = 2000
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
 
         # # Preprocessing parameters
@@ -299,6 +299,7 @@ class VAE(nn.Module):
             "noise": 0.1,  # noise float in [0, 1] (noise is added to the image)
         }
         self.augmentation_dict = augmentation_dict
+        # self.augmentation_dict = None
 
         self.random_seed = 42
 
