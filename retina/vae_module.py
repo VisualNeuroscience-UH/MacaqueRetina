@@ -3,6 +3,9 @@ import matplotlib.pyplot as plt  # plotting library
 import numpy as np  # this module is useful to work with numerical arrays
 import pandas as pd
 from sklearn.manifold import TSNE
+from sklearn.model_selection import train_test_split
+from scipy.ndimage import rotate, fourier_shift
+
 
 # Pytorch
 # import random
@@ -29,7 +32,7 @@ from pathlib import Path
 import pdb
 
 
-class ApricotDataset(torch.utils.data.Dataset):
+class AugmentedDataset(torch.utils.data.Dataset):
     """
     Apricot dataset class for Pytorch.
 
@@ -41,36 +44,42 @@ class ApricotDataset(torch.utils.data.Dataset):
     logged into the ApricotDataset instance object.
     """
 
-    def __init__(
-        self, apricot_data_folder, gc_type, response_type, augmentation_dict=None
-    ):
+    # TODO: Add noise and rectangular dropauts to the augmentation dictionary and pass it to the transforms.Compose() method.
+    # RandomErasing([p, scale, ratio, value, inplace]) -> Randomly selects a rectangle region in an image and erases its pixels.
 
-        self.apricot_data_folder = apricot_data_folder
-        self.gc_type = gc_type.lower()
-        self.response_type = response_type.lower()
+    def __init__(self, data, labels, augmentation_dict=None):
 
-        # Get all data from ApricotData class as tensors of shape (n_cells, channels, height, width)
-        data, labels, label_name_dict = self._get_spatial_apricot_data()
+        # self.apricot_data_folder = apricot_data_folder
+        # self.gc_type = gc_type.lower()
+        # self.response_type = response_type.lower()
+
+        # # Get all data from ApricotData class as tensors of shape (n_cells, channels, height, width)
+        # data, labels, label_name_dict = self._get_spatial_apricot_data()
         self.data = data
         self.labels = labels
-        self.label_name_dict = label_name_dict
 
-        if augmentation_dict is None:
-            augmentation_dict = {
-                "rotation": 0,
-                "translation": None,
-            }
+        self.augmentation_dict = augmentation_dict
 
-        self.transform = transforms.Compose(
-            [
-                transforms.Lambda(self._feature_scaling),
-                transforms.Resize((28, 28)),
-                transforms.RandomAffine(
-                    augmentation_dict["rotation"],
-                    translate=augmentation_dict["translation"],
-                ),
-            ]
-        )
+        # Define transforms
+        if self.augmentation_dict is None:
+            self.transform = transforms.Compose(
+                [
+                    transforms.Lambda(self._feature_scaling),
+                    transforms.Lambda(self._to_tensor),
+                    transforms.Resize((28, 28)),
+                ]
+            )
+        else:
+            self.transform = transforms.Compose(
+                [
+                    transforms.Lambda(self._feature_scaling),
+                    transforms.Lambda(self._add_noise),
+                    transforms.Lambda(self._random_rotate_image),
+                    transforms.Lambda(self._random_shift_image),
+                    transforms.Lambda(self._to_tensor),
+                    transforms.Resize((28, 28)),
+                ]
+            )
 
     def __len__(self):
         return len(self.data)
@@ -107,72 +116,92 @@ class ApricotDataset(torch.utils.data.Dataset):
 
         return data_scaled
 
-    def _get_spatial_apricot_data(self):
+    def _add_noise(self, image):
         """
-        Get spatial ganglion cell data from file using the apricot_data method read_spatial_filter_data()
+        Add noise to the input images.
+
+        Parameters
+        ----------
+        image : np.ndarray
+            Input image
+        noise_factor : float
+            Noise factor
 
         Returns
         -------
-        gc_spatial_data_np : np.ndarray
-            Spatial data with shape (n_gc, 1, ydim, xdim), pytorch format
+        noisy : np.ndarray
+
         """
+        noise_factor = self.augmentation_dict["noise"]
 
-        self.apricot_data = ApricotData(
-            self.apricot_data_folder, self.gc_type, self.response_type
+        noise = np.random.normal(loc=0, scale=noise_factor, size=image.shape)
+        noisy = np.clip(image + noise, 0.0, 1.0)
+        print(f"noise_factor={noise_factor}")
+        return noisy
+
+    # def _add_noise(self, image):
+    #     """
+    #     Add noise to the input images.
+
+    #     Parameters
+    #     ----------
+    #     image : torch.Tensor
+    #         Input image
+    #     noise_factor : float
+    #         Noise factor
+
+    #     Returns
+    #     -------
+    #     noisy : torch.Tensor
+
+    #     """
+    #     noise_factor = self.augmentation_dict["noise"]
+
+    #     noisy = image + torch.randn_like(image) * noise_factor
+    #     noisy = torch.clip(noisy, 0.0, 1.0)
+    #     print(f"noise_factor={noise_factor}")
+    #     return noisy
+
+    def _random_rotate_image(self, image):
+
+        rot = self.augmentation_dict["rotation"]
+        # Take random rot as float
+        rot = np.random.uniform(-rot, rot)
+        print(f"rot={rot:.2f}")
+        image_rot = rotate(image, rot, axes=(2, 1), reshape=False, mode="reflect")
+        return image_rot
+
+    def _random_shift_image(self, image):
+
+        shift_proportions = self.augmentation_dict["translation"]
+
+        shift_max = (
+            int(image.shape[1] * shift_proportions[0]),
+            int(image.shape[2] * shift_proportions[1]),
+        )  # shift in pixels, tuple of (y, x) shift
+        print(f"shift_max={shift_max}")
+        # Take random shift as float
+        shift = (
+            np.random.uniform(-shift_max[0], shift_max[0]),
+            np.random.uniform(-shift_max[1], shift_max[1]),
         )
+        print(f"shift={shift}")
 
-        # Get all data for learning
-        gc_types = [
-            key[: key.find("_")] for key in self.apricot_data.data_labels.keys()
-        ]
-        response_types = [
-            key[key.find("_") + 1 :] for key in self.apricot_data.data_labels.keys()
-        ]
-        response_labels = [value for value in self.apricot_data.data_labels.values()]
+        input_ = np.fft.fft2(np.squeeze(image))
+        result = fourier_shift(
+            input_, shift=shift
+        )  # shift in pixels, tuple of (y, x) shift
+        # result = fourier_shift(input_, shift=(-5, 0)) # shift in pixels, tuple of (y, x) shift
+        result = np.fft.ifft2(result)
+        image_shifted = result.real
+        # Expand 0:th dimension
+        image_shifted = np.expand_dims(image_shifted, axis=0)
 
-        collated_gc_spatial_data_np = np.empty(
-            (
-                0,
-                1,
-                self.apricot_data.metadata["data_spatialfilter_height"],
-                self.apricot_data.metadata["data_spatialfilter_width"],
-            )
-        )
-        collated_labels = np.empty((0, 1), dtype=int)
+        return image_shifted
 
-        for gc_type, response_type, label in zip(
-            gc_types, response_types, response_labels
-        ):
-
-            apricot_data = ApricotData(self.apricot_data_folder, gc_type, response_type)
-
-            (
-                gc_spatial_data_np_orig,
-                _,
-                bad_data_indices,
-            ) = apricot_data.read_spatial_filter_data()
-
-            # drop bad data
-            gc_spatial_data_np = np.delete(
-                gc_spatial_data_np_orig, bad_data_indices, axis=2
-            )
-
-            # reshape  pytorch (n_samples, 1, xdim, ydim)
-            gc_spatial_data_np = np.moveaxis(gc_spatial_data_np, 2, 0)
-            gc_spatial_data_np = np.expand_dims(gc_spatial_data_np, axis=1)
-
-            # collate data
-            collated_gc_spatial_data_np = np.concatenate(
-                (collated_gc_spatial_data_np, gc_spatial_data_np), axis=0
-            )
-            labels = np.full((gc_spatial_data_np.shape[0], 1), label)
-            collated_labels = np.concatenate((collated_labels, labels), axis=0)
-
-            # Covert to tensors
-            collated_gc_spatial_data_t = torch.from_numpy(collated_gc_spatial_data_np)
-            collated_labels_t = torch.from_numpy(collated_labels)
-
-        return collated_gc_spatial_data_t, collated_labels_t, apricot_data.data_labels
+    def _to_tensor(self, image):
+        image = torch.from_numpy(image)
+        return image
 
 
 class VariationalEncoder(nn.Module):
@@ -258,9 +287,16 @@ class VariationalAutoencoder(nn.Module):
 class VAE(nn.Module):
     """Variational Autoencoder class"""
 
+    # TODO KANNATTAAKO TEHDÄ KAKSIVAIHEINEN OPETUS? ENSIN KAIKKI JA SITTEN HALUTTU LUOKKA?
+
     def __init__(self, apricot_data_folder, gc_type, response_type):
         # def __init__(self):
         super().__init__()
+
+        self.apricot_data_folder = apricot_data_folder
+        self.gc_type = gc_type
+        self.response_type = response_type
+
         # Set common VAE model parameters
         self.latent_dim = 4
         self.latent_space_plot_scale = 2  # Scale for plotting latent space
@@ -277,18 +313,17 @@ class VAE(nn.Module):
         self.epochs = 2
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
 
-        # Preprocessing parameters
-        self.gaussian_filter_size = None  # None or 0.5 or ... # Denoising gaussian filter size (in pixels). None does not apply filter
-        self.n_pca_components = 16  # None or 32 # Number of PCA components to use for denoising. None does not apply PCA
+        # # Preprocessing parameters
+        # self.gaussian_filter_size = None  # None or 0.5 or ... # Denoising gaussian filter size (in pixels). None does not apply filter
+        # self.n_pca_components = 16  # None or 32 # Number of PCA components to use for denoising. None does not apply PCA
 
-        # Augment data. Final n samples =  n * (1 + n_repeats * 2): n is the original number of samples, 2 is the rot & shift
-        self.n_repeats = 100  # 10  # Each repeated array of images will have only one transformation applied to it (same rot or same shift).
-        self.angle_min = -10  # 30 # rotation int in degrees
-        self.angle_max = 10  # 30
-        self.shift_min = (
-            -3
-        )  # 5 # shift int in pixels (upsampled space, rand int for both x and y)
-        self.shift_max = 3  # 5
+        # Augment training and validation data.
+        augmentation_dict = {
+            "rotation": 15.0,  # rotation in degrees
+            "translation": (0.5, 0.5),  # fraction of image, (x, y) -directions
+            "noise": 0.1,  # noise float in [0, 1] (noise is added to the image)
+        }
+        self.augmentation_dict = augmentation_dict
 
         self.random_seed = 42
 
@@ -353,21 +388,25 @@ class VAE(nn.Module):
 
         """
 
-        # TÄHÄN JÄIT: Redo the dataset: SEPARATE TRAINING (WITH AUGMENTATION) AND VALIDATION (WITHOUT AUGMENTATION) DATASETS
-        # CAN THE VAE AND CLASSIFICATION BE COMBINED? (TRAINING THE VAE WITH THE CLASSIFICATION LOSS)
+        # Get numpy data
+        data_np, labels_np, data_labels = self._get_spatial_apricot_data()
 
-        # Get experimental data
-        gc_spatial_ds = ApricotDataset(apricot_data_folder, gc_type, response_type)
-        # gc_spatial_data_tensor = gc_spatial_data_tensor.to(self.device)
-
-        # Split into training and validation and a separate test dataset
-        train_val_ds, test_ds = random_split(
-            gc_spatial_ds,
-            [
-                int(len(gc_spatial_ds) * (1 - self.test_split)),
-                int(len(gc_spatial_ds) * self.test_split),
-            ],
+        # Split to training, validation and testing
+        train_val_data, test_data, train_val_labels, test_labels = train_test_split(
+            data_np,
+            labels_np,
+            test_size=self.test_split,
+            random_state=self.random_seed,
+            stratify=labels_np,
         )
+
+        # Augment training and validation data
+        train_val_ds = AugmentedDataset(
+            data_np, labels_np, augmentation_dict=self.augmentation_dict
+        )
+
+        # Do not augment test data
+        test_ds = AugmentedDataset(test_data, test_labels, augmentation_dict=None)
 
         self.test_ds = test_ds
 
@@ -385,16 +424,19 @@ class VAE(nn.Module):
         self.n_val = len(val_ds)
         self.n_test = len(test_ds)
 
-        # Augment data
+        if 1:
+            # Plot some examples
+            fig, axes = plt.subplots(1, 3, figsize=(10, 5))
+            # axes[0].imshow(train_ds[0][0].squeeze())
+            plt.colorbar(axes[0].imshow(train_ds[0][0].squeeze()))
+
+            # axes[1].imshow(val_ds[0][0].squeeze())
+            # add colobar
+            plt.colorbar(axes[1].imshow(val_ds[0][0].squeeze()))
+            plt.colorbar(axes[2].imshow(test_ds[0][0].squeeze()))
+            # axes[2].imshow(test_ds[0][0].squeeze())
+            plt.show()
         pdb.set_trace()
-        train_ds = AugmentedDataset(
-            train_ds,
-            self.n_repeats,
-            self.angle_min,
-            self.angle_max,
-            self.shift_min,
-            self.shift_max,
-        )
 
         train_loader = DataLoader(train_ds, batch_size=self.batch_size)
         valid_loader = DataLoader(val_ds, batch_size=self.batch_size)
@@ -403,6 +445,82 @@ class VAE(nn.Module):
         self.train_loader = train_loader
         self.valid_loader = valid_loader
         self.test_loader = test_loader
+
+    def _get_spatial_apricot_data(self):
+        """
+        Get spatial ganglion cell data from file using the apricot_data method read_spatial_filter_data().
+        All data is returned, the requested data is looged in the class attributes gc_type and response_type.
+
+        Returns
+        -------
+        gc_spatial_data_np : np.ndarray
+            Spatial data with shape (n_gc, 1, ydim, xdim), pytorch format
+        """
+
+        self.apricot_data = ApricotData(
+            self.apricot_data_folder, self.gc_type, self.response_type
+        )
+
+        # Get all available gc types and response types
+        gc_types = [
+            key[: key.find("_")] for key in self.apricot_data.data_labels.keys()
+        ]
+        response_types = [
+            key[key.find("_") + 1 :] for key in self.apricot_data.data_labels.keys()
+        ]
+        # Get the integer labels for each gc type and response type
+        response_labels = [value for value in self.apricot_data.data_labels.values()]
+
+        # Log requested label
+        self.gc_label = self.apricot_data.data_labels[
+            f"{self.gc_type}_{self.response_type}"
+        ]
+
+        # Initialise numpy arrays to store data
+        collated_gc_spatial_data_np = np.empty(
+            (
+                0,
+                1,
+                self.apricot_data.metadata["data_spatialfilter_height"],
+                self.apricot_data.metadata["data_spatialfilter_width"],
+            )
+        )
+        collated_labels_np = np.empty((0, 1), dtype=int)
+
+        # Get all data for learning
+        for gc_type, response_type, label in zip(
+            gc_types, response_types, response_labels
+        ):
+
+            apricot_data = ApricotData(self.apricot_data_folder, gc_type, response_type)
+
+            (
+                gc_spatial_data_np_orig,
+                _,
+                bad_data_indices,
+            ) = apricot_data.read_spatial_filter_data()
+
+            # Drop bad data
+            gc_spatial_data_np = np.delete(
+                gc_spatial_data_np_orig, bad_data_indices, axis=2
+            )
+
+            # Reshape  pytorch (n_samples, 1, xdim, ydim)
+            gc_spatial_data_np = np.moveaxis(gc_spatial_data_np, 2, 0)
+            gc_spatial_data_np = np.expand_dims(gc_spatial_data_np, axis=1)
+
+            # Collate data
+            collated_gc_spatial_data_np = np.concatenate(
+                (collated_gc_spatial_data_np, gc_spatial_data_np), axis=0
+            )
+            labels = np.full((gc_spatial_data_np.shape[0], 1), label)
+            collated_labels_np = np.concatenate((collated_labels_np, labels), axis=0)
+
+            # # Covert to tensors
+            # collated_gc_spatial_data_t = torch.from_numpy(collated_gc_spatial_data_np)
+            # collated_labels_t = torch.from_numpy(collated_labels_np).type(torch.uint8)
+
+        return collated_gc_spatial_data_np, collated_labels_np, apricot_data.data_labels
 
     def _prep_minst_data(self):
         data_dir = "dataset"
@@ -470,7 +588,7 @@ class VAE(nn.Module):
         vae.train()
         train_loss = 0.0
         # Iterate the dataloader (we do not need the label values, this is unsupervised learning)
-        # pdb.set_trace()
+
         # for x, _ in dataloader: # MNIST
         for x in dataloader:  # Apricot
             # Move tensor to the proper device

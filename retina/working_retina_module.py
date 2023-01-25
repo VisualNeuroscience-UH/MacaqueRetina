@@ -19,6 +19,9 @@ from tqdm import tqdm
 import brian2 as b2
 import brian2.units as b2u
 
+b2.prefs["logging.display_brian_error_message"] = False
+
+
 # Local
 from cxsystem2.core.tools import write_to_file, load_from_file
 
