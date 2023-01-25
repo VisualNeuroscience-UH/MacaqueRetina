@@ -333,9 +333,9 @@ class VAE(nn.Module):
         )
         # self.device = torch.device("cpu")
 
-        # # Set the random seed for reproducible results for both torch and numpy
-        # torch.manual_seed(self.random_seed)
-        # np.random.seed(self.random_seed)
+        # Set the random seed for reproducible results for both torch and numpy
+        torch.manual_seed(self.random_seed)
+        np.random.seed(self.random_seed)
 
         # Create datasets and dataloaders
         self._prep_apricot_data(apricot_data_folder, gc_type, response_type)
