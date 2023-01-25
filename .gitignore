@@ -39,6 +39,7 @@ docs/_build/
 docs/build/
 
 retina/output/
+retina/tb_logs/
 
 # Ipython notebook checkpoint folders
 *.ipynb_checkpoints

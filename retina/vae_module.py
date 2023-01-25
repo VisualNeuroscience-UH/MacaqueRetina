@@ -30,6 +30,7 @@ from retina.apricot_data_module import ApricotData
 
 # Builtin
 from pathlib import Path
+from datetime import datetime
 import shutil
 import pdb
 
@@ -74,6 +75,7 @@ class AugmentedDataset(torch.utils.data.Dataset):
                     transforms.Lambda(self._random_shift_image),
                     transforms.Lambda(self._to_tensor),
                     transforms.Resize((28, 28)),
+                    transforms.ToTensor(),
                 ]
             )
 
@@ -284,8 +286,8 @@ class VAE(nn.Module):
             1,
         )
 
-        self.batch_size = 512  # None will take the batch size from test_split size.
-        self.epochs = 2000
+        self.batch_size = 128  # None will take the batch size from test_split size.
+        self.epochs = 20000
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
 
         # # Preprocessing parameters
@@ -294,14 +296,15 @@ class VAE(nn.Module):
 
         # Augment training and validation data.
         augmentation_dict = {
-            "rotation": 10.0,  # rotation in degrees
-            "translation": (0.1, 0.1),  # fraction of image, (x, y) -directions
-            "noise": 0.1,  # noise float in [0, 1] (noise is added to the image)
+            "rotation": 20.0,  # rotation in degrees
+            "translation": (0.2, 0.2),  # fraction of image, (x, y) -directions
+            "noise": 0.15,  # noise float in [0, 1] (noise is added to the image)
         }
         self.augmentation_dict = augmentation_dict
         # self.augmentation_dict = None
 
         self.random_seed = 42
+        self.timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 
         self.device = (
             torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -577,7 +580,7 @@ class VAE(nn.Module):
                 f.unlink()
 
         # This creates new scalar/time series line in tensorboard
-        self.writer = SummaryWriter(str(exp_folder))
+        self.writer = SummaryWriter(str(exp_folder), max_queue=5)
 
     ### Training function
     def _train_epoch(self, vae, device, dataloader, optimizer):
@@ -661,7 +664,7 @@ class VAE(nn.Module):
             # Add train loss and val loss to tensorboard SummaryWriter
             with self.writer as writer:
                 writer.add_scalars(
-                    "Training",
+                    f"Training_{self.timestamp}",
                     {
                         "loss/train": train_loss,
                         "loss/val": val_loss,
