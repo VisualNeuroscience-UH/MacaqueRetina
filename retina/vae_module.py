@@ -5,6 +5,7 @@ import pandas as pd
 from sklearn.manifold import TSNE
 from sklearn.model_selection import train_test_split
 from scipy.ndimage import rotate, fourier_shift
+from torch.utils.tensorboard import SummaryWriter
 
 
 # Pytorch
@@ -29,6 +30,7 @@ from retina.apricot_data_module import ApricotData
 
 # Builtin
 from pathlib import Path
+import shutil
 import pdb
 
 
@@ -192,6 +194,8 @@ class VariationalEncoder(nn.Module):
         self.N = torch.distributions.Normal(0, 1)
         self.N.loc = self.N.loc.cuda()  # hack to get sampling on the GPU
         self.N.scale = self.N.scale.cuda()
+        # self.N.loc = self.N.loc.cpu()  # hack to get sampling on the GPU
+        # self.N.scale = self.N.scale.cpu()
         self.kl = 0
 
     def forward(self, x):
@@ -269,7 +273,7 @@ class VAE(nn.Module):
         self.response_type = response_type
 
         # Set common VAE model parameters
-        self.latent_dim = 16
+        self.latent_dim = 32
         self.latent_space_plot_scale = 2  # Scale for plotting latent space
         self.lr = 0.001
 
@@ -280,8 +284,8 @@ class VAE(nn.Module):
             1,
         )
 
-        self.batch_size = 256  # None will take the batch size from test_split size.
-        self.epochs = 2
+        self.batch_size = 512  # None will take the batch size from test_split size.
+        self.epochs = 200
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
 
         # # Preprocessing parameters
@@ -290,9 +294,9 @@ class VAE(nn.Module):
 
         # Augment training and validation data.
         augmentation_dict = {
-            "rotation": 0.0,  # rotation in degrees
-            "translation": (0, 0),  # fraction of image, (x, y) -directions
-            "noise": 0,  # noise float in [0, 1] (noise is added to the image)
+            "rotation": 10.0,  # rotation in degrees
+            "translation": (0.1, 0.1),  # fraction of image, (x, y) -directions
+            "noise": 0.1,  # noise float in [0, 1] (noise is added to the image)
         }
         self.augmentation_dict = augmentation_dict
 
@@ -301,6 +305,7 @@ class VAE(nn.Module):
         self.device = (
             torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         )
+        # self.device = torch.device("cpu")
 
         # Set the random seed for reproducible results for both torch and numpy
         torch.manual_seed(self.random_seed)
@@ -310,18 +315,17 @@ class VAE(nn.Module):
         self._prep_apricot_data(apricot_data_folder, gc_type, response_type)
         # self._prep_minst_data()
 
-        # Create loss function
-        # Train
-        # Save model to self.model
-        # Save latent space to self.latent_space
-        # Save reconstruction to self.reconstruction
-
         # Create model and set optimizer and learning rate scheduler
         self._prep_training()
 
         print(self.vae)
 
+        # Init tensorboard
+        self._prep_tensorboard_logging()
+
+        # Train
         self._train()
+        # self.writer.close()
 
         self._plot_ae_outputs(self.vae.encoder, self.vae.decoder, n=4)
 
@@ -545,6 +549,30 @@ class VAE(nn.Module):
         print(f"Selected device: {self.device}")
         self.vae.to(self.device)
 
+    def _prep_tensorboard_logging(self):
+        """
+        Prepare local folder environment for tensorboard logging and model building
+
+        Note that the tensoboard reset takes place only when quitting the terminal call
+        to tensorboard. You will see old graph, old scalars, if they are not overwritten
+        by new ones.
+        """
+
+        # Folders
+        exp_folder = Path(self.output_path).joinpath(self.exp_folder)
+        Path.mkdir(exp_folder, parents=True, exist_ok=True)
+
+        # Clear files and folders under exp_folder
+        for f in exp_folder.iterdir():
+            if f.is_dir():
+                shutil.rmtree(f)
+            else:
+                f.unlink()
+
+        # This creates new scalar/time series line in tensorboard
+        # self.summary_writer = tf.summary.create_file_writer(str(exp_folder))
+        self.writer = SummaryWriter(str(exp_folder))
+
     ### Training function
     def _train_epoch(self, vae, device, dataloader, optimizer):
         # Set train mode for both the encoder and the decoder
@@ -592,11 +620,11 @@ class VAE(nn.Module):
         plt.figure(figsize=(16, 4.5))
         targets = self.test_ds.targets.numpy()
         t_idx = {i: np.where(targets == i)[0][0] for i in range(n)}
+        encoder.eval()
+        decoder.eval()
         for i in range(n):
             ax = plt.subplot(2, n, i + 1)
             img = self.test_ds[t_idx[i]][0].unsqueeze(0).to(self.device)
-            encoder.eval()
-            decoder.eval()
             with torch.no_grad():
                 rec_img = decoder(encoder(img))
             plt.imshow(img.cpu().squeeze().numpy(), cmap="gist_gray")
@@ -621,6 +649,20 @@ class VAE(nn.Module):
             print(
                 f"\n EPOCH {epoch + 1}/{self.epochs} \t train loss {train_loss:.3f} \t val loss {val_loss:.3f}"
             )
+            # # Add train loss and val loss to tensorboard SummaryWriter
+            # self.writer.add_scalar("Loss/train", train_loss, epoch)
+            # self.writer.add_scalar("Loss/val", val_loss, epoch)
+            # Add train loss and val loss to tensorboard SummaryWriter
+            with self.writer as writer:
+                writer.add_scalars(
+                    "Training",
+                    {
+                        "loss/train": train_loss,
+                        "loss/val": val_loss,
+                    },
+                    epoch,
+                )
+            # self.writer.add_scalar("Loss/val", val_loss, epoch)
 
     def _reconstruct_random_images(self):
         with torch.no_grad():
