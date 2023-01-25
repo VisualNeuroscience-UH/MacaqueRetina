@@ -321,6 +321,7 @@ class VAE(nn.Module):
         print(self.vae)
 
         # Init tensorboard
+        self.tb_log_folder = "tb_logs"
         self._prep_tensorboard_logging()
 
         # Train
@@ -558,8 +559,13 @@ class VAE(nn.Module):
         by new ones.
         """
 
-        # Folders
-        exp_folder = Path(self.output_path).joinpath(self.exp_folder)
+        # Get the folder where this module file is located
+        from retina import vae_module as vv
+
+        this_folder = Path(vv.__file__).parent
+
+        # Create a folder for the experiment tensorboard logs
+        exp_folder = this_folder.joinpath(self.tb_log_folder)
         Path.mkdir(exp_folder, parents=True, exist_ok=True)
 
         # Clear files and folders under exp_folder
@@ -570,7 +576,6 @@ class VAE(nn.Module):
                 f.unlink()
 
         # This creates new scalar/time series line in tensorboard
-        # self.summary_writer = tf.summary.create_file_writer(str(exp_folder))
         self.writer = SummaryWriter(str(exp_folder))
 
     ### Training function
