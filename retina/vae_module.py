@@ -49,14 +49,8 @@ class AugmentedDataset(torch.utils.data.Dataset):
 
     def __init__(self, data, labels, augmentation_dict=None):
 
-        # self.apricot_data_folder = apricot_data_folder
-        # self.gc_type = gc_type.lower()
-        # self.response_type = response_type.lower()
-
-        # # Get all data from ApricotData class as tensors of shape (n_cells, channels, height, width)
-        # data, labels, label_name_dict = self._get_spatial_apricot_data()
         self.data = data
-        self.labels = labels
+        self.labels = self._to_tensor(labels)
 
         self.augmentation_dict = augmentation_dict
 
@@ -136,38 +130,15 @@ class AugmentedDataset(torch.utils.data.Dataset):
 
         noise = np.random.normal(loc=0, scale=noise_factor, size=image.shape)
         noisy = np.clip(image + noise, 0.0, 1.0)
-        print(f"noise_factor={noise_factor}")
+        # print(f"noise_factor={noise_factor}")
         return noisy
-
-    # def _add_noise(self, image):
-    #     """
-    #     Add noise to the input images.
-
-    #     Parameters
-    #     ----------
-    #     image : torch.Tensor
-    #         Input image
-    #     noise_factor : float
-    #         Noise factor
-
-    #     Returns
-    #     -------
-    #     noisy : torch.Tensor
-
-    #     """
-    #     noise_factor = self.augmentation_dict["noise"]
-
-    #     noisy = image + torch.randn_like(image) * noise_factor
-    #     noisy = torch.clip(noisy, 0.0, 1.0)
-    #     print(f"noise_factor={noise_factor}")
-    #     return noisy
 
     def _random_rotate_image(self, image):
 
         rot = self.augmentation_dict["rotation"]
         # Take random rot as float
         rot = np.random.uniform(-rot, rot)
-        print(f"rot={rot:.2f}")
+        # print(f"rot={rot:.2f}")
         image_rot = rotate(image, rot, axes=(2, 1), reshape=False, mode="reflect")
         return image_rot
 
@@ -179,19 +150,19 @@ class AugmentedDataset(torch.utils.data.Dataset):
             int(image.shape[1] * shift_proportions[0]),
             int(image.shape[2] * shift_proportions[1]),
         )  # shift in pixels, tuple of (y, x) shift
-        print(f"shift_max={shift_max}")
+
         # Take random shift as float
         shift = (
             np.random.uniform(-shift_max[0], shift_max[0]),
             np.random.uniform(-shift_max[1], shift_max[1]),
         )
-        print(f"shift={shift}")
+        # print(f"shift={shift[0]:.2f}, {shift[1]:.2f}")
 
         input_ = np.fft.fft2(np.squeeze(image))
         result = fourier_shift(
             input_, shift=shift
         )  # shift in pixels, tuple of (y, x) shift
-        # result = fourier_shift(input_, shift=(-5, 0)) # shift in pixels, tuple of (y, x) shift
+
         result = np.fft.ifft2(result)
         image_shifted = result.real
         # Expand 0:th dimension
@@ -200,8 +171,8 @@ class AugmentedDataset(torch.utils.data.Dataset):
         return image_shifted
 
     def _to_tensor(self, image):
-        image = torch.from_numpy(image)
-        return image
+        image_t = torch.from_numpy(image).float()  # to float32
+        return image_t
 
 
 class VariationalEncoder(nn.Module):
@@ -298,7 +269,7 @@ class VAE(nn.Module):
         self.response_type = response_type
 
         # Set common VAE model parameters
-        self.latent_dim = 4
+        self.latent_dim = 16
         self.latent_space_plot_scale = 2  # Scale for plotting latent space
         self.lr = 0.001
 
@@ -309,8 +280,8 @@ class VAE(nn.Module):
             1,
         )
 
-        self.batch_size = 16  # None will take the batch size from test_split size.
-        self.epochs = 2
+        self.batch_size = 256  # None will take the batch size from test_split size.
+        self.epochs = 400
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
 
         # # Preprocessing parameters
@@ -319,9 +290,9 @@ class VAE(nn.Module):
 
         # Augment training and validation data.
         augmentation_dict = {
-            "rotation": 15.0,  # rotation in degrees
-            "translation": (0.5, 0.5),  # fraction of image, (x, y) -directions
-            "noise": 0.1,  # noise float in [0, 1] (noise is added to the image)
+            "rotation": 0.0,  # rotation in degrees
+            "translation": (0, 0),  # fraction of image, (x, y) -directions
+            "noise": 0,  # noise float in [0, 1] (noise is added to the image)
         }
         self.augmentation_dict = augmentation_dict
 
@@ -330,30 +301,29 @@ class VAE(nn.Module):
         self.device = (
             torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         )
-        # self.variational_encoder = self.VariationalEncoder(self.latent_dim)
-        # self.decoder = self.Decoder(self.latent_dim)
 
+        # Set the random seed for reproducible results for both torch and numpy
+        torch.manual_seed(self.random_seed)
+        np.random.seed(self.random_seed)
+
+        # Create datasets and dataloaders
         self._prep_apricot_data(apricot_data_folder, gc_type, response_type)
         # self._prep_minst_data()
 
-        # Create dataloaders
-
-        pdb.set_trace()
-        # Create model
-        # Create optimizer
         # Create loss function
         # Train
         # Save model to self.model
         # Save latent space to self.latent_space
         # Save reconstruction to self.reconstruction
 
+        # Create model and set optimizer and learning rate scheduler
         self._prep_training()
 
         print(self.vae)
 
         self._train()
 
-        self._plot_ae_outputs(self.vae.encoder, self.vae.decoder, n=10)
+        self._plot_ae_outputs(self.vae.encoder, self.vae.decoder, n=4)
 
         self.vae.eval()
 
@@ -408,6 +378,7 @@ class VAE(nn.Module):
         # Do not augment test data
         test_ds = AugmentedDataset(test_data, test_labels, augmentation_dict=None)
 
+        test_ds.targets = test_ds.labels  # MNIST uses targets instead of labels
         self.test_ds = test_ds
 
         # Split into train and validation
@@ -424,19 +395,13 @@ class VAE(nn.Module):
         self.n_val = len(val_ds)
         self.n_test = len(test_ds)
 
-        if 1:
-            # Plot some examples
+        if 0:
+            # Plot one example from each set
             fig, axes = plt.subplots(1, 3, figsize=(10, 5))
-            # axes[0].imshow(train_ds[0][0].squeeze())
             plt.colorbar(axes[0].imshow(train_ds[0][0].squeeze()))
-
-            # axes[1].imshow(val_ds[0][0].squeeze())
-            # add colobar
             plt.colorbar(axes[1].imshow(val_ds[0][0].squeeze()))
             plt.colorbar(axes[2].imshow(test_ds[0][0].squeeze()))
-            # axes[2].imshow(test_ds[0][0].squeeze())
             plt.show()
-        pdb.set_trace()
 
         train_loader = DataLoader(train_ds, batch_size=self.batch_size)
         valid_loader = DataLoader(val_ds, batch_size=self.batch_size)
@@ -568,8 +533,6 @@ class VAE(nn.Module):
         self.test_loader = test_loader
 
     def _prep_training(self):
-        ### Set the random seed for reproducible results
-        torch.manual_seed(self.random_seed)
 
         self.vae = VariationalAutoencoder(
             latent_dims=self.latent_dim, device=self.device
@@ -590,7 +553,7 @@ class VAE(nn.Module):
         # Iterate the dataloader (we do not need the label values, this is unsupervised learning)
 
         # for x, _ in dataloader: # MNIST
-        for x in dataloader:  # Apricot
+        for x, _ in dataloader:  # Apricot
             # Move tensor to the proper device
             x = x.to(device)
             x_hat = vae(x)
