@@ -75,7 +75,6 @@ class AugmentedDataset(torch.utils.data.Dataset):
                     transforms.Lambda(self._random_shift_image),
                     transforms.Lambda(self._to_tensor),
                     transforms.Resize((28, 28)),
-                    transforms.ToTensor(),
                 ]
             )
 
@@ -127,18 +126,29 @@ class AugmentedDataset(torch.utils.data.Dataset):
 
         Returns
         -------
-        noisy : np.ndarray
+        image_noise : np.ndarray
 
         """
         noise_factor = self.augmentation_dict["noise"]
-
         noise = np.random.normal(loc=0, scale=noise_factor, size=image.shape)
-        noisy = np.clip(image + noise, 0.0, 1.0)
-        # print(f"noise_factor={noise_factor}")
-        return noisy
+        image_noise = np.clip(image + noise, 0.0, 1.0)
+
+        return image_noise
 
     def _random_rotate_image(self, image):
+        """
+        Rotate image by a random angle.
 
+        Parameters
+        ----------
+        image : np.ndarray
+            Input image
+
+        Returns
+        -------
+        image_rot : np.ndarray
+            Rotated image
+        """
         rot = self.augmentation_dict["rotation"]
         # Take random rot as float
         rot = np.random.uniform(-rot, rot)
@@ -147,7 +157,19 @@ class AugmentedDataset(torch.utils.data.Dataset):
         return image_rot
 
     def _random_shift_image(self, image):
+        """
+        Shift image by a random amount.
 
+        Parameters
+        ----------
+        image : np.ndarray
+            Input image
+
+        Returns
+        -------
+        image_shift : np.ndarray
+            Shifted image
+        """
         shift_proportions = self.augmentation_dict["translation"]
 
         shift_max = (
@@ -298,7 +320,7 @@ class VAE(nn.Module):
         augmentation_dict = {
             "rotation": 20.0,  # rotation in degrees
             "translation": (0.2, 0.2),  # fraction of image, (x, y) -directions
-            "noise": 0.15,  # noise float in [0, 1] (noise is added to the image)
+            "noise": 0.0,  # noise float in [0, 1] (noise is added to the image)
         }
         self.augmentation_dict = augmentation_dict
         # self.augmentation_dict = None
@@ -311,9 +333,9 @@ class VAE(nn.Module):
         )
         # self.device = torch.device("cpu")
 
-        # Set the random seed for reproducible results for both torch and numpy
-        torch.manual_seed(self.random_seed)
-        np.random.seed(self.random_seed)
+        # # Set the random seed for reproducible results for both torch and numpy
+        # torch.manual_seed(self.random_seed)
+        # np.random.seed(self.random_seed)
 
         # Create datasets and dataloaders
         self._prep_apricot_data(apricot_data_folder, gc_type, response_type)
@@ -404,7 +426,7 @@ class VAE(nn.Module):
         self.n_val = len(val_ds)
         self.n_test = len(test_ds)
 
-        if 0:
+        if 1:
             # Plot one example from each set
             fig, axes = plt.subplots(1, 3, figsize=(10, 5))
             plt.colorbar(axes[0].imshow(train_ds[0][0].squeeze()))
