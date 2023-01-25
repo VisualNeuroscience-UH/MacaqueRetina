@@ -281,7 +281,7 @@ class VAE(nn.Module):
         )
 
         self.batch_size = 256  # None will take the batch size from test_split size.
-        self.epochs = 400
+        self.epochs = 2
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
 
         # # Preprocessing parameters
@@ -602,13 +602,13 @@ class VAE(nn.Module):
             plt.imshow(img.cpu().squeeze().numpy(), cmap="gist_gray")
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
-            if i == n // 2:
+            if i == 0:
                 ax.set_title("Original images")
             ax = plt.subplot(2, n, i + 1 + n)
             plt.imshow(rec_img.cpu().squeeze().numpy(), cmap="gist_gray")
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
-            if i == n // 2:
+            if i == 0:
                 ax.set_title("Reconstructed images")
 
     def _train(self):
@@ -633,7 +633,9 @@ class VAE(nn.Module):
             img_recon = img_recon.cpu()
 
             fig, ax = plt.subplots(figsize=(20, 8.5))
-            self._show_image(torchvision.utils.make_grid(img_recon.data[:100], 10, 5))
+            # plot 100 images in 10x10 grid with 1 pixel padding in-between.
+            self._show_image(torchvision.utils.make_grid(img_recon.data[:100], 10, 1))
+            ax.set_title("Decoded images from a random sample of latent space")
 
     def _show_image(self, img):
         npimg = img.numpy()
