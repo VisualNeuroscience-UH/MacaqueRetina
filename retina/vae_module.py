@@ -298,8 +298,8 @@ class RetinaVAE(nn.Module):
         self.response_type = response_type
 
         # Set common VAE model parameters
-        self.latent_dim = 4
-        self.latent_space_plot_scale = 2  # Scale for plotting latent space
+        self.latent_dim = 2
+        self.latent_space_plot_scale = 1.5  # Scale for plotting latent space
         self.lr = 0.001
 
         # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
@@ -389,6 +389,8 @@ class RetinaVAE(nn.Module):
 
         # Figure 2
         self._reconstruct_random_images()
+
+        self._reconstruct_grid_images()
 
         encoded_samples = self._get_encoded_samples(ds_name="test_ds")
 
@@ -884,8 +886,12 @@ class RetinaVAE(nn.Module):
     def _reconstruct_random_images(self):
         with torch.no_grad():
 
-            # sample latent vectors from the normal distribution
-            latent = torch.randn(128, self.latent_dim, device=self.device)
+            # # sample latent vectors from the normal distribution
+            # latent = torch.randn(128, self.latent_dim, device=self.device)
+
+            scale = self.latent_space_plot_scale
+            # sample latent vectors from the uniform distribution between -scale and scale
+            latent = torch.rand(128, self.latent_dim, device=self.device) * 2 * scale - scale
 
             # reconstruct images from the latent vectors
             img_recon = self.vae.decoder(latent)
@@ -895,6 +901,32 @@ class RetinaVAE(nn.Module):
             # plot 100 images in 10x10 grid with 1 pixel padding in-between.
             self._show_image(torchvision.utils.make_grid(img_recon.data[:100], 10, 1))
             ax.set_title("Decoded images from a random sample of latent space")
+
+    def _reconstruct_grid_images(self):
+
+        if self.latent_dim == 2:
+            with torch.no_grad():
+                scale = self.latent_space_plot_scale
+                # sample grid of vectors between -1.5 and 1.5 in both dimensions
+                grid = torch.linspace(-scale, scale, 10)
+                latent = (
+                    torch.stack(torch.meshgrid(grid, grid))
+                    .reshape(2, -1)
+                    .T.to(self.device)
+                )
+
+                # reconstruct images from the latent vectors
+                img_recon = self.vae.decoder(latent)
+                img_recon = img_recon.cpu()
+
+                fig, ax = plt.subplots(figsize=(20, 8.5))
+                # plot 100 images in 10x10 grid with 1 pixel padding in-between.
+                self._show_image(
+                    torchvision.utils.make_grid(img_recon.data[:100], 10, 1)
+                )
+                ax.set_title("Decoded images from a grid of samples of latent space")
+        else:
+            print("Latent dimension is not 2. Multidim grid plot is not implemented.")
 
     def _show_image(self, img):
         npimg = img.numpy()
