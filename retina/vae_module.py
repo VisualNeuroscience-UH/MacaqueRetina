@@ -310,7 +310,7 @@ class RetinaVAE(nn.Module):
         )
 
         self.batch_size = 512  # None will take the batch size from test_split size.
-        self.epochs = 10
+        self.epochs = 2000
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.this_folder = self._get_this_folder()
         self.models_folder = self._set_models_folder()
@@ -348,7 +348,7 @@ class RetinaVAE(nn.Module):
 
         print(self.vae)
 
-        training = True
+        training = False
 
         if training:
             # Init tensorboard
@@ -891,11 +891,14 @@ class RetinaVAE(nn.Module):
 
             scale = self.latent_space_plot_scale
             # sample latent vectors from the uniform distribution between -scale and scale
-            latent = torch.rand(128, self.latent_dim, device=self.device) * 2 * scale - scale
+            latent = (
+                torch.rand(128, self.latent_dim, device=self.device) * 2 * scale - scale
+            )
 
             # reconstruct images from the latent vectors
             img_recon = self.vae.decoder(latent)
             img_recon = img_recon.cpu()
+            latent = latent.cpu()
 
             fig, ax = plt.subplots(figsize=(20, 8.5))
             # plot 100 images in 10x10 grid with 1 pixel padding in-between.
@@ -918,20 +921,45 @@ class RetinaVAE(nn.Module):
                 # reconstruct images from the latent vectors
                 img_recon = self.vae.decoder(latent)
                 img_recon = img_recon.cpu()
+                latent = latent.cpu()
 
                 fig, ax = plt.subplots(figsize=(20, 8.5))
                 # plot 100 images in 10x10 grid with 1 pixel padding in-between.
                 self._show_image(
-                    torchvision.utils.make_grid(img_recon.data[:100], 10, 1)
+                    torchvision.utils.make_grid(
+                        img_recon.data[:100], nrow=10, padding=1
+                    ),
+                    latent,
                 )
                 ax.set_title("Decoded images from a grid of samples of latent space")
         else:
             print("Latent dimension is not 2. Multidim grid plot is not implemented.")
 
-    def _show_image(self, img):
+    def _show_image(self, img, latent=None):
         npimg = img.numpy()
-        # plt.imshow(np.transpose(npimg, (1, 2, 0)), interpolation="nearest")
-        plt.imshow(np.transpose(npimg, (1, 2, 0)))
+        # Enc 0 as x-axis, 1 as y-axis
+        npimg_transposed = np.transpose(npimg, (2, 1, 0))
+        sidelength = int(npimg_transposed.shape[0] / 10)
+        npimg_transposed = np.flip(npimg_transposed, 0)  # flip the image ud
+        plt.imshow(npimg_transposed)
+        plt.xticks([])
+        plt.yticks([])
+        if latent is not None:
+            # Make x and y ticks from latent space (rows, cols) values
+            x_ticks = np.linspace(latent[:, 1].min(), latent[:, 1].max(), 10)
+            y_ticks = np.linspace(latent[:, 0].max(), latent[:, 0].min(), 10)
+            # Limit both x and y ticks to 2 significant digits
+            x_ticks = np.around(x_ticks, 2)
+            y_ticks = np.around(y_ticks, 2)
+            plt.xticks(
+                np.arange(0 + sidelength / 2, sidelength * 10, sidelength), x_ticks
+            )
+            plt.yticks(
+                np.arange(0 + sidelength / 2, sidelength * 10, sidelength), y_ticks
+            )
+            # X label and Y label
+            plt.xlabel("Enc. Variable 0")
+            plt.ylabel("Enc. Variable 1")
 
     def _get_encoded_samples(self, ds_name="test_ds"):
 
