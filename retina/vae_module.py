@@ -33,6 +33,7 @@ from pathlib import Path
 from datetime import datetime
 import shutil
 import pdb
+from copy import deepcopy
 
 
 class AugmentedDataset(torch.utils.data.Dataset):
@@ -309,12 +310,10 @@ class RetinaVAE(nn.Module):
         )
 
         self.batch_size = 512  # None will take the batch size from test_split size.
-        self.epochs = 200
+        self.epochs = 10
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
-
-        # # Preprocessing parameters
-        # self.gaussian_filter_size = None  # None or 0.5 or ... # Denoising gaussian filter size (in pixels). None does not apply filter
-        # self.n_pca_components = 16  # None or 32 # Number of PCA components to use for denoising. None does not apply PCA
+        self.this_folder = self._get_this_folder()
+        self.models_folder = self._set_models_folder()
 
         # Augment training and validation data.
         augmentation_dict = {
@@ -326,7 +325,7 @@ class RetinaVAE(nn.Module):
         self.augmentation_dict = None
 
         self.random_seed = 42
-        self.timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         self.device = (
             torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -349,14 +348,27 @@ class RetinaVAE(nn.Module):
 
         print(self.vae)
 
-        # Init tensorboard
-        self.tb_log_folder = "tb_logs"
-        self._prep_tensorboard_logging()
+        training = False
 
-        # Train
-        self._train()
-        self.writer.flush()
-        self.writer.close()
+        if training:
+            # Init tensorboard
+            self.tb_log_folder = "tb_logs"
+            self._prep_tensorboard_logging()
+
+            # Train
+            self._train()
+            self.writer.flush()
+            self.writer.close()
+
+            # Save model
+            model_path = self._save_model()
+        else:
+            # Load previously calculated model for vizualization
+            my_model_path = (
+                "/opt2/Git_Repos/MacaqueRetina/retina/models/model_20230126-173032.pt"
+            )
+            # Load model to self.vae and return state dict.
+            state_dict = self._load_model(model_path=my_model_path)
 
         # Figure 1
         self._plot_ae_outputs(
@@ -393,6 +405,53 @@ class RetinaVAE(nn.Module):
 
         # Figure 4
         self._plot_tsne_space(encoded_samples)
+
+    def _get_this_folder(self):
+        """Get the folder where this module file is located"""
+        from retina import vae_module as vv
+
+        this_folder = Path(vv.__file__).parent
+        return this_folder
+
+    def _set_models_folder(self):
+        """Set the folder where models are saved"""
+        models_folder = self.this_folder / "models"
+        Path(models_folder).mkdir(parents=True, exist_ok=True)
+
+        return models_folder
+
+    def _save_model(self):
+        """Save model"""
+        model_path = f"{self.models_folder}/model_{self.timestamp}.pt"
+        # Create models folder if it does not exist using pathlib
+
+        print(f"Saving model to {model_path}")
+        torch.save(self.vae.state_dict(), model_path)
+        return model_path
+
+    def _load_model(self, model_path=None):
+        """Load model if exists"""
+
+        if model_path is None or not Path(model_path).exists():
+            # Get the most recent model. Max recognizes the timestamp with the largest value
+            try:
+                model_path = max(Path(self.models_folder).glob("*.pt"))
+                print(f"Most recent model is {model_path}.")
+            except ValueError:
+                raise FileNotFoundError("No model files found. Aborting...")
+
+        else:
+            model_path = Path(model_path)
+
+        if Path.exists(model_path):
+            print(
+                f"Loading model from {model_path}. \nWARNING: This will replace the current model in-place."
+            )
+            self.vae.load_state_dict(torch.load(model_path))
+        else:
+            print(f"Model {model_path} does not exist.")
+
+        return self.vae.state_dict()
 
     def _visualize_augmentation(self, apricot_data_folder, gc_type, response_type):
         """
@@ -697,13 +756,8 @@ class RetinaVAE(nn.Module):
         by new ones.
         """
 
-        # Get the folder where this module file is located
-        from retina import vae_module as vv
-
-        this_folder = Path(vv.__file__).parent
-
         # Create a folder for the experiment tensorboard logs
-        exp_folder = this_folder.joinpath(self.tb_log_folder)
+        exp_folder = self.this_folder.joinpath(self.tb_log_folder)
         Path.mkdir(exp_folder, parents=True, exist_ok=True)
 
         # Clear files and folders under exp_folder
