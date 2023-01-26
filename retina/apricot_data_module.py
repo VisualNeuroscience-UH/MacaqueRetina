@@ -65,11 +65,14 @@ class ApricotData:
             raise NotImplementedError("Unknown cell type or response type, aborting")
 
         # Make a key-value dictionary for labeling the data
-        self.data_labels = {
+        self.data_names2labels_dict = {
             "parasol_on": 0,
             "parasol_off": 1,
             "midget_on": 2,
             "midget_off": 3,
+        }
+        self.data_labels2names_dict = {
+            v: k for k, v in self.data_names2labels_dict.items()
         }
 
         # Read nonspatial data. Data type is numpy nd array, but it includes a lot of metadata.

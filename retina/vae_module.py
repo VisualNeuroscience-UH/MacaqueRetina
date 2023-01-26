@@ -309,7 +309,7 @@ class RetinaVAE(nn.Module):
         )
 
         self.batch_size = 512  # None will take the batch size from test_split size.
-        self.epochs = 1000
+        self.epochs = 10
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
 
         # # Preprocessing parameters
@@ -384,7 +384,7 @@ class RetinaVAE(nn.Module):
         """
 
         # Get numpy data
-        data_np, labels_np, data_labels = self._get_spatial_apricot_data()
+        data_np, labels_np, data_names2labels_dict = self._get_spatial_apricot_data()
 
         # Split to training, validation and testing
         train_val_data, test_data, train_val_labels, test_labels = train_test_split(
@@ -428,12 +428,11 @@ class RetinaVAE(nn.Module):
             axs[1, i].axis("off")
 
         # Set the labels as text upper left inside the images of the upper row
-        data_labels_dict = {v: k for k, v in self.apricot_data.data_labels.items()}
         for i in range(5):
             axs[0, i].text(
                 0.05,
                 0.85,
-                data_labels_dict[train_val_labels[i][0]],
+                self.apricot_data.data_labels2names_dict[train_val_labels[i][0]],
                 fontsize=10,
                 color="blue",
                 transform=axs[0, i].transAxes,
@@ -471,7 +470,7 @@ class RetinaVAE(nn.Module):
         """
 
         # Get numpy data
-        data_np, labels_np, data_labels = self._get_spatial_apricot_data()
+        data_np, labels_np, data_names2labels_dict = self._get_spatial_apricot_data()
 
         # Split to training, validation and testing
         train_val_data, test_data, train_val_labels, test_labels = train_test_split(
@@ -533,16 +532,20 @@ class RetinaVAE(nn.Module):
 
         # Get all available gc types and response types
         gc_types = [
-            key[: key.find("_")] for key in self.apricot_data.data_labels.keys()
+            key[: key.find("_")]
+            for key in self.apricot_data.data_names2labels_dict.keys()
         ]
         response_types = [
-            key[key.find("_") + 1 :] for key in self.apricot_data.data_labels.keys()
+            key[key.find("_") + 1 :]
+            for key in self.apricot_data.data_names2labels_dict.keys()
         ]
         # Get the integer labels for each gc type and response type
-        response_labels = [value for value in self.apricot_data.data_labels.values()]
+        response_labels = [
+            value for value in self.apricot_data.data_names2labels_dict.values()
+        ]
 
         # Log requested label
-        self.gc_label = self.apricot_data.data_labels[
+        self.gc_label = self.apricot_data.data_names2labels_dict[
             f"{self.gc_type}_{self.response_type}"
         ]
 
@@ -590,7 +593,11 @@ class RetinaVAE(nn.Module):
             # collated_gc_spatial_data_t = torch.from_numpy(collated_gc_spatial_data_np)
             # collated_labels_t = torch.from_numpy(collated_labels_np).type(torch.uint8)
 
-        return collated_gc_spatial_data_np, collated_labels_np, apricot_data.data_labels
+        return (
+            collated_gc_spatial_data_np,
+            collated_labels_np,
+            apricot_data.data_names2labels_dict,
+        )
 
     def _prep_minst_data(self):
         data_dir = "dataset"
@@ -727,6 +734,7 @@ class RetinaVAE(nn.Module):
         t_idx = {i: np.where(targets == i)[0][0] for i in range(n)}
         encoder.eval()
         decoder.eval()
+
         for i in range(n):
             ax = plt.subplot(2, n, i + 1)
             img = self.test_ds[t_idx[i]][0].unsqueeze(0).to(self.device)
@@ -735,8 +743,19 @@ class RetinaVAE(nn.Module):
             plt.imshow(img.cpu().squeeze().numpy(), cmap="gist_gray")
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
+            ax.text(
+                0.05,
+                0.85,
+                self.apricot_data.data_labels2names_dict[
+                    self.test_ds[t_idx[i]][1].item()
+                ],
+                fontsize=10,
+                color="red",
+                transform=ax.transAxes,
+            )
             if i == 0:
                 ax.set_title("Original images")
+
             ax = plt.subplot(2, n, i + 1 + n)
             plt.imshow(rec_img.cpu().squeeze().numpy(), cmap="gist_gray")
             ax.get_xaxis().set_visible(False)
@@ -793,7 +812,7 @@ class RetinaVAE(nn.Module):
         encoded_samples = []
         for sample in tqdm(self.test_ds):
             img = sample[0].unsqueeze(0).to(self.device)
-            label = sample[1]
+            label = self.apricot_data.data_labels2names_dict[sample[1].item()]
             # Encode image
             self.vae.eval()
             with torch.no_grad():
