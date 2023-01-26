@@ -309,7 +309,7 @@ class RetinaVAE(nn.Module):
         )
 
         self.batch_size = 512  # None will take the batch size from test_split size.
-        self.epochs = 10
+        self.epochs = 200
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
 
         # # Preprocessing parameters
@@ -322,8 +322,8 @@ class RetinaVAE(nn.Module):
             "translation": (0.3, 0.3),  # fraction of image, (x, y) -directions
             "noise": 0.2,  # noise float in [0, 1] (noise is added to the image)
         }
-        self.augmentation_dict = augmentation_dict
-        # self.augmentation_dict = None
+        # self.augmentation_dict = augmentation_dict
+        self.augmentation_dict = None
 
         self.random_seed = 42
         self.timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -355,7 +355,8 @@ class RetinaVAE(nn.Module):
 
         # Train
         self._train()
-        # self.writer.close()
+        self.writer.flush()
+        self.writer.close()
 
         # Figure 1
         self._plot_ae_outputs(
@@ -695,7 +696,7 @@ class RetinaVAE(nn.Module):
                 f.unlink()
 
         # This creates new scalar/time series line in tensorboard
-        self.writer = SummaryWriter(str(exp_folder), max_queue=5)
+        self.writer = SummaryWriter(str(exp_folder), max_queue=100)
 
     ### Training function
     def _train_epoch(self, vae, device, dataloader, optimizer):
@@ -797,20 +798,16 @@ class RetinaVAE(nn.Module):
             print(
                 f"\n EPOCH {epoch + 1}/{self.epochs} \t train loss {train_loss:.3f} \t val loss {val_loss:.3f}"
             )
-            # # Add train loss and val loss to tensorboard SummaryWriter
-            # self.writer.add_scalar("Loss/train", train_loss, epoch)
-            # self.writer.add_scalar("Loss/val", val_loss, epoch)
+
             # Add train loss and val loss to tensorboard SummaryWriter
-            with self.writer as writer:
-                writer.add_scalars(
-                    f"Training_{self.timestamp}",
-                    {
-                        "loss/train": train_loss,
-                        "loss/val": val_loss,
-                    },
-                    epoch,
-                )
-            # self.writer.add_scalar("Loss/val", val_loss, epoch)
+            self.writer.add_scalars(
+                f"Training_{self.timestamp}",
+                {
+                    "loss/train": train_loss,
+                    "loss/val": val_loss,
+                },
+                epoch,
+            )
 
     def _reconstruct_random_images(self):
         with torch.no_grad():
