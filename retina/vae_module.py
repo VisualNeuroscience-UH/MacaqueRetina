@@ -357,16 +357,22 @@ class RetinaVAE(nn.Module):
         self._train()
         # self.writer.close()
 
-        self._plot_ae_outputs(self.vae.encoder, self.vae.decoder, n=4)
+        # Figure 1
+        self._plot_ae_outputs(
+            self.vae.encoder, self.vae.decoder, n=4, ds_name="test_ds"
+        )
 
         self.vae.eval()
 
+        # Figure 2
         self._reconstruct_random_images()
 
-        encoded_samples = self._get_encoded_samples()
+        encoded_samples = self._get_encoded_samples(ds_name="test_ds")
 
+        # Figure 3
         self._plot_latent_space(encoded_samples)
 
+        # Figure 4
         self._plot_tsne_space(encoded_samples)
 
     def _visualize_augmentation(self, apricot_data_folder, gc_type, response_type):
@@ -728,16 +734,27 @@ class RetinaVAE(nn.Module):
 
         return val_loss / len(dataloader.dataset)
 
-    def _plot_ae_outputs(self, encoder, decoder, n=10):
+    def _plot_ae_outputs(self, encoder, decoder, n=10, ds_name="test_ds"):
+        """
+        Plot the outputs of the autoencoder, one for each label.
+        """
+
+        if ds_name == "train_ds":
+            ds = self.train_ds
+        elif ds_name == "valid_ds":
+            ds = self.valid_ds
+        else:
+            ds_name = self.test_ds
+
         plt.figure(figsize=(16, 4.5))
-        targets = self.test_ds.targets.numpy()
+        targets = ds.targets.numpy()
         t_idx = {i: np.where(targets == i)[0][0] for i in range(n)}
         encoder.eval()
         decoder.eval()
 
         for i in range(n):
             ax = plt.subplot(2, n, i + 1)
-            img = self.test_ds[t_idx[i]][0].unsqueeze(0).to(self.device)
+            img = ds[t_idx[i]][0].unsqueeze(0).to(self.device)
             with torch.no_grad():
                 rec_img = decoder(encoder(img))
             plt.imshow(img.cpu().squeeze().numpy(), cmap="gist_gray")
@@ -746,9 +763,7 @@ class RetinaVAE(nn.Module):
             ax.text(
                 0.05,
                 0.85,
-                self.apricot_data.data_labels2names_dict[
-                    self.test_ds[t_idx[i]][1].item()
-                ],
+                self.apricot_data.data_labels2names_dict[ds[t_idx[i]][1].item()],
                 fontsize=10,
                 color="red",
                 transform=ax.transAxes,
@@ -762,6 +777,9 @@ class RetinaVAE(nn.Module):
             ax.get_yaxis().set_visible(False)
             if i == 0:
                 ax.set_title("Reconstructed images")
+
+        # Set the whole figure title as ds_name
+        plt.suptitle(ds_name)
 
     def _train(self):
 
@@ -808,9 +826,17 @@ class RetinaVAE(nn.Module):
         # plt.imshow(np.transpose(npimg, (1, 2, 0)), interpolation="nearest")
         plt.imshow(np.transpose(npimg, (1, 2, 0)))
 
-    def _get_encoded_samples(self):
+    def _get_encoded_samples(self, ds_name="test_ds"):
+
+        if ds_name == "train_ds":
+            ds = self.train_ds
+        elif ds_name == "valid_ds":
+            ds = self.valid_ds
+        else:
+            ds = self.test_ds
+
         encoded_samples = []
-        for sample in tqdm(self.test_ds):
+        for sample in tqdm(ds):
             img = sample[0].unsqueeze(0).to(self.device)
             label = self.apricot_data.data_labels2names_dict[sample[1].item()]
             # Encode image
