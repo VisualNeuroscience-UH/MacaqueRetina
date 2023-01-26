@@ -363,12 +363,30 @@ class RetinaVAE(nn.Module):
             self.vae.encoder, self.vae.decoder, n=4, ds_name="test_ds"
         )
 
+        # Figure 1
+        self._plot_ae_outputs(
+            self.vae.encoder, self.vae.decoder, n=4, ds_name="train_ds"
+        )
+
+        # Figure 1
+        self._plot_ae_outputs(
+            self.vae.encoder, self.vae.decoder, n=4, ds_name="valid_ds"
+        )
+
         self.vae.eval()
 
         # Figure 2
         self._reconstruct_random_images()
 
         encoded_samples = self._get_encoded_samples(ds_name="test_ds")
+
+        # Figure 3
+        self._plot_latent_space(encoded_samples)
+
+        # Figure 4
+        self._plot_tsne_space(encoded_samples)
+
+        encoded_samples = self._get_encoded_samples(ds_name="train_ds")
 
         # Figure 3
         self._plot_latent_space(encoded_samples)
