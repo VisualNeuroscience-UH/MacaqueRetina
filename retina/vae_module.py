@@ -507,6 +507,12 @@ class RetinaVAE(nn.Module):
             ],
         )
 
+        # Save for later use, this may be a proble with bigger datasets
+        self.train_ds = train_ds
+        self.val_ds = val_ds
+        self.train_ds.targets = self.train_ds.labels
+        self.val_ds.targets = self.val_ds.labels
+
         # Get n items for the three sets
         self.n_train = len(train_ds)
         self.n_val = len(val_ds)
