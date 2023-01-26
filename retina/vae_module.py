@@ -297,7 +297,7 @@ class RetinaVAE(nn.Module):
         self.response_type = response_type
 
         # Set common VAE model parameters
-        self.latent_dim = 32
+        self.latent_dim = 4
         self.latent_space_plot_scale = 2  # Scale for plotting latent space
         self.lr = 0.001
 
@@ -308,8 +308,8 @@ class RetinaVAE(nn.Module):
             1,
         )
 
-        self.batch_size = 128  # None will take the batch size from test_split size.
-        self.epochs = 200
+        self.batch_size = 512  # None will take the batch size from test_split size.
+        self.epochs = 1000
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
 
         # # Preprocessing parameters
@@ -318,9 +318,9 @@ class RetinaVAE(nn.Module):
 
         # Augment training and validation data.
         augmentation_dict = {
-            "rotation": 5.0,  # rotation in degrees
-            "translation": (0.2, 0.2),  # fraction of image, (x, y) -directions
-            "noise": 0.0,  # noise float in [0, 1] (noise is added to the image)
+            "rotation": 40.0,  # rotation in degrees
+            "translation": (0.3, 0.3),  # fraction of image, (x, y) -directions
+            "noise": 0.2,  # noise float in [0, 1] (noise is added to the image)
         }
         self.augmentation_dict = augmentation_dict
         # self.augmentation_dict = None
@@ -337,8 +337,8 @@ class RetinaVAE(nn.Module):
         torch.manual_seed(self.random_seed)
         np.random.seed(self.random_seed)
 
-        # Visualize the augmentation effects and exit
-        self._visualize_augmentation(apricot_data_folder, gc_type, response_type)
+        # # Visualize the augmentation effects and exit
+        # self._visualize_augmentation(apricot_data_folder, gc_type, response_type)
 
         # Create datasets and dataloaders
         self._prep_apricot_data(apricot_data_folder, gc_type, response_type)
@@ -507,17 +507,10 @@ class RetinaVAE(nn.Module):
         self.n_val = len(val_ds)
         self.n_test = len(test_ds)
 
-        if 1:
-            # Plot one example from each set
-            fig, axes = plt.subplots(1, 3, figsize=(10, 5))
-            plt.colorbar(axes[0].imshow(train_ds[0][0].squeeze()))
-            plt.colorbar(axes[1].imshow(val_ds[0][0].squeeze()))
-            plt.colorbar(axes[2].imshow(test_ds[0][0].squeeze()))
-            plt.show()
-
-        train_loader = DataLoader(train_ds, batch_size=self.batch_size)
-        valid_loader = DataLoader(val_ds, batch_size=self.batch_size)
-        test_loader = DataLoader(test_ds, batch_size=self.batch_size, shuffle=True)
+        train_loader = DataLoader(train_ds, batch_size=self.batch_size, shuffle=True)
+        valid_loader = DataLoader(val_ds, batch_size=self.batch_size, shuffle=True)
+        # valid_loader = DataLoader(test_ds, batch_size=self.batch_size, shuffle=True)
+        test_loader = DataLoader(test_ds, batch_size=self.batch_size)
 
         self.train_loader = train_loader
         self.valid_loader = valid_loader
