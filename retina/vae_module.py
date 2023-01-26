@@ -283,7 +283,7 @@ class VariationalAutoencoder(nn.Module):
         return self.decoder(z)
 
 
-class VAE(nn.Module):
+class RetinaVAE(nn.Module):
     """Variational Autoencoder class"""
 
     # TODO KANNATTAAKO TEHDÄ KAKSIVAIHEINEN OPETUS? ENSIN KAIKKI JA SITTEN HALUTTU LUOKKA?
@@ -309,7 +309,7 @@ class VAE(nn.Module):
         )
 
         self.batch_size = 128  # None will take the batch size from test_split size.
-        self.epochs = 20000
+        self.epochs = 200
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
 
         # # Preprocessing parameters
@@ -318,7 +318,7 @@ class VAE(nn.Module):
 
         # Augment training and validation data.
         augmentation_dict = {
-            "rotation": 20.0,  # rotation in degrees
+            "rotation": 5.0,  # rotation in degrees
             "translation": (0.2, 0.2),  # fraction of image, (x, y) -directions
             "noise": 0.0,  # noise float in [0, 1] (noise is added to the image)
         }
@@ -336,6 +336,9 @@ class VAE(nn.Module):
         # Set the random seed for reproducible results for both torch and numpy
         torch.manual_seed(self.random_seed)
         np.random.seed(self.random_seed)
+
+        # Visualize the augmentation effects and exit
+        self._visualize_augmentation(apricot_data_folder, gc_type, response_type)
 
         # Create datasets and dataloaders
         self._prep_apricot_data(apricot_data_folder, gc_type, response_type)
@@ -365,6 +368,84 @@ class VAE(nn.Module):
         self._plot_latent_space(encoded_samples)
 
         self._plot_tsne_space(encoded_samples)
+
+    def _visualize_augmentation(self, apricot_data_folder, gc_type, response_type):
+        """
+        Visualize the augmentation effects
+
+        Parameters
+        ----------
+        apricot_data_folder : str
+            Path to apricot data folder
+        gc_type : str
+            Type of ganglion cell to use. Options are 'on' or 'off'
+        response_type : str
+            Type of response to use. Options are 'mean' or 'peak'
+        """
+
+        # Get numpy data
+        data_np, labels_np, data_labels = self._get_spatial_apricot_data()
+
+        # Split to training, validation and testing
+        train_val_data, test_data, train_val_labels, test_labels = train_test_split(
+            data_np,
+            labels_np,
+            test_size=self.test_split,
+            random_state=self.random_seed,
+            stratify=labels_np,
+        )
+
+        # Augment training and validation data
+        train_val_ds = AugmentedDataset(
+            train_val_data, train_val_labels, augmentation_dict=self.augmentation_dict
+        )
+
+        # Do not augment test data
+        test_ds = AugmentedDataset(test_data, test_labels, augmentation_dict=None)
+
+        # Split into train and validation
+        train_ds, val_ds = random_split(
+            train_val_ds,
+            [
+                int(np.round(len(train_val_ds) * (1 - self.test_split))),
+                int(np.round(len(train_val_ds) * self.test_split)),
+            ],
+        )
+
+        # Get n items for the three sets
+        self.n_train = len(train_ds)
+        self.n_val = len(val_ds)
+        self.n_test = len(test_ds)
+
+        # Make a figure with 2 rows and 5 columns, with upper row containing 5 original and the lower row 5 augmented images.
+        # The original images are in the train_val_data (numpy array with dims (N x C x H x W)), and the augmented images are in the train_val_ds
+        # (torch dataset with dims (N x C x H x W)). The labels are in train_val_labels (numpy array with dims (N, 1)).
+        fig, axs = plt.subplots(2, 5, figsize=(10, 5))
+        for i in range(5):
+            axs[0, i].imshow(train_val_data[i, 0, :, :], cmap="gray")
+            axs[0, i].axis("off")
+            axs[1, i].imshow(train_val_ds[i][0][0, :, :], cmap="gray")
+            axs[1, i].axis("off")
+
+        # Set the labels as text upper left inside the images of the upper row
+        data_labels_dict = {v: k for k, v in self.apricot_data.data_labels.items()}
+        for i in range(5):
+            axs[0, i].text(
+                0.05,
+                0.85,
+                data_labels_dict[train_val_labels[i][0]],
+                fontsize=10,
+                color="blue",
+                transform=axs[0, i].transAxes,
+            )
+
+        # Set subtitle "Original" for the first row
+        axs[0, 0].set_title("Original", fontsize=14)
+        # Set subtitle "Augmented" for the second row
+        axs[1, 0].set_title("Augmented", fontsize=14)
+
+        plt.show()
+        exit()
 
     def _prep_apricot_data(self, apricot_data_folder, gc_type, response_type):
         """
@@ -403,7 +484,7 @@ class VAE(nn.Module):
 
         # Augment training and validation data
         train_val_ds = AugmentedDataset(
-            data_np, labels_np, augmentation_dict=self.augmentation_dict
+            train_val_data, train_val_labels, augmentation_dict=self.augmentation_dict
         )
 
         # Do not augment test data

@@ -24,7 +24,7 @@ from retina.fit_module import Fit
 from retina.retina_math_module import RetinaMath
 
 # from retina.vae_module import ApricotVAE
-from retina.vae_module import VAE
+from retina.vae_module import RetinaVAE
 from retina.gan_module import GAN
 
 # Builtin
@@ -105,7 +105,7 @@ class ConstructRetina(RetinaMath):
             First: sets ConstructRetina instance parameters from conf file my_retina
             Second: creates empty gc_df to hold the final ganglion cell mosaics
             Third: gets gc creation model according to model_type
-                Calls Fit, VAE or GAN classes
+                Calls Fit, RetinaVAE or GAN classes
 
         See class attributes for more details.
 
@@ -229,7 +229,7 @@ class ConstructRetina(RetinaMath):
 
         elif self.model_type == "VAE":
             # Fit variational autoencoder to generate receptive fields
-            self.vae_model = VAE(
+            self.vae_model = RetinaVAE(
                 self.context.apricot_data_folder, gc_type, response_type
             )
             print("Back from VAE!")
