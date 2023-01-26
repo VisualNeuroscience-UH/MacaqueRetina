@@ -348,7 +348,7 @@ class RetinaVAE(nn.Module):
 
         print(self.vae)
 
-        training = False
+        training = True
 
         if training:
             # Init tensorboard
@@ -367,7 +367,7 @@ class RetinaVAE(nn.Module):
             my_model_path = (
                 "/opt2/Git_Repos/MacaqueRetina/retina/models/model_20230126-173032.pt"
             )
-            # Load model to self.vae and return state dict.
+            # Load model to self.vae and return state dict. The numbers are in the state dict.
             state_dict = self._load_model(model_path=my_model_path)
 
         # Figure 1
