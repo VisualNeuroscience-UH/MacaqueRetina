@@ -5,9 +5,11 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import sys
 import pdb
+import time
 
 # sys.path.append(Path(__file__).resolve().parent.parent)
-
+# Start measuring time
+start_time = time.time()
 
 # Local
 from project.project_manager_module import ProjectManager
@@ -419,6 +421,15 @@ if __name__ == "__main__":
     """
     ### Housekeeping ###. Do not comment out.
     """
+    # End measuring time and print the time in HH hours MM minutes SS seconds format
+    end_time = time.time()
+    print(
+        "Total time taken: ",
+        time.strftime(
+            "%H hours %M minutes %S seconds", time.gmtime(end_time - start_time)
+        ),
+    )
+
     plt.show()
 
     if profile is True:
