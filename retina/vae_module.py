@@ -744,7 +744,7 @@ class RetinaVAE(nn.Module):
         elif ds_name == "valid_ds":
             ds = self.valid_ds
         else:
-            ds_name = self.test_ds
+            ds = self.test_ds
 
         plt.figure(figsize=(16, 4.5))
         targets = ds.targets.numpy()
