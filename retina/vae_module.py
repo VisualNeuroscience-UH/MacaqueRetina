@@ -748,7 +748,7 @@ class RetinaVAE(nn.Module):
         if ds_name == "train_ds":
             ds = self.train_ds
         elif ds_name == "valid_ds":
-            ds = self.valid_ds
+            ds = self.val_ds
         else:
             ds = self.test_ds
 
