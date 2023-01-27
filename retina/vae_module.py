@@ -310,19 +310,19 @@ class RetinaVAE(nn.Module):
         )
 
         self.batch_size = 512  # None will take the batch size from test_split size.
-        self.epochs = 2000
+        self.epochs = 5000
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.this_folder = self._get_this_folder()
         self.models_folder = self._set_models_folder()
 
         # Augment training and validation data.
         augmentation_dict = {
-            "rotation": 40.0,  # rotation in degrees
-            "translation": (0.3, 0.3),  # fraction of image, (x, y) -directions
-            "noise": 0.2,  # noise float in [0, 1] (noise is added to the image)
+            "rotation": 90.0,  # rotation in degrees
+            "translation": (0.1, 0.1),  # fraction of image, (x, y) -directions
+            "noise": 0.0,  # noise float in [0, 1] (noise is added to the image)
         }
-        # self.augmentation_dict = augmentation_dict
-        self.augmentation_dict = None
+        self.augmentation_dict = augmentation_dict
+        # self.augmentation_dict = None
 
         self.random_seed = 42
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -348,7 +348,7 @@ class RetinaVAE(nn.Module):
 
         print(self.vae)
 
-        training = False
+        training = True
 
         if training:
             # Init tensorboard
