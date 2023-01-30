@@ -37,6 +37,10 @@ from copy import deepcopy
 from itertools import product
 
 
+# TÄHÄN JÄIT. TEE FID, FIT STATS, SSIM SEKÄ MEAN SD , HIST MEASURES KUTEN KL DIVERGENCE.
+# NÄIDEN AVULLA NÄET KVANTITATIIVISESTI MITEN HYVIN ML TOIMII
+
+
 class AugmentedDataset(torch.utils.data.Dataset):
     """
     Apricot dataset class for Pytorch.
