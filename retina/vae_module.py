@@ -301,28 +301,27 @@ class RetinaVAE(nn.Module):
         # Set common VAE model parameters
         self.latent_dim = 2
         self.latent_space_plot_scale = 3.0  # Scale for plotting latent space
-        self.lr = 0.001
+        self.lr = 0.00001
 
         # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
         self.image_shape = (28, 28, 1)
 
-        self.batch_size = 16  # None will take the batch size from test_split size.
-        self.epochs = 200
+        self.batch_size = 32  # None will take the batch size from test_split size.
+        self.epochs = 5
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
-        self.train_by = [["parasol", "midget"], ["on"]]  # Train by these factors
-        self.n_trained_by = 2  # Number of factors to train by
+        self.train_by = [["parasol"], ["on"]]  # Train by these factors
 
         self.this_folder = self._get_this_folder()
         self.models_folder = self._set_models_folder()
 
         # Augment training and validation data.
         augmentation_dict = {
-            "rotation": 90.0,  # rotation in degrees
+            "rotation": 10.0,  # rotation in degrees
             "translation": (0.1, 0.1),  # fraction of image, (x, y) -directions
-            "noise": 0.0,  # noise float in [0, 1] (noise is added to the image)
+            "noise": 0.05,  # noise float in [0, 1] (noise is added to the image)
         }
-        # self.augmentation_dict = augmentation_dict
-        self.augmentation_dict = None
+        self.augmentation_dict = augmentation_dict
+        # self.augmentation_dict = None
 
         self.random_seed = 42
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -981,6 +980,10 @@ class RetinaVAE(nn.Module):
 
     def _plot_tsne_space(self, encoded_samples):
         tsne = TSNE(n_components=2)
+
+        if encoded_samples.shape[0] < tsne.perplexity:
+            tsne.perplexity = encoded_samples.shape[0] - 1
+
         tsne_results = tsne.fit_transform(encoded_samples.drop(["label"], axis=1))
 
         ax0 = sns.relplot(
