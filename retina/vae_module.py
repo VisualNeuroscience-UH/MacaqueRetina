@@ -52,22 +52,47 @@ class AugmentedDataset(torch.utils.data.Dataset):
     # TODO: Add noise and rectangular dropauts to the augmentation dictionary and pass it to the transforms.Compose() method.
     # RandomErasing([p, scale, ratio, value, inplace]) -> Randomly selects a rectangle region in an image and erases its pixels.
 
-    def __init__(self, data, labels, augmentation_dict=None):
+    def __init__(self, data, labels, resolution_hw, augmentation_dict=None):
 
         self.data = data
         self.labels = self._to_tensor(labels)
 
         self.augmentation_dict = augmentation_dict
 
+        # Calculate mean and std of data
+        data_mean = np.mean(self.data)
+        data_std = np.std(self.data)
+
+        # # Define transforms
+        # if self.augmentation_dict is None:
+        #     self.transform = transforms.Compose(
+        #         [
+        #             transforms.Lambda(self._to_tensor),
+        #             transforms.Normalize(mean=data_mean, std=data_std),
+        #             transforms.Resize(resolution_hw),
+        #         ]
+        #     )
+        # else:
+        #     self.transform = transforms.Compose(
+        #         [
+        #             transforms.Lambda(self._random_rotate_image),
+        #             transforms.Lambda(self._random_shift_image),
+        #             transforms.Lambda(self._to_tensor),
+        #             transforms.Normalize(mean=data_mean, std=data_std),
+        #             transforms.Resize(resolution_hw),
+        #             transforms.Lambda(self._add_noise_t),
+        #         ]
+        #     )
         # Define transforms
         if self.augmentation_dict is None:
             self.transform = transforms.Compose(
                 [
                     transforms.Lambda(self._feature_scaling),
                     transforms.Lambda(self._to_tensor),
-                    transforms.Resize((28, 28)),
+                    transforms.Resize(resolution_hw),
                 ]
             )
+
         else:
             self.transform = transforms.Compose(
                 [
@@ -76,7 +101,7 @@ class AugmentedDataset(torch.utils.data.Dataset):
                     transforms.Lambda(self._random_rotate_image),
                     transforms.Lambda(self._random_shift_image),
                     transforms.Lambda(self._to_tensor),
-                    transforms.Resize((28, 28)),
+                    transforms.Resize(resolution_hw),
                 ]
             )
 
@@ -133,7 +158,28 @@ class AugmentedDataset(torch.utils.data.Dataset):
         """
         noise_factor = self.augmentation_dict["noise"]
         noise = np.random.normal(loc=0, scale=noise_factor, size=image.shape)
-        image_noise = np.clip(image + noise, 0.0, 1.0)
+        image_noise = np.clip(image + noise, -3.0, 3.0)
+
+        return image_noise
+
+    def _add_noise_t(self, image):
+        """
+        Add noise to the input images.
+
+        Parameters
+        ----------
+        image : torch.Tensor
+            Input image
+        noise_factor : float
+            Noise factor
+
+        Returns
+        -------
+        image_noise : torch.Tensor
+        """
+        noise_factor = self.augmentation_dict["noise"]
+        noise = torch.randn_like(image) * noise_factor
+        image_noise = torch.clamp(image + noise, -3.0, 3.0)
 
         return image_noise
 
@@ -299,24 +345,24 @@ class RetinaVAE(nn.Module):
         self.response_type = response_type
 
         # Set common VAE model parameters
-        self.latent_dim = 2
+        self.latent_dim = 4
         self.latent_space_plot_scale = 3.0  # Scale for plotting latent space
-        self.lr = 0.00001
+        self.lr = 0.0001
 
         # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
-        self.image_shape = (28, 28, 1)
+        self.resolution_hw = (28, 28)
 
-        self.batch_size = 32  # None will take the batch size from test_split size.
-        self.epochs = 5
+        self.batch_size = 128  # None will take the batch size from test_split size.
+        self.epochs = 4000
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
-        self.train_by = [["parasol"], ["on"]]  # Train by these factors
+        self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
 
         self.this_folder = self._get_this_folder()
         self.models_folder = self._set_models_folder()
 
         # Augment training and validation data.
         augmentation_dict = {
-            "rotation": 10.0,  # rotation in degrees
+            "rotation": 45.0,  # rotation in degrees
             "translation": (0.1, 0.1),  # fraction of image, (x, y) -directions
             "noise": 0.05,  # noise float in [0, 1] (noise is added to the image)
         }
@@ -367,7 +413,7 @@ class RetinaVAE(nn.Module):
                 "/opt2/Git_Repos/MacaqueRetina/retina/models/model_20230126-173032.pt"
             )
             # Load model to self.vae and return state dict. The numbers are in the state dict.
-            state_dict = self._load_model(model_path=my_model_path)
+            state_dict = self._load_model(model_path=None)
 
         # Figure 1
         self._plot_ae_outputs(self.vae.encoder, self.vae.decoder, ds_name="test_ds")
@@ -540,11 +586,19 @@ class RetinaVAE(nn.Module):
 
         # Augment training and validation data
         train_val_ds = AugmentedDataset(
-            train_val_data, train_val_labels, augmentation_dict=self.augmentation_dict
+            train_val_data,
+            train_val_labels,
+            self.resolution_hw,
+            augmentation_dict=self.augmentation_dict,
         )
 
         # Do not augment test data
-        test_ds = AugmentedDataset(test_data, test_labels, augmentation_dict=None)
+        test_ds = AugmentedDataset(
+            test_data,
+            test_labels,
+            self.resolution_hw,
+            augmentation_dict=None,
+        )
 
         test_ds.targets = test_ds.labels  # MNIST uses targets instead of labels
         self.test_ds = test_ds
@@ -767,8 +821,8 @@ class RetinaVAE(nn.Module):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            # Print batch loss
-            print("\t partial train loss (single batch): %f" % (loss.item()))
+            # # Print batch loss
+            # print("\t partial train loss (single batch): %f" % (loss.item()))
             train_loss += loss.item()
 
         return train_loss / len(dataloader.dataset)
@@ -848,19 +902,22 @@ class RetinaVAE(nn.Module):
                 self.vae, self.device, self.train_loader, self.optim
             )
             val_loss = self._test_epoch(self.vae, self.device, self.valid_loader)
-            print(
-                f"\n EPOCH {epoch + 1}/{self.epochs} \t train loss {train_loss:.3f} \t val loss {val_loss:.3f}"
-            )
 
-            # Add train loss and val loss to tensorboard SummaryWriter
-            self.writer.add_scalars(
-                f"Training_{self.timestamp}",
-                {
-                    "loss/train": train_loss,
-                    "loss/val": val_loss,
-                },
-                epoch,
-            )
+            # For every 100th epoch, print the outputs of the autoencoder
+            if epoch == 0 or epoch % 100 == 0:
+                print(
+                    f" EPOCH {epoch + 1}/{self.epochs} \t train loss {train_loss:.3f} \t val loss {val_loss:.3f}"
+                )
+
+                # Add train loss and val loss to tensorboard SummaryWriter
+                self.writer.add_scalars(
+                    f"Training_{self.timestamp}",
+                    {
+                        "loss/train": train_loss,
+                        "loss/val": val_loss,
+                    },
+                    epoch,
+                )
 
     def _reconstruct_random_images(self):
         with torch.no_grad():
