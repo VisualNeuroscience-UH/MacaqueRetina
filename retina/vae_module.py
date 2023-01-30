@@ -34,6 +34,7 @@ from datetime import datetime
 import shutil
 import pdb
 from copy import deepcopy
+from itertools import product
 
 
 class AugmentedDataset(torch.utils.data.Dataset):
@@ -303,15 +304,14 @@ class RetinaVAE(nn.Module):
         self.lr = 0.001
 
         # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
-        self.image_shape = (
-            28,
-            28,
-            1,
-        )
+        self.image_shape = (28, 28, 1)
 
         self.batch_size = 16  # None will take the batch size from test_split size.
-        self.epochs = 5000
+        self.epochs = 2
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
+        self.train_by = [["parasol", "midget"], ["on"]]  # Train by these factors
+        self.n_trained_by = 2  # Number of factors to train by
+
         self.this_folder = self._get_this_folder()
         self.models_folder = self._set_models_folder()
 
@@ -337,10 +337,10 @@ class RetinaVAE(nn.Module):
         np.random.seed(self.random_seed)
 
         # # Visualize the augmentation effects and exit
-        # self._visualize_augmentation(apricot_data_folder, gc_type, response_type)
+        # self._visualize_augmentation()
 
         # Create datasets and dataloaders
-        self._prep_apricot_data(apricot_data_folder, gc_type, response_type)
+        self._prep_apricot_data()
         # self._prep_minst_data()
 
         # Create model and set optimizer and learning rate scheduler
@@ -371,19 +371,13 @@ class RetinaVAE(nn.Module):
             state_dict = self._load_model(model_path=my_model_path)
 
         # Figure 1
-        self._plot_ae_outputs(
-            self.vae.encoder, self.vae.decoder, n=4, ds_name="test_ds"
-        )
+        self._plot_ae_outputs(self.vae.encoder, self.vae.decoder, ds_name="test_ds")
 
         # Figure 1
-        self._plot_ae_outputs(
-            self.vae.encoder, self.vae.decoder, n=4, ds_name="train_ds"
-        )
+        self._plot_ae_outputs(self.vae.encoder, self.vae.decoder, ds_name="train_ds")
 
         # Figure 1
-        self._plot_ae_outputs(
-            self.vae.encoder, self.vae.decoder, n=4, ds_name="valid_ds"
-        )
+        self._plot_ae_outputs(self.vae.encoder, self.vae.decoder, ds_name="valid_ds")
 
         self.vae.eval()
 
@@ -455,18 +449,9 @@ class RetinaVAE(nn.Module):
 
         return self.vae.state_dict()
 
-    def _visualize_augmentation(self, apricot_data_folder, gc_type, response_type):
+    def _visualize_augmentation(self):
         """
-        Visualize the augmentation effects
-
-        Parameters
-        ----------
-        apricot_data_folder : str
-            Path to apricot data folder
-        gc_type : str
-            Type of ganglion cell to use. Options are 'on' or 'off'
-        response_type : str
-            Type of response to use. Options are 'mean' or 'peak'
+        Visualize the augmentation effects and exit
         """
 
         # Get numpy data
@@ -532,7 +517,7 @@ class RetinaVAE(nn.Module):
         plt.show()
         exit()
 
-    def _prep_apricot_data(self, apricot_data_folder, gc_type, response_type):
+    def _prep_apricot_data(self):
         """
         Prep apricot data for training. This includes:
         - Loading data
@@ -540,34 +525,10 @@ class RetinaVAE(nn.Module):
         - Augmenting data
         - Preprocessing data
         - Creating dataloaders
-
-        Parameters
-        ----------
-        apricot_data_folder : str
-            Path to apricot data folder
-        gc_type : str
-            Type of ganglion cell to use. Options are 'parasol' or 'midget'
-        response_type : str
-            Type of response to use. Options are 'on' or 'off'
-
-        Returns
-        -------
-
         """
 
         # Get numpy data
         data_np, labels_np, data_names2labels_dict = self._get_spatial_apricot_data()
-
-        # Get the label from current gc_type and response_type
-        self.label = data_names2labels_dict[f"{gc_type}_{response_type}"]
-
-        # Take only the data with the current label
-        data_np = data_np[labels_np == self.label]
-
-        # Print the label name and the N samples
-        print(
-            f"Label: {self.apricot_data.data_labels2names_dict[self.label]}, N samples: {data_np.shape[0]}"
-        )
 
         # Split to training, validation and testing
         train_val_data, test_data, train_val_labels, test_labels = train_test_split(
@@ -611,7 +572,6 @@ class RetinaVAE(nn.Module):
 
         train_loader = DataLoader(train_ds, batch_size=self.batch_size, shuffle=True)
         valid_loader = DataLoader(val_ds, batch_size=self.batch_size, shuffle=True)
-        # valid_loader = DataLoader(test_ds, batch_size=self.batch_size, shuffle=True)
         test_loader = DataLoader(test_ds, batch_size=self.batch_size)
 
         self.train_loader = train_loader
@@ -625,8 +585,12 @@ class RetinaVAE(nn.Module):
 
         Returns
         -------
-        gc_spatial_data_np : np.ndarray
-            Spatial data with shape (n_gc, 1, ydim, xdim), pytorch format
+        collated_gc_spatial_data_np : np.ndarray
+            Spatial data with shape (n_gc, 1, ydim, xdim)
+        collated_gc_spatial_labels_np : np.ndarray
+            Labels with shape (n_gc, 1)
+        data_names2labels_dict : dict
+            Dictionary with gc names as keys and labels as values
         """
 
         self.apricot_data = ApricotData(
@@ -642,10 +606,20 @@ class RetinaVAE(nn.Module):
             key[key.find("_") + 1 :]
             for key in self.apricot_data.data_names2labels_dict.keys()
         ]
-        # Get the integer labels for each gc type and response type
-        response_labels = [
-            value for value in self.apricot_data.data_names2labels_dict.values()
+
+        # Build a list of combinations of gc types and response types from self.train_by
+        train_by_combinations = [
+            f"{gc}_{response}"
+            for (gc, response) in product(self.train_by[0], self.train_by[1])
         ]
+
+        response_labels = [
+            self.apricot_data.data_names2labels_dict[key]
+            for key in train_by_combinations
+        ]
+
+        # Log trained_by labels
+        self.train_by_labels = response_labels
 
         # Log requested label
         self.gc_label = self.apricot_data.data_names2labels_dict[
@@ -691,10 +665,6 @@ class RetinaVAE(nn.Module):
             )
             labels = np.full((gc_spatial_data_np.shape[0], 1), label)
             collated_labels_np = np.concatenate((collated_labels_np, labels), axis=0)
-
-            # # Covert to tensors
-            # collated_gc_spatial_data_t = torch.from_numpy(collated_gc_spatial_data_np)
-            # collated_labels_t = torch.from_numpy(collated_labels_np).type(torch.uint8)
 
         return (
             collated_gc_spatial_data_np,
@@ -826,7 +796,7 @@ class RetinaVAE(nn.Module):
 
         return val_loss / len(dataloader.dataset)
 
-    def _plot_ae_outputs(self, encoder, decoder, n=10, ds_name="test_ds"):
+    def _plot_ae_outputs(self, encoder, decoder, ds_name="test_ds"):
         """
         Plot the outputs of the autoencoder, one for each label.
         """
@@ -840,13 +810,16 @@ class RetinaVAE(nn.Module):
 
         plt.figure(figsize=(16, 4.5))
         targets = ds.targets.numpy()
-        t_idx = {i: np.where(targets == i)[0][0] for i in range(n)}
+        t_idx = {i: np.where(targets == i)[0][0] for i in self.train_by_labels}
         encoder.eval()
         decoder.eval()
 
+        n = len(self.train_by_labels)
+
         for i in range(n):
+            t_idx_i = t_idx[self.train_by_labels[i]]
             ax = plt.subplot(2, n, i + 1)
-            img = ds[t_idx[i]][0].unsqueeze(0).to(self.device)
+            img = ds[t_idx_i][0].unsqueeze(0).to(self.device)
             with torch.no_grad():
                 rec_img = decoder(encoder(img))
             plt.imshow(img.cpu().squeeze().numpy(), cmap="gist_gray")
@@ -855,7 +828,7 @@ class RetinaVAE(nn.Module):
             ax.text(
                 0.05,
                 0.85,
-                self.apricot_data.data_labels2names_dict[ds[t_idx[i]][1].item()],
+                self.apricot_data.data_labels2names_dict[ds[t_idx_i][1].item()],
                 fontsize=10,
                 color="red",
                 transform=ax.transAxes,
