@@ -307,7 +307,7 @@ class RetinaVAE(nn.Module):
         self.image_shape = (28, 28, 1)
 
         self.batch_size = 16  # None will take the batch size from test_split size.
-        self.epochs = 2
+        self.epochs = 200
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol", "midget"], ["on"]]  # Train by these factors
         self.n_trained_by = 2  # Number of factors to train by
@@ -593,20 +593,17 @@ class RetinaVAE(nn.Module):
             Dictionary with gc names as keys and labels as values
         """
 
+        # Get requested data
         self.apricot_data = ApricotData(
             self.apricot_data_folder, self.gc_type, self.response_type
         )
 
-        # Get all available gc types and response types
-        gc_types = [
-            key[: key.find("_")]
-            for key in self.apricot_data.data_names2labels_dict.keys()
-        ]
-        response_types = [
-            key[key.find("_") + 1 :]
-            for key in self.apricot_data.data_names2labels_dict.keys()
+        # Log requested label
+        self.gc_label = self.apricot_data.data_names2labels_dict[
+            f"{self.gc_type}_{self.response_type}"
         ]
 
+        # We train by more data, however.
         # Build a list of combinations of gc types and response types from self.train_by
         train_by_combinations = [
             f"{gc}_{response}"
@@ -621,10 +618,9 @@ class RetinaVAE(nn.Module):
         # Log trained_by labels
         self.train_by_labels = response_labels
 
-        # Log requested label
-        self.gc_label = self.apricot_data.data_names2labels_dict[
-            f"{self.gc_type}_{self.response_type}"
-        ]
+        # Get all available gc types and response types
+        gc_types = [key[: key.find("_")] for key in train_by_combinations]
+        response_types = [key[key.find("_") + 1 :] for key in train_by_combinations]
 
         # Initialise numpy arrays to store data
         collated_gc_spatial_data_np = np.empty(
@@ -637,11 +633,11 @@ class RetinaVAE(nn.Module):
         )
         collated_labels_np = np.empty((0, 1), dtype=int)
 
-        # Get all data for learning
+        # Get data for learning
         for gc_type, response_type, label in zip(
             gc_types, response_types, response_labels
         ):
-
+            print(f"Loading data for {gc_type}_{response_type} (label {label})")
             apricot_data = ApricotData(self.apricot_data_folder, gc_type, response_type)
 
             (
