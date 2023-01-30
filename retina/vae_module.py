@@ -287,7 +287,7 @@ class VariationalAutoencoder(nn.Module):
 class RetinaVAE(nn.Module):
     """Variational Autoencoder class"""
 
-    # TODO KANNATTAAKO TEHDÄ KAKSIVAIHEINEN OPETUS? ENSIN KAIKKI JA SITTEN HALUTTU LUOKKA?
+    # TODO BASE CLASS JOHON INTERFACE?
 
     def __init__(self, apricot_data_folder, gc_type, response_type):
         # def __init__(self):
@@ -299,7 +299,7 @@ class RetinaVAE(nn.Module):
 
         # Set common VAE model parameters
         self.latent_dim = 2
-        self.latent_space_plot_scale = 1.5  # Scale for plotting latent space
+        self.latent_space_plot_scale = 3.0  # Scale for plotting latent space
         self.lr = 0.001
 
         # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
@@ -309,7 +309,7 @@ class RetinaVAE(nn.Module):
             1,
         )
 
-        self.batch_size = 512  # None will take the batch size from test_split size.
+        self.batch_size = 16  # None will take the batch size from test_split size.
         self.epochs = 5000
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.this_folder = self._get_this_folder()
@@ -321,8 +321,8 @@ class RetinaVAE(nn.Module):
             "translation": (0.1, 0.1),  # fraction of image, (x, y) -directions
             "noise": 0.0,  # noise float in [0, 1] (noise is added to the image)
         }
-        self.augmentation_dict = augmentation_dict
-        # self.augmentation_dict = None
+        # self.augmentation_dict = augmentation_dict
+        self.augmentation_dict = None
 
         self.random_seed = 42
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -546,9 +546,9 @@ class RetinaVAE(nn.Module):
         apricot_data_folder : str
             Path to apricot data folder
         gc_type : str
-            Type of ganglion cell to use. Options are 'on' or 'off'
+            Type of ganglion cell to use. Options are 'parasol' or 'midget'
         response_type : str
-            Type of response to use. Options are 'mean' or 'peak'
+            Type of response to use. Options are 'on' or 'off'
 
         Returns
         -------
@@ -557,6 +557,17 @@ class RetinaVAE(nn.Module):
 
         # Get numpy data
         data_np, labels_np, data_names2labels_dict = self._get_spatial_apricot_data()
+
+        # Get the label from current gc_type and response_type
+        self.label = data_names2labels_dict[f"{gc_type}_{response_type}"]
+
+        # Take only the data with the current label
+        data_np = data_np[labels_np == self.label]
+
+        # Print the label name and the N samples
+        print(
+            f"Label: {self.apricot_data.data_labels2names_dict[self.label]}, N samples: {data_np.shape[0]}"
+        )
 
         # Split to training, validation and testing
         train_val_data, test_data, train_val_labels, test_labels = train_test_split(
