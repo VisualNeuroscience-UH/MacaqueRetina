@@ -466,9 +466,9 @@ class RetinaVAE(nn.Module):
         )
         # self.device = torch.device("cpu")
 
-        # Set the random seed for reproducible results for both torch and numpy
-        torch.manual_seed(self.random_seed)
-        np.random.seed(self.random_seed)
+        # # Set the random seed for reproducible results for both torch and numpy
+        # torch.manual_seed(self.random_seed)
+        # np.random.seed(self.random_seed)
 
         # # Visualize the augmentation effects and exit
         # self._visualize_augmentation()
@@ -549,21 +549,26 @@ class RetinaVAE(nn.Module):
         trainable = tune.with_resources(MyTrainableClass, {"cpu": 2, "gpu": 0.25})
 
         # Search space of the tuning job. Both preprocessor and dataset can be tuned here.
-        # param_space = {"input_size": 64}
-        param_space = {"lr": tune.choice([0.001, 0.01, 0.1])}
+        # Use grid search to try out all values for each parameter. values: iterable
+        # Grid search: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#ray.tune.grid_search
+        # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
+        param_space = {"lr": tune.grid_search([0.001, 0.01, 0.1])}
 
         # Tuning algorithm specific configs.
         tune_config = None
 
         # Runtime configuration that is specific to individual trials. Will overwrite the run config passed to the Trainer.
-        # local_dir – Local dir to save training results to. Defaults to ~/ray_results.
+        # for API, see https://docs.ray.io/en/latest/ray-air/package-ref.html#ray.air.config.RunConfig
         run_config = (
             air.RunConfig(
-                stop={"training_iteration": 20},
+                name="my_run",
+                stop={"training_iteration": 60},
                 local_dir=self.ray_dir,
                 checkpoint_config=air.CheckpointConfig(
                     checkpoint_at_end=True,
+                    num_to_keep=1,  # Keep only the best checkpoint
                 ),
+                verbose=2,
             ),
         )
 
