@@ -258,7 +258,7 @@ class AugmentedDataset(torch.utils.data.Dataset):
 
 
 class VariationalEncoder(nn.Module):
-    def __init__(self, latent_dims, device):
+    def __init__(self, latent_dims, device=None):
         # super(VariationalEncoder, self).__init__()
         super().__init__()
 
@@ -272,14 +272,19 @@ class VariationalEncoder(nn.Module):
         self.linear3 = nn.Linear(128, latent_dims)
 
         self.N = torch.distributions.Normal(0, 1)
-        # self.N.loc = self.N.loc.cuda()  # hack to get sampling on the GPU
-        # self.N.scale = self.N.scale.cuda()
-        self.N.loc = self.N.loc.cpu()  # hack to get sampling on the GPU
-        self.N.scale = self.N.scale.cpu()
+        if device is not None and device.type == "cpu":
+            self.N.loc = self.N.loc.cpu()  # hack to get sampling on the GPU
+            self.N.scale = self.N.scale.cpu()
+        elif device is not None and device.type == "cuda":
+            self.N.loc = self.N.loc.cuda()  # hack to get sampling on the GPU
+            self.N.scale = self.N.scale.cuda()
+        else:
+            print(f"Device {device}")
         self.kl = 0
 
     def forward(self, x):
-        x = x.to(self.device)
+        if self.device is not None:
+            x = x.to(self.device)
         x = F.relu(self.conv1(x))
         x = F.relu(self.batch2(self.conv2(x)))
         x = F.relu(self.conv3(x))
@@ -324,17 +329,16 @@ class Decoder(nn.Module):
 
 
 class VariationalAutoencoder(nn.Module):
-    def __init__(self, latent_dims, device):
+    def __init__(self, latent_dims, device=None):
         super().__init__()
 
         self.device = device
         self.encoder = VariationalEncoder(latent_dims=latent_dims, device=self.device)
-        # self.encoder = self.variational_encoder(latent_dims)
         self.decoder = Decoder(latent_dims)
-        # self.decoder = self.variational_decoder(latent_dims)
 
     def forward(self, x):
-        x = x.to(self.device)
+        if self.device is not None:
+            x = x.to(self.device)
         z = self.encoder(x)
         return self.decoder(z)
 
@@ -416,11 +420,14 @@ class TrainableVAE(tune.Trainable):
         self._train_epoch = methods["_train_epoch"]
         self._validate_epoch = methods["_validate_epoch"]
 
-        self.device = device
+        # self.device = device
         print(f"\nUsing device: {self.device}")
+        # self.model = VariationalAutoencoder(latent_dims=config.get("latent_dim"))
+        # print(f"\nUsing device: {self.device}")
         self.model = VariationalAutoencoder(
             latent_dims=config.get("latent_dim"), device=self.device
         )
+        self.model.to(self.device)
 
         self.optim = torch.optim.Adam(
             self.model.parameters(), lr=config.get("lr"), weight_decay=1e-5
@@ -439,9 +446,9 @@ class TrainableVAE(tune.Trainable):
             )
 
             val_loss = self._validate_epoch(self.model, self.device, self.valid_loader)
-            print(
-                f" EPOCH {epoch + 1}/{self.epochs} \t train loss {train_loss:.3f} \t val loss {val_loss:.3f}"
-            )
+            # print(
+            #     f" EPOCH {epoch + 1}/{self.epochs} \t train loss {train_loss:.3f} \t val loss {val_loss:.3f}"
+            # )
             # # For every 100th epoch, print the outputs of the autoencoder
             # if epoch == 0 or epoch % 100 == 0:
             #     print(
@@ -489,7 +496,7 @@ class RetinaVAE(nn.Module):
         self.resolution_hw = (28, 28)
 
         self.batch_size = 128  # None will take the batch size from test_split size.
-        self.epochs = 10
+        self.epochs = 500
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
 
@@ -509,10 +516,10 @@ class RetinaVAE(nn.Module):
         self.random_seed = 42
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        # self.device = (
-        #     torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-        # )
-        self.device = torch.device("cpu")
+        self.device = (
+            torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        )
+        # self.device = torch.device("cpu")
 
         # # Set the random seed for reproducible results for both torch and numpy
         # torch.manual_seed(self.random_seed)
@@ -594,7 +601,7 @@ class RetinaVAE(nn.Module):
         """Set ray tuner"""
 
         # trainable = tune.with_resources(MyTrainableClass, {"cpu": 1, "gpu": 0.25})
-        trainable = tune.with_resources(TrainableVAE, {"cpu": 1, "gpu": 0.25})
+        trainable = tune.with_resources(TrainableVAE, {"gpu": 0.25})
         trainable_with_parameters = tune.with_parameters(
             trainable,
             train_loader=self.train_loader,
