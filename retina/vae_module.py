@@ -388,26 +388,71 @@ class TrainableVAE(tune.Trainable):
     Accessing config through Trainable.setup
 
     Return metrics from Trainable.step
+
+    https://docs.ray.io/en/latest/tune/api_docs/trainable.html#tune-trainable-class-api
     """
 
-    def setup(self, config, data=None):
-        # self.model = nn.Sequential(
-        #     nn.Linear(config.get("input_size", 32), 32), nn.ReLU(), nn.Linear(32, 10)
-        # )
-        self.model = nn.Sequential(
-            nn.Linear(config.get("input_size", 32), 32), nn.ReLU(), nn.Linear(32, 10)
-        )
-        self.data = data
-        self.iter = iter(self.data)
-        self.next_sample = next(self.iter)
+    def setup(
+        self,
+        config,
+        model=None,
+        train_loader=None,
+        valid_loader=None,
+        device=None,
+        epochs=None,
+        optim=None,
+        methods=None,
+    ):
+
+        # Assert that none of the optional arguments are None
+        assert model is not None, "model is None, aborting..."
+        assert train_loader is not None, "train_loader is None, aborting..."
+        assert valid_loader is not None, "valid_loader is None, aborting..."
+        assert device is not None, "device is None, aborting..."
+        assert epochs is not None, "epochs is None, aborting..."
+        assert methods is not None, "methods is None, aborting..."
+
+        self.model = model
+        self.train_loader = train_loader
+        self.valid_loader = valid_loader
+        self.device = device
+        self.epochs = epochs
+        self.optim = optim
+        self._train_epoch = methods["_train_epoch"]
+        self._validate_epoch = methods["_validate_epoch"]
+
+    # def step(self):
+    #     # loss = update_model(self.next_sample)
+    #     loss = None
+
+    #     return {"loss": 1}
 
     def step(self):
-        loss = update_model(self.next_sample)
-        try:
-            self.next_sample = next(self.iter)
-        except StopIteration:
-            return {"loss": loss, done: True}
-        return {"loss": loss}
+        for epoch in range(self.epochs):
+            train_loss = self._train_epoch(
+                self.model, self.device, self.train_loader, self.optim
+            )
+
+            val_loss = self._validate_epoch(self.model, self.device, self.valid_loader)
+            print(
+                f" EPOCH {epoch + 1}/{self.epochs} \t train loss {train_loss:.3f} \t val loss {val_loss:.3f}"
+            )
+            # # For every 100th epoch, print the outputs of the autoencoder
+            # if epoch == 0 or epoch % 100 == 0:
+            #     print(
+            #         f" EPOCH {epoch + 1}/{self.epochs} \t train loss {train_loss:.3f} \t val loss {val_loss:.3f}"
+            #     )
+
+            # # Add train loss and val loss to tensorboard SummaryWriter
+            # self.writer.add_scalars(
+            #     f"Training_{self.timestamp}",
+            #     {
+            #         "loss/train": train_loss,
+            #         "loss/val": val_loss,
+            #     },
+            #     epoch,
+            # )
+        return {"loss": val_loss}
 
     def save_checkpoint(self, tmp_checkpoint_dir):
         checkpoint_path = os.path.join(tmp_checkpoint_dir, "model.pth")
@@ -421,8 +466,6 @@ class TrainableVAE(tune.Trainable):
 
 class RetinaVAE(nn.Module):
     """Variational Autoencoder class"""
-
-    # TODO BASE CLASS JOHON INTERFACE?
 
     def __init__(self, apricot_data_folder, gc_type, response_type):
         # def __init__(self):
@@ -441,7 +484,7 @@ class RetinaVAE(nn.Module):
         self.resolution_hw = (28, 28)
 
         self.batch_size = 128  # None will take the batch size from test_split size.
-        self.epochs = 400
+        self.epochs = 10
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
 
@@ -483,33 +526,31 @@ class RetinaVAE(nn.Module):
         print(self.vae)
         self.debug = True
 
-        # TÄHÄN JÄIT. TÄMÄHÄN EI SIIS MENE NÄIN. KÄYTÄ
-        # https://docs.ray.io/en/master/tune/examples/includes/mnist_pytorch_trainable.html
+        training_mode = "tune_model"  # "train_model" or "tune_model" or "load_model"
 
-        tuner = self._set_ray_tuner()
-        tuner.fit()
-        exit()
-        training = True
+        match training_mode:
+            case "train_model":
+                # Init tensorboard
+                self.tb_log_folder = "tb_logs"
+                self._prep_tensorboard_logging()
 
-        if training:
-            # Init tensorboard
-            self.tb_log_folder = "tb_logs"
-            self._prep_tensorboard_logging()
+                # Train
+                self._train()
+                self.writer.flush()
+                self.writer.close()
 
-            # Train
-            self._train()
-            self.writer.flush()
-            self.writer.close()
+                # Save model
+                model_path = self._save_model()
 
-            # Save model
-            model_path = self._save_model()
-        else:
-            # Load previously calculated model for vizualization
-            my_model_path = (
-                "/opt2/Git_Repos/MacaqueRetina/retina/models/model_20230126-173032.pt"
-            )
-            # Load model to self.vae and return state dict. The numbers are in the state dict.
-            state_dict = self._load_model(model_path=None)
+            case "tune_model":
+                tuner = self._set_ray_tuner()
+                tuner.fit()
+
+            case "load_model":
+                # Load previously calculated model for vizualization
+                my_model_path = "/opt2/Git_Repos/MacaqueRetina/retina/models/model_20230126-173032.pt"
+                # Load model to self.vae and return state dict. The numbers are in the state dict.
+                state_dict = self._load_model(model_path=None)
 
         # Figure 1
         self._plot_ae_outputs(self.vae.encoder, self.vae.decoder, ds_name="test_ds")
@@ -546,23 +587,51 @@ class RetinaVAE(nn.Module):
     def _set_ray_tuner(self):
         """Set ray tuner"""
 
-        trainable = tune.with_resources(MyTrainableClass, {"cpu": 2, "gpu": 0.25})
+        # trainable = tune.with_resources(MyTrainableClass, {"cpu": 1, "gpu": 0.25})
+        trainable = tune.with_resources(TrainableVAE, {"cpu": 1, "gpu": 0.25})
+        trainable_with_parameters = tune.with_parameters(
+            trainable,
+            model=self.vae,
+            train_loader=self.train_loader,
+            valid_loader=self.valid_loader,
+            device=self.device,
+            epochs=self.epochs,
+            optim=self.optim,
+            methods={
+                "_train_epoch": self._train_epoch,
+                "_validate_epoch": self._validate_epoch,
+            },
+        )
 
+        NUM_MODELS = 2
         # Search space of the tuning job. Both preprocessor and dataset can be tuned here.
         # Use grid search to try out all values for each parameter. values: iterable
         # Grid search: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#ray.tune.grid_search
         # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
-        param_space = {"lr": tune.grid_search([0.001, 0.01, 0.1])}
+        param_space = {
+            "lr": tune.grid_search([0.001, 0.01]),
+            # "batch_size": tune.grid_search([32, 64]),
+            "model_id": tune.grid_search(
+                ["model_{}".format(i) for i in range(NUM_MODELS)]
+            ),
+        }
 
-        # Tuning algorithm specific configs.
-        tune_config = None
+        # Efficient hyperparameter selection. Search Algorithms are wrappers around open-source
+        # optimization libraries. Each library has a
+        # specific way of defining the search space.
+        # https://docs.ray.io/en/latest/ray-air/package-ref.html#ray.tune.tune_config.TuneConfig
+        tune_config = tune.TuneConfig(
+            search_alg=tune.search.basic_variant.BasicVariantGenerator(
+                constant_grid_search=True,
+            ),
+        )
 
         # Runtime configuration that is specific to individual trials. Will overwrite the run config passed to the Trainer.
         # for API, see https://docs.ray.io/en/latest/ray-air/package-ref.html#ray.air.config.RunConfig
         run_config = (
             air.RunConfig(
                 name="my_run",
-                stop={"training_iteration": 60},
+                stop={"training_iteration": 1},
                 local_dir=self.ray_dir,
                 checkpoint_config=air.CheckpointConfig(
                     checkpoint_at_end=True,
@@ -573,7 +642,7 @@ class RetinaVAE(nn.Module):
         )
 
         tuner = tune.Tuner(
-            trainable,
+            trainable_with_parameters,
             param_space=param_space,
             run_config=run_config[0],
             tune_config=tune_config,
@@ -962,7 +1031,7 @@ class RetinaVAE(nn.Module):
         return train_loss / len(dataloader.dataset)
 
     ### Testing function
-    def _test_epoch(self, vae, device, dataloader):
+    def _validate_epoch(self, vae, device, dataloader):
         # Set evaluation mode for encoder and decoder
         vae.eval()
         val_loss = 0.0
@@ -1035,7 +1104,7 @@ class RetinaVAE(nn.Module):
             train_loss = self._train_epoch(
                 self.vae, self.device, self.train_loader, self.optim
             )
-            val_loss = self._test_epoch(self.vae, self.device, self.valid_loader)
+            val_loss = self._validate_epoch(self.vae, self.device, self.valid_loader)
 
             # For every 100th epoch, print the outputs of the autoencoder
             if epoch == 0 or epoch % 100 == 0:
