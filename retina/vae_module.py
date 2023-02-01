@@ -5,7 +5,6 @@ import pandas as pd
 from sklearn.manifold import TSNE
 from sklearn.model_selection import train_test_split
 from scipy.ndimage import rotate, fourier_shift
-from torch.utils.tensorboard import SummaryWriter
 
 
 # Pytorch
@@ -16,6 +15,10 @@ from torchvision import transforms
 from torch.utils.data import DataLoader, Subset, random_split
 from torch import nn
 import torch.nn.functional as F
+from torch.utils.tensorboard import SummaryWriter
+
+from ray import air, tune
+from ray.tune.schedulers import ASHAScheduler
 
 # import torch.utils.data.Subset as Subset
 
@@ -35,6 +38,7 @@ import shutil
 import pdb
 from copy import deepcopy
 from itertools import product
+import os
 
 
 # TÄHÄN JÄIT. TEE FID, FIT STATS, SSIM SEKÄ MEAN SD , HIST MEASURES KUTEN KL DIVERGENCE.
@@ -335,6 +339,86 @@ class VariationalAutoencoder(nn.Module):
         return self.decoder(z)
 
 
+def objective(x, a, b):
+    return a * (x**0.5) + b
+
+
+class Trainable(tune.Trainable):
+    def setup(self, config: dict):
+        # config (dict): A dict of hyperparameters
+        self.x = 0
+        self.a = config["a"]
+        self.b = config["b"]
+
+    def step(self):  # This is called iteratively.
+        score = objective(self.x, self.a, self.b)
+        self.x += 1
+        return {"score": score}
+
+
+class MyTrainableClass(tune.Trainable):
+    def setup(self, config):
+        self.model = nn.Sequential(
+            nn.Linear(config.get("input_size", 32), 32), nn.ReLU(), nn.Linear(32, 10)
+        )
+
+    def step(self):
+        return {}
+
+    def save_checkpoint(self, tmp_checkpoint_dir):
+        checkpoint_path = os.path.join(tmp_checkpoint_dir, "model.pth")
+        torch.save(self.model.state_dict(), checkpoint_path)
+        return tmp_checkpoint_dir
+
+    def load_checkpoint(self, tmp_checkpoint_dir):
+        checkpoint_path = os.path.join(tmp_checkpoint_dir, "model.pth")
+        self.model.load_state_dict(torch.load(checkpoint_path))
+
+
+class TrainableVAE(tune.Trainable):
+    """
+    Tune will convert this class into a Ray actor, which runs on a separate process.
+    By default, Tune will also change the current working directory of this process to
+    its corresponding trial-level log directory self.logdir. This is designed so that
+    different trials that run on the same physical node wont accidently write to the same
+    location and overstep each other
+
+    Generally you only need to implement setup, step, save_checkpoint, and load_checkpoint when subclassing Trainable.
+
+    Accessing config through Trainable.setup
+
+    Return metrics from Trainable.step
+    """
+
+    def setup(self, config, data=None):
+        # self.model = nn.Sequential(
+        #     nn.Linear(config.get("input_size", 32), 32), nn.ReLU(), nn.Linear(32, 10)
+        # )
+        self.model = nn.Sequential(
+            nn.Linear(config.get("input_size", 32), 32), nn.ReLU(), nn.Linear(32, 10)
+        )
+        self.data = data
+        self.iter = iter(self.data)
+        self.next_sample = next(self.iter)
+
+    def step(self):
+        loss = update_model(self.next_sample)
+        try:
+            self.next_sample = next(self.iter)
+        except StopIteration:
+            return {"loss": loss, done: True}
+        return {"loss": loss}
+
+    def save_checkpoint(self, tmp_checkpoint_dir):
+        checkpoint_path = os.path.join(tmp_checkpoint_dir, "model.pth")
+        torch.save(self.model.state_dict(), checkpoint_path)
+        return tmp_checkpoint_dir
+
+    def load_checkpoint(self, tmp_checkpoint_dir):
+        checkpoint_path = os.path.join(tmp_checkpoint_dir, "model.pth")
+        self.model.load_state_dict(torch.load(checkpoint_path))
+
+
 class RetinaVAE(nn.Module):
     """Variational Autoencoder class"""
 
@@ -357,12 +441,13 @@ class RetinaVAE(nn.Module):
         self.resolution_hw = (28, 28)
 
         self.batch_size = 128  # None will take the batch size from test_split size.
-        self.epochs = 4000
+        self.epochs = 400
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
 
         self.this_folder = self._get_this_folder()
         self.models_folder = self._set_models_folder()
+        self.ray_dir = self.this_folder / "ray_results"
 
         # Augment training and validation data.
         augmentation_dict = {
@@ -396,7 +481,14 @@ class RetinaVAE(nn.Module):
         self._prep_training()
 
         print(self.vae)
+        self.debug = True
 
+        # TÄHÄN JÄIT. TÄMÄHÄN EI SIIS MENE NÄIN. KÄYTÄ
+        # https://docs.ray.io/en/master/tune/examples/includes/mnist_pytorch_trainable.html
+
+        tuner = self._set_ray_tuner()
+        tuner.fit()
+        exit()
         training = True
 
         if training:
@@ -450,6 +542,39 @@ class RetinaVAE(nn.Module):
 
         # Figure 4
         self._plot_tsne_space(encoded_samples)
+
+    def _set_ray_tuner(self):
+        """Set ray tuner"""
+
+        trainable = tune.with_resources(MyTrainableClass, {"cpu": 2, "gpu": 0.25})
+
+        # Search space of the tuning job. Both preprocessor and dataset can be tuned here.
+        # param_space = {"input_size": 64}
+        param_space = {"lr": tune.choice([0.001, 0.01, 0.1])}
+
+        # Tuning algorithm specific configs.
+        tune_config = None
+
+        # Runtime configuration that is specific to individual trials. Will overwrite the run config passed to the Trainer.
+        # local_dir – Local dir to save training results to. Defaults to ~/ray_results.
+        run_config = (
+            air.RunConfig(
+                stop={"training_iteration": 20},
+                local_dir=self.ray_dir,
+                checkpoint_config=air.CheckpointConfig(
+                    checkpoint_at_end=True,
+                ),
+            ),
+        )
+
+        tuner = tune.Tuner(
+            trainable,
+            param_space=param_space,
+            run_config=run_config[0],
+            tune_config=tune_config,
+        )
+
+        return tuner
 
     def _get_this_folder(self):
         """Get the folder where this module file is located"""

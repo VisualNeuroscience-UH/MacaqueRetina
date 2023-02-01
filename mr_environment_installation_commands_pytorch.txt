@@ -20,4 +20,6 @@ pip install colorednoise
 pip install h5py # does not work with conda 230116 SV
 pip install black
 pip install tensorboard
- pip install "ray[tune]"
+pip install "ray[tune]"
+conda install torch-fidelity torchmetrics
+pip install optuna
