@@ -18,6 +18,9 @@ import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 
 from ray import air, tune
+from ray.train.torch import TorchCheckpoint, TorchPredictor
+
+# from ray.air import Result
 from ray.tune.schedulers import ASHAScheduler
 
 # import torch.utils.data.Subset as Subset
@@ -343,42 +346,6 @@ class VariationalAutoencoder(nn.Module):
         return self.decoder(z)
 
 
-def objective(x, a, b):
-    return a * (x**0.5) + b
-
-
-class Trainable(tune.Trainable):
-    def setup(self, config: dict):
-        # config (dict): A dict of hyperparameters
-        self.x = 0
-        self.a = config["a"]
-        self.b = config["b"]
-
-    def step(self):  # This is called iteratively.
-        score = objective(self.x, self.a, self.b)
-        self.x += 1
-        return {"score": score}
-
-
-class MyTrainableClass(tune.Trainable):
-    def setup(self, config):
-        self.model = nn.Sequential(
-            nn.Linear(config.get("input_size", 32), 32), nn.ReLU(), nn.Linear(32, 10)
-        )
-
-    def step(self):
-        return {}
-
-    def save_checkpoint(self, tmp_checkpoint_dir):
-        checkpoint_path = os.path.join(tmp_checkpoint_dir, "model.pth")
-        torch.save(self.model.state_dict(), checkpoint_path)
-        return tmp_checkpoint_dir
-
-    def load_checkpoint(self, tmp_checkpoint_dir):
-        checkpoint_path = os.path.join(tmp_checkpoint_dir, "model.pth")
-        self.model.load_state_dict(torch.load(checkpoint_path))
-
-
 class TrainableVAE(tune.Trainable):
     """
     Tune will convert this class into a Ray actor, which runs on a separate process.
@@ -399,31 +366,31 @@ class TrainableVAE(tune.Trainable):
     def setup(
         self,
         config,
-        train_loader=None,
-        valid_loader=None,
+        train_ds=None,
+        val_ds=None,
         epochs=None,
         device=None,
         methods=None,
     ):
 
         # Assert that none of the optional arguments are None
-        assert train_loader is not None, "train_loader is None, aborting..."
-        assert valid_loader is not None, "valid_loader is None, aborting..."
+        assert train_ds is not None, "train_ds is None, aborting..."
+        assert val_ds is not None, "val_ds is None, aborting..."
         assert epochs is not None, "epochs is None, aborting..."
         assert device is not None, "device is None, aborting..."
         assert methods is not None, "methods is None, aborting..."
 
-        self.train_loader = train_loader
-        self.valid_loader = valid_loader
+        self.train_loader = DataLoader(
+            train_ds, batch_size=config.get("batch_size"), shuffle=True
+        )
+
+        self.valid_loader = DataLoader(val_ds, config.get("batch_size"), shuffle=True)
+
         self.epochs = epochs
         self.device = device
         self._train_epoch = methods["_train_epoch"]
         self._validate_epoch = methods["_validate_epoch"]
 
-        # self.device = device
-        print(f"\nUsing device: {self.device}")
-        # self.model = VariationalAutoencoder(latent_dims=config.get("latent_dim"))
-        # print(f"\nUsing device: {self.device}")
         self.model = VariationalAutoencoder(
             latent_dims=config.get("latent_dim"), device=self.device
         )
@@ -496,7 +463,7 @@ class RetinaVAE(nn.Module):
         self.resolution_hw = (28, 28)
 
         self.batch_size = 128  # None will take the batch size from test_split size.
-        self.epochs = 500
+        self.epochs = 1000
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
 
@@ -555,8 +522,34 @@ class RetinaVAE(nn.Module):
                 model_path = self._save_model()
 
             case "tune_model":
-                tuner = self._set_ray_tuner()
-                tuner.fit()
+                tuner, trainable_with_parameters = self._set_ray_tuner()
+                result_grid = tuner.fit()
+                results_df = result_grid.get_dataframe()
+                print("Shortest training time:", results_df["time_total_s"].min())
+                print("Longest training time:", results_df["time_total_s"].max())
+
+                best_result = result_grid.get_best_result(metric="loss", mode="min")
+                print("Best result:", best_result)
+                # best_result.checkpoint
+                result_df = best_result.metrics_dataframe
+                result_df[["training_iteration", "loss", "time_total_s"]]
+                checkpoint = best_result.checkpoint
+
+                # TÄHÄN JÄIT. LOADING CHECKPOINT
+                # CHAT GPT EHDOTUKSET:
+                # def load_checkpoint(self, checkpoint_path):
+                #     self.model.load_state_dict(torch.load(checkpoint_path))
+
+                # model = MyModel()
+                # checkpoint_path = "path/to/checkpoint/model.pth"
+                # model.load_checkpoint(checkpoint_path)
+
+                # import os
+                # root_path = "ray_results/TrainableVAE_2023-02-01_16-04-46"
+                # checkpoint_dir = [d for d in os.listdir(root_path) if d.startswith("checkpoint")][0]
+                # checkpoint_path = os.path.join(root_path, checkpoint_dir, "model.pth")
+
+                pdb.set_trace()
 
             case "load_model":
                 # Load previously calculated model for vizualization
@@ -601,11 +594,11 @@ class RetinaVAE(nn.Module):
         """Set ray tuner"""
 
         # trainable = tune.with_resources(MyTrainableClass, {"cpu": 1, "gpu": 0.25})
-        trainable = tune.with_resources(TrainableVAE, {"gpu": 0.25})
+        trainable = tune.with_resources(TrainableVAE, {"gpu": 0.125})
         trainable_with_parameters = tune.with_parameters(
             trainable,
-            train_loader=self.train_loader,
-            valid_loader=self.valid_loader,
+            train_ds=self.train_ds,
+            val_ds=self.val_ds,
             epochs=self.epochs,
             device=self.device,
             methods={
@@ -614,19 +607,15 @@ class RetinaVAE(nn.Module):
             },
         )
 
-        NUM_MODELS = 2
+        NUM_MODELS = 1
         # Search space of the tuning job. Both preprocessor and dataset can be tuned here.
         # Use grid search to try out all values for each parameter. values: iterable
         # Grid search: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#ray.tune.grid_search
         # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
         param_space = {
-            "lr": tune.grid_search([0.001, 0.01]),
-            "latent_dim": tune.grid_search(
-                [
-                    2,
-                ]
-            ),
-            # "batch_size": tune.grid_search([32, 64]),
+            "lr": tune.grid_search([0.001]),
+            "latent_dim": tune.grid_search([2]),
+            "batch_size": tune.grid_search([32, 64, 128, 256]),
             "model_id": tune.grid_search(
                 ["model_{}".format(i) for i in range(NUM_MODELS)]
             ),
@@ -646,7 +635,6 @@ class RetinaVAE(nn.Module):
         # for API, see https://docs.ray.io/en/latest/ray-air/package-ref.html#ray.air.config.RunConfig
         run_config = (
             air.RunConfig(
-                name="my_run",
                 stop={"training_iteration": 1},
                 local_dir=self.ray_dir,
                 checkpoint_config=air.CheckpointConfig(
@@ -664,7 +652,7 @@ class RetinaVAE(nn.Module):
             tune_config=tune_config,
         )
 
-        return tuner
+        return tuner, trainable_with_parameters
 
     def _get_this_folder(self):
         """Get the folder where this module file is located"""
