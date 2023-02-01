@@ -272,10 +272,10 @@ class VariationalEncoder(nn.Module):
         self.linear3 = nn.Linear(128, latent_dims)
 
         self.N = torch.distributions.Normal(0, 1)
-        self.N.loc = self.N.loc.cuda()  # hack to get sampling on the GPU
-        self.N.scale = self.N.scale.cuda()
-        # self.N.loc = self.N.loc.cpu()  # hack to get sampling on the GPU
-        # self.N.scale = self.N.scale.cpu()
+        # self.N.loc = self.N.loc.cuda()  # hack to get sampling on the GPU
+        # self.N.scale = self.N.scale.cuda()
+        self.N.loc = self.N.loc.cpu()  # hack to get sampling on the GPU
+        self.N.scale = self.N.scale.cpu()
         self.kl = 0
 
     def forward(self, x):
@@ -395,31 +395,36 @@ class TrainableVAE(tune.Trainable):
     def setup(
         self,
         config,
-        model=None,
         train_loader=None,
         valid_loader=None,
-        device=None,
         epochs=None,
-        optim=None,
+        device=None,
         methods=None,
     ):
 
         # Assert that none of the optional arguments are None
-        assert model is not None, "model is None, aborting..."
         assert train_loader is not None, "train_loader is None, aborting..."
         assert valid_loader is not None, "valid_loader is None, aborting..."
-        assert device is not None, "device is None, aborting..."
         assert epochs is not None, "epochs is None, aborting..."
+        assert device is not None, "device is None, aborting..."
         assert methods is not None, "methods is None, aborting..."
 
-        self.model = model
         self.train_loader = train_loader
         self.valid_loader = valid_loader
-        self.device = device
         self.epochs = epochs
-        self.optim = optim
+        self.device = device
         self._train_epoch = methods["_train_epoch"]
         self._validate_epoch = methods["_validate_epoch"]
+
+        self.device = device
+        print(f"\nUsing device: {self.device}")
+        self.model = VariationalAutoencoder(
+            latent_dims=config.get("latent_dim"), device=self.device
+        )
+
+        self.optim = torch.optim.Adam(
+            self.model.parameters(), lr=config.get("lr"), weight_decay=1e-5
+        )
 
     # def step(self):
     #     # loss = update_model(self.next_sample)
@@ -504,10 +509,10 @@ class RetinaVAE(nn.Module):
         self.random_seed = 42
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        self.device = (
-            torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-        )
-        # self.device = torch.device("cpu")
+        # self.device = (
+        #     torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        # )
+        self.device = torch.device("cpu")
 
         # # Set the random seed for reproducible results for both torch and numpy
         # torch.manual_seed(self.random_seed)
@@ -552,6 +557,7 @@ class RetinaVAE(nn.Module):
                 # Load model to self.vae and return state dict. The numbers are in the state dict.
                 state_dict = self._load_model(model_path=None)
 
+        exit()
         # Figure 1
         self._plot_ae_outputs(self.vae.encoder, self.vae.decoder, ds_name="test_ds")
 
@@ -591,12 +597,10 @@ class RetinaVAE(nn.Module):
         trainable = tune.with_resources(TrainableVAE, {"cpu": 1, "gpu": 0.25})
         trainable_with_parameters = tune.with_parameters(
             trainable,
-            model=self.vae,
             train_loader=self.train_loader,
             valid_loader=self.valid_loader,
-            device=self.device,
             epochs=self.epochs,
-            optim=self.optim,
+            device=self.device,
             methods={
                 "_train_epoch": self._train_epoch,
                 "_validate_epoch": self._validate_epoch,
@@ -610,6 +614,11 @@ class RetinaVAE(nn.Module):
         # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
         param_space = {
             "lr": tune.grid_search([0.001, 0.01]),
+            "latent_dim": tune.grid_search(
+                [
+                    2,
+                ]
+            ),
             # "batch_size": tune.grid_search([32, 64]),
             "model_id": tune.grid_search(
                 ["model_{}".format(i) for i in range(NUM_MODELS)]
