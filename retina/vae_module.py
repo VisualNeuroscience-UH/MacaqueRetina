@@ -522,7 +522,7 @@ class RetinaVAE(nn.Module):
                 model_path = self._save_model()
 
             case "tune_model":
-                tuner, trainable_with_parameters = self._set_ray_tuner()
+                tuner = self._set_ray_tuner()
                 result_grid = tuner.fit()
                 results_df = result_grid.get_dataframe()
                 print("Shortest training time:", results_df["time_total_s"].min())
@@ -530,26 +530,12 @@ class RetinaVAE(nn.Module):
 
                 best_result = result_grid.get_best_result(metric="loss", mode="min")
                 print("Best result:", best_result)
-                # best_result.checkpoint
                 result_df = best_result.metrics_dataframe
                 result_df[["training_iteration", "loss", "time_total_s"]]
                 checkpoint = best_result.checkpoint
 
-                # TÄHÄN JÄIT. LOADING CHECKPOINT
-                # CHAT GPT EHDOTUKSET:
-                # def load_checkpoint(self, checkpoint_path):
-                #     self.model.load_state_dict(torch.load(checkpoint_path))
-
-                # model = MyModel()
-                # checkpoint_path = "path/to/checkpoint/model.pth"
-                # model.load_checkpoint(checkpoint_path)
-
-                # import os
-                # root_path = "ray_results/TrainableVAE_2023-02-01_16-04-46"
-                # checkpoint_dir = [d for d in os.listdir(root_path) if d.startswith("checkpoint")][0]
-                # checkpoint_path = os.path.join(root_path, checkpoint_dir, "model.pth")
-
-                pdb.set_trace()
+                # Load model state dict from checkpoint to new self.vae and return the state dict.
+                state_dict = self._load_model(best_result=best_result)
 
             case "load_model":
                 # Load previously calculated model for vizualization
@@ -557,7 +543,6 @@ class RetinaVAE(nn.Module):
                 # Load model to self.vae and return state dict. The numbers are in the state dict.
                 state_dict = self._load_model(model_path=None)
 
-        exit()
         # Figure 1
         self._plot_ae_outputs(self.vae.encoder, self.vae.decoder, ds_name="test_ds")
 
@@ -594,7 +579,7 @@ class RetinaVAE(nn.Module):
         """Set ray tuner"""
 
         # trainable = tune.with_resources(MyTrainableClass, {"cpu": 1, "gpu": 0.25})
-        trainable = tune.with_resources(TrainableVAE, {"gpu": 0.125})
+        trainable = tune.with_resources(TrainableVAE, {"gpu": 0.25})
         trainable_with_parameters = tune.with_parameters(
             trainable,
             train_ds=self.train_ds,
@@ -652,7 +637,7 @@ class RetinaVAE(nn.Module):
             tune_config=tune_config,
         )
 
-        return tuner, trainable_with_parameters
+        return tuner
 
     def _get_this_folder(self):
         """Get the folder where this module file is located"""
@@ -677,27 +662,44 @@ class RetinaVAE(nn.Module):
         torch.save(self.vae.state_dict(), model_path)
         return model_path
 
-    def _load_model(self, model_path=None):
+    def _load_model(self, model_path=None, best_result=None):
         """Load model if exists"""
 
-        if model_path is None or not Path(model_path).exists():
-            # Get the most recent model. Max recognizes the timestamp with the largest value
-            try:
-                model_path = max(Path(self.models_folder).glob("*.pt"))
-                print(f"Most recent model is {model_path}.")
-            except ValueError:
-                raise FileNotFoundError("No model files found. Aborting...")
+        if best_result is not None:
+            # ref https://medium.com/distributed-computing-with-ray/simple-end-to-end-ml-from-selection-to-serving-with-ray-tune-and-ray-serve-10f5564d33ba
+            log_dir = best_result.log_dir
+            checkpoint_dir = [
+                d for d in os.listdir(log_dir) if d.startswith("checkpoint")
+            ][0]
+            checkpoint_path = os.path.join(log_dir, checkpoint_dir, "model.pth")
 
-        else:
-            model_path = Path(model_path)
+            latent_dim = best_result.config["latent_dim"]
+            # Get model with correct layer dimensions
+            model = VariationalAutoencoder(latent_dims=latent_dim, device=self.device)
+            model.load_state_dict(torch.load(checkpoint_path))
+            self.latent_dim = latent_dim
+            self.vae = model.to(self.device)
 
-        if Path.exists(model_path):
-            print(
-                f"Loading model from {model_path}. \nWARNING: This will replace the current model in-place."
-            )
-            self.vae.load_state_dict(torch.load(model_path))
-        else:
-            print(f"Model {model_path} does not exist.")
+        elif model_path is not None:
+            if model_path is None or not Path(model_path).exists():
+
+                # Get the most recent model. Max recognizes the timestamp with the largest value
+                try:
+                    model_path = max(Path(self.models_folder).glob("*.pt"))
+                    print(f"Most recent model is {model_path}.")
+                except ValueError:
+                    raise FileNotFoundError("No model files found. Aborting...")
+
+            else:
+                model_path = Path(model_path)
+
+            if Path.exists(model_path):
+                print(
+                    f"Loading model from {model_path}. \nWARNING: This will replace the current model in-place."
+                )
+                self.vae.load_state_dict(torch.load(model_path))
+            else:
+                print(f"Model {model_path} does not exist.")
 
         return self.vae.state_dict()
 
