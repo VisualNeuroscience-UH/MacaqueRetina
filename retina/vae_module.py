@@ -74,26 +74,6 @@ class AugmentedDataset(torch.utils.data.Dataset):
         data_mean = np.mean(self.data)
         data_std = np.std(self.data)
 
-        # # Define transforms
-        # if self.augmentation_dict is None:
-        #     self.transform = transforms.Compose(
-        #         [
-        #             transforms.Lambda(self._to_tensor),
-        #             transforms.Normalize(mean=data_mean, std=data_std),
-        #             transforms.Resize(resolution_hw),
-        #         ]
-        #     )
-        # else:
-        #     self.transform = transforms.Compose(
-        #         [
-        #             transforms.Lambda(self._random_rotate_image),
-        #             transforms.Lambda(self._random_shift_image),
-        #             transforms.Lambda(self._to_tensor),
-        #             transforms.Normalize(mean=data_mean, std=data_std),
-        #             transforms.Resize(resolution_hw),
-        #             transforms.Lambda(self._add_noise_t),
-        #         ]
-        #     )
         # Define transforms
         if self.augmentation_dict is None:
             self.transform = transforms.Compose(
@@ -400,12 +380,6 @@ class TrainableVAE(tune.Trainable):
             self.model.parameters(), lr=config.get("lr"), weight_decay=1e-5
         )
 
-    # def step(self):
-    #     # loss = update_model(self.next_sample)
-    #     loss = None
-
-    #     return {"loss": 1}
-
     def step(self):
         for epoch in range(self.epochs):
             train_loss = self._train_epoch(
@@ -413,24 +387,7 @@ class TrainableVAE(tune.Trainable):
             )
 
             val_loss = self._validate_epoch(self.model, self.device, self.valid_loader)
-            # print(
-            #     f" EPOCH {epoch + 1}/{self.epochs} \t train loss {train_loss:.3f} \t val loss {val_loss:.3f}"
-            # )
-            # # For every 100th epoch, print the outputs of the autoencoder
-            # if epoch == 0 or epoch % 100 == 0:
-            #     print(
-            #         f" EPOCH {epoch + 1}/{self.epochs} \t train loss {train_loss:.3f} \t val loss {val_loss:.3f}"
-            #     )
 
-            # # Add train loss and val loss to tensorboard SummaryWriter
-            # self.writer.add_scalars(
-            #     f"Training_{self.timestamp}",
-            #     {
-            #         "loss/train": train_loss,
-            #         "loss/val": val_loss,
-            #     },
-            #     epoch,
-            # )
         return {"loss": val_loss}
 
     def save_checkpoint(self, tmp_checkpoint_dir):
@@ -463,7 +420,7 @@ class RetinaVAE(nn.Module):
         self.resolution_hw = (28, 28)
 
         self.batch_size = 128  # None will take the batch size from test_split size.
-        self.epochs = 1000
+        self.epochs = 10
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
 
@@ -495,20 +452,27 @@ class RetinaVAE(nn.Module):
         # # Visualize the augmentation effects and exit
         # self._visualize_augmentation()
 
-        # Create datasets and dataloaders
-        self._prep_apricot_data()
-        # self._prep_minst_data()
+        # # Create datasets and dataloaders
+        # self._prep_apricot_data()
+        # # self._prep_minst_data()
 
-        # Create model and set optimizer and learning rate scheduler
-        self._prep_training()
+        # # Create model and set optimizer and learning rate scheduler
+        # self._prep_training()
 
-        print(self.vae)
         self.debug = True
 
-        training_mode = "tune_model"  # "train_model" or "tune_model" or "load_model"
+        training_mode = "train_model"  # "train_model" or "tune_model" or "load_model"
 
         match training_mode:
             case "train_model":
+                # Create datasets and dataloaders
+                self._prep_apricot_data()
+                # self._prep_minst_data()
+
+                # Create model and set optimizer and learning rate scheduler
+                self._prep_training()
+                print(self.vae)
+
                 # Init tensorboard
                 self.tb_log_folder = "tb_logs"
                 self._prep_tensorboard_logging()
@@ -522,6 +486,9 @@ class RetinaVAE(nn.Module):
                 model_path = self._save_model()
 
             case "tune_model":
+                # Create datasets and dataloaders
+                self._prep_apricot_data(tune_augmentation=True)
+
                 tuner = self._set_ray_tuner()
                 self.result_grid = tuner.fit()
                 results_df = self.result_grid.get_dataframe()
@@ -543,9 +510,11 @@ class RetinaVAE(nn.Module):
 
             case "load_model":
                 # Load previously calculated model for vizualization
-                my_model_path = "/opt2/Git_Repos/MacaqueRetina/retina/models/model_20230126-173032.pt"
                 # Load model to self.vae and return state dict. The numbers are in the state dict.
-                state_dict = self._load_model(model_path=None)
+                # if model_path = None, loads the most recent model.
+                # my_model_path = "/opt2/Git_Repos/MacaqueRetina/retina/models/model_20230126-173032.pt"
+                my_model_path = None
+                state_dict = self._load_model(model_path=my_model_path)
 
         # Figure 1
         self._plot_ae_outputs(self.vae.encoder, self.vae.decoder, ds_name="test_ds")
@@ -586,8 +555,6 @@ class RetinaVAE(nn.Module):
         trainable = tune.with_resources(TrainableVAE, {"gpu": 0.25})
         trainable_with_parameters = tune.with_parameters(
             trainable,
-            train_ds=self.train_ds,
-            val_ds=self.val_ds,
             epochs=self.epochs,
             device=self.device,
             methods={
@@ -797,7 +764,7 @@ class RetinaVAE(nn.Module):
         plt.show()
         exit()
 
-    def _prep_apricot_data(self):
+    def _prep_apricot_data(self, tune_augmentation=False):
         """
         Prep apricot data for training. This includes:
         - Loading data
@@ -818,6 +785,10 @@ class RetinaVAE(nn.Module):
             random_state=self.random_seed,
             stratify=labels_np,
         )
+
+        if tune_augmentation is True:
+            self.train_val_data = train_val_data
+            self.train_val_labels = train_val_labels
 
         # Augment training and validation data
         train_val_ds = AugmentedDataset(
@@ -847,7 +818,7 @@ class RetinaVAE(nn.Module):
             ],
         )
 
-        # Save for later use, this may be a proble with bigger datasets
+        # Save for later use, this may be a problem with bigger datasets
         self.train_ds = train_ds
         self.val_ds = val_ds
         self.train_ds.targets = train_val_ds.labels[self.train_ds.indices]
