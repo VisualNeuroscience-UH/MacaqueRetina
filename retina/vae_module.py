@@ -364,7 +364,7 @@ class TrainableVAE(tune.Trainable):
             train_ds, batch_size=config.get("batch_size"), shuffle=True
         )
 
-        self.valid_loader = DataLoader(val_ds, config.get("batch_size"), shuffle=True)
+        self.val_loader = DataLoader(val_ds, config.get("batch_size"), shuffle=True)
 
         self.epochs = epochs
         self.device = device
@@ -386,7 +386,7 @@ class TrainableVAE(tune.Trainable):
                 self.model, self.device, self.train_loader, self.optim
             )
 
-            val_loss = self._validate_epoch(self.model, self.device, self.valid_loader)
+            val_loss = self._validate_epoch(self.model, self.device, self.val_loader)
 
         return {"loss": val_loss}
 
@@ -466,8 +466,22 @@ class RetinaVAE(nn.Module):
         match training_mode:
             case "train_model":
                 # Create datasets and dataloaders
-                self._prep_apricot_data()
+                # self._prep_apricot_data()
                 # self._prep_minst_data()
+
+                self._get_and_split_apricot_data()
+
+                self._augment_and_set_dataloader(
+                    data_type="train",
+                    augmentation_dict=self.augmentation_dict,
+                    shuffle=True,
+                )
+                self._augment_and_set_dataloader(
+                    data_type="val",
+                    augmentation_dict=self.augmentation_dict,
+                    shuffle=True,
+                )
+                self._augment_and_set_dataloader(data_type="test", shuffle=False)
 
                 # Create model and set optimizer and learning rate scheduler
                 self._prep_training()
@@ -764,8 +778,85 @@ class RetinaVAE(nn.Module):
         plt.show()
         exit()
 
+    def _get_and_split_apricot_data(self):
+        """
+        Load data
+        Split into training, validation and testing
+        """
+
+        # Get numpy data
+        data_np, labels_np, data_names2labels_dict = self._get_spatial_apricot_data()
+
+        # Split to training+validation and testing
+        (
+            train_val_data_np,
+            test_data_np,
+            train_val_labels_np,
+            test_labels_np,
+        ) = train_test_split(
+            data_np,
+            labels_np,
+            test_size=self.test_split,
+            random_state=self.random_seed,
+            stratify=labels_np,
+        )
+
+        # Split into train and validation
+        train_data_np, val_data_np, train_labels_np, val_labels_np = train_test_split(
+            train_val_data_np,
+            train_val_labels_np,
+            test_size=self.test_split,
+            random_state=self.random_seed,
+            stratify=train_val_labels_np,
+        )
+
+        # These are all numpy arrays
+        self.train_data = train_data_np
+        self.train_labels = train_labels_np
+        self.val_data = val_data_np
+        self.val_labels = val_labels_np
+        self.test_data = test_data_np
+        self.test_labels = test_labels_np
+
+    def _augment_and_set_dataloader(
+        self, data_type="train", augmentation_dict=None, batch_size=32, shuffle=True
+    ):
+        """
+        Augmenting data
+        Creating dataloaders
+
+        Parameters:
+            data_type (str): "train", "val" or "test"
+            augmentation_dict (dict): augmentation dictionary
+            batch_size (int): batch size
+            shuffle (bool): shuffle data
+        """
+
+        data = getattr(self, data_type + "_data")
+        labels = getattr(self, data_type + "_labels")
+
+        # Augment training and validation data
+        data_ds = AugmentedDataset(
+            data,
+            labels,
+            self.resolution_hw,
+            augmentation_dict=augmentation_dict,
+        )
+
+        # set self. attribute "n_train", "n_val" or "n_test"
+        setattr(self, "n_" + data_type, len(data_ds))
+
+        # set self. attribute "train_ds", "val_ds" or "test_ds"
+        setattr(self, data_type + "_ds", data_ds)
+
+        data_loader = DataLoader(data_ds, batch_size=batch_size, shuffle=shuffle)
+
+        # set self. attribute "train_loader", "val_loader" or "test_loader"
+        setattr(self, data_type + "_loader", data_loader)
+
     def _prep_apricot_data(self, tune_augmentation=False):
         """
+        OBSOLETE, REPLACED BY _get_and_split_apricot_data AND _augment_and_set_dataloader
         Prep apricot data for training. This includes:
         - Loading data
         - Splitting into training, validation and testing
@@ -806,7 +897,7 @@ class RetinaVAE(nn.Module):
             augmentation_dict=None,
         )
 
-        test_ds.targets = test_ds.labels  # MNIST uses targets instead of labels
+        test_ds.labels = test_ds.labels  # MNIST uses targets instead of labels
         self.test_ds = test_ds
 
         # Split into train and validation
@@ -821,8 +912,8 @@ class RetinaVAE(nn.Module):
         # Save for later use, this may be a problem with bigger datasets
         self.train_ds = train_ds
         self.val_ds = val_ds
-        self.train_ds.targets = train_val_ds.labels[self.train_ds.indices]
-        self.val_ds.targets = train_val_ds.labels[self.val_ds.indices]
+        self.train_ds.labels = train_val_ds.labels[self.train_ds.indices]
+        self.val_ds.labels = train_val_ds.labels[self.val_ds.indices]
 
         # Get n items for the three sets
         self.n_train = len(train_ds)
@@ -830,11 +921,11 @@ class RetinaVAE(nn.Module):
         self.n_test = len(test_ds)
 
         train_loader = DataLoader(train_ds, batch_size=self.batch_size, shuffle=True)
-        valid_loader = DataLoader(val_ds, batch_size=self.batch_size, shuffle=True)
+        val_loader = DataLoader(val_ds, batch_size=self.batch_size, shuffle=True)
         test_loader = DataLoader(test_ds, batch_size=self.batch_size)
 
         self.train_loader = train_loader
-        self.valid_loader = valid_loader
+        self.val_loader = val_loader
         self.test_loader = test_loader
 
     def _get_spatial_apricot_data(self):
@@ -954,7 +1045,7 @@ class RetinaVAE(nn.Module):
         test_indices = torch.arange(1000)
         train_val_ds = Subset(_train_ds, train_indices)
         test_ds = Subset(_test_ds, test_indices)
-        test_ds.targets = torch.from_numpy(
+        test_ds.labels = torch.from_numpy(
             np.fromiter((_test_ds.targets[i] for i in test_indices), int)
         )  # Add targets for the plotting
 
@@ -965,11 +1056,11 @@ class RetinaVAE(nn.Module):
         train_ds, val_ds = random_split(train_val_ds, [int(m - m * 0.2), int(m * 0.2)])
 
         train_loader = DataLoader(train_ds, batch_size=self.batch_size)
-        valid_loader = DataLoader(val_ds, batch_size=self.batch_size)
+        val_loader = DataLoader(val_ds, batch_size=self.batch_size)
         test_loader = DataLoader(test_ds, batch_size=self.batch_size, shuffle=True)
 
         self.train_loader = train_loader
-        self.valid_loader = valid_loader
+        self.val_loader = val_loader
         self.test_loader = test_loader
 
     def _prep_training(self):
@@ -1064,7 +1155,7 @@ class RetinaVAE(nn.Module):
             ds = self.test_ds
 
         plt.figure(figsize=(16, 4.5))
-        targets = ds.targets.numpy()
+        targets = ds.labels.numpy()
         t_idx = {i: np.where(targets == i)[0][0] for i in self.train_by_labels}
         encoder.eval()
         decoder.eval()
@@ -1107,7 +1198,7 @@ class RetinaVAE(nn.Module):
             train_loss = self._train_epoch(
                 self.vae, self.device, self.train_loader, self.optim
             )
-            val_loss = self._validate_epoch(self.vae, self.device, self.valid_loader)
+            val_loss = self._validate_epoch(self.vae, self.device, self.val_loader)
 
             # For every 100th epoch, print the outputs of the autoencoder
             if epoch == 0 or epoch % 100 == 0:
