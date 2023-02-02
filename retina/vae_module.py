@@ -236,7 +236,7 @@ class AugmentedDataset(torch.utils.data.Dataset):
         return image_shifted
 
     def _to_tensor(self, image):
-        image_t = torch.from_numpy(image).float()  # to float32
+        image_t = torch.from_numpy(deepcopy(image)).float()  # to float32
         return image_t
 
 
@@ -346,25 +346,45 @@ class TrainableVAE(tune.Trainable):
     def setup(
         self,
         config,
-        train_ds=None,
-        val_ds=None,
+        data_dict=None,
         epochs=None,
         device=None,
         methods=None,
     ):
 
         # Assert that none of the optional arguments are None
-        assert train_ds is not None, "train_ds is None, aborting..."
-        assert val_ds is not None, "val_ds is None, aborting..."
+        assert data_dict is not None, "val_ds is None, aborting..."
         assert epochs is not None, "epochs is None, aborting..."
         assert device is not None, "device is None, aborting..."
         assert methods is not None, "methods is None, aborting..."
 
-        self.train_loader = DataLoader(
-            train_ds, batch_size=config.get("batch_size"), shuffle=True
+        self.train_data = data_dict["train_data"]
+        self.train_labels = data_dict["train_labels"]
+        self.val_data = data_dict["val_data"]
+        self.val_labels = data_dict["val_labels"]
+
+        # Augment training and validation data.
+        augmentation_dict = {
+            "rotation": 45.0,  # rotation in degrees
+            "translation": (0.1, 0.1),  # fraction of image, (x, y) -directions
+            "noise": 0.05,  # noise float in [0, 1] (noise is added to the image)
+        }
+
+        self._augment_and_get_dataloader = methods["_augment_and_get_dataloader"]
+
+        self.train_loader = self._augment_and_get_dataloader(
+            data_type="train",
+            augmentation_dict=augmentation_dict,
+            batch_size=config.get("batch_size"),
+            shuffle=True,
         )
 
-        self.val_loader = DataLoader(val_ds, config.get("batch_size"), shuffle=True)
+        self.val_loader = self._augment_and_get_dataloader(
+            data_type="val",
+            augmentation_dict=augmentation_dict,
+            batch_size=config.get("batch_size"),
+            shuffle=True,
+        )
 
         self.epochs = epochs
         self.device = device
@@ -458,10 +478,9 @@ class RetinaVAE(nn.Module):
 
         # # Create model and set optimizer and learning rate scheduler
         # self._prep_training()
+        self._get_and_split_apricot_data()
 
-        self.debug = True
-
-        training_mode = "train_model"  # "train_model" or "tune_model" or "load_model"
+        training_mode = "tune_model"  # "train_model" or "tune_model" or "load_model"
 
         match training_mode:
             case "train_model":
@@ -469,19 +488,16 @@ class RetinaVAE(nn.Module):
                 # self._prep_apricot_data()
                 # self._prep_minst_data()
 
-                self._get_and_split_apricot_data()
-
-                self._augment_and_set_dataloader(
+                self.train_loader = self._augment_and_get_dataloader(
                     data_type="train",
                     augmentation_dict=self.augmentation_dict,
                     shuffle=True,
                 )
-                self._augment_and_set_dataloader(
+                self.val_loader = self._augment_and_get_dataloader(
                     data_type="val",
                     augmentation_dict=self.augmentation_dict,
                     shuffle=True,
                 )
-                self._augment_and_set_dataloader(data_type="test", shuffle=False)
 
                 # Create model and set optimizer and learning rate scheduler
                 self._prep_training()
@@ -500,11 +516,10 @@ class RetinaVAE(nn.Module):
                 model_path = self._save_model()
 
             case "tune_model":
-                # Create datasets and dataloaders
-                self._prep_apricot_data(tune_augmentation=True)
 
                 tuner = self._set_ray_tuner()
                 self.result_grid = tuner.fit()
+
                 results_df = self.result_grid.get_dataframe()
                 print("Shortest training time:", results_df["time_total_s"].min())
                 print("Longest training time:", results_df["time_total_s"].max())
@@ -530,14 +545,20 @@ class RetinaVAE(nn.Module):
                 my_model_path = None
                 state_dict = self._load_model(model_path=my_model_path)
 
+        self.test_loader = self._augment_and_get_dataloader(
+            data_type="test", shuffle=False
+        )
+
         # Figure 1
         self._plot_ae_outputs(self.vae.encoder, self.vae.decoder, ds_name="test_ds")
 
-        # Figure 1
-        self._plot_ae_outputs(self.vae.encoder, self.vae.decoder, ds_name="train_ds")
-
-        # Figure 1
-        self._plot_ae_outputs(self.vae.encoder, self.vae.decoder, ds_name="valid_ds")
+        if training_mode == "train_model":
+            self._plot_ae_outputs(
+                self.vae.encoder, self.vae.decoder, ds_name="train_ds"
+            )
+            self._plot_ae_outputs(
+                self.vae.encoder, self.vae.decoder, ds_name="valid_ds"
+            )
 
         self.vae.eval()
 
@@ -554,26 +575,29 @@ class RetinaVAE(nn.Module):
         # Figure 4
         self._plot_tsne_space(encoded_samples)
 
-        encoded_samples = self._get_encoded_samples(ds_name="train_ds")
-
-        # Figure 3
-        self._plot_latent_space(encoded_samples)
-
-        # Figure 4
-        self._plot_tsne_space(encoded_samples)
+        if training_mode == "train_model":
+            encoded_samples = self._get_encoded_samples(ds_name="train_ds")
+            self._plot_latent_space(encoded_samples)
+            self._plot_tsne_space(encoded_samples)
 
     def _set_ray_tuner(self):
         """Set ray tuner"""
 
-        # trainable = tune.with_resources(MyTrainableClass, {"cpu": 1, "gpu": 0.25})
         trainable = tune.with_resources(TrainableVAE, {"gpu": 0.25})
         trainable_with_parameters = tune.with_parameters(
             trainable,
+            data_dict={
+                "train_data": self.train_data,
+                "train_labels": self.train_labels,
+                "val_data": self.val_data,
+                "val_labels": self.val_labels,
+            },
             epochs=self.epochs,
             device=self.device,
             methods={
                 "_train_epoch": self._train_epoch,
                 "_validate_epoch": self._validate_epoch,
+                "_augment_and_get_dataloader": self._augment_and_get_dataloader,
             },
         )
 
@@ -818,7 +842,7 @@ class RetinaVAE(nn.Module):
         self.test_data = test_data_np
         self.test_labels = test_labels_np
 
-    def _augment_and_set_dataloader(
+    def _augment_and_get_dataloader(
         self, data_type="train", augmentation_dict=None, batch_size=32, shuffle=True
     ):
         """
@@ -831,6 +855,18 @@ class RetinaVAE(nn.Module):
             batch_size (int): batch size
             shuffle (bool): shuffle data
         """
+
+        # Assert that data_type is "train", "val" or "test"
+        assert data_type in [
+            "train",
+            "val",
+            "test",
+        ], "data_type must be 'train', 'val' or 'test', aborting..."
+
+        # Assert that self. has attribute "train_data", "val_data" or "test_data"
+        assert hasattr(self, data_type + "_data"), (
+            "\nself has no attribute '" + data_type + "_data', aborting...\n"
+        )
 
         data = getattr(self, data_type + "_data")
         labels = getattr(self, data_type + "_labels")
@@ -851,12 +887,14 @@ class RetinaVAE(nn.Module):
 
         data_loader = DataLoader(data_ds, batch_size=batch_size, shuffle=shuffle)
 
-        # set self. attribute "train_loader", "val_loader" or "test_loader"
-        setattr(self, data_type + "_loader", data_loader)
+        # # set self. attribute "train_loader", "val_loader" or "test_loader"
+        # setattr(self, data_type + "_loader", data_loader)
+
+        return data_loader
 
     def _prep_apricot_data(self, tune_augmentation=False):
         """
-        OBSOLETE, REPLACED BY _get_and_split_apricot_data AND _augment_and_set_dataloader
+        OBSOLETE, REPLACED BY _get_and_split_apricot_data AND _augment_and_get_dataloader
         Prep apricot data for training. This includes:
         - Loading data
         - Splitting into training, validation and testing
