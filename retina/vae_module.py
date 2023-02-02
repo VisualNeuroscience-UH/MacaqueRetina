@@ -365,9 +365,14 @@ class TrainableVAE(tune.Trainable):
 
         # Augment training and validation data.
         augmentation_dict = {
-            "rotation": 45.0,  # rotation in degrees
-            "translation": (0.1, 0.1),  # fraction of image, (x, y) -directions
-            "noise": 0.05,  # noise float in [0, 1] (noise is added to the image)
+            "rotation": config.get("rotation"),  # rotation in degrees
+            "translation": (
+                config.get("translation"),
+                config.get("translation"),
+            ),  # fraction of image, (x, y) -directions
+            "noise": config.get(
+                "noise"
+            ),  # noise float in [0, 1] (noise is added to the image)
         }
 
         self._augment_and_get_dataloader = methods["_augment_and_get_dataloader"]
@@ -440,7 +445,7 @@ class RetinaVAE(nn.Module):
         self.resolution_hw = (28, 28)
 
         self.batch_size = 128  # None will take the batch size from test_split size.
-        self.epochs = 10
+        self.epochs = 1000
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
 
@@ -609,7 +614,10 @@ class RetinaVAE(nn.Module):
         param_space = {
             "lr": tune.grid_search([0.001]),
             "latent_dim": tune.grid_search([2]),
-            "batch_size": tune.grid_search([32, 64, 128, 256]),
+            "batch_size": tune.grid_search([64]),
+            "rotation": tune.grid_search([0, 10, 20, 40]),
+            "translation": tune.grid_search([0]),
+            "noise": tune.grid_search([0]),
             "model_id": tune.grid_search(
                 ["model_{}".format(i) for i in range(NUM_MODELS)]
             ),
