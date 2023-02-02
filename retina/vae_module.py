@@ -40,10 +40,6 @@ import os
 import time
 
 
-# TÄHÄN JÄIT. TEE FID, FIT STATS, SSIM SEKÄ MEAN SD , HIST MEASURES KUTEN KL DIVERGENCE.
-# NÄIDEN AVULLA NÄET KVANTITATIIVISESTI MITEN HYVIN ML TOIMII
-
-
 class AugmentedDataset(torch.utils.data.Dataset):
     """
     Apricot dataset class for Pytorch.
@@ -391,6 +387,7 @@ class TrainableVAE(tune.Trainable):
         self.device = device
         self._train_epoch = methods["_train_epoch"]
         self._validate_epoch = methods["_validate_epoch"]
+        self._get_fid = methods["_get_fid"]
 
         self.model = VariationalAutoencoder(
             latent_dims=config.get("latent_dim"), device=self.device
@@ -408,8 +405,27 @@ class TrainableVAE(tune.Trainable):
             )
 
             val_loss = self._validate_epoch(self.model, self.device, self.val_loader)
+        fid64 = self._get_fid(self.model, self.device, self.val_loader, n_features=64)
+        # fid192 = self._get_fid(
+        #     self.model, self.device, self.val_loader, n_features=192
+        # )
+        # fid768 = self._get_fid(
+        #     self.model, self.device, self.val_loader, n_features=768
+        # )
+        # fid2048 = self._get_fid(
+        #     self.model, self.device, self.val_loader, n_features=2048
+        # )
+        print(
+            f"{epoch} - train_loss: {train_loss:.4f} - val_loss: {val_loss:.4f} - fid64: {fid64:.4f}"
+        )
 
-        return {"loss": val_loss}
+        return {
+            "fid64": fid64,
+            "val_loss": val_loss,
+            # "fid192": fid192,
+            # "fid768": fid768,
+            # "fid2048": fid2048,
+        }
 
     def save_checkpoint(self, tmp_checkpoint_dir):
         checkpoint_path = os.path.join(tmp_checkpoint_dir, "model.pth")
@@ -441,7 +457,7 @@ class RetinaVAE(nn.Module):
         self.resolution_hw = (28, 28)
 
         self.batch_size = 128  # None will take the batch size from test_split size.
-        self.epochs = 10
+        self.epochs = 1000
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
 
@@ -480,7 +496,7 @@ class RetinaVAE(nn.Module):
         # self._prep_training()
         self._get_and_split_apricot_data()
 
-        training_mode = "train_model"  # "train_model" or "tune_model" or "load_model"
+        training_mode = "tune_model"  # "train_model" or "tune_model" or "load_model"
 
         match training_mode:
             case "train_model":
@@ -516,8 +532,16 @@ class RetinaVAE(nn.Module):
                 model_path = self._save_model()
 
                 # Get Frechet Inception Distance
-                fid = self._get_fid()
+                fid = self._get_fid(
+                    self.vae, self.device, self.val_loader, n_features=64
+                )
                 print("FID:", fid)
+
+                # TÄHÄN JÄIT: KÄYTÄ RAY CLIReporteria, JOTTA SAAT FID YM TULOKSET TAULUKKOON
+                # SELVITÄ FID TULOSTEN MERKITYS JA LAATU -- ESIM KUVAT KERROKSISTA, MITÄ
+                # MERKITSEVÄT, MINKÄLAISIA "RESEPTIIVISIÄ KENTTIÄ" EDUSTAVAT.
+                # SEN JÄLKEEN SSIM, FIT STATS, SEKÄ MEAN SD , HIST MEASURES KUTEN KL DIVERGENCE.
+                # NÄIDEN AVULLA NÄET KVANTITATIIVISESTI MITEN HYVIN ML TOIMII
 
             case "tune_model":
 
@@ -529,11 +553,11 @@ class RetinaVAE(nn.Module):
                 print("Longest training time:", results_df["time_total_s"].max())
 
                 best_result = self.result_grid.get_best_result(
-                    metric="loss", mode="min"
+                    metric="val_loss", mode="min"
                 )
                 print("Best result:", best_result)
                 result_df = best_result.metrics_dataframe
-                result_df[["training_iteration", "loss", "time_total_s"]]
+                result_df[["training_iteration", "val_loss", "time_total_s"]]
 
                 # Load model state dict from checkpoint to new self.vae and return the state dict.
                 state_dict = self._load_model(best_result=best_result)
@@ -584,7 +608,7 @@ class RetinaVAE(nn.Module):
             self._plot_latent_space(encoded_samples)
             self._plot_tsne_space(encoded_samples)
 
-    def _get_fid(self, n_features=64):
+    def _get_fid(self, model, this_device, val_loader, n_features=64):
         """
         FrechetInceptionDistance(feature=2048, reset_real_features=True, normalize=False)
         input is expected to be mini-batches of 3-channel RGB images of shape (3 x H x W)
@@ -610,12 +634,21 @@ class RetinaVAE(nn.Module):
 
         """
 
+        # Assert n_features is valid
+        assert n_features in [
+            64,
+            192,
+            768,
+            2048,
+        ], "n_features must be one of [64, 192, 768, 2048], aborting..."
+
+        assert model is not None, "Model must be provided, aborting..."
+
         # this_device = "cpu"
-        this_device = "cuda:0" if torch.cuda.is_available() else "cpu"
-        model = self.vae
+        # this_device = "cuda:0" if torch.cuda.is_available() else "cpu"
         model.to(this_device)
         model.eval()
-        dataloader = self.val_loader
+        dataloader = val_loader
 
         # Init empty torch tensor
         imgs_dist1 = torch.empty(
@@ -668,6 +701,7 @@ class RetinaVAE(nn.Module):
                 "_train_epoch": self._train_epoch,
                 "_validate_epoch": self._validate_epoch,
                 "_augment_and_get_dataloader": self._augment_and_get_dataloader,
+                "_get_fid": self._get_fid,
             },
         )
 
@@ -696,6 +730,8 @@ class RetinaVAE(nn.Module):
             search_alg=tune.search.basic_variant.BasicVariantGenerator(
                 constant_grid_search=True,
             ),
+            metric="fid64",
+            mode="min",
         )
 
         # Runtime configuration that is specific to individual trials. Will overwrite the run config passed to the Trainer.
