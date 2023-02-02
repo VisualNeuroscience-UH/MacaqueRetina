@@ -23,3 +23,4 @@ pip install tensorboard
 pip install "ray[tune]"
 conda install torch-fidelity torchmetrics
 pip install optuna
+conda install ignite -c pytorch

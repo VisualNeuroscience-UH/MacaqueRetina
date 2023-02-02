@@ -18,7 +18,8 @@ import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 
 from ray import air, tune
-from ray.train.torch import TorchCheckpoint, TorchPredictor
+
+# from ray.train.torch import TorchCheckpoint, TorchPredictor
 
 # from ray.air import Result
 from ray.tune.schedulers import ASHAScheduler
