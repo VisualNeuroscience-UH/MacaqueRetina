@@ -18,15 +18,9 @@ import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 
 from ray import air, tune
-
-# from ray.train.torch import TorchCheckpoint, TorchPredictor
-
-# from ray.air import Result
 from ray.tune.schedulers import ASHAScheduler
 
-# import torch.utils.data.Subset as Subset
-
-# import torch.optim as optim
+from torchmetrics.image.fid import FrechetInceptionDistance
 
 # Viz
 from tqdm import tqdm
@@ -43,6 +37,7 @@ import pdb
 from copy import deepcopy
 from itertools import product
 import os
+import time
 
 
 # TÄHÄN JÄIT. TEE FID, FIT STATS, SSIM SEKÄ MEAN SD , HIST MEASURES KUTEN KL DIVERGENCE.
@@ -446,7 +441,7 @@ class RetinaVAE(nn.Module):
         self.resolution_hw = (28, 28)
 
         self.batch_size = 128  # None will take the batch size from test_split size.
-        self.epochs = 1000
+        self.epochs = 10
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
 
@@ -460,10 +455,14 @@ class RetinaVAE(nn.Module):
             "translation": (0.1, 0.1),  # fraction of image, (x, y) -directions
             "noise": 0.05,  # noise float in [0, 1] (noise is added to the image)
         }
-        self.augmentation_dict = augmentation_dict
-        # self.augmentation_dict = None
+        # self.augmentation_dict = augmentation_dict
+        self.augmentation_dict = None
 
+        # Set the random seed for reproducible results for both torch and numpy
         self.random_seed = 42
+        torch.manual_seed(self.random_seed)
+        np.random.seed(self.random_seed)
+
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         self.device = (
@@ -471,22 +470,17 @@ class RetinaVAE(nn.Module):
         )
         # self.device = torch.device("cpu")
 
-        # # Set the random seed for reproducible results for both torch and numpy
-        # torch.manual_seed(self.random_seed)
-        # np.random.seed(self.random_seed)
-
         # # Visualize the augmentation effects and exit
         # self._visualize_augmentation()
 
         # # Create datasets and dataloaders
-        # self._prep_apricot_data()
         # # self._prep_minst_data()
 
         # # Create model and set optimizer and learning rate scheduler
         # self._prep_training()
         self._get_and_split_apricot_data()
 
-        training_mode = "tune_model"  # "train_model" or "tune_model" or "load_model"
+        training_mode = "train_model"  # "train_model" or "tune_model" or "load_model"
 
         match training_mode:
             case "train_model":
@@ -520,6 +514,10 @@ class RetinaVAE(nn.Module):
 
                 # Save model
                 model_path = self._save_model()
+
+                # Get Frechet Inception Distance
+                fid = self._get_fid()
+                print("FID:", fid)
 
             case "tune_model":
 
@@ -585,6 +583,72 @@ class RetinaVAE(nn.Module):
             encoded_samples = self._get_encoded_samples(ds_name="train_ds")
             self._plot_latent_space(encoded_samples)
             self._plot_tsne_space(encoded_samples)
+
+    def _get_fid(self, n_features=64):
+        """
+        FrechetInceptionDistance(feature=2048, reset_real_features=True, normalize=False)
+        input is expected to be mini-batches of 3-channel RGB images of shape (3 x H x W)
+        If argument normalize is True images are expected to be dtype float and have values in the [0, 1] range.
+
+        Parameters
+
+        feature : (Union[int, Module])
+
+            Either an integer or nn.Module:
+
+                an integer will indicate the inceptionv3 feature layer to choose. Can be one of the following: 64, 192, 768, 2048
+
+                an nn.Module for using a custom feature extractor. Expects that its forward method returns an (N,d) matrix where
+                N is the batch size and d is the feature size.
+
+        reset_real_features : (bool)
+            Whether to also reset the real features. Since in many cases the real dataset does not change, the features can cached them to avoid recomputing them which is costly. Set this to False if your dataset does not change.
+
+        kwargs : (Any)
+            Additional keyword arguments, see Advanced metric settings for more info.
+
+
+        """
+
+        # this_device = "cpu"
+        this_device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        model = self.vae
+        model.to(this_device)
+        model.eval()
+        dataloader = self.val_loader
+
+        # Init empty torch tensor
+        imgs_dist1 = torch.empty(
+            (0, 3, self.resolution_hw[0], self.resolution_hw[1]),
+            dtype=torch.float32,
+        ).to(this_device)
+        imgs_dist2 = torch.empty(
+            (0, 3, self.resolution_hw[0], self.resolution_hw[1]),
+            dtype=torch.float32,
+        ).to(this_device)
+
+        with torch.no_grad():  # No need to track the gradients
+            for x, _ in dataloader:
+                # Move tensor to the proper device
+                x = x.to(this_device)
+                x_hat = model(x)
+                # Expand dim 1 to 3 for x and x_hat
+                x_expanded = x.expand(-1, 3, -1, -1)
+                x_hat_expanded = x_hat.expand(-1, 3, -1, -1)
+
+                imgs_dist1 = torch.cat((imgs_dist1, x_expanded), dim=0)
+                imgs_dist2 = torch.cat((imgs_dist2, x_hat_expanded), dim=0)
+
+        # Get fid
+        startime = time.time()
+        fid_obj = FrechetInceptionDistance(
+            feature=n_features, normalize=True, reset_real_features=False
+        ).to(this_device)
+        fid_obj.update(imgs_dist1, real=True)
+        fid_obj.update(imgs_dist2, real=False)
+        fid = fid_obj.compute()
+
+        return fid
 
     def _set_ray_tuner(self):
         """Set ray tuner"""
