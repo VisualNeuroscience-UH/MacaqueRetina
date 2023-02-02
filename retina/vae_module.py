@@ -523,19 +523,23 @@ class RetinaVAE(nn.Module):
 
             case "tune_model":
                 tuner = self._set_ray_tuner()
-                result_grid = tuner.fit()
-                results_df = result_grid.get_dataframe()
+                self.result_grid = tuner.fit()
+                results_df = self.result_grid.get_dataframe()
                 print("Shortest training time:", results_df["time_total_s"].min())
                 print("Longest training time:", results_df["time_total_s"].max())
 
-                best_result = result_grid.get_best_result(metric="loss", mode="min")
+                best_result = self.result_grid.get_best_result(
+                    metric="loss", mode="min"
+                )
                 print("Best result:", best_result)
                 result_df = best_result.metrics_dataframe
                 result_df[["training_iteration", "loss", "time_total_s"]]
-                checkpoint = best_result.checkpoint
 
                 # Load model state dict from checkpoint to new self.vae and return the state dict.
                 state_dict = self._load_model(best_result=best_result)
+                # You need to stop here and manually set the trial name to the one you want to load.
+                # trial_name = "TrainableVAE_29a86_00000"  # From ray_results table/folder, # Implement later when you need it to load from a specific trial
+                # state_dict = self._load_model(trial_name=trial_name)
 
             case "load_model":
                 # Load previously calculated model for vizualization
@@ -662,8 +666,21 @@ class RetinaVAE(nn.Module):
         torch.save(self.vae.state_dict(), model_path)
         return model_path
 
-    def _load_model(self, model_path=None, best_result=None):
+    def _load_model(self, model_path=None, best_result=None, trial_name=None):
         """Load model if exists"""
+
+        def _get_model_and_latent_dim_from_logdir(log_dir):
+            """Get model and latent dim from log dir"""
+            checkpoint_dir = [
+                d for d in os.listdir(log_dir) if d.startswith("checkpoint")
+            ][0]
+            checkpoint_path = os.path.join(log_dir, checkpoint_dir, "model.pth")
+
+            latent_dim = best_result.config["latent_dim"]
+            # Get model with correct layer dimensions
+            model = VariationalAutoencoder(latent_dims=latent_dim, device=self.device)
+            model.load_state_dict(torch.load(checkpoint_path))
+            return model, latent_dim
 
         if best_result is not None:
             # ref https://medium.com/distributed-computing-with-ray/simple-end-to-end-ml-from-selection-to-serving-with-ray-tune-and-ray-serve-10f5564d33ba
@@ -700,6 +717,15 @@ class RetinaVAE(nn.Module):
                 self.vae.load_state_dict(torch.load(model_path))
             else:
                 print(f"Model {model_path} does not exist.")
+
+        elif trial_name is not None:
+            # trial_name = "TrainableVAE_XXX" from ray.tune results table.
+            # Implement later when you need it. Trial name should be unique.
+            results_df = self.result_grid.get_dataframe()
+            log_dir = [d for d in results_df["logdir"] if trial_name in d][0]
+            model, latent_dim = _get_model_and_latent_dim_from_logdir(log_dir)
+            self.vae = model.to(self.device)
+            self.latent_dim = latent_dim
 
         return self.vae.state_dict()
 
