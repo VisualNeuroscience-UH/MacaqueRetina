@@ -238,13 +238,13 @@ class VariationalEncoder(nn.Module):
         super().__init__()
 
         self.device = device
-        self.conv1 = nn.Conv2d(1, 8, 3, stride=2, padding=1)
-        self.conv2 = nn.Conv2d(8, 16, 3, stride=2, padding=1)
+        self.conv1 = nn.Conv2d(1, 8, kernel_size=3, stride=2, padding=1)
+        self.conv2 = nn.Conv2d(8, 16, kernel_size=3, stride=2, padding=1)
         self.batch2 = nn.BatchNorm2d(16)
-        self.conv3 = nn.Conv2d(16, 32, 3, stride=2, padding=0)
+        self.conv3 = nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=0)
         self.linear1 = nn.Linear(3 * 3 * 32, 128)
-        self.linear2 = nn.Linear(128, latent_dims)
-        self.linear3 = nn.Linear(128, latent_dims)
+        self.linear2 = nn.Linear(128, latent_dims)  # mu
+        self.linear3 = nn.Linear(128, latent_dims)  # sigma
 
         self.N = torch.distributions.Normal(0, 1)
         if device is not None and device.type == "cpu":
@@ -260,7 +260,14 @@ class VariationalEncoder(nn.Module):
     def forward(self, x):
         if self.device is not None:
             x = x.to(self.device)
-        x = F.relu(self.conv1(x))
+        x = F.relu(
+            self.conv1(x)
+        )  # RF kuva otetaan lineaarisen kombon jälkeen ennen relu:a
+        # Open F.relu to module version nn.ReLU()
+        # Save the output to a variable (in self?)
+        # test the effect on timing
+        # Alternatively,
+        # Build model and after training, use the model to view the RF:s in the middle of the network
         x = F.relu(self.batch2(self.conv2(x)))
         x = F.relu(self.conv3(x))
         x = torch.flatten(x, start_dim=1)
