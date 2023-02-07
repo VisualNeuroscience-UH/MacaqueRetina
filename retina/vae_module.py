@@ -15,12 +15,17 @@ from torchvision import transforms
 from torch.utils.data import DataLoader, Subset, random_split
 from torch import nn
 import torch.nn.functional as F
+
 from torch.utils.tensorboard import SummaryWriter
+from torchmetrics.image.fid import FrechetInceptionDistance
+from torchmetrics.image.kid import KernelInceptionDistance
+from torchmetrics import StructuralSimilarityIndexMeasure
+from torchmetrics import MeanSquaredError
 
 from ray import air, tune
 from ray.tune.schedulers import ASHAScheduler
+from ray.tune import CLIReporter
 
-from torchmetrics.image.fid import FrechetInceptionDistance
 
 # Viz
 from tqdm import tqdm
@@ -318,10 +323,20 @@ class VariationalAutoencoder(nn.Module):
         self.encoder = VariationalEncoder(latent_dims=latent_dims, device=self.device)
         self.decoder = Decoder(latent_dims)
 
+        self.mse = MeanSquaredError()
+        self.fid = FrechetInceptionDistance(
+            n_features=64, reset_real_features=False, normalize=True
+        )
+        self.kid = KernelInceptionDistance(
+            n_features=64, reset_real_features=False, normalize=True, subset_size=4
+        )
+        self.ssim = StructuralSimilarityIndexMeasure()
+
     def forward(self, x):
         if self.device is not None:
             x = x.to(self.device)
         z = self.encoder(x)
+
         return self.decoder(z)
 
 
@@ -346,14 +361,14 @@ class TrainableVAE(tune.Trainable):
         self,
         config,
         data_dict=None,
-        epochs=None,
+        # epochs=None,
         device=None,
         methods=None,
     ):
 
         # Assert that none of the optional arguments are None
         assert data_dict is not None, "val_ds is None, aborting..."
-        assert epochs is not None, "epochs is None, aborting..."
+        # assert epochs is not None, "epochs is None, aborting..."
         assert device is not None, "device is None, aborting..."
         assert methods is not None, "methods is None, aborting..."
 
@@ -390,11 +405,11 @@ class TrainableVAE(tune.Trainable):
             shuffle=True,
         )
 
-        self.epochs = epochs
+        # self.epochs = epochs
         self.device = device
         self._train_epoch = methods["_train_epoch"]
         self._validate_epoch = methods["_validate_epoch"]
-        self._get_fid = methods["_get_fid"]
+        # self._get_fid = methods["_get_fid"]
 
         self.model = VariationalAutoencoder(
             latent_dims=config.get("latent_dim"), device=self.device
@@ -406,32 +421,34 @@ class TrainableVAE(tune.Trainable):
         )
 
     def step(self):
-        for epoch in range(self.epochs):
-            train_loss = self._train_epoch(
-                self.model, self.device, self.train_loader, self.optim
-            )
-
-            val_loss = self._validate_epoch(self.model, self.device, self.val_loader)
-        fid64 = self._get_fid(self.model, self.device, self.val_loader, n_features=64)
-        # fid192 = self._get_fid(
-        #     self.model, self.device, self.val_loader, n_features=192
-        # )
-        # fid768 = self._get_fid(
-        #     self.model, self.device, self.val_loader, n_features=768
-        # )
-        # fid2048 = self._get_fid(
-        #     self.model, self.device, self.val_loader, n_features=2048
-        # )
-        print(
-            f"{epoch} - train_loss: {train_loss:.4f} - val_loss: {val_loss:.4f} - fid64: {fid64:.4f}"
+        train_loss = self._train_epoch(
+            self.model, self.device, self.train_loader, self.optim
         )
 
+        (
+            val_loss_epoch,
+            mse_loss_epoch,
+            ssim_loss_epoch,
+            fid_loss_epoch,
+            kid_mean_epoch,
+            kid_std_epoch,
+        ) = self._validate_epoch(self.model, self.device, self.val_loader)
+        # fid64 = self._get_fid(self.model, self.device, self.val_loader, n_features=64)
+
+        print(
+            f"""{self.training_iteration} - train_loss: {train_loss:.4f} - val_loss: {val_loss_epoch:.4f} - ssim {ssim_loss_epoch} - 
+            fid {fid_loss_epoch} - kid mean {kid_mean_epoch} - kid std {kid_std_epoch}"""
+        )
+        # print(f"{self.training_iteration=}")
+        # exit()
         return {
-            "fid64": fid64,
-            "val_loss": val_loss,
-            # "fid192": fid192,
-            # "fid768": fid768,
-            # "fid2048": fid2048,
+            "train_loss": train_loss,
+            "val_loss": val_loss_epoch,
+            "mse_loss": mse_loss_epoch,
+            "ssim_loss": ssim_loss_epoch,
+            "fid_loss": fid_loss_epoch,
+            "kid_mean": kid_mean_epoch,
+            "kid_std": kid_std_epoch,
         }
 
     def save_checkpoint(self, tmp_checkpoint_dir):
@@ -444,8 +461,11 @@ class TrainableVAE(tune.Trainable):
         self.model.load_state_dict(torch.load(checkpoint_path))
 
 
-class RetinaVAE(nn.Module):
-    """Variational Autoencoder class"""
+class RetinaVAE:
+    """
+    Class to apply variational autoencoder to Apricot retina data and run single learning run
+    or Ray[Tune] hyperparameter search.
+    """
 
     def __init__(self, apricot_data_folder, gc_type, response_type):
         # def __init__(self):
@@ -464,7 +484,7 @@ class RetinaVAE(nn.Module):
         self.resolution_hw = (28, 28)
 
         self.batch_size = 128  # None will take the batch size from test_split size.
-        self.epochs = 1000
+        self.epochs = 10
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
 
@@ -538,17 +558,15 @@ class RetinaVAE(nn.Module):
                 # Save model
                 model_path = self._save_model()
 
-                # Get Frechet Inception Distance
-                fid = self._get_fid(
-                    self.vae, self.device, self.val_loader, n_features=64
-                )
-                print("FID:", fid)
-
                 # TÄHÄN JÄIT: KÄYTÄ RAY CLIReporteria, JOTTA SAAT FID YM TULOKSET TAULUKKOON
                 # SELVITÄ FID TULOSTEN MERKITYS JA LAATU -- ESIM KUVAT KERROKSISTA, MITÄ
                 # MERKITSEVÄT, MINKÄLAISIA "RESEPTIIVISIÄ KENTTIÄ" EDUSTAVAT.
                 # SEN JÄLKEEN SSIM, FIT STATS, SEKÄ MEAN SD , HIST MEASURES KUTEN KL DIVERGENCE.
                 # NÄIDEN AVULLA NÄET KVANTITATIIVISESTI MITEN HYVIN ML TOIMII
+                # Refereces:
+                # FID : Heusel_2017_NIPS
+                # KID : Binkowski_2018_ICLR
+                # SSIM : Wang_2009_IEEESignProcMag, Wang_2004_IEEETransImProc
 
             case "tune_model":
 
@@ -615,83 +633,17 @@ class RetinaVAE(nn.Module):
             self._plot_latent_space(encoded_samples)
             self._plot_tsne_space(encoded_samples)
 
-    def _get_fid(self, model, this_device, val_loader, n_features=64):
-        """
-        FrechetInceptionDistance(feature=2048, reset_real_features=True, normalize=False)
-        input is expected to be mini-batches of 3-channel RGB images of shape (3 x H x W)
-        If argument normalize is True images are expected to be dtype float and have values in the [0, 1] range.
-
-        Parameters
-
-        feature : (Union[int, Module])
-
-            Either an integer or nn.Module:
-
-                an integer will indicate the inceptionv3 feature layer to choose. Can be one of the following: 64, 192, 768, 2048
-
-                an nn.Module for using a custom feature extractor. Expects that its forward method returns an (N,d) matrix where
-                N is the batch size and d is the feature size.
-
-        reset_real_features : (bool)
-            Whether to also reset the real features. Since in many cases the real dataset does not change, the features can cached them to avoid recomputing them which is costly. Set this to False if your dataset does not change.
-
-        kwargs : (Any)
-            Additional keyword arguments, see Advanced metric settings for more info.
-
-
-        """
-
-        # Assert n_features is valid
-        assert n_features in [
-            64,
-            192,
-            768,
-            2048,
-        ], "n_features must be one of [64, 192, 768, 2048], aborting..."
-
-        assert model is not None, "Model must be provided, aborting..."
-
-        # this_device = "cpu"
-        # this_device = "cuda:0" if torch.cuda.is_available() else "cpu"
-        model.to(this_device)
-        model.eval()
-        dataloader = val_loader
-
-        # Init empty torch tensor
-        imgs_dist1 = torch.empty(
-            (0, 3, self.resolution_hw[0], self.resolution_hw[1]),
-            dtype=torch.float32,
-        ).to(this_device)
-        imgs_dist2 = torch.empty(
-            (0, 3, self.resolution_hw[0], self.resolution_hw[1]),
-            dtype=torch.float32,
-        ).to(this_device)
-
-        with torch.no_grad():  # No need to track the gradients
-            for x, _ in dataloader:
-                # Move tensor to the proper device
-                x = x.to(this_device)
-                x_hat = model(x)
-                # Expand dim 1 to 3 for x and x_hat
-                x_expanded = x.expand(-1, 3, -1, -1)
-                x_hat_expanded = x_hat.expand(-1, 3, -1, -1)
-
-                imgs_dist1 = torch.cat((imgs_dist1, x_expanded), dim=0)
-                imgs_dist2 = torch.cat((imgs_dist2, x_hat_expanded), dim=0)
-
-        # Get fid
-        startime = time.time()
-        fid_obj = FrechetInceptionDistance(
-            feature=n_features, normalize=True, reset_real_features=False
-        ).to(this_device)
-        fid_obj.update(imgs_dist1, real=True)
-        fid_obj.update(imgs_dist2, real=False)
-        fid = fid_obj.compute()
-
-        return fid
-
     def _set_ray_tuner(self):
         """Set ray tuner"""
+
+        reporter = CLIReporter()
+        reporter.add_metric_column("train_loss")
+        reporter.add_metric_column("val_loss")
+        reporter.add_metric_column("mse_loss")
+        reporter.add_metric_column("ssim_loss")
+        reporter.add_metric_column("fid_loss")
+        reporter.add_metric_column("kid_mean")
+        reporter.add_metric_column("kid_std")
 
         trainable = tune.with_resources(TrainableVAE, {"gpu": 0.25})
         trainable_with_parameters = tune.with_parameters(
@@ -702,13 +654,12 @@ class RetinaVAE(nn.Module):
                 "val_data": self.val_data,
                 "val_labels": self.val_labels,
             },
-            epochs=self.epochs,
+            # epochs=self.epochs,
             device=self.device,
             methods={
                 "_train_epoch": self._train_epoch,
                 "_validate_epoch": self._validate_epoch,
                 "_augment_and_get_dataloader": self._augment_and_get_dataloader,
-                "_get_fid": self._get_fid,
             },
         )
 
@@ -737,7 +688,7 @@ class RetinaVAE(nn.Module):
             search_alg=tune.search.basic_variant.BasicVariantGenerator(
                 constant_grid_search=True,
             ),
-            metric="fid64",
+            metric="val_loss",
             mode="min",
         )
 
@@ -745,7 +696,8 @@ class RetinaVAE(nn.Module):
         # for API, see https://docs.ray.io/en/latest/ray-air/package-ref.html#ray.air.config.RunConfig
         run_config = (
             air.RunConfig(
-                stop={"training_iteration": 1},
+                stop={"training_iteration": self.epochs},
+                progress_reporter=reporter,
                 local_dir=self.ray_dir,
                 checkpoint_config=air.CheckpointConfig(
                     checkpoint_at_end=True,
@@ -1283,18 +1235,63 @@ class RetinaVAE(nn.Module):
         # Set evaluation mode for encoder and decoder
         vae.eval()
         val_loss = 0.0
+        vae.mse.reset()
+        vae.fid.reset()
+        vae.kid.reset()
+        vae.ssim.reset()
+
         with torch.no_grad():  # No need to track the gradients
             for x, _ in dataloader:
                 # Move tensor to the proper device
                 x = x.to(device)
-                # Encode data
-                encoded_data = vae.encoder(x)
-                # Decode data
                 x_hat = vae(x)
                 loss = ((x - x_hat) ** 2).sum() + vae.encoder.kl
                 val_loss += loss.item()
 
-        return val_loss / len(dataloader.dataset)
+                vae.mse.update(x_hat, x)  # MSE
+                vae.ssim.update(x_hat, x)  # SSIM
+
+                # Expand dim 1 to 3 for x and x_hat
+                x_expanded = x.expand(-1, 3, -1, -1)
+                x_hat_expanded = x_hat.expand(-1, 3, -1, -1)
+
+                # imgs_dist1 = torch.cat((imgs_dist1, x_expanded), dim=0)
+                # imgs_dist2 = torch.cat((imgs_dist2, x_hat_expanded), dim=0)
+
+                vae.fid.update(x_hat_expanded, real=False)  # FID
+                vae.fid.update(x_expanded, real=True)  # FID
+                vae.kid.update(x_hat_expanded, real=False)  # KID
+                vae.kid.update(x_hat_expanded, real=True)  # KID
+
+        n_samples = len(dataloader.dataset)
+        val_loss_epoch = val_loss / n_samples
+        mse_loss_epoch = vae.mse.compute()
+        fid_loss_epoch = vae.fid.compute()
+        kid_mean_epoch, kid_std_epoch = vae.kid.compute()
+        ssim_loss_epoch = vae.ssim.compute()
+
+        # Test all output variables for type, and covert to value if needed
+        if isinstance(val_loss_epoch, torch.Tensor):
+            val_loss_epoch = val_loss_epoch.item()
+        if isinstance(mse_loss_epoch, torch.Tensor):
+            mse_loss_epoch = mse_loss_epoch.item()
+        if isinstance(fid_loss_epoch, torch.Tensor):
+            fid_loss_epoch = fid_loss_epoch.item()
+        if isinstance(kid_mean_epoch, torch.Tensor):
+            kid_mean_epoch = kid_mean_epoch.item()
+        if isinstance(kid_std_epoch, torch.Tensor):
+            kid_std_epoch = kid_std_epoch.item()
+        if isinstance(ssim_loss_epoch, torch.Tensor):
+            ssim_loss_epoch = ssim_loss_epoch.item()
+
+        return (
+            val_loss_epoch,
+            mse_loss_epoch,
+            ssim_loss_epoch,
+            fid_loss_epoch,
+            kid_mean_epoch,
+            kid_std_epoch,
+        )
 
     def _plot_ae_outputs(self, encoder, decoder, ds_name="test_ds"):
         """
@@ -1347,28 +1344,46 @@ class RetinaVAE(nn.Module):
         plt.suptitle(ds_name)
 
     def _train(self):
-
+        """
+        Train for training_mode = train_model
+        """
         for epoch in range(self.epochs):
             train_loss = self._train_epoch(
                 self.vae, self.device, self.train_loader, self.optim
             )
-            val_loss = self._validate_epoch(self.vae, self.device, self.val_loader)
+            (
+                val_loss_epoch,
+                mse_loss_epoch,
+                ssim_loss_epoch,
+                fid_loss_epoch,
+                kid_mean_epoch,
+                kid_std_epoch,
+            ) = self._validate_epoch(self.vae, self.device, self.val_loader)
 
             # For every 100th epoch, print the outputs of the autoencoder
             if epoch == 0 or epoch % 100 == 0:
                 print(
-                    f" EPOCH {epoch + 1}/{self.epochs} \t train loss {train_loss:.3f} \t val loss {val_loss:.3f}"
+                    f""" 
+                    EPOCH {epoch + 1}/{self.epochs} \t train_loss {train_loss:.3f} \t val loss {val_loss_epoch:.3f} \n
+                    mse {mse_loss_epoch} \t ssim {ssim_loss_epoch} \t fid {fid_loss_epoch} \n
+                    kid mean {kid_mean_epoch} \t kid std {kid_std_epoch}
+                    """
                 )
 
-                # Add train loss and val loss to tensorboard SummaryWriter
-                self.writer.add_scalars(
-                    f"Training_{self.timestamp}",
-                    {
-                        "loss/train": train_loss,
-                        "loss/val": val_loss,
-                    },
-                    epoch,
-                )
+            # Add train loss and val loss to tensorboard SummaryWriter
+            self.writer.add_scalars(
+                f"Training_{self.timestamp}",
+                {
+                    "loss/train": train_loss,
+                    "loss/val": val_loss_epoch,
+                    "mse/val": mse_loss_epoch,
+                    "fid/val": fid_loss_epoch,
+                    "kid_mean/val": kid_mean_epoch,
+                    "kid_std/val": kid_std_epoch,
+                    "ssim/val": ssim_loss_epoch,
+                },
+                epoch,
+            )
 
     def _reconstruct_random_images(self):
         with torch.no_grad():
