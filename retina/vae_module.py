@@ -22,6 +22,8 @@ from torchmetrics.image.kid import KernelInceptionDistance
 from torchmetrics import StructuralSimilarityIndexMeasure
 from torchmetrics import MeanSquaredError
 
+import torch._dynamo as dynamo
+
 from ray import air, tune
 from ray.tune.schedulers import ASHAScheduler
 from ray.tune import CLIReporter
@@ -361,14 +363,12 @@ class TrainableVAE(tune.Trainable):
         self,
         config,
         data_dict=None,
-        # epochs=None,
         device=None,
         methods=None,
     ):
 
         # Assert that none of the optional arguments are None
         assert data_dict is not None, "val_ds is None, aborting..."
-        # assert epochs is not None, "epochs is None, aborting..."
         assert device is not None, "device is None, aborting..."
         assert methods is not None, "methods is None, aborting..."
 
@@ -405,17 +405,14 @@ class TrainableVAE(tune.Trainable):
             shuffle=True,
         )
 
-        # self.epochs = epochs
         self.device = device
         self._train_epoch = methods["_train_epoch"]
         self._validate_epoch = methods["_validate_epoch"]
-        # self._get_fid = methods["_get_fid"]
 
         self.model = VariationalAutoencoder(
             latent_dims=config.get("latent_dim"), device=self.device
         )
         self.model.to(self.device)
-        # self.model = torch.compile(self.model)
 
         self.optim = torch.optim.Adam(
             self.model.parameters(), lr=config.get("lr"), weight_decay=1e-5
@@ -430,25 +427,41 @@ class TrainableVAE(tune.Trainable):
             val_loss_epoch,
             mse_loss_epoch,
             ssim_loss_epoch,
-            fid_loss_epoch,
             kid_mean_epoch,
             kid_std_epoch,
         ) = self._validate_epoch(self.model, self.device, self.val_loader)
-        # fid64 = self._get_fid(self.model, self.device, self.val_loader, n_features=64)
 
-        print(
-            f"""{self.training_iteration} - train_loss: {train_loss:.4f} - val_loss: {val_loss_epoch:.4f} - ssim {ssim_loss_epoch} - 
-            kid mean {kid_mean_epoch} - kid std {kid_std_epoch}"""
+        # Printing slows down the training process
+        # print(
+        #     f"""{self.training_iteration} - train_loss: {train_loss:.3f} - val_loss: {val_loss_epoch:.3f} - ssim {ssim_loss_epoch:.3f} -
+        #     kid mean {kid_mean_epoch:.3f} - kid std {kid_std_epoch:.3f}"""
+        # )
+
+        # Convert to float, del & empty cache to free GPU memory
+        train_loss_out = float(train_loss)
+        val_loss_out = float(val_loss_epoch)
+        mse_loss_out = float(mse_loss_epoch)
+        ssim_loss_out = float(ssim_loss_epoch)
+        kid_mean_out = float(kid_mean_epoch)
+        kid_std_out = float(kid_std_epoch)
+
+        del (
+            train_loss,
+            val_loss_epoch,
+            mse_loss_epoch,
+            ssim_loss_epoch,
+            kid_mean_epoch,
+            kid_std_epoch,
         )
-        # print(f"{self.training_iteration=}")
-        # exit()
+        torch.cuda.empty_cache()
+
         return {
-            "train_loss": train_loss,
-            "val_loss": val_loss_epoch,
-            "mse_loss": mse_loss_epoch,
-            "ssim_loss": ssim_loss_epoch,
-            "kid_mean": kid_mean_epoch,
-            "kid_std": kid_std_epoch,
+            "train_loss": train_loss_out,
+            "val_loss": val_loss_out,
+            "mse_loss": mse_loss_out,
+            "ssim_loss": ssim_loss_out,
+            "kid_mean": kid_mean_out,
+            "kid_std": kid_std_out,
         }
 
     def save_checkpoint(self, tmp_checkpoint_dir):
@@ -465,10 +478,14 @@ class RetinaVAE:
     """
     Class to apply variational autoencoder to Apricot retina data and run single learning run
     or Ray[Tune] hyperparameter search.
+
+    Refereces for validation metrics:
+    FID : Heusel_2017_NIPS
+    KID : Binkowski_2018_ICLR
+    SSIM : Wang_2009_IEEESignProcMag, Wang_2004_IEEETransImProc
     """
 
     def __init__(self, apricot_data_folder, gc_type, response_type):
-        # def __init__(self):
         super().__init__()
 
         self.apricot_data_folder = apricot_data_folder
@@ -484,7 +501,7 @@ class RetinaVAE:
         self.resolution_hw = (28, 28)
 
         self.batch_size = 128  # None will take the batch size from test_split size.
-        self.epochs = 100
+        self.epochs = 1000
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
 
@@ -525,6 +542,8 @@ class RetinaVAE:
 
         training_mode = "tune_model"  # "train_model" or "tune_model" or "load_model"
 
+        # TÄHÄN JÄIT: CLI reporter metrics, viz metrics, RFs imgs
+
         match training_mode:
             case "train_model":
                 # Create datasets and dataloaders
@@ -550,6 +569,13 @@ class RetinaVAE:
                 self.tb_log_folder = "tb_logs"
                 self._prep_tensorboard_logging()
 
+                # # Only Linux supported
+                # explanation, out_guards, graphs, ops_per_graph = dynamo.explain(
+                #     self._train()
+                # )
+                # print(explanation)
+                # exit()
+
                 # Train
                 self._train()
                 self.writer.flush()
@@ -558,14 +584,21 @@ class RetinaVAE:
                 # Save model
                 model_path = self._save_model()
 
-                # TÄHÄN JÄIT: CLI reporter metrics, viz metrics, RFs imgs
-
-                # Refereces:
-                # FID : Heusel_2017_NIPS
-                # KID : Binkowski_2018_ICLR
-                # SSIM : Wang_2009_IEEESignProcMag, Wang_2004_IEEETransImProc
-
             case "tune_model":
+
+                # This will be captured at _set_ray_tuner
+                # Search space of the tuning job. Both preprocessor and dataset can be tuned here.
+                # Use grid search to try out all values for each parameter. values: iterable
+                # Grid search: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#ray.tune.grid_search
+                # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
+                self.search_space = {
+                    "lr": [0.001, 0.0005],
+                    "latent_dim": [2, 4],
+                    "batch_size": [64],
+                    "rotation": [0, 10, 45],
+                    "translation": [0.1],
+                    "noise": [0],
+                }
 
                 tuner = self._set_ray_tuner()
                 self.result_grid = tuner.fit()
@@ -660,17 +693,13 @@ class RetinaVAE:
         )
 
         NUM_MODELS = 1
-        # Search space of the tuning job. Both preprocessor and dataset can be tuned here.
-        # Use grid search to try out all values for each parameter. values: iterable
-        # Grid search: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#ray.tune.grid_search
-        # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
         param_space = {
-            "lr": tune.grid_search([0.001]),
-            "latent_dim": tune.grid_search([2]),
-            "batch_size": tune.grid_search([64]),
-            "rotation": tune.grid_search([0, 10]),
-            "translation": tune.grid_search([0]),
-            "noise": tune.grid_search([0]),
+            "lr": tune.grid_search(self.search_space["lr"]),
+            "latent_dim": tune.grid_search(self.search_space["latent_dim"]),
+            "batch_size": tune.grid_search(self.search_space["batch_size"]),
+            "rotation": tune.grid_search(self.search_space["rotation"]),
+            "translation": tune.grid_search(self.search_space["translation"]),
+            "noise": tune.grid_search(self.search_space["noise"]),
             "model_id": tune.grid_search(
                 ["model_{}".format(i) for i in range(NUM_MODELS)]
             ),
@@ -1354,16 +1383,34 @@ class RetinaVAE:
                 """
             )
 
+            # Convert to float, del & empty cache to free GPU memory
+            train_loss_out = float(train_loss)
+            val_loss_out = float(val_loss_epoch)
+            mse_loss_out = float(mse_loss_epoch)
+            ssim_loss_out = float(ssim_loss_epoch)
+            kid_mean_out = float(kid_mean_epoch)
+            kid_std_out = float(kid_std_epoch)
+
+            del (
+                train_loss,
+                val_loss_epoch,
+                mse_loss_epoch,
+                ssim_loss_epoch,
+                kid_mean_epoch,
+                kid_std_epoch,
+            )
+            torch.cuda.empty_cache()
+
             # Add train loss and val loss to tensorboard SummaryWriter
             self.writer.add_scalars(
                 f"Training_{self.timestamp}",
                 {
-                    "loss/train": train_loss,
-                    "loss/val": val_loss_epoch,
-                    "mse/val": mse_loss_epoch,
-                    "kid_mean/val": kid_mean_epoch,
+                    "loss/train": train_loss_out,
+                    "loss/val": val_loss_out,
+                    "mse/val": mse_loss_out,
+                    "ssim/val": ssim_loss_out,
+                    "kid_mean/val": kid_mean_out,
                     "kid_std/val": kid_std_epoch,
-                    "ssim/val": ssim_loss_epoch,
                 },
                 epoch,
             )

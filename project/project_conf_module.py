@@ -261,7 +261,7 @@ elif my_retina["gc_type"] == "midget":
     )
 
 
-profile = True
+profile = False
 
 if __name__ == "__main__":
 
