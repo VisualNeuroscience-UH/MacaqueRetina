@@ -540,7 +540,7 @@ class RetinaVAE:
         # self._prep_training()
         self._get_and_split_apricot_data()
 
-        training_mode = "tune_model"  # "train_model" or "tune_model" or "load_model"
+        training_mode = "load_model"  # "train_model" or "tune_model" or "load_model"
 
         # TÄHÄN JÄIT: CLI reporter metrics, viz metrics, RFs imgs
 
@@ -623,10 +623,9 @@ class RetinaVAE:
             case "load_model":
                 # Load previously calculated model for vizualization
                 # Load model to self.vae and return state dict. The numbers are in the state dict.
-                # if model_path = None, loads the most recent model.
-                # my_model_path = "/opt2/Git_Repos/MacaqueRetina/retina/models/model_20230126-173032.pt"
-                my_model_path = None
-                state_dict = self._load_model(model_path=my_model_path)
+                # my_model_path = "C:\Users\simov\Laskenta\GitRepos\MacaqueRetina\retina\models" # For single trials from "train_model"
+                trial_name = "TrainableVAE_0b9bb_00006"  # From ray_results table/folder
+                state_dict = self._load_model(model_path=None, trial_name=trial_name)
 
         self.test_loader = self._augment_and_get_dataloader(
             data_type="test", shuffle=False
@@ -756,7 +755,9 @@ class RetinaVAE:
         return models_folder
 
     def _save_model(self):
-        """Save model"""
+        """
+        Save model for single trial, a.k.a. 'train_model' training_mode
+        """
         model_path = f"{self.models_folder}/model_{self.timestamp}.pt"
         # Create models folder if it does not exist using pathlib
 
@@ -780,6 +781,13 @@ class RetinaVAE:
             model.load_state_dict(torch.load(checkpoint_path))
             return model, latent_dim
 
+        if not hasattr(self, "vae"):
+            # Note that if you start parametrically vary the model architecture, you need to save the model architecture as well or
+            # rebuild it here (c.f. latent_dims)
+            self.vae = VariationalAutoencoder(
+                latent_dims=self.latent_dim, device=self.device
+            )
+
         if best_result is not None:
             # ref https://medium.com/distributed-computing-with-ray/simple-end-to-end-ml-from-selection-to-serving-with-ray-tune-and-ray-serve-10f5564d33ba
             log_dir = best_result.log_dir
@@ -796,7 +804,7 @@ class RetinaVAE:
             self.vae = model.to(self.device)
 
         elif model_path is not None:
-            if model_path is None or not Path(model_path).exists():
+            if not Path(model_path).exists():
 
                 # Get the most recent model. Max recognizes the timestamp with the largest value
                 try:
@@ -819,11 +827,27 @@ class RetinaVAE:
         elif trial_name is not None:
             # trial_name = "TrainableVAE_XXX" from ray.tune results table.
             # Implement later when you need it. Trial name should be unique.
-            results_df = self.result_grid.get_dataframe()
-            log_dir = [d for d in results_df["logdir"] if trial_name in d][0]
-            model, latent_dim = _get_model_and_latent_dim_from_logdir(log_dir)
-            self.vae = model.to(self.device)
-            self.latent_dim = latent_dim
+            # Search under self.ray_dir for folder with the trial name. Under that folder, there should be a checkpoint folder.
+            # Load the model from the checkpoint folder.
+            correct_trial_folder = [
+                p for p in Path(self.ray_dir).glob(f"**/") if trial_name in p.stem
+            ][0]
+            pdb.set_trace()
+            # TÄHÄN JÄIT: LATAA TÄSTÄ TUNER JA KÄYTÄ TUNER.GET_RESULTS() HAKEMAAN RESULT GRID. SITÄ KAUTTA SAAT LATENT DIMIN.
+            # Sen jälkeen ks paperi
+            tuner = tune.Tuner.restore(str(correct_trial_folder))
+            results = tuner.get_results()
+            checkpoint_folder_name = [
+                p for p in Path(correct_trial_folder).glob("checkpoint_*")
+            ][0]
+            model_path = Path.joinpath(checkpoint_folder_name, "model.pth")
+
+            try:
+                self.vae.load_state_dict(torch.load(model_path))
+            except RuntimeError:
+                pass
+
+            pdb.set_trace()
 
         return self.vae.state_dict()
 
