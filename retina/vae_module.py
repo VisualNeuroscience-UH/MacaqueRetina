@@ -324,9 +324,9 @@ class VariationalAutoencoder(nn.Module):
         self.decoder = Decoder(latent_dims)
 
         self.mse = MeanSquaredError()
-        self.fid = FrechetInceptionDistance(
-            n_features=64, reset_real_features=False, normalize=True
-        )
+        # self.fid = FrechetInceptionDistance(
+        #     n_features=64, reset_real_features=False, normalize=True
+        # )
         self.kid = KernelInceptionDistance(
             n_features=64, reset_real_features=False, normalize=True, subset_size=4
         )
@@ -415,6 +415,7 @@ class TrainableVAE(tune.Trainable):
             latent_dims=config.get("latent_dim"), device=self.device
         )
         self.model.to(self.device)
+        # self.model = torch.compile(self.model)
 
         self.optim = torch.optim.Adam(
             self.model.parameters(), lr=config.get("lr"), weight_decay=1e-5
@@ -437,7 +438,7 @@ class TrainableVAE(tune.Trainable):
 
         print(
             f"""{self.training_iteration} - train_loss: {train_loss:.4f} - val_loss: {val_loss_epoch:.4f} - ssim {ssim_loss_epoch} - 
-            fid {fid_loss_epoch} - kid mean {kid_mean_epoch} - kid std {kid_std_epoch}"""
+            kid mean {kid_mean_epoch} - kid std {kid_std_epoch}"""
         )
         # print(f"{self.training_iteration=}")
         # exit()
@@ -446,7 +447,6 @@ class TrainableVAE(tune.Trainable):
             "val_loss": val_loss_epoch,
             "mse_loss": mse_loss_epoch,
             "ssim_loss": ssim_loss_epoch,
-            "fid_loss": fid_loss_epoch,
             "kid_mean": kid_mean_epoch,
             "kid_std": kid_std_epoch,
         }
@@ -484,7 +484,7 @@ class RetinaVAE:
         self.resolution_hw = (28, 28)
 
         self.batch_size = 128  # None will take the batch size from test_split size.
-        self.epochs = 10
+        self.epochs = 100
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
 
@@ -558,11 +558,8 @@ class RetinaVAE:
                 # Save model
                 model_path = self._save_model()
 
-                # TÄHÄN JÄIT: KÄYTÄ RAY CLIReporteria, JOTTA SAAT FID YM TULOKSET TAULUKKOON
-                # SELVITÄ FID TULOSTEN MERKITYS JA LAATU -- ESIM KUVAT KERROKSISTA, MITÄ
-                # MERKITSEVÄT, MINKÄLAISIA "RESEPTIIVISIÄ KENTTIÄ" EDUSTAVAT.
-                # SEN JÄLKEEN SSIM, FIT STATS, SEKÄ MEAN SD , HIST MEASURES KUTEN KL DIVERGENCE.
-                # NÄIDEN AVULLA NÄET KVANTITATIIVISESTI MITEN HYVIN ML TOIMII
+                # TÄHÄN JÄIT: CLI reporter metrics, viz metrics, RFs imgs
+
                 # Refereces:
                 # FID : Heusel_2017_NIPS
                 # KID : Binkowski_2018_ICLR
@@ -641,7 +638,6 @@ class RetinaVAE:
         reporter.add_metric_column("val_loss")
         reporter.add_metric_column("mse_loss")
         reporter.add_metric_column("ssim_loss")
-        reporter.add_metric_column("fid_loss")
         reporter.add_metric_column("kid_mean")
         reporter.add_metric_column("kid_std")
 
@@ -672,7 +668,7 @@ class RetinaVAE:
             "lr": tune.grid_search([0.001]),
             "latent_dim": tune.grid_search([2]),
             "batch_size": tune.grid_search([64]),
-            "rotation": tune.grid_search([0, 10, 20, 40]),
+            "rotation": tune.grid_search([0, 10]),
             "translation": tune.grid_search([0]),
             "noise": tune.grid_search([0]),
             "model_id": tune.grid_search(
@@ -1236,9 +1232,8 @@ class RetinaVAE:
         vae.eval()
         val_loss = 0.0
         vae.mse.reset()
-        vae.fid.reset()
-        vae.kid.reset()
         vae.ssim.reset()
+        vae.kid.reset()
 
         with torch.no_grad():  # No need to track the gradients
             for x, _ in dataloader:
@@ -1255,40 +1250,31 @@ class RetinaVAE:
                 x_expanded = x.expand(-1, 3, -1, -1)
                 x_hat_expanded = x_hat.expand(-1, 3, -1, -1)
 
-                # imgs_dist1 = torch.cat((imgs_dist1, x_expanded), dim=0)
-                # imgs_dist2 = torch.cat((imgs_dist2, x_hat_expanded), dim=0)
-
-                vae.fid.update(x_hat_expanded, real=False)  # FID
-                vae.fid.update(x_expanded, real=True)  # FID
                 vae.kid.update(x_hat_expanded, real=False)  # KID
                 vae.kid.update(x_hat_expanded, real=True)  # KID
 
         n_samples = len(dataloader.dataset)
         val_loss_epoch = val_loss / n_samples
         mse_loss_epoch = vae.mse.compute()
-        fid_loss_epoch = vae.fid.compute()
-        kid_mean_epoch, kid_std_epoch = vae.kid.compute()
         ssim_loss_epoch = vae.ssim.compute()
+        kid_mean_epoch, kid_std_epoch = vae.kid.compute()
 
         # Test all output variables for type, and covert to value if needed
         if isinstance(val_loss_epoch, torch.Tensor):
             val_loss_epoch = val_loss_epoch.item()
         if isinstance(mse_loss_epoch, torch.Tensor):
             mse_loss_epoch = mse_loss_epoch.item()
-        if isinstance(fid_loss_epoch, torch.Tensor):
-            fid_loss_epoch = fid_loss_epoch.item()
+        if isinstance(ssim_loss_epoch, torch.Tensor):
+            ssim_loss_epoch = ssim_loss_epoch.item()
         if isinstance(kid_mean_epoch, torch.Tensor):
             kid_mean_epoch = kid_mean_epoch.item()
         if isinstance(kid_std_epoch, torch.Tensor):
             kid_std_epoch = kid_std_epoch.item()
-        if isinstance(ssim_loss_epoch, torch.Tensor):
-            ssim_loss_epoch = ssim_loss_epoch.item()
 
         return (
             val_loss_epoch,
             mse_loss_epoch,
             ssim_loss_epoch,
-            fid_loss_epoch,
             kid_mean_epoch,
             kid_std_epoch,
         )
@@ -1355,20 +1341,18 @@ class RetinaVAE:
                 val_loss_epoch,
                 mse_loss_epoch,
                 ssim_loss_epoch,
-                fid_loss_epoch,
                 kid_mean_epoch,
                 kid_std_epoch,
             ) = self._validate_epoch(self.vae, self.device, self.val_loader)
 
             # For every 100th epoch, print the outputs of the autoencoder
-            if epoch == 0 or epoch % 100 == 0:
-                print(
-                    f""" 
-                    EPOCH {epoch + 1}/{self.epochs} \t train_loss {train_loss:.3f} \t val loss {val_loss_epoch:.3f} \n
-                    mse {mse_loss_epoch} \t ssim {ssim_loss_epoch} \t fid {fid_loss_epoch} \n
-                    kid mean {kid_mean_epoch} \t kid std {kid_std_epoch}
-                    """
-                )
+            # if epoch == 0 or epoch % 100 == 0:
+            print(
+                f""" 
+                EPOCH {epoch + 1}/{self.epochs} \t train_loss {train_loss:.3f} \t val loss {val_loss_epoch:.3f}
+                mse {mse_loss_epoch:.3f} \t ssim {ssim_loss_epoch:.3f} \t kid mean {kid_mean_epoch:.3f} \t kid std {kid_std_epoch:.3f}
+                """
+            )
 
             # Add train loss and val loss to tensorboard SummaryWriter
             self.writer.add_scalars(
@@ -1377,7 +1361,6 @@ class RetinaVAE:
                     "loss/train": train_loss,
                     "loss/val": val_loss_epoch,
                     "mse/val": mse_loss_epoch,
-                    "fid/val": fid_loss_epoch,
                     "kid_mean/val": kid_mean_epoch,
                     "kid_std/val": kid_std_epoch,
                     "ssim/val": ssim_loss_epoch,
