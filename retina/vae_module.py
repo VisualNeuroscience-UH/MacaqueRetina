@@ -46,6 +46,7 @@ from itertools import product
 import os
 import time
 import subprocess
+import itertools
 
 
 class AugmentedDataset(torch.utils.data.Dataset):
@@ -459,8 +460,8 @@ class TrainableVAE(tune.Trainable):
         return {
             "train_loss": train_loss_out,
             "val_loss": val_loss_out,
-            "mse_loss": mse_loss_out,
-            "ssim_loss": ssim_loss_out,
+            "mse": mse_loss_out,
+            "ssim": ssim_loss_out,
             "kid_mean": kid_mean_out,
             "kid_std": kid_std_out,
         }
@@ -502,7 +503,7 @@ class RetinaVAE:
         self.resolution_hw = (28, 28)
 
         self.batch_size = 128  # None will take the batch size from test_split size.
-        self.epochs = 2000
+        self.epochs = 1000
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
 
@@ -541,9 +542,21 @@ class RetinaVAE:
         # self._prep_training()
         self._get_and_split_apricot_data()
 
-        training_mode = "load_model"  # "train_model" or "tune_model" or "load_model"
+        # This will be captured at _set_ray_tuner
+        # Search space of the tuning job. Both preprocessor and dataset can be tuned here.
+        # Use grid search to try out all values for each parameter. values: iterable
+        # Grid search: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#ray.tune.grid_search
+        # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
+        self.search_space = {
+            "lr": [0.001],
+            "latent_dim": [2, 4, 8, 16, 32, 64, 128, 256],
+            "batch_size": [64],
+            "rotation": [30],
+            "translation": [0],
+            "noise": [0],
+        }
 
-        # TÄHÄN JÄIT: CLI reporter metrics, viz metrics, RFs imgs
+        training_mode = "load_model"  # "train_model" or "tune_model" or "load_model"
 
         match training_mode:
             case "train_model":
@@ -580,20 +593,6 @@ class RetinaVAE:
 
             case "tune_model":
 
-                # This will be captured at _set_ray_tuner
-                # Search space of the tuning job. Both preprocessor and dataset can be tuned here.
-                # Use grid search to try out all values for each parameter. values: iterable
-                # Grid search: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#ray.tune.grid_search
-                # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
-                self.search_space = {
-                    "lr": [0.0005, 0.005],
-                    "latent_dim": [2, 16],
-                    "batch_size": [64],
-                    "rotation": [10, 45],
-                    "translation": [0.1, 0.3],
-                    "noise": [0],
-                }
-
                 tuner = self._set_ray_tuner()
                 self.result_grid = tuner.fit()
 
@@ -602,7 +601,7 @@ class RetinaVAE:
                 print("Longest training time:", results_df["time_total_s"].max())
 
                 best_result = self.result_grid.get_best_result(
-                    metric="kid_std", mode="max"
+                    metric="val_loss", mode="min"
                 )
                 print("Best result:", best_result)
                 result_df = best_result.metrics_dataframe
@@ -621,17 +620,20 @@ class RetinaVAE:
                 # Load previously calculated model for vizualization
                 # Load model to self.vae and return state dict. The numbers are in the state dict.
                 # my_model_path = "C:\Users\simov\Laskenta\GitRepos\MacaqueRetina\retina\models" # For single trials from "train_model"
-                trial_name = "TrainableVAE_827a3_00004"  # From ray_results table/folder
+                trial_name = "TrainableVAE_c5bfd_00000"  # From ray_results table/folder
                 state_dict, results_grid, tb_dir = self._load_model(
                     model_path=None, trial_name=trial_name
                 )
                 # # Evoke new subprocess and run tensorboard at tb_dir folder
                 # self._run_tensorboard(tb_dir=tb_dir)
 
+                # Dep vars: train_loss, val_loss, mse, ssim, kid_std, kid_mean,
                 self._plot_results(
                     results_grid=results_grid,
                     dep_var="val_loss",
-                    labels=["lr", "latent_dim", "rotation", "translation"],
+                    labels=[
+                        "model_id"
+                    ],  # Put here the variables which were varied in the search space in this trial.
                 )
 
                 print(results_grid)
@@ -642,60 +644,85 @@ class RetinaVAE:
             data_type="test", shuffle=False
         )
 
-        # # Figure 1
-        # self._plot_ae_outputs(
-        #     self.vae.encoder,
-        #     self.vae.decoder,
-        #     ds_name="test_ds",
-        #     sample_start_stop=[10, 25],
-        # )
+        # Figure 1
+        self._plot_ae_outputs(
+            self.vae.encoder,
+            self.vae.decoder,
+            ds_name="test_ds",
+            sample_start_stop=[10, 25],
+        )
 
-        # if training_mode == "train_model":
-        #     self._plot_ae_outputs(
-        #         self.vae.encoder, self.vae.decoder, ds_name="train_ds"
-        #     )
-        #     self._plot_ae_outputs(
-        #         self.vae.encoder, self.vae.decoder, ds_name="valid_ds"
-        #     )
+        if training_mode == "train_model":
+            self._plot_ae_outputs(
+                self.vae.encoder, self.vae.decoder, ds_name="train_ds"
+            )
+            self._plot_ae_outputs(
+                self.vae.encoder, self.vae.decoder, ds_name="valid_ds"
+            )
 
-        # self.vae.eval()
+        self.vae.eval()
 
-        # # Figure 2
-        # self._reconstruct_random_images()
+        # Figure 2
+        self._reconstruct_random_images()
 
-        # self._reconstruct_grid_images()
+        self._reconstruct_grid_images()
 
-        # encoded_samples = self._get_encoded_samples(ds_name="test_ds")
+        encoded_samples = self._get_encoded_samples(ds_name="test_ds")
 
-        # # Figure 3
-        # self._plot_latent_space(encoded_samples)
+        # Figure 3
+        self._plot_latent_space(encoded_samples)
 
-        # # Figure 4
-        # self._plot_tsne_space(encoded_samples)
+        # Figure 4
+        self._plot_tsne_space(encoded_samples)
 
-        # if training_mode == "train_model":
-        #     encoded_samples = self._get_encoded_samples(ds_name="train_ds")
-        #     self._plot_latent_space(encoded_samples)
-        #     self._plot_tsne_space(encoded_samples)
+        if training_mode == "train_model":
+            encoded_samples = self._get_encoded_samples(ds_name="train_ds")
+            self._plot_latent_space(encoded_samples)
+            self._plot_tsne_space(encoded_samples)
 
     def _plot_results(self, results_grid, dep_var="val_loss", labels=None):
         """Plot results from ray tune"""
+
+        df = results_grid.get_dataframe()
+        # Find all columns with string "config/"
+        config_cols = [x for x in df.columns if "config/" in x]
+
+        # From the config_cols, identify columns where there is more than one unique value
+        # These are the columns which were varied in the search space
+        varied_cols = []
+        for col in config_cols:
+            if len(df[col].unique()) > 1:
+                varied_cols.append(col)
+
+        # Drop the "config/" part from the column names
+        varied_cols = [x.replace("config/", "") for x in varied_cols]
+
+        num_colors = len(results_grid.get_dataframe())
+        colors = plt.cm.get_cmap("tab20", num_colors).colors
+
+        # Create a new plot for each label
+        color_idx = 0
         ax = None
-        label = None
         for result in results_grid:
-            if labels is not None:
-                # result = ''.join("&markers=%s" % ','.join(map(str, x)) for x in markers)
-                # label = f"{labels[0]}={result.config[labels[0]]}, {labels[1]}={result.config[labels[1]]}"
-                label = ",".join(f"{x}={result.config[x]}" for x in labels)
+            label = ",".join(f"{x}={result.config[x]}" for x in varied_cols)
+            print(label)
             if ax is None:
                 ax = result.metrics_dataframe.plot(
-                    "training_iteration", dep_var, label=label
+                    "training_iteration",
+                    dep_var,
+                    label=label,
+                    color=colors[color_idx],
                 )
             else:
                 result.metrics_dataframe.plot(
-                    "training_iteration", dep_var, ax=ax, label=label
+                    "training_iteration",
+                    dep_var,
+                    ax=ax,
+                    label=label,
+                    color=colors[color_idx],
                 )
-        ax.set_title(f"{dep_var} vs. training iteration for all trials")
+            color_idx += 1
+        ax.set_title(f"{dep_var} vs. training iteration for {label}")
         ax.set_ylabel(dep_var)
         ax.grid(True)
 
@@ -719,8 +746,8 @@ class RetinaVAE:
         reporter = CLIReporter()
         reporter.add_metric_column("train_loss")
         reporter.add_metric_column("val_loss")
-        reporter.add_metric_column("mse_loss")
-        reporter.add_metric_column("ssim_loss")
+        reporter.add_metric_column("mse")
+        reporter.add_metric_column("ssim")
         reporter.add_metric_column("kid_mean")
         reporter.add_metric_column("kid_std")
 
@@ -742,7 +769,7 @@ class RetinaVAE:
             },
         )
 
-        NUM_MODELS = 1
+        NUM_MODELS = 2
         param_space = {
             "lr": tune.grid_search(self.search_space["lr"]),
             "latent_dim": tune.grid_search(self.search_space["latent_dim"]),
@@ -866,10 +893,14 @@ class RetinaVAE:
             # trial_name = "TrainableVAE_XXX" from ray.tune results table.
             # Search under self.ray_dir for folder with the trial name. Under that folder,
             # there should be a checkpoint folder which contains the model.pth file.
-            correct_trial_folder = [
-                p for p in Path(self.ray_dir).glob(f"**/") if trial_name in p.stem
-            ][0]
-
+            try:
+                correct_trial_folder = [
+                    p for p in Path(self.ray_dir).glob(f"**/") if trial_name in p.stem
+                ][0]
+            except IndexError:
+                raise FileNotFoundError(
+                    f"Could not find trial with name {trial_name}. Aborting..."
+                )
             # However, we need to first check that the model dimensionality is correct.
             # This will be hard coded for checking and changing only latent_dim.
             # More versatile version is necessary if other dimensions are searched.
