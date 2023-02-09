@@ -1344,7 +1344,9 @@ class RetinaVAE:
             kid_std_epoch,
         )
 
-    def _plot_ae_outputs(self, encoder, decoder, ds_name="test_ds"):
+    def _plot_ae_outputs(
+        self, encoder, decoder, ds_name="test_ds", sample_start_stop=[0, 10]
+    ):
         """
         Plot the outputs of the autoencoder, one for each label.
         """
@@ -1358,16 +1360,19 @@ class RetinaVAE:
 
         plt.figure(figsize=(16, 4.5))
         targets = ds.labels.numpy()
-        t_idx = {i: np.where(targets == i)[0][0] for i in self.train_by_labels}
+        # t_idx = {i: np.where(targets == i)[0][0] for i in self.train_by_labels}
+        t_idx = {i: np.where(targets == i)[0][:] for i in self.train_by_labels}
         encoder.eval()
         decoder.eval()
 
-        n = len(self.train_by_labels)
+        n_cell_types = len(self.train_by_labels)
+        samples = np.arange(sample_start_stop[0], sample_start_stop[1])
+        # pdb.set_trace()
 
-        for i in range(n):
-            t_idx_i = t_idx[self.train_by_labels[i]]
-            ax = plt.subplot(2, n, i + 1)
-            img = ds[t_idx_i][0].unsqueeze(0).to(self.device)
+        for i in samples:
+            # this_idx = t_idx[self.train_by_labels[i]]
+            ax = plt.subplot(2, len(samples), i + 1)
+            img = ds[i][0].unsqueeze(0).to(self.device)
             with torch.no_grad():
                 rec_img = decoder(encoder(img))
             plt.imshow(img.cpu().squeeze().numpy(), cmap="gist_gray")
@@ -1376,7 +1381,7 @@ class RetinaVAE:
             ax.text(
                 0.05,
                 0.85,
-                self.apricot_data.data_labels2names_dict[ds[t_idx_i][1].item()],
+                self.apricot_data.data_labels2names_dict[ds[i][1].item()],
                 fontsize=10,
                 color="red",
                 transform=ax.transAxes,
@@ -1384,7 +1389,7 @@ class RetinaVAE:
             if i == 0:
                 ax.set_title("Original images")
 
-            ax = plt.subplot(2, n, i + 1 + n)
+            ax = plt.subplot(2, len(samples), len(samples) + i + 1)
             plt.imshow(rec_img.cpu().squeeze().numpy(), cmap="gist_gray")
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
