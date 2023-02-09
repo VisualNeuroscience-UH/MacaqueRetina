@@ -617,7 +617,7 @@ class RetinaVAE:
                 # Load previously calculated model for vizualization
                 # Load model to self.vae and return state dict. The numbers are in the state dict.
                 # my_model_path = "C:\Users\simov\Laskenta\GitRepos\MacaqueRetina\retina\models" # For single trials from "train_model"
-                trial_name = "TrainableVAE_bfa96_00000"  # From ray_results table/folder
+                trial_name = "TrainableVAE_bfa96_00005"  # From ray_results table/folder
                 state_dict = self._load_model(model_path=None, trial_name=trial_name)
 
         # self.device = torch.device("cpu")
@@ -627,7 +627,12 @@ class RetinaVAE:
         )
 
         # Figure 1
-        self._plot_ae_outputs(self.vae.encoder, self.vae.decoder, ds_name="test_ds")
+        self._plot_ae_outputs(
+            self.vae.encoder,
+            self.vae.decoder,
+            ds_name="test_ds",
+            sample_start_stop=[10, 15],
+        )
 
         if training_mode == "train_model":
             self._plot_ae_outputs(
@@ -1369,10 +1374,11 @@ class RetinaVAE:
         samples = np.arange(sample_start_stop[0], sample_start_stop[1])
         # pdb.set_trace()
 
-        for i in samples:
+        for pos_idx, sample_idx in enumerate(samples):
             # this_idx = t_idx[self.train_by_labels[i]]
-            ax = plt.subplot(2, len(samples), i + 1)
-            img = ds[i][0].unsqueeze(0).to(self.device)
+
+            ax = plt.subplot(2, len(samples), pos_idx + 1)
+            img = ds[sample_idx][0].unsqueeze(0).to(self.device)
             with torch.no_grad():
                 rec_img = decoder(encoder(img))
             plt.imshow(img.cpu().squeeze().numpy(), cmap="gist_gray")
@@ -1381,19 +1387,19 @@ class RetinaVAE:
             ax.text(
                 0.05,
                 0.85,
-                self.apricot_data.data_labels2names_dict[ds[i][1].item()],
+                self.apricot_data.data_labels2names_dict[ds[sample_idx][1].item()],
                 fontsize=10,
                 color="red",
                 transform=ax.transAxes,
             )
-            if i == 0:
+            if pos_idx == 0:
                 ax.set_title("Original images")
 
-            ax = plt.subplot(2, len(samples), len(samples) + i + 1)
+            ax = plt.subplot(2, len(samples), len(samples) + pos_idx + 1)
             plt.imshow(rec_img.cpu().squeeze().numpy(), cmap="gist_gray")
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
-            if i == 0:
+            if pos_idx == 0:
                 ax.set_title("Reconstructed images")
 
         # Set the whole figure title as ds_name
