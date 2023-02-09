@@ -45,6 +45,7 @@ from copy import deepcopy
 from itertools import product
 import os
 import time
+import subprocess
 
 
 class AugmentedDataset(torch.utils.data.Dataset):
@@ -501,7 +502,7 @@ class RetinaVAE:
         self.resolution_hw = (28, 28)
 
         self.batch_size = 128  # None will take the batch size from test_split size.
-        self.epochs = 10
+        self.epochs = 2000
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
 
@@ -585,12 +586,12 @@ class RetinaVAE:
                 # Grid search: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#ray.tune.grid_search
                 # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
                 self.search_space = {
-                    "lr": [0.001, 0.002],
-                    "latent_dim": [2, 4],
+                    "lr": [0.0005, 0.005],
+                    "latent_dim": [2, 16],
                     "batch_size": [64],
-                    "rotation": [0, 10],
-                    "translation": [0.1],
-                    "noise": [0, 0.1],
+                    "rotation": [10, 45],
+                    "translation": [0.1, 0.3],
+                    "noise": [0],
                 }
 
                 tuner = self._set_ray_tuner()
@@ -601,7 +602,7 @@ class RetinaVAE:
                 print("Longest training time:", results_df["time_total_s"].max())
 
                 best_result = self.result_grid.get_best_result(
-                    metric="val_loss", mode="min"
+                    metric="kid_std", mode="max"
                 )
                 print("Best result:", best_result)
                 result_df = best_result.metrics_dataframe
@@ -613,14 +614,27 @@ class RetinaVAE:
                 # trial_name = "TrainableVAE_29a86_00000"  # From ray_results table/folder, # Implement later when you need it to load from a specific trial
                 # state_dict = self._load_model(trial_name=trial_name)
 
+                # Give one second to write the checkpoint to disk
+                time.sleep(1)
+
             case "load_model":
                 # Load previously calculated model for vizualization
                 # Load model to self.vae and return state dict. The numbers are in the state dict.
                 # my_model_path = "C:\Users\simov\Laskenta\GitRepos\MacaqueRetina\retina\models" # For single trials from "train_model"
-                trial_name = "TrainableVAE_bfa96_00005"  # From ray_results table/folder
-                state_dict, results_df = self._load_model(
+                trial_name = "TrainableVAE_827a3_00004"  # From ray_results table/folder
+                state_dict, results_grid, tb_dir = self._load_model(
                     model_path=None, trial_name=trial_name
                 )
+                # # Evoke new subprocess and run tensorboard at tb_dir folder
+                # self._run_tensorboard(tb_dir=tb_dir)
+
+                self._plot_results(
+                    results_grid=results_grid,
+                    dep_var="val_loss",
+                    labels=["lr", "latent_dim", "rotation", "translation"],
+                )
+
+                print(results_grid)
 
         # self.device = torch.device("cpu")
 
@@ -628,41 +642,76 @@ class RetinaVAE:
             data_type="test", shuffle=False
         )
 
-        # Figure 1
-        self._plot_ae_outputs(
-            self.vae.encoder,
-            self.vae.decoder,
-            ds_name="test_ds",
-            sample_start_stop=[10, 15],
+        # # Figure 1
+        # self._plot_ae_outputs(
+        #     self.vae.encoder,
+        #     self.vae.decoder,
+        #     ds_name="test_ds",
+        #     sample_start_stop=[10, 25],
+        # )
+
+        # if training_mode == "train_model":
+        #     self._plot_ae_outputs(
+        #         self.vae.encoder, self.vae.decoder, ds_name="train_ds"
+        #     )
+        #     self._plot_ae_outputs(
+        #         self.vae.encoder, self.vae.decoder, ds_name="valid_ds"
+        #     )
+
+        # self.vae.eval()
+
+        # # Figure 2
+        # self._reconstruct_random_images()
+
+        # self._reconstruct_grid_images()
+
+        # encoded_samples = self._get_encoded_samples(ds_name="test_ds")
+
+        # # Figure 3
+        # self._plot_latent_space(encoded_samples)
+
+        # # Figure 4
+        # self._plot_tsne_space(encoded_samples)
+
+        # if training_mode == "train_model":
+        #     encoded_samples = self._get_encoded_samples(ds_name="train_ds")
+        #     self._plot_latent_space(encoded_samples)
+        #     self._plot_tsne_space(encoded_samples)
+
+    def _plot_results(self, results_grid, dep_var="val_loss", labels=None):
+        """Plot results from ray tune"""
+        ax = None
+        label = None
+        for result in results_grid:
+            if labels is not None:
+                # result = ''.join("&markers=%s" % ','.join(map(str, x)) for x in markers)
+                # label = f"{labels[0]}={result.config[labels[0]]}, {labels[1]}={result.config[labels[1]]}"
+                label = ",".join(f"{x}={result.config[x]}" for x in labels)
+            if ax is None:
+                ax = result.metrics_dataframe.plot(
+                    "training_iteration", dep_var, label=label
+                )
+            else:
+                result.metrics_dataframe.plot(
+                    "training_iteration", dep_var, ax=ax, label=label
+                )
+        ax.set_title(f"{dep_var} vs. training iteration for all trials")
+        ax.set_ylabel(dep_var)
+        ax.grid(True)
+
+    def _run_tensorboard(self, tb_dir):
+        """Run tensorboard in a new subprocess"""
+        subprocess.run(
+            [
+                "tensorboard",
+                "--logdir",
+                tb_dir,
+                "--host",
+                "localhost",
+                "--port",
+                "6006",
+            ]
         )
-
-        if training_mode == "train_model":
-            self._plot_ae_outputs(
-                self.vae.encoder, self.vae.decoder, ds_name="train_ds"
-            )
-            self._plot_ae_outputs(
-                self.vae.encoder, self.vae.decoder, ds_name="valid_ds"
-            )
-
-        self.vae.eval()
-
-        # Figure 2
-        self._reconstruct_random_images()
-
-        self._reconstruct_grid_images()
-
-        encoded_samples = self._get_encoded_samples(ds_name="test_ds")
-
-        # Figure 3
-        self._plot_latent_space(encoded_samples)
-
-        # Figure 4
-        self._plot_tsne_space(encoded_samples)
-
-        if training_mode == "train_model":
-            encoded_samples = self._get_encoded_samples(ds_name="train_ds")
-            self._plot_latent_space(encoded_samples)
-            self._plot_tsne_space(encoded_samples)
 
     def _set_ray_tuner(self):
         """Set ray tuner"""
@@ -770,7 +819,6 @@ class RetinaVAE:
     def _load_model(self, model_path=None, best_result=None, trial_name=None):
         """Load model if exists. Use either model_path, best_result, or trial_name to load model"""
 
-
         if not hasattr(self, "vae"):
             # Note that if you start parametrically vary the model architecture, you need to save the model architecture as well or
             # rebuild it here (c.f. latent_dims)
@@ -853,7 +901,7 @@ class RetinaVAE:
 
             # Move new model to same device as the input data
             self.vae.to(self.device)
-            return self.vae.state_dict(), df
+            return self.vae.state_dict(), results, correct_trial_folder
 
         return self.vae.state_dict()
 
