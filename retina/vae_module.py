@@ -501,7 +501,7 @@ class RetinaVAE:
         self.resolution_hw = (28, 28)
 
         self.batch_size = 128  # None will take the batch size from test_split size.
-        self.epochs = 1000
+        self.epochs = 10
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
 
@@ -569,13 +569,6 @@ class RetinaVAE:
                 self.tb_log_folder = "tb_logs"
                 self._prep_tensorboard_logging()
 
-                # # Only Linux supported
-                # explanation, out_guards, graphs, ops_per_graph = dynamo.explain(
-                #     self._train()
-                # )
-                # print(explanation)
-                # exit()
-
                 # Train
                 self._train()
                 self.writer.flush()
@@ -592,12 +585,12 @@ class RetinaVAE:
                 # Grid search: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#ray.tune.grid_search
                 # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
                 self.search_space = {
-                    "lr": [0.001, 0.0005],
+                    "lr": [0.001, 0.002],
                     "latent_dim": [2, 4],
                     "batch_size": [64],
-                    "rotation": [0, 10, 45],
+                    "rotation": [0, 10],
                     "translation": [0.1],
-                    "noise": [0],
+                    "noise": [0, 0.1],
                 }
 
                 tuner = self._set_ray_tuner()
@@ -624,8 +617,10 @@ class RetinaVAE:
                 # Load previously calculated model for vizualization
                 # Load model to self.vae and return state dict. The numbers are in the state dict.
                 # my_model_path = "C:\Users\simov\Laskenta\GitRepos\MacaqueRetina\retina\models" # For single trials from "train_model"
-                trial_name = "TrainableVAE_0b9bb_00006"  # From ray_results table/folder
+                trial_name = "TrainableVAE_bfa96_00000"  # From ray_results table/folder
                 state_dict = self._load_model(model_path=None, trial_name=trial_name)
+
+        # self.device = torch.device("cpu")
 
         self.test_loader = self._augment_and_get_dataloader(
             data_type="test", shuffle=False
@@ -712,8 +707,8 @@ class RetinaVAE:
             search_alg=tune.search.basic_variant.BasicVariantGenerator(
                 constant_grid_search=True,
             ),
-            metric="val_loss",
-            mode="min",
+            metric="kid_std",
+            mode="max",
         )
 
         # Runtime configuration that is specific to individual trials. Will overwrite the run config passed to the Trainer.
@@ -768,18 +763,18 @@ class RetinaVAE:
     def _load_model(self, model_path=None, best_result=None, trial_name=None):
         """Load model if exists"""
 
-        def _get_model_and_latent_dim_from_logdir(log_dir):
-            """Get model and latent dim from log dir"""
-            checkpoint_dir = [
-                d for d in os.listdir(log_dir) if d.startswith("checkpoint")
-            ][0]
-            checkpoint_path = os.path.join(log_dir, checkpoint_dir, "model.pth")
+        # def _get_model_and_latent_dim_from_logdir(log_dir):
+        #     """Get model and latent dim from log dir"""
+        #     checkpoint_dir = [
+        #         d for d in os.listdir(log_dir) if d.startswith("checkpoint")
+        #     ][0]
+        #     checkpoint_path = os.path.join(log_dir, checkpoint_dir, "model.pth")
 
-            latent_dim = best_result.config["latent_dim"]
-            # Get model with correct layer dimensions
-            model = VariationalAutoencoder(latent_dims=latent_dim, device=self.device)
-            model.load_state_dict(torch.load(checkpoint_path))
-            return model, latent_dim
+        #     latent_dim = best_result.config["latent_dim"]
+        #     # Get model with correct layer dimensions
+        #     model = VariationalAutoencoder(latent_dims=latent_dim, device=self.device)
+        #     model.load_state_dict(torch.load(checkpoint_path))
+        #     return model, latent_dim
 
         if not hasattr(self, "vae"):
             # Note that if you start parametrically vary the model architecture, you need to save the model architecture as well or
@@ -826,17 +821,34 @@ class RetinaVAE:
 
         elif trial_name is not None:
             # trial_name = "TrainableVAE_XXX" from ray.tune results table.
-            # Implement later when you need it. Trial name should be unique.
-            # Search under self.ray_dir for folder with the trial name. Under that folder, there should be a checkpoint folder.
-            # Load the model from the checkpoint folder.
+            # Search under self.ray_dir for folder with the trial name. Under that folder,
+            # there should be a checkpoint folder which contains the model.pth file.
             correct_trial_folder = [
                 p for p in Path(self.ray_dir).glob(f"**/") if trial_name in p.stem
             ][0]
-            pdb.set_trace()
-            # TÄHÄN JÄIT: LATAA TÄSTÄ TUNER JA KÄYTÄ TUNER.GET_RESULTS() HAKEMAAN RESULT GRID. SITÄ KAUTTA SAAT LATENT DIMIN.
-            # Sen jälkeen ks paperi
-            tuner = tune.Tuner.restore(str(correct_trial_folder))
+
+            # However, we need to first check that the model dimensionality is correct.
+            # This will be hard coded for checking and changing only latent_dim.
+            # More versatile version is necessary if other dimensions are searched.
+
+            # Get the results as dataframe from the ray directory / correct run
+            results_folder = correct_trial_folder.parents[0]
+            tuner = tune.Tuner.restore(str(results_folder))
             results = tuner.get_results()
+            df = results.get_dataframe()
+
+            # Check the latent_dim, change if necessary and update the model
+            new_latent_dim = df[df["logdir"] == str(correct_trial_folder)][
+                "config/latent_dim"
+            ].values[0]
+            if self.latent_dim != new_latent_dim:
+                print(f"Changing latent_dim from {self.latent_dim} to {new_latent_dim}")
+                self.latent_dim = new_latent_dim
+                self.vae = VariationalAutoencoder(
+                    latent_dims=self.latent_dim, device=self.device
+                )
+
+            # Load the model from the checkpoint folder.
             checkpoint_folder_name = [
                 p for p in Path(correct_trial_folder).glob("checkpoint_*")
             ][0]
@@ -847,8 +859,8 @@ class RetinaVAE:
             except RuntimeError:
                 pass
 
-            pdb.set_trace()
-
+        # Move new model to same device as the input data
+        self.vae.to(self.device)
         return self.vae.state_dict()
 
     def _visualize_augmentation(self):
@@ -1434,7 +1446,7 @@ class RetinaVAE:
                     "mse/val": mse_loss_out,
                     "ssim/val": ssim_loss_out,
                     "kid_mean/val": kid_mean_out,
-                    "kid_std/val": kid_std_epoch,
+                    "kid_std/val": kid_std_out,
                 },
                 epoch,
             )
