@@ -618,7 +618,9 @@ class RetinaVAE:
                 # Load model to self.vae and return state dict. The numbers are in the state dict.
                 # my_model_path = "C:\Users\simov\Laskenta\GitRepos\MacaqueRetina\retina\models" # For single trials from "train_model"
                 trial_name = "TrainableVAE_bfa96_00005"  # From ray_results table/folder
-                state_dict = self._load_model(model_path=None, trial_name=trial_name)
+                state_dict, results_df = self._load_model(
+                    model_path=None, trial_name=trial_name
+                )
 
         # self.device = torch.device("cpu")
 
@@ -766,20 +768,8 @@ class RetinaVAE:
         return model_path
 
     def _load_model(self, model_path=None, best_result=None, trial_name=None):
-        """Load model if exists"""
+        """Load model if exists. Use either model_path, best_result, or trial_name to load model"""
 
-        # def _get_model_and_latent_dim_from_logdir(log_dir):
-        #     """Get model and latent dim from log dir"""
-        #     checkpoint_dir = [
-        #         d for d in os.listdir(log_dir) if d.startswith("checkpoint")
-        #     ][0]
-        #     checkpoint_path = os.path.join(log_dir, checkpoint_dir, "model.pth")
-
-        #     latent_dim = best_result.config["latent_dim"]
-        #     # Get model with correct layer dimensions
-        #     model = VariationalAutoencoder(latent_dims=latent_dim, device=self.device)
-        #     model.load_state_dict(torch.load(checkpoint_path))
-        #     return model, latent_dim
 
         if not hasattr(self, "vae"):
             # Note that if you start parametrically vary the model architecture, you need to save the model architecture as well or
@@ -859,13 +849,12 @@ class RetinaVAE:
             ][0]
             model_path = Path.joinpath(checkpoint_folder_name, "model.pth")
 
-            try:
-                self.vae.load_state_dict(torch.load(model_path))
-            except RuntimeError:
-                pass
+            self.vae.load_state_dict(torch.load(model_path))
 
-        # Move new model to same device as the input data
-        self.vae.to(self.device)
+            # Move new model to same device as the input data
+            self.vae.to(self.device)
+            return self.vae.state_dict(), df
+
         return self.vae.state_dict()
 
     def _visualize_augmentation(self):
