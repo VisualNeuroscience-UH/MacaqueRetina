@@ -519,6 +519,8 @@ class RetinaVAE:
             "kid_mean",
         ]
 
+        # TÄHÄN JÄIT: TARVITSEEKO LISÄTÄ PRECISION JA RECALL? IMPLEMENTAATIO.
+
         # Augment training and validation data.
         augmentation_dict = {
             "rotation": 45.0,  # rotation in degrees
@@ -641,8 +643,6 @@ class RetinaVAE:
                 )
 
                 print(results_grid)
-
-        # self.device = torch.device("cpu")
 
         self.test_loader = self._augment_and_get_dataloader(
             data_type="test", shuffle=False
