@@ -520,6 +520,9 @@ class RetinaVAE:
         ]
 
         # TÄHÄN JÄIT: TARVITSEEKO LISÄTÄ PRECISION JA RECALL? IMPLEMENTAATIO.
+        # TESTAA ERI KID LAYERIT.
+        # TEE YKSIULOTTEISET HAUT.
+        # MENE OTANIEMEEN JA NÄYTÄ PETRILLE.
 
         # Augment training and validation data.
         augmentation_dict = {
