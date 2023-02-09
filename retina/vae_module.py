@@ -510,6 +510,14 @@ class RetinaVAE:
         self.this_folder = self._get_this_folder()
         self.models_folder = self._set_models_folder()
         self.ray_dir = self.this_folder / "ray_results"
+        self.dependent_variables = [
+            "train_loss",
+            "val_loss",
+            "mse",
+            "ssim",
+            "kid_std",
+            "kid_mean",
+        ]
 
         # Augment training and validation data.
         augmentation_dict = {
@@ -541,20 +549,6 @@ class RetinaVAE:
         # # Create model and set optimizer and learning rate scheduler
         # self._prep_training()
         self._get_and_split_apricot_data()
-
-        # This will be captured at _set_ray_tuner
-        # Search space of the tuning job. Both preprocessor and dataset can be tuned here.
-        # Use grid search to try out all values for each parameter. values: iterable
-        # Grid search: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#ray.tune.grid_search
-        # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
-        self.search_space = {
-            "lr": [0.001],
-            "latent_dim": [2, 4, 8, 16, 32, 64, 128, 256],
-            "batch_size": [64],
-            "rotation": [30],
-            "translation": [0],
-            "noise": [0],
-        }
 
         training_mode = "load_model"  # "train_model" or "tune_model" or "load_model"
 
@@ -593,6 +587,20 @@ class RetinaVAE:
 
             case "tune_model":
 
+                # This will be captured at _set_ray_tuner
+                # Search space of the tuning job. Both preprocessor and dataset can be tuned here.
+                # Use grid search to try out all values for each parameter. values: iterable
+                # Grid search: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#ray.tune.grid_search
+                # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
+                self.search_space = {
+                    "lr": [0.001],
+                    "latent_dim": [2, 4, 8, 16, 32, 64, 128, 256],
+                    "batch_size": [64],
+                    "rotation": [30],
+                    "translation": [0],
+                    "noise": [0],
+                }
+
                 tuner = self._set_ray_tuner()
                 self.result_grid = tuner.fit()
 
@@ -628,12 +636,8 @@ class RetinaVAE:
                 # self._run_tensorboard(tb_dir=tb_dir)
 
                 # Dep vars: train_loss, val_loss, mse, ssim, kid_std, kid_mean,
-                self._plot_results(
+                self._plot_dependent_variables(
                     results_grid=results_grid,
-                    dep_var="val_loss",
-                    labels=[
-                        "model_id"
-                    ],  # Put here the variables which were varied in the search space in this trial.
                 )
 
                 print(results_grid)
@@ -680,7 +684,7 @@ class RetinaVAE:
             self._plot_latent_space(encoded_samples)
             self._plot_tsne_space(encoded_samples)
 
-    def _plot_results(self, results_grid, dep_var="val_loss", labels=None):
+    def _plot_dependent_variables(self, results_grid):
         """Plot results from ray tune"""
 
         df = results_grid.get_dataframe()
@@ -700,31 +704,38 @@ class RetinaVAE:
         num_colors = len(results_grid.get_dataframe())
         colors = plt.cm.get_cmap("tab20", num_colors).colors
 
-        # Create a new plot for each label
-        color_idx = 0
-        ax = None
-        for result in results_grid:
-            label = ",".join(f"{x}={result.config[x]}" for x in varied_cols)
-            print(label)
-            if ax is None:
-                ax = result.metrics_dataframe.plot(
-                    "training_iteration",
-                    dep_var,
-                    label=label,
-                    color=colors[color_idx],
-                )
-            else:
+        # Make one subplot for each dependent variable
+        # List of dependent variables
+        dep_vars = self.dependent_variables
+
+        nrows = 2
+        ncols = len(dep_vars) // 2
+        plt.figure(figsize=(ncols * 5, nrows * 5))
+
+        for idx, dep_var in enumerate(dep_vars):
+            # Create a new plot for each label
+            color_idx = 0
+            ax = plt.subplot(nrows, ncols, idx + 1)
+
+            for result in results_grid:
+                if idx == 0:
+                    label = ",".join(f"{x}={result.config[x]}" for x in varied_cols)
+                    legend = True
+                else:
+                    legend = False
+
                 result.metrics_dataframe.plot(
                     "training_iteration",
                     dep_var,
                     ax=ax,
                     label=label,
                     color=colors[color_idx],
+                    legend=legend,
                 )
-            color_idx += 1
-        ax.set_title(f"{dep_var} vs. training iteration for {label}")
-        ax.set_ylabel(dep_var)
-        ax.grid(True)
+                color_idx += 1
+            ax.set_title(f"{dep_var}")
+            ax.set_ylabel(dep_var)
+            ax.grid(True)
 
     def _run_tensorboard(self, tb_dir):
         """Run tensorboard in a new subprocess"""
