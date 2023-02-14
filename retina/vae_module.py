@@ -263,6 +263,7 @@ class VariationalEncoder(nn.Module):
             padding=ksp["pad1"],
         )
         # W2=(W1−F+2P)/S+1
+        # self.batch1 = nn.BatchNorm2d(depth)
         self.conv2 = nn.Conv2d(
             depth,
             depth * 2,
@@ -297,6 +298,7 @@ class VariationalEncoder(nn.Module):
         if self.device is not None:
             x = x.to(self.device)
         x = F.relu(self.conv1(x))
+        # x = F.relu(self.batch1(self.conv1(x)))
         x = F.relu(self.batch2(self.conv2(x)))
         x = F.relu(self.conv3(x))
         x = torch.flatten(x, start_dim=1)
@@ -389,8 +391,9 @@ class VariationalAutoencoder(nn.Module):
         # self.fid = FrechetInceptionDistance(
         #     n_features=64, reset_real_features=False, normalize=True
         # )
+        # Allowed n_features: 64, 192, 768, 2048
         self.kid = KernelInceptionDistance(
-            n_features=64, reset_real_features=False, normalize=True, subset_size=4
+            n_features=192, reset_real_features=False, normalize=True, subset_size=4
         )
         self.ssim = StructuralSimilarityIndexMeasure()
 
@@ -447,6 +450,17 @@ class VariationalAutoencoder(nn.Module):
                 "pad1": 2,
                 "pad2": 2,
                 "pad3": 2,
+                "conv3_sidelen": 28,
+                "opad3": 0,
+                "opad2": 0,
+                "opad1": 0,
+            },
+            "k7s1": {
+                "kernel": 7,
+                "stride": 1,
+                "pad1": 3,
+                "pad2": 3,
+                "pad3": 3,
                 "conv3_sidelen": 28,
                 "opad3": 0,
                 "opad2": 0,
@@ -614,7 +628,7 @@ class RetinaVAE:
         self.resolution_hw = (28, 28)
 
         self.batch_size = 128  # None will take the batch size from test_split size.
-        self.epochs = 20
+        self.epochs = 500
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
 
@@ -630,9 +644,10 @@ class RetinaVAE:
             "kid_mean",
         ]
 
+        # TÄHÄN JÄIT:
+        # TESTAA N CONV LAYERS 2-4 / PARAMETRISOI
+        # KOKEILE PUDOTTAA BATCH NORM VEKS / PARAMETRISOI
         # TARVITSEEKO LISÄTÄ PRECISION JA RECALL? IMPLEMENTAATIO.
-        # TESTAA ERI KID LAYERIT.
-        # TEE YKSIULOTTEISET HAUT.
 
         # Augment training and validation data.
         augmentation_dict = {
@@ -644,7 +659,7 @@ class RetinaVAE:
         self.augmentation_dict = None
 
         # Set the random seed for reproducible results for both torch and numpy
-        self.random_seed = 12
+        self.random_seed = np.random.randint(1, 10000)
         torch.manual_seed(self.random_seed)
         np.random.seed(self.random_seed)
 
@@ -665,7 +680,7 @@ class RetinaVAE:
         # self._prep_training()
         self._get_and_split_apricot_data()
 
-        training_mode = "train_model"  # "train_model" or "tune_model" or "load_model"
+        training_mode = "load_model"  # "train_model" or "tune_model" or "load_model"
 
         match training_mode:
             case "train_model":
@@ -720,14 +735,12 @@ class RetinaVAE:
                     "lr": [0.0001],
                     "latent_dim": [2],
                     "ksp": [
-                        # "k3s2",
                         "k3s1",
-                        # "k5s2",
-                        "k5s1",
-                    ],  # "k3s2", "k3s1", "k5s2", "k5s1"
-                    "depth": [8],
+                        "k7s1",
+                    ],  # k3s2,k3s1,k5s2,k5s1,k7s1
+                    "depth": [4, 16],
                     "batch_size": [64],
-                    "rotation": [15, 30],
+                    "rotation": [15],
                     "translation": [0],
                     "noise": [0],
                 }
@@ -756,7 +769,7 @@ class RetinaVAE:
                 # Load previously calculated model for vizualization
                 # Load model to self.vae and return state dict. The numbers are in the state dict.
                 # my_model_path = "C:\Users\simov\Laskenta\GitRepos\MacaqueRetina\retina\models" # For single trials from "train_model"
-                trial_name = "TrainableVAE_fc662_00001"  # From ray_results table/folder
+                trial_name = "TrainableVAE_a8970_00001"  # From ray_results table/folder
                 state_dict, result_grid, tb_dir = self._load_model(
                     model_path=None, trial_name=trial_name
                 )
@@ -767,7 +780,7 @@ class RetinaVAE:
                     input_size=(1, self.resolution_hw[0], self.resolution_hw[1]),
                     batch_size=-1,
                 )
-                pdb.set_trace()
+                # pdb.set_trace()
 
                 # Dep vars: train_loss, val_loss, mse, ssim, kid_std, kid_mean,
                 self._plot_dependent_variables(
@@ -923,7 +936,7 @@ class RetinaVAE:
             },
         )
 
-        NUM_MODELS = 1
+        NUM_MODELS = 2
         param_space = {
             "lr": tune.grid_search(self.search_space["lr"]),
             "latent_dim": tune.grid_search(self.search_space["latent_dim"]),
@@ -1083,9 +1096,9 @@ class RetinaVAE:
             new_ksp = df[df["logdir"] == str(correct_trial_folder)][
                 "config/ksp"
             ].values[0]
-            new_depth = df[df["logdir"] == str(correct_trial_folder)][
-                "config/depth"
-            ].values[0]
+            new_depth = int(
+                df[df["logdir"] == str(correct_trial_folder)]["config/depth"].values[0]
+            )
             print(f"Changing latent_dim from {self.latent_dim} to {new_latent_dim}")
             self.latent_dim = new_latent_dim
             self.vae = VariationalAutoencoder(
