@@ -296,15 +296,11 @@ class VariationalEncoder(nn.Module):
         x = F.relu(self.batch2(self.conv2(x)))
         x = F.relu(self.conv3(x))
         x = torch.flatten(x, start_dim=1)
-        pdb.set_trace()
         x = F.relu(self.linear1(x))
-
         mu = self.linear2(x)
         sigma = torch.exp(self.linear3(x))
-        pdb.set_trace()
         z = mu + sigma * self.N.sample(mu.shape)
         self.kl = (sigma**2 + mu**2 - torch.log(sigma) - 1 / 2).sum()
-        pdb.set_trace()
         return z
 
 
@@ -1576,7 +1572,6 @@ class RetinaVAE:
 
         n_cell_types = len(self.train_by_labels)
         samples = np.arange(sample_start_stop[0], sample_start_stop[1])
-        # pdb.set_trace()
 
         for pos_idx, sample_idx in enumerate(samples):
             # this_idx = t_idx[self.train_by_labels[i]]
