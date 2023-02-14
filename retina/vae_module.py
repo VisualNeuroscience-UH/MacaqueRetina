@@ -23,6 +23,7 @@ from torchmetrics import StructuralSimilarityIndexMeasure
 from torchmetrics import MeanSquaredError
 
 import torch._dynamo as dynamo
+from torchsummary import summary
 
 from ray import air, tune
 from ray.tune.schedulers import ASHAScheduler
@@ -557,7 +558,8 @@ class TrainableVAE(tune.Trainable):
         torch.cuda.empty_cache()
 
         return {
-            "iteration": self.iteration + 1, # Do not remove, plus one for 0=>1 indexing
+            "iteration": self.iteration
+            + 1,  # Do not remove, plus one for 0=>1 indexing
             "train_loss": train_loss_out,
             "val_loss": val_loss_out,
             "mse": mse_loss_out,
@@ -603,7 +605,7 @@ class RetinaVAE:
         self.resolution_hw = (28, 28)
 
         self.batch_size = 128  # None will take the batch size from test_split size.
-        self.epochs = 20
+        self.epochs = 500
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
 
@@ -633,7 +635,7 @@ class RetinaVAE:
         self.augmentation_dict = None
 
         # Set the random seed for reproducible results for both torch and numpy
-        self.random_seed = 42
+        self.random_seed = 12
         torch.manual_seed(self.random_seed)
         np.random.seed(self.random_seed)
 
@@ -654,7 +656,7 @@ class RetinaVAE:
         # self._prep_training()
         self._get_and_split_apricot_data()
 
-        training_mode = "tune_model"  # "train_model" or "tune_model" or "load_model"
+        training_mode = "load_model"  # "train_model" or "tune_model" or "load_model"
 
         match training_mode:
             case "train_model":
@@ -704,13 +706,13 @@ class RetinaVAE:
                     "lr": [0.0001],
                     "latent_dim": [2],
                     "ksp": [
-                        "k3s2",
+                        # "k3s2",
                         "k3s1",
-                        "k5s2",
+                        # "k5s2",
                         "k5s1",
                     ],  # "k3s2", "k3s1", "k5s2", "k5s1"
                     "batch_size": [64],
-                    "rotation": [30],
+                    "rotation": [15, 30],
                     "translation": [0],
                     "noise": [0],
                 }
@@ -739,19 +741,25 @@ class RetinaVAE:
                 # Load previously calculated model for vizualization
                 # Load model to self.vae and return state dict. The numbers are in the state dict.
                 # my_model_path = "C:\Users\simov\Laskenta\GitRepos\MacaqueRetina\retina\models" # For single trials from "train_model"
-                trial_name = "TrainableVAE_e0530_00000"  # From ray_results table/folder
-                state_dict, results_grid, tb_dir = self._load_model(
+                trial_name = "TrainableVAE_fc662_00001"  # From ray_results table/folder
+                state_dict, result_grid, tb_dir = self._load_model(
                     model_path=None, trial_name=trial_name
                 )
                 # # Evoke new subprocess and run tensorboard at tb_dir folder
                 # self._run_tensorboard(tb_dir=tb_dir)
+                summary(
+                    self.vae,
+                    input_size=(1, self.resolution_hw[0], self.resolution_hw[1]),
+                    batch_size=-1,
+                )
+                pdb.set_trace()
 
                 # Dep vars: train_loss, val_loss, mse, ssim, kid_std, kid_mean,
                 self._plot_dependent_variables(
-                    results_grid=results_grid,
+                    results_grid=result_grid,
                 )
 
-                print(results_grid)
+                print(result_grid)
 
         self.test_loader = self._augment_and_get_dataloader(
             data_type="test", shuffle=False
@@ -900,7 +908,7 @@ class RetinaVAE:
             },
         )
 
-        NUM_MODELS = 1
+        NUM_MODELS = 2
         param_space = {
             "lr": tune.grid_search(self.search_space["lr"]),
             "latent_dim": tune.grid_search(self.search_space["latent_dim"]),
