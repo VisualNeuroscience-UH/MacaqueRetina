@@ -557,6 +557,7 @@ class TrainableVAE(tune.Trainable):
         torch.cuda.empty_cache()
 
         return {
+            "iteration": self.iteration + 1, # Do not remove, plus one for 0=>1 indexing
             "train_loss": train_loss_out,
             "val_loss": val_loss_out,
             "mse": mse_loss_out,
@@ -595,9 +596,6 @@ class RetinaVAE:
 
         # Set common VAE model parameters
         self.latent_dim = 4
-        # Kernel size and stride, options: k3s2, k3s1, k5s2, k5s1
-        # self._set_ksp_key()
-
         self.latent_space_plot_scale = 3.0  # Scale for plotting latent space
         self.lr = 0.001
 
@@ -605,7 +603,7 @@ class RetinaVAE:
         self.resolution_hw = (28, 28)
 
         self.batch_size = 128  # None will take the batch size from test_split size.
-        self.epochs = 2
+        self.epochs = 20
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
 
@@ -703,9 +701,14 @@ class RetinaVAE:
                 # Grid search: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#ray.tune.grid_search
                 # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
                 self.search_space = {
-                    "lr": [0.001],
+                    "lr": [0.0001],
                     "latent_dim": [2],
-                    "ksp": ["k3s2", "k3s1", "k5s2", "k5s1"],
+                    "ksp": [
+                        "k3s2",
+                        "k3s1",
+                        "k5s2",
+                        "k5s1",
+                    ],  # "k3s2", "k3s1", "k5s2", "k5s1"
                     "batch_size": [64],
                     "rotation": [30],
                     "translation": [0],
@@ -727,12 +730,7 @@ class RetinaVAE:
                 result_df[["training_iteration", "val_loss", "time_total_s"]]
 
                 # Load model state dict from checkpoint to new self.vae and return the state dict.
-                # Set ksp for re-creating correct model dimensions
-                self.ksp = ["k5s1"]
                 state_dict = self._load_model(best_result=best_result)
-                # You need to stop here and manually set the trial name to the one you want to load.
-                # trial_name = "TrainableVAE_29a86_00000"  # From ray_results table/folder, # Implement later when you need it to load from a specific trial
-                # state_dict = self._load_model(trial_name=trial_name)
 
                 # Give one second to write the checkpoint to disk
                 time.sleep(1)
@@ -741,7 +739,7 @@ class RetinaVAE:
                 # Load previously calculated model for vizualization
                 # Load model to self.vae and return state dict. The numbers are in the state dict.
                 # my_model_path = "C:\Users\simov\Laskenta\GitRepos\MacaqueRetina\retina\models" # For single trials from "train_model"
-                trial_name = "TrainableVAE_c5bfd_00000"  # From ray_results table/folder
+                trial_name = "TrainableVAE_e0530_00000"  # From ray_results table/folder
                 state_dict, results_grid, tb_dir = self._load_model(
                     model_path=None, trial_name=trial_name
                 )
@@ -865,13 +863,25 @@ class RetinaVAE:
     def _set_ray_tuner(self):
         """Set ray tuner"""
 
-        reporter = CLIReporter()
-        reporter.add_metric_column("train_loss")
-        reporter.add_metric_column("val_loss")
-        reporter.add_metric_column("mse")
-        reporter.add_metric_column("ssim")
-        reporter.add_metric_column("kid_mean")
-        reporter.add_metric_column("kid_std")
+        # List of strings from the self.search_space dictionary which should be reported.
+        # Include only the parameters which have more than one item listed in the search space.
+        parameters_to_report = []
+        for key, value in self.search_space.items():
+            if len(value) > 1:
+                parameters_to_report.append(key)
+
+        reporter = CLIReporter(
+            metric_columns=[
+                "iteration",
+                "train_loss",
+                "val_loss",
+                "mse",
+                "ssim",
+                "kid_mean",
+                "kid_std",
+            ],
+            parameter_columns=parameters_to_report,
+        )
 
         trainable = tune.with_resources(TrainableVAE, {"gpu": 0.25})
         trainable_with_parameters = tune.with_parameters(
@@ -882,7 +892,6 @@ class RetinaVAE:
                 "val_data": self.val_data,
                 "val_labels": self.val_labels,
             },
-            # epochs=self.epochs,
             device=self.device,
             methods={
                 "_train_epoch": self._train_epoch,
@@ -913,8 +922,8 @@ class RetinaVAE:
             search_alg=tune.search.basic_variant.BasicVariantGenerator(
                 constant_grid_search=True,
             ),
-            metric="kid_std",
-            mode="max",
+            # metric="kid_std",
+            # mode="max",
         )
 
         # Runtime configuration that is specific to individual trials. Will overwrite the run config passed to the Trainer.
