@@ -362,9 +362,11 @@ class Decoder(nn.Module):
 
 
 class VariationalAutoencoder(nn.Module):
-    def __init__(self, latent_dims, ksp=None, device=None):
+    def __init__(self, latent_dims, ksp_key=None, device=None):
         super().__init__()
 
+        self._set_ksp_key()
+        ksp = self.ksp_keys[ksp_key]
         self.device = device
         self.encoder = VariationalEncoder(
             latent_dims=latent_dims, ksp=ksp, device=self.device
@@ -386,6 +388,63 @@ class VariationalAutoencoder(nn.Module):
         z = self.encoder(x)
 
         return self.decoder(z)
+
+    def _set_ksp_key(self):
+        """
+        Preset conv2D kernel, stride and padding values for kernel 3 and 5 and for
+        reduction (28*28 => 3*3) and preservation (28*28 => 28*28) of representation size.
+        """
+
+        self.ksp_keys = {
+            "k3s2": {
+                "kernel": 3,
+                "stride": 2,
+                "pad1": 1,
+                "pad2": 1,
+                "pad3": 0,
+                "lin_in": 288,
+                "conv3_sidelen": 3,
+                "opad3": 0,
+                "opad2": 1,
+                "opad1": 1,
+            },
+            "k5s2": {
+                "kernel": 5,
+                "stride": 2,
+                "pad1": 2,
+                "pad2": 2,
+                "pad3": 1,
+                "lin_in": 288,
+                "conv3_sidelen": 3,
+                "opad3": 0,
+                "opad2": 1,
+                "opad1": 1,
+            },
+            "k3s1": {
+                "kernel": 3,
+                "stride": 1,
+                "pad1": 1,
+                "pad2": 1,
+                "pad3": 1,
+                "lin_in": 25088,
+                "conv3_sidelen": 28,
+                "opad3": 0,
+                "opad2": 0,
+                "opad1": 0,
+            },
+            "k5s1": {
+                "kernel": 5,
+                "stride": 1,
+                "pad1": 2,
+                "pad2": 2,
+                "pad3": 2,
+                "lin_in": 25088,
+                "conv3_sidelen": 28,
+                "opad3": 0,
+                "opad2": 0,
+                "opad1": 0,
+            },
+        }
 
 
 class TrainableVAE(tune.Trainable):
@@ -457,7 +516,7 @@ class TrainableVAE(tune.Trainable):
 
         self.model = VariationalAutoencoder(
             latent_dims=config.get("latent_dim"),
-            ksp=config.get("ksp"),
+            ksp_key=config.get("ksp"),
             device=self.device,
         )
         self.model.to(self.device)
@@ -478,12 +537,6 @@ class TrainableVAE(tune.Trainable):
             kid_mean_epoch,
             kid_std_epoch,
         ) = self._validate_epoch(self.model, self.device, self.val_loader)
-
-        # Printing slows down the training process
-        # print(
-        #     f"""{self.training_iteration} - train_loss: {train_loss:.3f} - val_loss: {val_loss_epoch:.3f} - ssim {ssim_loss_epoch:.3f} -
-        #     kid mean {kid_mean_epoch:.3f} - kid std {kid_std_epoch:.3f}"""
-        # )
 
         # Convert to float, del & empty cache to free GPU memory
         train_loss_out = float(train_loss)
@@ -543,8 +596,8 @@ class RetinaVAE:
         # Set common VAE model parameters
         self.latent_dim = 4
         # Kernel size and stride, options: k3s2, k3s1, k5s2, k5s1
-        self._set_ksp_key()
-        self.ksp = self.ksp_key["k5s1"]
+        # self._set_ksp_key()
+
         self.latent_space_plot_scale = 3.0  # Scale for plotting latent space
         self.lr = 0.001
 
@@ -552,7 +605,7 @@ class RetinaVAE:
         self.resolution_hw = (28, 28)
 
         self.batch_size = 128  # None will take the batch size from test_split size.
-        self.epochs = 1000
+        self.epochs = 2
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
 
@@ -571,7 +624,6 @@ class RetinaVAE:
         # TARVITSEEKO LISÄTÄ PRECISION JA RECALL? IMPLEMENTAATIO.
         # TESTAA ERI KID LAYERIT.
         # TEE YKSIULOTTEISET HAUT.
-        # MENE OTANIEMEEN JA NÄYTÄ PETRILLE.
 
         # Augment training and validation data.
         augmentation_dict = {
@@ -604,7 +656,7 @@ class RetinaVAE:
         # self._prep_training()
         self._get_and_split_apricot_data()
 
-        training_mode = "train_model"  # "train_model" or "tune_model" or "load_model"
+        training_mode = "tune_model"  # "train_model" or "tune_model" or "load_model"
 
         match training_mode:
             case "train_model":
@@ -626,6 +678,8 @@ class RetinaVAE:
                 )
 
                 # Create model and set optimizer and learning rate scheduler
+                self.ksp = "k3s2"  # "k3s1" # "k5s2" # "k5s1"
+
                 self._prep_training()
                 print(self.vae)
 
@@ -651,7 +705,7 @@ class RetinaVAE:
                 self.search_space = {
                     "lr": [0.001],
                     "latent_dim": [2],
-                    "ksp": ["k3s2"],
+                    "ksp": ["k3s2", "k3s1", "k5s2", "k5s1"],
                     "batch_size": [64],
                     "rotation": [30],
                     "translation": [0],
@@ -673,6 +727,8 @@ class RetinaVAE:
                 result_df[["training_iteration", "val_loss", "time_total_s"]]
 
                 # Load model state dict from checkpoint to new self.vae and return the state dict.
+                # Set ksp for re-creating correct model dimensions
+                self.ksp = ["k5s1"]
                 state_dict = self._load_model(best_result=best_result)
                 # You need to stop here and manually set the trial name to the one you want to load.
                 # trial_name = "TrainableVAE_29a86_00000"  # From ray_results table/folder, # Implement later when you need it to load from a specific trial
@@ -738,63 +794,6 @@ class RetinaVAE:
             encoded_samples = self._get_encoded_samples(ds_name="train_ds")
             self._plot_latent_space(encoded_samples)
             self._plot_tsne_space(encoded_samples)
-
-    def _set_ksp_key(self):
-        """
-        Preset conv2D kernel, stride and padding values for kernel 3 and 5 and for
-        reduction (28*28 => 3*3) and preservation (28*28 => 28*28) of representation size.
-        """
-
-        self.ksp_key = {
-            "k3s2": {
-                "kernel": 3,
-                "stride": 2,
-                "pad1": 1,
-                "pad2": 1,
-                "pad3": 0,
-                "lin_in": 288,
-                "conv3_sidelen": 3,
-                "opad3": 0,
-                "opad2": 1,
-                "opad1": 1,
-            },
-            "k5s2": {
-                "kernel": 5,
-                "stride": 2,
-                "pad1": 2,
-                "pad2": 2,
-                "pad3": 1,
-                "lin_in": 288,
-                "conv3_sidelen": 3,
-                "opad3": 0,
-                "opad2": 1,
-                "opad1": 1,
-            },
-            "k3s1": {
-                "kernel": 3,
-                "stride": 1,
-                "pad1": 1,
-                "pad2": 1,
-                "pad3": 1,
-                "lin_in": 25088,
-                "conv3_sidelen": 28,
-                "opad3": 0,
-                "opad2": 0,
-                "opad1": 0,
-            },
-            "k5s1": {
-                "kernel": 5,
-                "stride": 1,
-                "pad1": 2,
-                "pad2": 2,
-                "pad3": 2,
-                "lin_in": 25088,
-                "conv3_sidelen": 28,
-                "opad3": 0,
-                "opad2": 0,
-                "opad1": 0,
-            },
-        }
 
     def _plot_dependent_variables(self, results_grid):
         """Plot results from ray tune"""
@@ -892,7 +891,7 @@ class RetinaVAE:
             },
         )
 
-        NUM_MODELS = 2
+        NUM_MODELS = 1
         param_space = {
             "lr": tune.grid_search(self.search_space["lr"]),
             "latent_dim": tune.grid_search(self.search_space["latent_dim"]),
@@ -972,10 +971,10 @@ class RetinaVAE:
 
         if not hasattr(self, "vae"):
             # Note that if you start parametrically vary the model architecture, you need to save the model architecture as well or
-            # rebuild it here (c.f. latent_dims)
+            # rebuild it here (c.f. latent_dims, ksp_key)
             self.vae = VariationalAutoencoder(
                 latent_dims=self.latent_dim,
-                ksp=self.ksp,
+                ksp_key="k3s2",  # kernel size 3, stride 2
                 device=self.device,
             )
 
@@ -988,9 +987,10 @@ class RetinaVAE:
             checkpoint_path = os.path.join(log_dir, checkpoint_dir, "model.pth")
 
             latent_dim = best_result.config["latent_dim"]
+            ksp = best_result.config["ksp"]
             # Get model with correct layer dimensions
             model = VariationalAutoencoder(
-                latent_dims=latent_dim, ksp=self.ksp, device=self.device
+                latent_dims=latent_dim, ksp_key=ksp, device=self.device
             )
             model.load_state_dict(torch.load(checkpoint_path))
             self.latent_dim = latent_dim
@@ -1043,14 +1043,17 @@ class RetinaVAE:
             new_latent_dim = df[df["logdir"] == str(correct_trial_folder)][
                 "config/latent_dim"
             ].values[0]
-            if self.latent_dim != new_latent_dim:
-                print(f"Changing latent_dim from {self.latent_dim} to {new_latent_dim}")
-                self.latent_dim = new_latent_dim
-                self.vae = VariationalAutoencoder(
-                    latent_dims=self.latent_dim,
-                    ksp=self.ksp,
-                    device=self.device,
-                )
+            # check new ksp and update
+            new_ksp = df[df["logdir"] == str(correct_trial_folder)][
+                "config/ksp"
+            ].values[0]
+            print(f"Changing latent_dim from {self.latent_dim} to {new_latent_dim}")
+            self.latent_dim = new_latent_dim
+            self.vae = VariationalAutoencoder(
+                latent_dims=self.latent_dim,
+                ksp_key=new_ksp,
+                device=self.device,
+            )
 
             # Load the model from the checkpoint folder.
             checkpoint_folder_name = [
@@ -1437,7 +1440,7 @@ class RetinaVAE:
 
         self.vae = VariationalAutoencoder(
             latent_dims=self.latent_dim,
-            ksp=self.ksp,
+            ksp_key=self.ksp,
             device=self.device,
         )
 
