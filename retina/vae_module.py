@@ -257,25 +257,24 @@ class VariationalEncoder(nn.Module):
         self.device = device
         self.conv1 = nn.Conv2d(
             1, 8, kernel_size=ksp["kernel"], stride=ksp["stride"], padding=ksp["pad1"]
-        )  # output = floor((width - kernel_size + 2*padding)/stride + 1) TÄHÄN JÄIT: PARAMETRISOI PADDING
+        )
         # W2=(W1−F+2P)/S+1
         self.conv2 = nn.Conv2d(
             8, 16, kernel_size=ksp["kernel"], stride=ksp["stride"], padding=ksp["pad2"]
-        )  # 1
+        )
         self.batch2 = nn.BatchNorm2d(16)
         self.conv3 = nn.Conv2d(
             16, 32, kernel_size=ksp["kernel"], stride=ksp["stride"], padding=ksp["pad3"]
-        )  # 0
-        # self.linear1 = nn.Linear(
-        #     int(ksp["conv3_sidelen"] * ksp["conv3_sidelen"] * 32), 128
-        # )
-        self.linear1 = nn.Linear(25088, 128)  # 3*3*32 = 288
+        )
+        self.linear1 = nn.Linear(
+            int(ksp["conv3_sidelen"] * ksp["conv3_sidelen"] * 32), 128
+        )
         self.linear2 = nn.Linear(128, latent_dims)  # mu
         self.linear3 = nn.Linear(128, latent_dims)  # sigma
 
         self.N = torch.distributions.Normal(0, 1)
         if device is not None and device.type == "cpu":
-            self.N.loc = self.N.loc.cpu()  # hack to get sampling on the GPU
+            self.N.loc = self.N.loc.cpu()
             self.N.scale = self.N.scale.cpu()
         elif device is not None and device.type == "cuda":
             self.N.loc = self.N.loc.cuda()  # hack to get sampling on the GPU
@@ -285,14 +284,7 @@ class VariationalEncoder(nn.Module):
     def forward(self, x):
         if self.device is not None:
             x = x.to(self.device)
-        x = F.relu(
-            self.conv1(x)
-        )  # RF kuva otetaan lineaarisen kombon jälkeen ennen relu:a
-        # Open F.relu to module version nn.ReLU()
-        # Save the output to a variable (in self?)
-        # test the effect on timing
-        # Alternatively,
-        # Build model and after training, use the model to view the RF:s in the middle of the network
+        x = F.relu(self.conv1(x))
         x = F.relu(self.batch2(self.conv2(x)))
         x = F.relu(self.conv3(x))
         x = torch.flatten(x, start_dim=1)
@@ -322,7 +314,7 @@ class Decoder(nn.Module):
         self.decoder_lin = nn.Sequential(
             nn.Linear(latent_dims, 128),
             nn.ReLU(True),
-            nn.Linear(128, ksp["lin_in"]),  # 3*3*32 = 288, 28 * 28 * 32 = 25088,
+            nn.Linear(128, ksp["lin_in"]),
             nn.ReLU(True),
         )
 
@@ -465,7 +457,7 @@ class TrainableVAE(tune.Trainable):
 
         self.model = VariationalAutoencoder(
             latent_dims=config.get("latent_dim"),
-            kernel_size=config.get("kernel_size"),
+            ksp=config.get("ksp"),
             device=self.device,
         )
         self.model.to(self.device)
@@ -550,56 +542,8 @@ class RetinaVAE:
 
         # Set common VAE model parameters
         self.latent_dim = 4
-        self.ksp_key = {
-            "k3s2": {
-                "kernel": 3,
-                "stride": 2,
-                "pad1": 1,
-                "pad2": 1,
-                "pad3": 0,
-                "lin_in": 288,
-                "conv3_sidelen": 3,
-                "opad3": 0,
-                "opad2": 1,
-                "opad1": 1,
-            },
-            "k5s2": {
-                "kernel": 5,
-                "stride": 2,
-                "pad1": 2,
-                "pad2": 2,
-                "pad3": 1,
-                "lin_in": 288,
-                "conv3_sidelen": 3,
-                "opad3": 0,
-                "opad2": 1,
-                "opad1": 1,
-            },
-            "k3s1": {
-                "kernel": 3,
-                "stride": 1,
-                "pad1": 1,
-                "pad2": 1,
-                "pad3": 1,
-                "lin_in": 25088,
-                "conv3_sidelen": 28,
-                "opad3": 0,
-                "opad2": 0,
-                "opad1": 0,
-            },
-            "k5s1": {
-                "kernel": 5,
-                "stride": 1,
-                "pad1": 2,
-                "pad2": 2,
-                "pad3": 2,
-                "lin_in": 25088,
-                "conv3_sidelen": 28,
-                "opad3": 0,
-                "opad2": 0,
-                "opad1": 0,
-            },
-        }
+        # Kernel size and stride, options: k3s2, k3s1, k5s2, k5s1
+        self._set_ksp_key()
         self.ksp = self.ksp_key["k5s1"]
         self.latent_space_plot_scale = 3.0  # Scale for plotting latent space
         self.lr = 0.001
@@ -608,7 +552,7 @@ class RetinaVAE:
         self.resolution_hw = (28, 28)
 
         self.batch_size = 128  # None will take the batch size from test_split size.
-        self.epochs = 10
+        self.epochs = 1000
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
 
@@ -624,7 +568,6 @@ class RetinaVAE:
             "kid_mean",
         ]
 
-        # TÄHÄN JÄIT: KOKEILE 5 CONV KERNEL
         # TARVITSEEKO LISÄTÄ PRECISION JA RECALL? IMPLEMENTAATIO.
         # TESTAA ERI KID LAYERIT.
         # TEE YKSIULOTTEISET HAUT.
@@ -795,6 +738,63 @@ class RetinaVAE:
             encoded_samples = self._get_encoded_samples(ds_name="train_ds")
             self._plot_latent_space(encoded_samples)
             self._plot_tsne_space(encoded_samples)
+
+    def _set_ksp_key(self):
+        """
+        Preset conv2D kernel, stride and padding values for kernel 3 and 5 and for
+        reduction (28*28 => 3*3) and preservation (28*28 => 28*28) of representation size.
+        """
+
+        self.ksp_key = {
+            "k3s2": {
+                "kernel": 3,
+                "stride": 2,
+                "pad1": 1,
+                "pad2": 1,
+                "pad3": 0,
+                "lin_in": 288,
+                "conv3_sidelen": 3,
+                "opad3": 0,
+                "opad2": 1,
+                "opad1": 1,
+            },
+            "k5s2": {
+                "kernel": 5,
+                "stride": 2,
+                "pad1": 2,
+                "pad2": 2,
+                "pad3": 1,
+                "lin_in": 288,
+                "conv3_sidelen": 3,
+                "opad3": 0,
+                "opad2": 1,
+                "opad1": 1,
+            },
+            "k3s1": {
+                "kernel": 3,
+                "stride": 1,
+                "pad1": 1,
+                "pad2": 1,
+                "pad3": 1,
+                "lin_in": 25088,
+                "conv3_sidelen": 28,
+                "opad3": 0,
+                "opad2": 0,
+                "opad1": 0,
+            },
+            "k5s1": {
+                "kernel": 5,
+                "stride": 1,
+                "pad1": 2,
+                "pad2": 2,
+                "pad3": 2,
+                "lin_in": 25088,
+                "conv3_sidelen": 28,
+                "opad3": 0,
+                "opad2": 0,
+                "opad1": 0,
+            },
+        }
 
     def _plot_dependent_variables(self, results_grid):
         """Plot results from ray tune"""
