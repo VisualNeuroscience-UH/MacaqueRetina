@@ -241,7 +241,7 @@ class AugmentedDataset(torch.utils.data.Dataset):
 
 
 class VariationalEncoder(nn.Module):
-    def __init__(self, latent_dims, ksp=None, device=None):
+    def __init__(self, latent_dims, ksp=None, depth=8, device=None):
         # super(VariationalEncoder, self).__init__()
         super().__init__()
         if ksp is None:
@@ -251,24 +251,35 @@ class VariationalEncoder(nn.Module):
                 "pad1": 1,
                 "pad2": 1,
                 "pad3": 0,
-                "lin_in": 288,
                 "conv3_sidelen": 3,
             }
 
         self.device = device
         self.conv1 = nn.Conv2d(
-            1, 8, kernel_size=ksp["kernel"], stride=ksp["stride"], padding=ksp["pad1"]
+            1,
+            depth,
+            kernel_size=ksp["kernel"],
+            stride=ksp["stride"],
+            padding=ksp["pad1"],
         )
         # W2=(W1−F+2P)/S+1
         self.conv2 = nn.Conv2d(
-            8, 16, kernel_size=ksp["kernel"], stride=ksp["stride"], padding=ksp["pad2"]
+            depth,
+            depth * 2,
+            kernel_size=ksp["kernel"],
+            stride=ksp["stride"],
+            padding=ksp["pad2"],
         )
-        self.batch2 = nn.BatchNorm2d(16)
+        self.batch2 = nn.BatchNorm2d(depth * 2)
         self.conv3 = nn.Conv2d(
-            16, 32, kernel_size=ksp["kernel"], stride=ksp["stride"], padding=ksp["pad3"]
+            depth * 2,
+            depth * 4,
+            kernel_size=ksp["kernel"],
+            stride=ksp["stride"],
+            padding=ksp["pad3"],
         )
         self.linear1 = nn.Linear(
-            int(ksp["conv3_sidelen"] * ksp["conv3_sidelen"] * 32), 128
+            int(ksp["conv3_sidelen"] * ksp["conv3_sidelen"] * depth * 4), 128
         )
         self.linear2 = nn.Linear(128, latent_dims)  # mu
         self.linear3 = nn.Linear(128, latent_dims)  # sigma
@@ -298,7 +309,7 @@ class VariationalEncoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, latent_dims, ksp=None, device=None):
+    def __init__(self, latent_dims, ksp=None, depth=8, device=None):
         super().__init__()
 
         if ksp is None:
@@ -308,44 +319,44 @@ class Decoder(nn.Module):
                 "pad1": 1,
                 "pad2": 1,
                 "pad3": 0,
-                "lin_in": 288,
                 "conv3_sidelen": 3,
             }
 
         self.decoder_lin = nn.Sequential(
             nn.Linear(latent_dims, 128),
             nn.ReLU(True),
-            nn.Linear(128, ksp["lin_in"]),
+            nn.Linear(128, ksp["conv3_sidelen"] * ksp["conv3_sidelen"] * depth * 4),
             nn.ReLU(True),
         )
 
         self.unflatten = nn.Unflatten(
-            dim=1, unflattened_size=(32, ksp["conv3_sidelen"], ksp["conv3_sidelen"])
+            dim=1,
+            unflattened_size=(depth * 4, ksp["conv3_sidelen"], ksp["conv3_sidelen"]),
         )
 
         self.decoder_conv = nn.Sequential(
             nn.ConvTranspose2d(
-                32,
-                16,
+                depth * 4,
+                depth * 2,
                 kernel_size=ksp["kernel"],
                 stride=ksp["stride"],
                 padding=ksp["pad3"],
                 output_padding=ksp["opad3"],
             ),
-            nn.BatchNorm2d(16),
+            nn.BatchNorm2d(depth * 2),
             nn.ReLU(True),
             nn.ConvTranspose2d(
-                16,
-                8,
+                depth * 2,
+                depth,
                 kernel_size=ksp["kernel"],
                 stride=ksp["stride"],
                 padding=ksp["pad2"],
                 output_padding=ksp["opad2"],
             ),
-            nn.BatchNorm2d(8),
+            nn.BatchNorm2d(depth),
             nn.ReLU(True),
             nn.ConvTranspose2d(
-                8,
+                depth,
                 1,
                 kernel_size=ksp["kernel"],
                 stride=ksp["stride"],
@@ -363,16 +374,16 @@ class Decoder(nn.Module):
 
 
 class VariationalAutoencoder(nn.Module):
-    def __init__(self, latent_dims, ksp_key=None, device=None):
+    def __init__(self, latent_dims, ksp_key=None, depth=8, device=None):
         super().__init__()
 
         self._set_ksp_key()
         ksp = self.ksp_keys[ksp_key]
         self.device = device
         self.encoder = VariationalEncoder(
-            latent_dims=latent_dims, ksp=ksp, device=self.device
+            latent_dims=latent_dims, ksp=ksp, depth=depth, device=self.device
         )
-        self.decoder = Decoder(latent_dims, ksp)
+        self.decoder = Decoder(latent_dims, ksp, depth=depth, device=self.device)
 
         self.mse = MeanSquaredError()
         # self.fid = FrechetInceptionDistance(
@@ -403,7 +414,6 @@ class VariationalAutoencoder(nn.Module):
                 "pad1": 1,
                 "pad2": 1,
                 "pad3": 0,
-                "lin_in": 288,
                 "conv3_sidelen": 3,
                 "opad3": 0,
                 "opad2": 1,
@@ -415,7 +425,6 @@ class VariationalAutoencoder(nn.Module):
                 "pad1": 2,
                 "pad2": 2,
                 "pad3": 1,
-                "lin_in": 288,
                 "conv3_sidelen": 3,
                 "opad3": 0,
                 "opad2": 1,
@@ -427,7 +436,6 @@ class VariationalAutoencoder(nn.Module):
                 "pad1": 1,
                 "pad2": 1,
                 "pad3": 1,
-                "lin_in": 25088,
                 "conv3_sidelen": 28,
                 "opad3": 0,
                 "opad2": 0,
@@ -439,7 +447,6 @@ class VariationalAutoencoder(nn.Module):
                 "pad1": 2,
                 "pad2": 2,
                 "pad3": 2,
-                "lin_in": 25088,
                 "conv3_sidelen": 28,
                 "opad3": 0,
                 "opad2": 0,
@@ -518,6 +525,7 @@ class TrainableVAE(tune.Trainable):
         self.model = VariationalAutoencoder(
             latent_dims=config.get("latent_dim"),
             ksp_key=config.get("ksp"),
+            depth=config.get("depth"),
             device=self.device,
         )
         self.model.to(self.device)
@@ -598,6 +606,7 @@ class RetinaVAE:
 
         # Set common VAE model parameters
         self.latent_dim = 4
+        self.depth = 16
         self.latent_space_plot_scale = 3.0  # Scale for plotting latent space
         self.lr = 0.001
 
@@ -605,7 +614,7 @@ class RetinaVAE:
         self.resolution_hw = (28, 28)
 
         self.batch_size = 128  # None will take the batch size from test_split size.
-        self.epochs = 500
+        self.epochs = 20
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
 
@@ -656,7 +665,7 @@ class RetinaVAE:
         # self._prep_training()
         self._get_and_split_apricot_data()
 
-        training_mode = "load_model"  # "train_model" or "tune_model" or "load_model"
+        training_mode = "train_model"  # "train_model" or "tune_model" or "load_model"
 
         match training_mode:
             case "train_model":
@@ -694,6 +703,11 @@ class RetinaVAE:
 
                 # Save model
                 model_path = self._save_model()
+                summary(
+                    self.vae,
+                    input_size=(1, self.resolution_hw[0], self.resolution_hw[1]),
+                    batch_size=-1,
+                )
 
             case "tune_model":
 
@@ -711,6 +725,7 @@ class RetinaVAE:
                         # "k5s2",
                         "k5s1",
                     ],  # "k3s2", "k3s1", "k5s2", "k5s1"
+                    "depth": [8],
                     "batch_size": [64],
                     "rotation": [15, 30],
                     "translation": [0],
@@ -908,11 +923,12 @@ class RetinaVAE:
             },
         )
 
-        NUM_MODELS = 2
+        NUM_MODELS = 1
         param_space = {
             "lr": tune.grid_search(self.search_space["lr"]),
             "latent_dim": tune.grid_search(self.search_space["latent_dim"]),
             "ksp": tune.grid_search(self.search_space["ksp"]),
+            "depth": tune.grid_search(self.search_space["depth"]),
             "batch_size": tune.grid_search(self.search_space["batch_size"]),
             "rotation": tune.grid_search(self.search_space["rotation"]),
             "translation": tune.grid_search(self.search_space["translation"]),
@@ -992,6 +1008,7 @@ class RetinaVAE:
             self.vae = VariationalAutoencoder(
                 latent_dims=self.latent_dim,
                 ksp_key="k3s2",  # kernel size 3, stride 2
+                depth=8,
                 device=self.device,
             )
 
@@ -1005,12 +1022,14 @@ class RetinaVAE:
 
             latent_dim = best_result.config["latent_dim"]
             ksp = best_result.config["ksp"]
+            depth = best_result.config["depth"]
             # Get model with correct layer dimensions
             model = VariationalAutoencoder(
-                latent_dims=latent_dim, ksp_key=ksp, device=self.device
+                latent_dims=latent_dim, ksp_key=ksp, depth=depth, device=self.device
             )
             model.load_state_dict(torch.load(checkpoint_path))
             self.latent_dim = latent_dim
+            self.depth = depth
             self.vae = model.to(self.device)
 
         elif model_path is not None:
@@ -1064,11 +1083,15 @@ class RetinaVAE:
             new_ksp = df[df["logdir"] == str(correct_trial_folder)][
                 "config/ksp"
             ].values[0]
+            new_depth = df[df["logdir"] == str(correct_trial_folder)][
+                "config/depth"
+            ].values[0]
             print(f"Changing latent_dim from {self.latent_dim} to {new_latent_dim}")
             self.latent_dim = new_latent_dim
             self.vae = VariationalAutoencoder(
                 latent_dims=self.latent_dim,
                 ksp_key=new_ksp,
+                depth=new_depth,
                 device=self.device,
             )
 
@@ -1458,6 +1481,7 @@ class RetinaVAE:
         self.vae = VariationalAutoencoder(
             latent_dims=self.latent_dim,
             ksp_key=self.ksp,
+            depth=self.depth,
             device=self.device,
         )
 
