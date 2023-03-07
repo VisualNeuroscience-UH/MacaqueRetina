@@ -241,7 +241,7 @@ class AugmentedDataset(torch.utils.data.Dataset):
 
 
 class VariationalEncoder(nn.Module):
-    def __init__(self, latent_dims, ksp=None, depth=8, device=None):
+    def __init__(self, latent_dims, ksp=None, channels=8, device=None):
         # super(VariationalEncoder, self).__init__()
         super().__init__()
         if ksp is None:
@@ -257,30 +257,30 @@ class VariationalEncoder(nn.Module):
         self.device = device
         self.conv1 = nn.Conv2d(
             1,
-            depth,
+            channels,
             kernel_size=ksp["kernel"],
             stride=ksp["stride"],
             padding=ksp["pad1"],
         )
         # W2=(W1−F+2P)/S+1
-        # self.batch1 = nn.BatchNorm2d(depth)
+        # self.batch1 = nn.BatchNorm2d(channels)
         self.conv2 = nn.Conv2d(
-            depth,
-            depth * 2,
+            channels,
+            channels * 2,
             kernel_size=ksp["kernel"],
             stride=ksp["stride"],
             padding=ksp["pad2"],
         )
-        self.batch2 = nn.BatchNorm2d(depth * 2)
+        self.batch2 = nn.BatchNorm2d(channels * 2)
         self.conv3 = nn.Conv2d(
-            depth * 2,
-            depth * 4,
+            channels * 2,
+            channels * 4,
             kernel_size=ksp["kernel"],
             stride=ksp["stride"],
             padding=ksp["pad3"],
         )
         self.linear1 = nn.Linear(
-            int(ksp["conv3_sidelen"] * ksp["conv3_sidelen"] * depth * 4), 128
+            int(ksp["conv3_sidelen"] * ksp["conv3_sidelen"] * channels * 4), 128
         )
         self.linear2 = nn.Linear(128, latent_dims)  # mu
         self.linear3 = nn.Linear(128, latent_dims)  # sigma
@@ -311,7 +311,7 @@ class VariationalEncoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, latent_dims, ksp=None, depth=8, device=None):
+    def __init__(self, latent_dims, ksp=None, channels=8, device=None):
         super().__init__()
 
         if ksp is None:
@@ -327,38 +327,38 @@ class Decoder(nn.Module):
         self.decoder_lin = nn.Sequential(
             nn.Linear(latent_dims, 128),
             nn.ReLU(True),
-            nn.Linear(128, ksp["conv3_sidelen"] * ksp["conv3_sidelen"] * depth * 4),
+            nn.Linear(128, ksp["conv3_sidelen"] * ksp["conv3_sidelen"] * channels * 4),
             nn.ReLU(True),
         )
 
         self.unflatten = nn.Unflatten(
             dim=1,
-            unflattened_size=(depth * 4, ksp["conv3_sidelen"], ksp["conv3_sidelen"]),
+            unflattened_size=(channels * 4, ksp["conv3_sidelen"], ksp["conv3_sidelen"]),
         )
 
         self.decoder_conv = nn.Sequential(
             nn.ConvTranspose2d(
-                depth * 4,
-                depth * 2,
+                channels * 4,
+                channels * 2,
                 kernel_size=ksp["kernel"],
                 stride=ksp["stride"],
                 padding=ksp["pad3"],
                 output_padding=ksp["opad3"],
             ),
-            nn.BatchNorm2d(depth * 2),
+            nn.BatchNorm2d(channels * 2),
             nn.ReLU(True),
             nn.ConvTranspose2d(
-                depth * 2,
-                depth,
+                channels * 2,
+                channels,
                 kernel_size=ksp["kernel"],
                 stride=ksp["stride"],
                 padding=ksp["pad2"],
                 output_padding=ksp["opad2"],
             ),
-            nn.BatchNorm2d(depth),
+            nn.BatchNorm2d(channels),
             nn.ReLU(True),
             nn.ConvTranspose2d(
-                depth,
+                channels,
                 1,
                 kernel_size=ksp["kernel"],
                 stride=ksp["stride"],
@@ -376,16 +376,16 @@ class Decoder(nn.Module):
 
 
 class VariationalAutoencoder(nn.Module):
-    def __init__(self, latent_dims, ksp_key=None, depth=8, device=None):
+    def __init__(self, latent_dims, ksp_key=None, channels=8, device=None):
         super().__init__()
 
         self._set_ksp_key()
         ksp = self.ksp_keys[ksp_key]
         self.device = device
         self.encoder = VariationalEncoder(
-            latent_dims=latent_dims, ksp=ksp, depth=depth, device=self.device
+            latent_dims=latent_dims, ksp=ksp, channels=channels, device=self.device
         )
-        self.decoder = Decoder(latent_dims, ksp, depth=depth, device=self.device)
+        self.decoder = Decoder(latent_dims, ksp, channels=channels, device=self.device)
 
         self.mse = MeanSquaredError()
         # self.fid = FrechetInceptionDistance(
@@ -539,7 +539,7 @@ class TrainableVAE(tune.Trainable):
         self.model = VariationalAutoencoder(
             latent_dims=config.get("latent_dim"),
             ksp_key=config.get("ksp"),
-            depth=config.get("depth"),
+            channels=config.get("channels"),
             device=self.device,
         )
         self.model.to(self.device)
@@ -620,7 +620,7 @@ class RetinaVAE:
 
         # Set common VAE model parameters
         self.latent_dim = 4
-        self.depth = 16
+        self.channels = 16
         self.latent_space_plot_scale = 3.0  # Scale for plotting latent space
         self.lr = 0.001
 
@@ -736,21 +736,37 @@ class RetinaVAE:
                     "latent_dim": [2],
                     "ksp": [
                         "k3s1",
+                        "k5s1",
                         "k7s1",
-                    ],  # k3s2,k3s1,k5s2,k5s1,k7s1
-                    "depth": [4, 16],
+                    ],  # k3s2,k3s1,k5s2,k5s1,k7s1 Kernel-stride-padding for conv layers
+                    "channels": [16],
                     "batch_size": [64],
-                    "rotation": [15],
-                    "translation": [0],
-                    "noise": [0],
+                    "rotation": [15],  # rotation in degrees
+                    "translation": [0],  # fraction of image, (x, y) or [xy] -directions
+                    "noise": [0],  # noise float in [0, 1] (noise is added to the image)
+                    "num_models": 3,  # repetitions of the same model
                 }
 
                 tuner = self._set_ray_tuner()
                 self.result_grid = tuner.fit()
 
                 results_df = self.result_grid.get_dataframe()
-                print("Shortest training time:", results_df["time_total_s"].min())
-                print("Longest training time:", results_df["time_total_s"].max())
+                print(
+                    "Shortest training time:",
+                    results_df["time_total_s"].min(),
+                    "for config:",
+                    results_df[
+                        results_df["time_total_s"] == results_df["time_total_s"].min()
+                    ].index.values,
+                )
+                print(
+                    "Longest training time:",
+                    results_df["time_total_s"].max(),
+                    "for config:",
+                    results_df[
+                        results_df["time_total_s"] == results_df["time_total_s"].max()
+                    ].index.values,
+                )
 
                 best_result = self.result_grid.get_best_result(
                     metric="val_loss", mode="min"
@@ -769,7 +785,7 @@ class RetinaVAE:
                 # Load previously calculated model for vizualization
                 # Load model to self.vae and return state dict. The numbers are in the state dict.
                 # my_model_path = "C:\Users\simov\Laskenta\GitRepos\MacaqueRetina\retina\models" # For single trials from "train_model"
-                trial_name = "TrainableVAE_a8970_00001"  # From ray_results table/folder
+                trial_name = "TrainableVAE_c32da_00000"  # From ray_results table/folder
                 state_dict, result_grid, tb_dir = self._load_model(
                     model_path=None, trial_name=trial_name
                 )
@@ -782,8 +798,13 @@ class RetinaVAE:
                 )
                 # pdb.set_trace()
 
+                # # Dep vars: train_loss, val_loss, mse, ssim, kid_std, kid_mean,
+                # self._plot_dependent_variables(
+                #     results_grid=result_grid,
+                # )
+
                 # Dep vars: train_loss, val_loss, mse, ssim, kid_std, kid_mean,
-                self._plot_dependent_variables(
+                self._plot_dependent_variable_mean_std(
                     results_grid=result_grid,
                 )
 
@@ -845,6 +866,9 @@ class RetinaVAE:
 
         # Drop the "config/" part from the column names
         varied_cols = [x.replace("config/", "") for x in varied_cols]
+
+        # # remove "model_id" from the varied columns
+        # varied_cols.remove("model_id")
 
         num_colors = len(results_grid.get_dataframe())
         colors = plt.cm.get_cmap("tab20", num_colors).colors
@@ -908,6 +932,7 @@ class RetinaVAE:
 
         reporter = CLIReporter(
             metric_columns=[
+                "time_total_s",
                 "iteration",
                 "train_loss",
                 "val_loss",
@@ -936,18 +961,18 @@ class RetinaVAE:
             },
         )
 
-        NUM_MODELS = 2
+        # NUM_MODELS = 2
         param_space = {
             "lr": tune.grid_search(self.search_space["lr"]),
             "latent_dim": tune.grid_search(self.search_space["latent_dim"]),
             "ksp": tune.grid_search(self.search_space["ksp"]),
-            "depth": tune.grid_search(self.search_space["depth"]),
+            "channels": tune.grid_search(self.search_space["channels"]),
             "batch_size": tune.grid_search(self.search_space["batch_size"]),
             "rotation": tune.grid_search(self.search_space["rotation"]),
             "translation": tune.grid_search(self.search_space["translation"]),
             "noise": tune.grid_search(self.search_space["noise"]),
             "model_id": tune.grid_search(
-                ["model_{}".format(i) for i in range(NUM_MODELS)]
+                ["model_{}".format(i) for i in range(self.search_space["num_models"])]
             ),
         }
 
@@ -1021,7 +1046,7 @@ class RetinaVAE:
             self.vae = VariationalAutoencoder(
                 latent_dims=self.latent_dim,
                 ksp_key="k3s2",  # kernel size 3, stride 2
-                depth=8,
+                channels=8,
                 device=self.device,
             )
 
@@ -1035,14 +1060,17 @@ class RetinaVAE:
 
             latent_dim = best_result.config["latent_dim"]
             ksp = best_result.config["ksp"]
-            depth = best_result.config["depth"]
+            channels = best_result.config["channels"]
             # Get model with correct layer dimensions
             model = VariationalAutoencoder(
-                latent_dims=latent_dim, ksp_key=ksp, depth=depth, device=self.device
+                latent_dims=latent_dim,
+                ksp_key=ksp,
+                channels=channels,
+                device=self.device,
             )
             model.load_state_dict(torch.load(checkpoint_path))
             self.latent_dim = latent_dim
-            self.depth = depth
+            self.channels = channels
             self.vae = model.to(self.device)
 
         elif model_path is not None:
@@ -1096,15 +1124,17 @@ class RetinaVAE:
             new_ksp = df[df["logdir"] == str(correct_trial_folder)][
                 "config/ksp"
             ].values[0]
-            new_depth = int(
-                df[df["logdir"] == str(correct_trial_folder)]["config/depth"].values[0]
+            new_channels = int(
+                df[df["logdir"] == str(correct_trial_folder)]["config/channels"].values[
+                    0
+                ]
             )
             print(f"Changing latent_dim from {self.latent_dim} to {new_latent_dim}")
             self.latent_dim = new_latent_dim
             self.vae = VariationalAutoencoder(
                 latent_dims=self.latent_dim,
                 ksp_key=new_ksp,
-                depth=new_depth,
+                channels=new_channels,
                 device=self.device,
             )
 
@@ -1494,7 +1524,7 @@ class RetinaVAE:
         self.vae = VariationalAutoencoder(
             latent_dims=self.latent_dim,
             ksp_key=self.ksp,
-            depth=self.depth,
+            channels=self.channels,
             device=self.device,
         )
 
