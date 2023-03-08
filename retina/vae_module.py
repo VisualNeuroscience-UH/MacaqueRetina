@@ -22,7 +22,7 @@ from torchmetrics.image.kid import KernelInceptionDistance
 from torchmetrics import StructuralSimilarityIndexMeasure
 from torchmetrics import MeanSquaredError
 
-import torch._dynamo as dynamo
+# import torch._dynamo as dynamo
 from torchsummary import summary
 
 from ray import air, tune
@@ -241,7 +241,7 @@ class AugmentedDataset(torch.utils.data.Dataset):
 
 
 class VariationalEncoder(nn.Module):
-    def __init__(self, latent_dims, ksp=None, channels=8, device=None):
+    def __init__(self, latent_dims, ksp=None, channels=8, conv_layers=3, device=None):
         # super(VariationalEncoder, self).__init__()
         super().__init__()
         if ksp is None:
@@ -311,7 +311,7 @@ class VariationalEncoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, latent_dims, ksp=None, channels=8, device=None):
+    def __init__(self, latent_dims, ksp=None, channels=8, conv_layers=3, device=None):
         super().__init__()
 
         if ksp is None:
@@ -376,7 +376,9 @@ class Decoder(nn.Module):
 
 
 class VariationalAutoencoder(nn.Module):
-    def __init__(self, latent_dims, ksp_key=None, channels=8, device=None):
+    def __init__(
+        self, latent_dims, ksp_key=None, channels=8, conv_layers=3, device=None
+    ):
         super().__init__()
 
         self._set_ksp_key()
@@ -628,7 +630,7 @@ class RetinaVAE:
         self.resolution_hw = (28, 28)
 
         self.batch_size = 128  # None will take the batch size from test_split size.
-        self.epochs = 500
+        self.epochs = 5
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
 
@@ -680,7 +682,7 @@ class RetinaVAE:
         # self._prep_training()
         self._get_and_split_apricot_data()
 
-        training_mode = "load_model"  # "train_model" or "tune_model" or "load_model"
+        training_mode = "train_model"  # "train_model" or "tune_model" or "load_model"
 
         match training_mode:
             case "train_model":
