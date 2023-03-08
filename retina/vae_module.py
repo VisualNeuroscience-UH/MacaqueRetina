@@ -48,6 +48,7 @@ import os
 import time
 import subprocess
 import itertools
+from collections import OrderedDict
 
 
 class AugmentedDataset(torch.utils.data.Dataset):
@@ -241,7 +242,15 @@ class AugmentedDataset(torch.utils.data.Dataset):
 
 
 class VariationalEncoder(nn.Module):
-    def __init__(self, latent_dims, ksp=None, channels=8, conv_layers=3, device=None):
+    def __init__(
+        self,
+        latent_dims,
+        ksp=None,
+        channels=8,
+        conv_layers=3,
+        batch_norm=True,
+        device=None,
+    ):
         # super(VariationalEncoder, self).__init__()
         super().__init__()
         if ksp is None:
@@ -255,33 +264,48 @@ class VariationalEncoder(nn.Module):
             }
 
         self.device = device
-        self.conv1 = nn.Conv2d(
-            1,
-            channels,
-            kernel_size=ksp["kernel"],
-            stride=ksp["stride"],
-            padding=ksp["pad1"],
+
+        self.encoder_conv1 = nn.Sequential(
+            nn.Conv2d(
+                1,
+                channels,
+                kernel_size=ksp["kernel"],
+                stride=ksp["stride"],
+                padding=ksp["pad1"],
+            ),
+            nn.BatchNorm2d(channels),
+            nn.ReLU(True),
         )
-        # W2=(W1−F+2P)/S+1
-        # self.batch1 = nn.BatchNorm2d(channels)
-        self.conv2 = nn.Conv2d(
-            channels,
-            channels * 2,
-            kernel_size=ksp["kernel"],
-            stride=ksp["stride"],
-            padding=ksp["pad2"],
+
+        # Make an OrderedDict to feed into nn.Sequential containing the convolutional layers
+        conv_layers_2toN = OrderedDict()
+        for i in range(conv_layers - 1):
+            n_channels = channels * 2**i
+            conv_layers_2toN["conv" + str(i + 2)] = nn.Conv2d(
+                n_channels,
+                n_channels * 2,
+                kernel_size=ksp["kernel"],
+                stride=ksp["stride"],
+                padding=ksp[f"pad{i + 2}"],
+            )
+            if batch_norm is True:
+                conv_layers_2toN["batch" + str(i + 2)] = nn.BatchNorm2d(n_channels * 2)
+            conv_layers_2toN["relu" + str(i + 2)] = nn.ReLU(True)
+
+        # OrderedDict works when it is the only argument to nn.Sequential
+        self.encoder_conv2toN = nn.Sequential(conv_layers_2toN)
+
+        self.flatten = nn.Flatten(start_dim=1)
+        self.encoder_lin = nn.Linear(
+            int(
+                ksp["conv3_sidelen"]
+                * ksp["conv3_sidelen"]
+                * channels
+                * 2 ** (conv_layers - 1)
+            ),
+            128,
         )
-        self.batch2 = nn.BatchNorm2d(channels * 2)
-        self.conv3 = nn.Conv2d(
-            channels * 2,
-            channels * 4,
-            kernel_size=ksp["kernel"],
-            stride=ksp["stride"],
-            padding=ksp["pad3"],
-        )
-        self.linear1 = nn.Linear(
-            int(ksp["conv3_sidelen"] * ksp["conv3_sidelen"] * channels * 4), 128
-        )
+
         self.linear2 = nn.Linear(128, latent_dims)  # mu
         self.linear3 = nn.Linear(128, latent_dims)  # sigma
 
@@ -297,12 +321,12 @@ class VariationalEncoder(nn.Module):
     def forward(self, x):
         if self.device is not None:
             x = x.to(self.device)
-        x = F.relu(self.conv1(x))
-        # x = F.relu(self.batch1(self.conv1(x)))
-        x = F.relu(self.batch2(self.conv2(x)))
-        x = F.relu(self.conv3(x))
-        x = torch.flatten(x, start_dim=1)
-        x = F.relu(self.linear1(x))
+
+        x = self.encoder_conv1(x)
+        x = self.encoder_conv2toN(x)
+        x = self.flatten(x)
+        x = self.encoder_lin(x)
+
         mu = self.linear2(x)
         sigma = torch.exp(self.linear3(x))
         z = mu + sigma * self.N.sample(mu.shape)
@@ -311,7 +335,15 @@ class VariationalEncoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, latent_dims, ksp=None, channels=8, conv_layers=3, device=None):
+    def __init__(
+        self,
+        latent_dims,
+        ksp=None,
+        channels=8,
+        conv_layers=3,
+        batch_norm=True,
+        device=None,
+    ):
         super().__init__()
 
         if ksp is None:
@@ -327,67 +359,106 @@ class Decoder(nn.Module):
         self.decoder_lin = nn.Sequential(
             nn.Linear(latent_dims, 128),
             nn.ReLU(True),
-            nn.Linear(128, ksp["conv3_sidelen"] * ksp["conv3_sidelen"] * channels * 4),
+            nn.Linear(
+                128,
+                ksp["conv3_sidelen"]
+                * ksp["conv3_sidelen"]
+                * channels
+                * 2 ** (conv_layers - 1),
+            ),
             nn.ReLU(True),
         )
 
         self.unflatten = nn.Unflatten(
             dim=1,
-            unflattened_size=(channels * 4, ksp["conv3_sidelen"], ksp["conv3_sidelen"]),
+            unflattened_size=(
+                channels * 2 ** (conv_layers - 1),
+                ksp["conv3_sidelen"],
+                ksp["conv3_sidelen"],
+            ),
         )
 
-        self.decoder_conv = nn.Sequential(
-            nn.ConvTranspose2d(
-                channels * 4,
-                channels * 2,
+        # Make an OrderedDict to feed into nn.Sequential containing the deconvolutional layers
+        deconv_layers_Nto2 = OrderedDict()
+
+        for i in range(conv_layers - 1):
+            n_channels = channels * 2 ** (conv_layers - i - 1)
+            deconv_layers_Nto2["deconv" + str(conv_layers - i)] = nn.ConvTranspose2d(
+                n_channels,
+                n_channels // 2,
                 kernel_size=ksp["kernel"],
                 stride=ksp["stride"],
-                padding=ksp["pad3"],
-                output_padding=ksp["opad3"],
-            ),
-            nn.BatchNorm2d(channels * 2),
-            nn.ReLU(True),
-            nn.ConvTranspose2d(
-                channels * 2,
-                channels,
-                kernel_size=ksp["kernel"],
-                stride=ksp["stride"],
-                padding=ksp["pad2"],
-                output_padding=ksp["opad2"],
-            ),
-            nn.BatchNorm2d(channels),
-            nn.ReLU(True),
-            nn.ConvTranspose2d(
-                channels,
-                1,
-                kernel_size=ksp["kernel"],
-                stride=ksp["stride"],
-                padding=ksp["pad1"],
-                output_padding=ksp["opad1"],
-            ),
+                padding=ksp[f"pad{conv_layers - i}"],
+                output_padding=ksp[f"opad{conv_layers - i}"],
+            )
+            if batch_norm is True:
+                deconv_layers_Nto2["batch" + str(conv_layers - i)] = nn.BatchNorm2d(
+                    n_channels // 2
+                )
+            deconv_layers_Nto2["relu" + str(conv_layers - i)] = nn.ReLU(True)
+
+        self.decoder_convNto2 = nn.Sequential(deconv_layers_Nto2)
+
+        self.decoder_end = nn.ConvTranspose2d(
+            channels,
+            1,
+            kernel_size=ksp["kernel"],
+            stride=ksp["stride"],
+            padding=ksp["pad1"],
+            output_padding=ksp["opad1"],
         )
 
     def forward(self, x):
         x = self.decoder_lin(x)
         x = self.unflatten(x)
-        x = self.decoder_conv(x)
+        x = self.decoder_convNto2(x)
+        x = self.decoder_end(x)
         x = torch.sigmoid(x)
         return x
 
 
 class VariationalAutoencoder(nn.Module):
     def __init__(
-        self, latent_dims, ksp_key=None, channels=8, conv_layers=3, device=None
+        self,
+        latent_dims,
+        ksp_key=None,
+        channels=8,
+        conv_layers=3,
+        batch_norm=True,
+        device=None,
     ):
         super().__init__()
+
+        # Assert that conv_layers is an integer between 1 and 5
+        assert isinstance(
+            conv_layers, int
+        ), "conv_layers must be an integer, aborting..."
+        assert conv_layers >= 1, "conv_layers must be >= 1, aborting..."
+        assert conv_layers <= 5, "conv_layers must be <= 5, aborting..."
+        if conv_layers > 3:
+            assert (
+                "s2" not in ksp_key
+            ), "stride 2 only supports conv_layers <= 3, check ksp, aborting..."
 
         self._set_ksp_key()
         ksp = self.ksp_keys[ksp_key]
         self.device = device
         self.encoder = VariationalEncoder(
-            latent_dims=latent_dims, ksp=ksp, channels=channels, device=self.device
+            latent_dims=latent_dims,
+            ksp=ksp,
+            channels=channels,
+            conv_layers=conv_layers,
+            batch_norm=batch_norm,
+            device=self.device,
         )
-        self.decoder = Decoder(latent_dims, ksp, channels=channels, device=self.device)
+        self.decoder = Decoder(
+            latent_dims,
+            ksp,
+            channels=channels,
+            conv_layers=conv_layers,
+            batch_norm=batch_norm,
+            device=self.device,
+        )
 
         self.mse = MeanSquaredError()
         # self.fid = FrechetInceptionDistance(
@@ -441,7 +512,11 @@ class VariationalAutoencoder(nn.Module):
                 "pad1": 1,
                 "pad2": 1,
                 "pad3": 1,
+                "pad4": 1,
+                "pad5": 1,
                 "conv3_sidelen": 28,
+                "opad5": 0,
+                "opad4": 0,
                 "opad3": 0,
                 "opad2": 0,
                 "opad1": 0,
@@ -452,7 +527,11 @@ class VariationalAutoencoder(nn.Module):
                 "pad1": 2,
                 "pad2": 2,
                 "pad3": 2,
+                "pad4": 2,
+                "pad5": 2,
                 "conv3_sidelen": 28,
+                "opad5": 0,
+                "opad4": 0,
                 "opad3": 0,
                 "opad2": 0,
                 "opad1": 0,
@@ -463,7 +542,11 @@ class VariationalAutoencoder(nn.Module):
                 "pad1": 3,
                 "pad2": 3,
                 "pad3": 3,
+                "pad4": 3,
+                "pad5": 3,
                 "conv3_sidelen": 28,
+                "opad5": 0,
+                "opad4": 0,
                 "opad3": 0,
                 "opad2": 0,
                 "opad1": 0,
@@ -621,16 +704,16 @@ class RetinaVAE:
         self.response_type = response_type
 
         # Set common VAE model parameters
-        self.latent_dim = 4
+        self.latent_dim = 2
         self.channels = 16
         self.latent_space_plot_scale = 3.0  # Scale for plotting latent space
-        self.lr = 0.001
+        self.lr = 0.0001
 
         # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
         self.resolution_hw = (28, 28)
 
-        self.batch_size = 128  # None will take the batch size from test_split size.
-        self.epochs = 5
+        self.batch_size = 64  # None will take the batch size from test_split size.
+        self.epochs = 500
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
 
@@ -646,16 +729,17 @@ class RetinaVAE:
             "kid_mean",
         ]
 
+        self.conv_layers = 5
+        self.batch_norm = True
+
         # TÄHÄN JÄIT:
-        # TESTAA N CONV LAYERS 1-5 / PARAMETRISOI
-        # KOKEILE PUDOTTAA BATCH NORM VEKS / PARAMETRISOI
         # TARVITSEEKO LISÄTÄ PRECISION JA RECALL? IMPLEMENTAATIO.
 
         # Augment training and validation data.
         augmentation_dict = {
-            "rotation": 45.0,  # rotation in degrees
-            "translation": (0.1, 0.1),  # fraction of image, (x, y) -directions
-            "noise": 0.05,  # noise float in [0, 1] (noise is added to the image)
+            "rotation": 15.0,  # rotation in degrees
+            "translation": (0.0, 0.0),  # fraction of image, (x, y) -directions
+            "noise": 0.0,  # noise float in [0, 1] (noise is added to the image)
         }
         # self.augmentation_dict = augmentation_dict
         self.augmentation_dict = None
@@ -704,7 +788,7 @@ class RetinaVAE:
                 )
 
                 # Create model and set optimizer and learning rate scheduler
-                self.ksp = "k3s2"  # "k3s1" # "k5s2" # "k5s1"
+                self.ksp = "k5s1"  # "k3s1" # "k5s2" # "k5s1"
 
                 self._prep_training()
                 print(self.vae)
@@ -740,7 +824,7 @@ class RetinaVAE:
                         "k3s1",
                         "k5s1",
                         "k7s1",
-                    ],  # k3s2,k3s1,k5s2,k5s1,k7s1 Kernel-stride-padding for conv layers
+                    ],  # k3s2,k3s1,k5s2,k5s1,k7s1 Kernel-stride-padding for conv layers. NOTE you cannot use >3 conv layers with stride 2
                     "channels": [16],
                     "batch_size": [64],
                     "rotation": [15],  # rotation in degrees
@@ -1527,6 +1611,8 @@ class RetinaVAE:
             latent_dims=self.latent_dim,
             ksp_key=self.ksp,
             channels=self.channels,
+            conv_layers=self.conv_layers,
+            batch_norm=self.batch_norm,
             device=self.device,
         )
 
