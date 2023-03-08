@@ -729,10 +729,12 @@ class RetinaVAE:
             "kid_mean",
         ]
 
-        self.conv_layers = 5
+        self.conv_layers = 1
         self.batch_norm = True
 
         # TÄHÄN JÄIT:
+        # LOSSIT outoja, menee nan arvoon myös conv layers 4:lla
+        # implementoi tuneen uudet hyperparametrit
         # TARVITSEEKO LISÄTÄ PRECISION JA RECALL? IMPLEMENTAATIO.
 
         # Augment training and validation data.
