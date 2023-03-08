@@ -49,6 +49,7 @@ import time
 import subprocess
 import itertools
 from collections import OrderedDict
+from sys import exit
 
 
 class AugmentedDataset(torch.utils.data.Dataset):
@@ -242,6 +243,10 @@ class AugmentedDataset(torch.utils.data.Dataset):
 
 
 class VariationalEncoder(nn.Module):
+    """
+    Original implementation from Eugenia Anello (https://medium.com/dataseries/variational-autoencoder-with-pytorch-2d359cbf027b)
+    """
+
     def __init__(
         self,
         latent_dims,
@@ -273,7 +278,6 @@ class VariationalEncoder(nn.Module):
                 stride=ksp["stride"],
                 padding=ksp["pad1"],
             ),
-            nn.BatchNorm2d(channels),
             nn.ReLU(True),
         )
 
@@ -288,8 +292,12 @@ class VariationalEncoder(nn.Module):
                 stride=ksp["stride"],
                 padding=ksp[f"pad{i + 2}"],
             )
-            if batch_norm is True:
+            # Add one batch norm layer after last convolutional layer
+            if (
+                batch_norm is True and i == 0
+            ):  # parametrize 0 if need to put b-layer after other conv layers
                 conv_layers_2toN["batch" + str(i + 2)] = nn.BatchNorm2d(n_channels * 2)
+
             conv_layers_2toN["relu" + str(i + 2)] = nn.ReLU(True)
 
         # OrderedDict works when it is the only argument to nn.Sequential
@@ -318,6 +326,8 @@ class VariationalEncoder(nn.Module):
             self.N.scale = self.N.scale.cuda()
         self.kl = 0
 
+        self.delete_me = 0
+
     def forward(self, x):
         if self.device is not None:
             x = x.to(self.device)
@@ -328,9 +338,16 @@ class VariationalEncoder(nn.Module):
         x = self.encoder_lin(x)
 
         mu = self.linear2(x)
-        sigma = torch.exp(self.linear3(x))
+        sigma = torch.exp(
+            self.linear3(x)
+        )  # The exp is an auxiliary activation to lin layer to ensure positive sigma
         z = mu + sigma * self.N.sample(mu.shape)
-        self.kl = (sigma**2 + mu**2 - torch.log(sigma) - 1 / 2).sum()
+        # OLD self.kl = (sigma**2 + mu**2 - torch.log(sigma) - 1 / 2).sum(), from orig ref@medium, see above
+        # Ref Kingma_2014_arXiv
+        self.kl = -0.5 * torch.sum(
+            1 + torch.log(sigma.pow(2)) - mu.pow(2) - sigma.pow(2)
+        )
+
         return z
 
 
@@ -380,8 +397,8 @@ class Decoder(nn.Module):
 
         # Make an OrderedDict to feed into nn.Sequential containing the deconvolutional layers
         deconv_layers_Nto2 = OrderedDict()
-
-        for i in range(conv_layers - 1):
+        conv_layers_list = list(range(conv_layers - 1))
+        for i in conv_layers_list:
             n_channels = channels * 2 ** (conv_layers - i - 1)
             deconv_layers_Nto2["deconv" + str(conv_layers - i)] = nn.ConvTranspose2d(
                 n_channels,
@@ -391,7 +408,9 @@ class Decoder(nn.Module):
                 padding=ksp[f"pad{conv_layers - i}"],
                 output_padding=ksp[f"opad{conv_layers - i}"],
             )
-            if batch_norm is True:
+            if (
+                batch_norm is True and i == conv_layers_list[-1]
+            ):  # parametrize the -1 if you want to change b-layer
                 deconv_layers_Nto2["batch" + str(conv_layers - i)] = nn.BatchNorm2d(
                     n_channels // 2
                 )
@@ -729,13 +748,13 @@ class RetinaVAE:
             "kid_mean",
         ]
 
-        self.conv_layers = 1
+        self.conv_layers = 3
         self.batch_norm = True
 
         # TÄHÄN JÄIT:
-        # LOSSIT outoja, menee nan arvoon myös conv layers 4:lla
         # implementoi tuneen uudet hyperparametrit
         # TARVITSEEKO LISÄTÄ PRECISION JA RECALL? IMPLEMENTAATIO.
+        # tune until sun runs out of hydrogen
 
         # Augment training and validation data.
         augmentation_dict = {
@@ -743,8 +762,8 @@ class RetinaVAE:
             "translation": (0.0, 0.0),  # fraction of image, (x, y) -directions
             "noise": 0.0,  # noise float in [0, 1] (noise is added to the image)
         }
-        # self.augmentation_dict = augmentation_dict
-        self.augmentation_dict = None
+        self.augmentation_dict = augmentation_dict
+        # self.augmentation_dict = None
 
         # Set the random seed for reproducible results for both torch and numpy
         self.random_seed = np.random.randint(1, 10000)
@@ -790,7 +809,7 @@ class RetinaVAE:
                 )
 
                 # Create model and set optimizer and learning rate scheduler
-                self.ksp = "k5s1"  # "k3s1" # "k5s2" # "k5s1"
+                self.ksp = "k7s1"  # "k3s1" # "k5s2" # "k5s1"
 
                 self._prep_training()
                 print(self.vae)
@@ -884,17 +903,16 @@ class RetinaVAE:
                     input_size=(1, self.resolution_hw[0], self.resolution_hw[1]),
                     batch_size=-1,
                 )
-                # pdb.set_trace()
-
-                # # Dep vars: train_loss, val_loss, mse, ssim, kid_std, kid_mean,
-                # self._plot_dependent_variables(
-                #     results_grid=result_grid,
-                # )
 
                 # Dep vars: train_loss, val_loss, mse, ssim, kid_std, kid_mean,
-                self._plot_dependent_variable_mean_std(
+                self._plot_dependent_variables(
                     results_grid=result_grid,
                 )
+
+                # # Dep vars: train_loss, val_loss, mse, ssim, kid_std, kid_mean,
+                # self._plot_dependent_variable_mean_std(
+                #     results_grid=result_grid,
+                # )
 
                 print(result_grid)
 
