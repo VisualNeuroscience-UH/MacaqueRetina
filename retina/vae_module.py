@@ -724,19 +724,59 @@ class RetinaVAE:
         self.gc_type = gc_type
         self.response_type = response_type
 
+        # N epochs for both single training and ray tune runs
+        self.epochs = 5
+
+        training_mode = "load_model"  # "train_model" or "tune_model" or "load_model"
+        # self.model_path = "C:\Users\simov\Laskenta\GitRepos\MacaqueRetina\retina\models" # For most recent single trials from "train_model"
+        # self.model_path = "/opt2/Git_Repos/MacaqueRetina/retina/models/"  # For most recent single trials from "train_model"
+        self.trial_name = "TrainableVAE_e8de9_00002"  # From ray_results table/folder
+
+        # TÄHÄN JÄIT:
+        # TARVITSEEKO LISÄTÄ PRECISION JA RECALL metrics? IMPLEMENTAATIO.
+        # tune until sun runs out of hydrogen
+
+        #######################
+        # Single run parameters
+        #######################
+
         # Set common VAE model parameters
         self.latent_dim = 2
         self.channels = 16
-        self.latent_space_plot_scale = 3.0  # Scale for plotting latent space
         self.lr = 0.0001
+
+        self.batch_size = 64  # None will take the batch size from test_split size.
+        self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
+        self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
+
+        self.ksp = "k3s2"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
+        self.conv_layers = 3
+        self.batch_norm = True
+
+        # Augment training and validation data.
+        augmentation_dict = {
+            "rotation": 15.0,  # rotation in degrees
+            "translation": (0.0, 0.0),  # fraction of image, (x, y) -directions
+            "noise": 0.0,  # noise float in [0, 1] (noise is added to the image)
+        }
+        self.augmentation_dict = augmentation_dict
+        # self.augmentation_dict = None
+
+        ####################
+        # Utility parameters
+        ####################
+
+        # Set the random seed for reproducible results for both torch and numpy
+        self.random_seed = np.random.randint(1, 10000)
+        torch.manual_seed(self.random_seed)
+        np.random.seed(self.random_seed)
+
+        self.latent_space_plot_scale = 3.0  # Scale for plotting latent space
 
         # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
         self.resolution_hw = (28, 28)
 
-        self.batch_size = 64  # None will take the batch size from test_split size.
-        self.epochs = 5
-        self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
-        self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
+        self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         self.this_folder = self._get_this_folder()
         self.models_folder = self._set_models_folder()
@@ -749,31 +789,6 @@ class RetinaVAE:
             "kid_std",
             "kid_mean",
         ]
-
-        self.ksp = "k7s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
-        self.conv_layers = 3
-        self.batch_norm = True
-
-        # TÄHÄN JÄIT:
-        # implementoi tuneen uudet hyperparametrit
-        # TARVITSEEKO LISÄTÄ PRECISION JA RECALL? IMPLEMENTAATIO.
-        # tune until sun runs out of hydrogen
-
-        # Augment training and validation data.
-        augmentation_dict = {
-            "rotation": 15.0,  # rotation in degrees
-            "translation": (0.0, 0.0),  # fraction of image, (x, y) -directions
-            "noise": 0.0,  # noise float in [0, 1] (noise is added to the image)
-        }
-        self.augmentation_dict = augmentation_dict
-        # self.augmentation_dict = None
-
-        # Set the random seed for reproducible results for both torch and numpy
-        self.random_seed = np.random.randint(1, 10000)
-        torch.manual_seed(self.random_seed)
-        np.random.seed(self.random_seed)
-
-        self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         self.device = (
             torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -789,8 +804,6 @@ class RetinaVAE:
         # # Create model and set optimizer and learning rate scheduler
         # self._prep_training()
         self._get_and_split_apricot_data()
-
-        training_mode = "load_model"  # "train_model" or "tune_model" or "load_model"
 
         match training_mode:
             case "train_model":
@@ -892,30 +905,38 @@ class RetinaVAE:
             case "load_model":
                 # Load previously calculated model for vizualization
                 # Load model to self.vae and return state dict. The numbers are in the state dict.
-                # my_model_path = "C:\Users\simov\Laskenta\GitRepos\MacaqueRetina\retina\models" # For single trials from "train_model"
-                trial_name = "TrainableVAE_7a5cb_00000"  # From ray_results table/folder
-                state_dict, result_grid, tb_dir = self._load_model(
-                    model_path=None, trial_name=trial_name
-                )
+
+                if hasattr(self, "trial_name"):
+                    state_dict, result_grid, tb_dir = self._load_model(
+                        model_path=None, trial_name=self.trial_name
+                    )
+                    # Dep vars: train_loss, val_loss, mse, ssim, kid_std, kid_mean,
+                    self._plot_dependent_variables(
+                        results_grid=result_grid,
+                    )
+                    print(result_grid)
+
+                elif hasattr(self, "model_path"):
+                    state_dict = self._load_model(
+                        model_path=self.model_path, trial_name=None
+                    )
+                else:
+                    raise ValueError(
+                        "No model path or trial name given, cannot load model, aborting..."
+                    )
+
                 # # Evoke new subprocess and run tensorboard at tb_dir folder
                 # self._run_tensorboard(tb_dir=tb_dir)
                 summary(
-                    self.vae,
+                    self.vae.to(self.device),
                     input_size=(1, self.resolution_hw[0], self.resolution_hw[1]),
                     batch_size=-1,
-                )
-
-                # Dep vars: train_loss, val_loss, mse, ssim, kid_std, kid_mean,
-                self._plot_dependent_variables(
-                    results_grid=result_grid,
                 )
 
                 # # Dep vars: train_loss, val_loss, mse, ssim, kid_std, kid_mean,
                 # self._plot_dependent_variable_mean_std(
                 #     results_grid=result_grid,
                 # )
-
-                print(result_grid)
 
         self.test_loader = self._augment_and_get_dataloader(
             data_type="test", shuffle=False
@@ -1200,23 +1221,20 @@ class RetinaVAE:
                 device=self.device,
             )
 
-            if not Path(model_path).exists():
-
-                # Get the most recent model. Max recognizes the timestamp with the largest value
+            model_path = Path(model_path)
+            if Path.exists(model_path) and model_path.is_file():
+                print(
+                    f"Loading model from {model_path}. \nWARNING: This will replace the current model in-place."
+                )
+                self.vae.load_state_dict(torch.load(str(model_path)))
+            elif Path.exists(model_path) and model_path.is_dir():
                 try:
                     model_path = max(Path(self.models_folder).glob("*.pt"))
+                    self.vae.load_state_dict(torch.load(str(model_path)))
                     print(f"Most recent model is {model_path}.")
                 except ValueError:
                     raise FileNotFoundError("No model files found. Aborting...")
 
-            else:
-                model_path = Path(model_path)
-
-            if Path.exists(model_path):
-                print(
-                    f"Loading model from {model_path}. \nWARNING: This will replace the current model in-place."
-                )
-                self.vae.load_state_dict(torch.load(model_path))
             else:
                 print(f"Model {model_path} does not exist.")
 
@@ -1286,6 +1304,26 @@ class RetinaVAE:
             # Move new model to same device as the input data
             self.vae.to(self.device)
             return self.vae.state_dict(), results, correct_trial_folder
+
+        else:
+            self.vae = VariationalAutoencoder(
+                latent_dims=self.latent_dim,
+                ksp_key=self.ksp,
+                channels=self.channels,
+                conv_layers=self.conv_layers,
+                batch_norm=self.batch_norm,
+                device=self.device,
+            )
+            # Get the most recent model. Max recognizes the timestamp with the largest value
+            try:
+                model_path = max(Path(self.models_folder).glob("*.pt"))
+                print(f"Most recent model is {model_path}.")
+            except ValueError:
+                raise FileNotFoundError("No model files found. Aborting...")
+            self.vae.load_state_dict(torch.load(model_path))
+
+            # Move new model to same device as the input data
+            self.vae.to(self.device)
 
         return self.vae.state_dict()
 
