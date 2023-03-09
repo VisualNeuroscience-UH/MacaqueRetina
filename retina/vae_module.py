@@ -256,6 +256,7 @@ class VariationalEncoder(nn.Module):
         batch_norm=True,
         device=None,
     ):
+
         # super(VariationalEncoder, self).__init__()
         super().__init__()
         if ksp is None:
@@ -292,10 +293,9 @@ class VariationalEncoder(nn.Module):
                 stride=ksp["stride"],
                 padding=ksp[f"pad{i + 2}"],
             )
-            # Add one batch norm layer after last convolutional layer
-            if (
-                batch_norm is True and i == 0
-            ):  # parametrize 0 if need to put b-layer after other conv layers
+            # Add one batch norm layer after second convolutional layer
+            # parametrize 0 if need to put b-layer after other conv layers
+            if batch_norm and i == 0:  # batch_norm is np.bool_ type, "is True" fails
                 conv_layers_2toN["batch" + str(i + 2)] = nn.BatchNorm2d(n_channels * 2)
 
             conv_layers_2toN["relu" + str(i + 2)] = nn.ReLU(True)
@@ -325,8 +325,6 @@ class VariationalEncoder(nn.Module):
             self.N.loc = self.N.loc.cuda()  # hack to get sampling on the GPU
             self.N.scale = self.N.scale.cuda()
         self.kl = 0
-
-        self.delete_me = 0
 
     def forward(self, x):
         if self.device is not None:
@@ -408,9 +406,10 @@ class Decoder(nn.Module):
                 padding=ksp[f"pad{conv_layers - i}"],
                 output_padding=ksp[f"opad{conv_layers - i}"],
             )
-            if (
-                batch_norm is True and i == conv_layers_list[-1]
-            ):  # parametrize the -1 if you want to change b-layer
+
+            # parametrize the -1 if you want to change b-layer
+            # batch_norm is np.bool_ type, "is True" fails
+            if batch_norm and i == conv_layers_list[-1]:
                 deconv_layers_Nto2["batch" + str(conv_layers - i)] = nn.BatchNorm2d(
                     n_channels // 2
                 )
@@ -479,6 +478,7 @@ class VariationalAutoencoder(nn.Module):
             device=self.device,
         )
 
+        # Consider moving for not to unnecessarily print the kid model
         self.mse = MeanSquaredError()
         # self.fid = FrechetInceptionDistance(
         #     n_features=64, reset_real_features=False, normalize=True
@@ -644,6 +644,8 @@ class TrainableVAE(tune.Trainable):
             latent_dims=config.get("latent_dim"),
             ksp_key=config.get("ksp"),
             channels=config.get("channels"),
+            conv_layers=config.get("conv_layers"),
+            batch_norm=config.get("batch_norm"),
             device=self.device,
         )
         self.model.to(self.device)
@@ -732,7 +734,7 @@ class RetinaVAE:
         self.resolution_hw = (28, 28)
 
         self.batch_size = 64  # None will take the batch size from test_split size.
-        self.epochs = 500
+        self.epochs = 5
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
 
@@ -748,6 +750,7 @@ class RetinaVAE:
             "kid_mean",
         ]
 
+        self.ksp = "k7s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
         self.conv_layers = 3
         self.batch_norm = True
 
@@ -787,7 +790,7 @@ class RetinaVAE:
         # self._prep_training()
         self._get_and_split_apricot_data()
 
-        training_mode = "train_model"  # "train_model" or "tune_model" or "load_model"
+        training_mode = "load_model"  # "train_model" or "tune_model" or "load_model"
 
         match training_mode:
             case "train_model":
@@ -809,8 +812,6 @@ class RetinaVAE:
                 )
 
                 # Create model and set optimizer and learning rate scheduler
-                self.ksp = "k7s1"  # "k3s1" # "k5s2" # "k5s1"
-
                 self._prep_training()
                 print(self.vae)
 
@@ -842,16 +843,16 @@ class RetinaVAE:
                     "lr": [0.0001],
                     "latent_dim": [2],
                     "ksp": [
-                        "k3s1",
                         "k5s1",
-                        "k7s1",
                     ],  # k3s2,k3s1,k5s2,k5s1,k7s1 Kernel-stride-padding for conv layers. NOTE you cannot use >3 conv layers with stride 2
                     "channels": [16],
                     "batch_size": [64],
-                    "rotation": [15],  # rotation in degrees
-                    "translation": [0],  # fraction of image, (x, y) or [xy] -directions
-                    "noise": [0],  # noise float in [0, 1] (noise is added to the image)
-                    "num_models": 3,  # repetitions of the same model
+                    "conv_layers": [2, 4],
+                    "batch_norm": [True, False],  # becomes np.bool type
+                    "rotation": [15],  # Augment: max rotation in degrees
+                    "translation": [0],  # Augment: fract of im, max in (x, y)/[xy] dir
+                    "noise": [0],  # Augment: noise float in [0, 1] (noise added)
+                    "num_models": 1,  # repetitions of the same model
                 }
 
                 tuner = self._set_ray_tuner()
@@ -892,7 +893,7 @@ class RetinaVAE:
                 # Load previously calculated model for vizualization
                 # Load model to self.vae and return state dict. The numbers are in the state dict.
                 # my_model_path = "C:\Users\simov\Laskenta\GitRepos\MacaqueRetina\retina\models" # For single trials from "train_model"
-                trial_name = "TrainableVAE_c32da_00000"  # From ray_results table/folder
+                trial_name = "TrainableVAE_7a5cb_00000"  # From ray_results table/folder
                 state_dict, result_grid, tb_dir = self._load_model(
                     model_path=None, trial_name=trial_name
                 )
@@ -1033,9 +1034,12 @@ class RetinaVAE:
         # Include only the parameters which have more than one item listed in the search space.
         parameters_to_report = []
         for key, value in self.search_space.items():
+            if key == "num_models":
+                continue
             if len(value) > 1:
                 parameters_to_report.append(key)
 
+        print(f"parameters_to_report: {parameters_to_report}")
         reporter = CLIReporter(
             metric_columns=[
                 "time_total_s",
@@ -1074,6 +1078,8 @@ class RetinaVAE:
             "ksp": tune.grid_search(self.search_space["ksp"]),
             "channels": tune.grid_search(self.search_space["channels"]),
             "batch_size": tune.grid_search(self.search_space["batch_size"]),
+            "conv_layers": tune.grid_search(self.search_space["conv_layers"]),
+            "batch_norm": tune.grid_search(self.search_space["batch_norm"]),
             "rotation": tune.grid_search(self.search_space["rotation"]),
             "translation": tune.grid_search(self.search_space["translation"]),
             "noise": tune.grid_search(self.search_space["noise"]),
@@ -1146,15 +1152,15 @@ class RetinaVAE:
     def _load_model(self, model_path=None, best_result=None, trial_name=None):
         """Load model if exists. Use either model_path, best_result, or trial_name to load model"""
 
-        if not hasattr(self, "vae"):
-            # Note that if you start parametrically vary the model architecture, you need to save the model architecture as well or
-            # rebuild it here (c.f. latent_dims, ksp_key)
-            self.vae = VariationalAutoencoder(
-                latent_dims=self.latent_dim,
-                ksp_key="k3s2",  # kernel size 3, stride 2
-                channels=8,
-                device=self.device,
-            )
+        # if not hasattr(self, "vae"):
+        #     # Note that if you start parametrically vary the model architecture, you need to save the model architecture as well or
+        #     # rebuild it here (c.f. latent_dims, ksp_key)
+        #     self.vae = VariationalAutoencoder(
+        #         latent_dims=self.latent_dim,
+        #         ksp_key="k3s2",  # kernel size 3, stride 2
+        #         channels=8,
+        #         device=self.device,
+        #     )
 
         if best_result is not None:
             # ref https://medium.com/distributed-computing-with-ray/simple-end-to-end-ml-from-selection-to-serving-with-ray-tune-and-ray-serve-10f5564d33ba
@@ -1167,11 +1173,15 @@ class RetinaVAE:
             latent_dim = best_result.config["latent_dim"]
             ksp = best_result.config["ksp"]
             channels = best_result.config["channels"]
+            conv_layers = best_result.config["conv_layers"]
+            batch_norm = best_result.config["batch_norm"]
             # Get model with correct layer dimensions
             model = VariationalAutoencoder(
                 latent_dims=latent_dim,
                 ksp_key=ksp,
                 channels=channels,
+                conv_layers=conv_layers,
+                batch_norm=batch_norm,
                 device=self.device,
             )
             model.load_state_dict(torch.load(checkpoint_path))
@@ -1180,6 +1190,16 @@ class RetinaVAE:
             self.vae = model.to(self.device)
 
         elif model_path is not None:
+
+            self.vae = VariationalAutoencoder(
+                latent_dims=self.latent_dim,
+                ksp_key=self.ksp,
+                channels=self.channels,
+                conv_layers=self.conv_layers,
+                batch_norm=self.batch_norm,
+                device=self.device,
+            )
+
             if not Path(model_path).exists():
 
                 # Get the most recent model. Max recognizes the timestamp with the largest value
@@ -1235,12 +1255,22 @@ class RetinaVAE:
                     0
                 ]
             )
-            print(f"Changing latent_dim from {self.latent_dim} to {new_latent_dim}")
+            new_conv_layers = int(
+                df[df["logdir"] == str(correct_trial_folder)][
+                    "config/conv_layers"
+                ].values[0]
+            )
+            new_batch_norm = df[df["logdir"] == str(correct_trial_folder)][
+                "config/batch_norm"
+            ].values[0]
+
             self.latent_dim = new_latent_dim
             self.vae = VariationalAutoencoder(
                 latent_dims=self.latent_dim,
                 ksp_key=new_ksp,
                 channels=new_channels,
+                conv_layers=new_conv_layers,
+                batch_norm=new_batch_norm,
                 device=self.device,
             )
 
@@ -1250,6 +1280,7 @@ class RetinaVAE:
             ][0]
             model_path = Path.joinpath(checkpoint_folder_name, "model.pth")
 
+            # pdb.set_trace()
             self.vae.load_state_dict(torch.load(model_path))
 
             # Move new model to same device as the input data
