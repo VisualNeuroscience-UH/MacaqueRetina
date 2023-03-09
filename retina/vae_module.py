@@ -725,12 +725,14 @@ class RetinaVAE:
         self.response_type = response_type
 
         # N epochs for both single training and ray tune runs
-        self.epochs = 5
+        self.epochs = 500
 
+        # training_mode = "tune_model"  # "train_model" or "tune_model" or "load_model"
         training_mode = "load_model"  # "train_model" or "tune_model" or "load_model"
         # self.model_path = "C:\Users\simov\Laskenta\GitRepos\MacaqueRetina\retina\models" # For most recent single trials from "train_model"
         # self.model_path = "/opt2/Git_Repos/MacaqueRetina/retina/models/"  # For most recent single trials from "train_model"
-        self.trial_name = "TrainableVAE_e8de9_00002"  # From ray_results table/folder
+        # self.trial_name = "TrainableVAE_1ae8d_00009"  # From ray_results table/folder
+        self.trial_name = "5b7c6"  # From ray_results table/folder
 
         # TÄHÄN JÄIT:
         # TARVITSEEKO LISÄTÄ PRECISION JA RECALL metrics? IMPLEMENTAATIO.
@@ -853,19 +855,20 @@ class RetinaVAE:
                 # Grid search: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#ray.tune.grid_search
                 # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
                 self.search_space = {
-                    "lr": [0.0001],
+                    "lr": [0.01, 0.001, 0.0001, 0.00001],
                     "latent_dim": [2],
+                    # k3s2,k3s1,k5s2,k5s1,k7s1 Kernel-stride-padding for conv layers. NOTE you cannot use >3 conv layers with stride 2
                     "ksp": [
-                        "k5s1",
-                    ],  # k3s2,k3s1,k5s2,k5s1,k7s1 Kernel-stride-padding for conv layers. NOTE you cannot use >3 conv layers with stride 2
+                        "k7s1",
+                    ],
                     "channels": [16],
                     "batch_size": [64],
-                    "conv_layers": [2, 4],
-                    "batch_norm": [True, False],  # becomes np.bool type
+                    "conv_layers": [1],
+                    "batch_norm": [False],
                     "rotation": [15],  # Augment: max rotation in degrees
                     "translation": [0],  # Augment: fract of im, max in (x, y)/[xy] dir
                     "noise": [0],  # Augment: noise float in [0, 1] (noise added)
-                    "num_models": 1,  # repetitions of the same model
+                    "num_models": 2,  # repetitions of the same model
                 }
 
                 tuner = self._set_ray_tuner()
@@ -914,7 +917,6 @@ class RetinaVAE:
                     self._plot_dependent_variables(
                         results_grid=result_grid,
                     )
-                    print(result_grid)
 
                 elif hasattr(self, "model_path"):
                     state_dict = self._load_model(
@@ -1029,6 +1031,27 @@ class RetinaVAE:
                     color=colors[color_idx],
                     legend=legend,
                 )
+
+                # At the end (+1) of the x-axis, add mean and SD of last 50 epochs as dot and vertical line, respectively
+                last_50 = result.metrics_dataframe.tail(50)
+                mean = last_50[dep_var].mean()
+                std = last_50[dep_var].std()
+                ax.plot(
+                    result.metrics_dataframe.tail(1)["training_iteration"] + 1,
+                    mean,
+                    "o",
+                    color=colors[color_idx],
+                )
+                ax.plot(
+                    [
+                        result.metrics_dataframe.tail(1)["training_iteration"] + 1,
+                    ]
+                    * 2,
+                    [mean - std, mean + std],
+                    "-",
+                    color=colors[color_idx],
+                )
+
                 color_idx += 1
             ax.set_title(f"{dep_var}")
             ax.set_ylabel(dep_var)
@@ -1092,7 +1115,6 @@ class RetinaVAE:
             },
         )
 
-        # NUM_MODELS = 2
         param_space = {
             "lr": tune.grid_search(self.search_space["lr"]),
             "latent_dim": tune.grid_search(self.search_space["latent_dim"]),
@@ -1172,16 +1194,6 @@ class RetinaVAE:
 
     def _load_model(self, model_path=None, best_result=None, trial_name=None):
         """Load model if exists. Use either model_path, best_result, or trial_name to load model"""
-
-        # if not hasattr(self, "vae"):
-        #     # Note that if you start parametrically vary the model architecture, you need to save the model architecture as well or
-        #     # rebuild it here (c.f. latent_dims, ksp_key)
-        #     self.vae = VariationalAutoencoder(
-        #         latent_dims=self.latent_dim,
-        #         ksp_key="k3s2",  # kernel size 3, stride 2
-        #         channels=8,
-        #         device=self.device,
-        #     )
 
         if best_result is not None:
             # ref https://medium.com/distributed-computing-with-ray/simple-end-to-end-ml-from-selection-to-serving-with-ray-tune-and-ray-serve-10f5564d33ba
@@ -1298,7 +1310,6 @@ class RetinaVAE:
             ][0]
             model_path = Path.joinpath(checkpoint_folder_name, "model.pth")
 
-            # pdb.set_trace()
             self.vae.load_state_dict(torch.load(model_path))
 
             # Move new model to same device as the input data
