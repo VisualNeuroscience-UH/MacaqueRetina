@@ -485,7 +485,7 @@ class VariationalAutoencoder(nn.Module):
         # )
         # Allowed n_features: 64, 192, 768, 2048
         self.kid = KernelInceptionDistance(
-            n_features=192, reset_real_features=False, normalize=True, subset_size=4
+            n_features=2048, reset_real_features=False, normalize=True, subset_size=4
         )
         self.ssim = StructuralSimilarityIndexMeasure()
 
@@ -727,16 +727,17 @@ class RetinaVAE:
         # N epochs for both single training and ray tune runs
         self.epochs = 500
 
-        # training_mode = "tune_model"  # "train_model" or "tune_model" or "load_model"
-        training_mode = "load_model"  # "train_model" or "tune_model" or "load_model"
+        # "train_model" or "tune_model" or "load_model"
+        # training_mode = "tune_model"
+        training_mode = "load_model"
         # self.model_path = "C:\Users\simov\Laskenta\GitRepos\MacaqueRetina\retina\models" # For most recent single trials from "train_model"
         # self.model_path = "/opt2/Git_Repos/MacaqueRetina/retina/models/"  # For most recent single trials from "train_model"
-        # self.trial_name = "TrainableVAE_1ae8d_00009"  # From ray_results table/folder
-        self.trial_name = "5b7c6"  # From ray_results table/folder
+        self.trial_name = "TrainableVAE_d7f0e_00000"  # From ray_results table/folder
 
         # TÄHÄN JÄIT:
+        # Testaa KID 64 - 2048 vaikutus KID mean arvoon
         # TARVITSEEKO LISÄTÄ PRECISION JA RECALL metrics? IMPLEMENTAATIO.
-        # tune until sun runs out of hydrogen
+        # tune until sun runs out of hydrogen, eli Ray Tune
 
         #######################
         # Single run parameters
@@ -745,11 +746,12 @@ class RetinaVAE:
         # Set common VAE model parameters
         self.latent_dim = 2
         self.channels = 16
-        self.lr = 0.0001
+        self.lr = 0.0003
 
         self.batch_size = 64  # None will take the batch size from test_split size.
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
+        # self.train_by = [["midget"], ["on", "off"]]  # Train by these factors
 
         self.ksp = "k3s2"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
         self.conv_layers = 3
@@ -855,21 +857,24 @@ class RetinaVAE:
                 # Grid search: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#ray.tune.grid_search
                 # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
                 self.search_space = {
-                    "lr": [0.01, 0.001, 0.0001, 0.00001],
+                    "lr": [0.0003],
                     "latent_dim": [2],
                     # k3s2,k3s1,k5s2,k5s1,k7s1 Kernel-stride-padding for conv layers. NOTE you cannot use >3 conv layers with stride 2
-                    "ksp": [
-                        "k7s1",
-                    ],
+                    "ksp": ["k7s1"],
                     "channels": [16],
                     "batch_size": [64],
-                    "conv_layers": [1],
+                    "conv_layers": [3],
                     "batch_norm": [False],
-                    "rotation": [15],  # Augment: max rotation in degrees
-                    "translation": [0],  # Augment: fract of im, max in (x, y)/[xy] dir
+                    "rotation": [0],  # Augment: max rotation in degrees
+                    # Augment: fract of im, max in (x, y)/[xy] dir
+                    "translation": [0, 0.1],
                     "noise": [0],  # Augment: noise float in [0, 1] (noise added)
                     "num_models": 2,  # repetitions of the same model
                 }
+
+                # Fraction of GPU per trial. 0.25 for smaller models is enough. Larger may need 0.33 or 0.5.
+                # Increase if you get CUDA out of memory errors.
+                self.gpu_fraction = 0.25
 
                 tuner = self._set_ray_tuner()
                 self.result_grid = tuner.fit()
@@ -893,7 +898,7 @@ class RetinaVAE:
                 )
 
                 best_result = self.result_grid.get_best_result(
-                    metric="val_loss", mode="min"
+                    metric="kid_mean", mode="min"
                 )
                 print("Best result:", best_result)
                 result_df = best_result.metrics_dataframe
@@ -1036,17 +1041,15 @@ class RetinaVAE:
                 last_50 = result.metrics_dataframe.tail(50)
                 mean = last_50[dep_var].mean()
                 std = last_50[dep_var].std()
+                n_epochs = result.metrics_dataframe.tail(1)["training_iteration"]
                 ax.plot(
-                    result.metrics_dataframe.tail(1)["training_iteration"] + 1,
+                    n_epochs + n_epochs // 5,
                     mean,
                     "o",
                     color=colors[color_idx],
                 )
                 ax.plot(
-                    [
-                        result.metrics_dataframe.tail(1)["training_iteration"] + 1,
-                    ]
-                    * 2,
+                    [n_epochs + n_epochs // 5] * 2,
                     [mean - std, mean + std],
                     "-",
                     color=colors[color_idx],
@@ -1098,7 +1101,7 @@ class RetinaVAE:
             parameter_columns=parameters_to_report,
         )
 
-        trainable = tune.with_resources(TrainableVAE, {"gpu": 0.25})
+        trainable = tune.with_resources(TrainableVAE, {"gpu": self.gpu_fraction})
         trainable_with_parameters = tune.with_parameters(
             trainable,
             data_dict={
@@ -1769,7 +1772,10 @@ class RetinaVAE:
             # print("\t partial train loss (single batch): %f" % (loss.item()))
             train_loss += loss.item()
 
-        return train_loss / len(dataloader.dataset)
+        train_loss_out = float(train_loss)
+        del train_loss, loss, x, x_hat
+
+        return train_loss_out / len(dataloader.dataset)
 
     ### Testing function
     def _validate_epoch(self, vae, device, dataloader):
@@ -1795,8 +1801,13 @@ class RetinaVAE:
                 x_expanded = x.expand(-1, 3, -1, -1)
                 x_hat_expanded = x_hat.expand(-1, 3, -1, -1)
 
+                vae.kid.update(x_expanded, real=True)  # KID
                 vae.kid.update(x_hat_expanded, real=False)  # KID
-                vae.kid.update(x_hat_expanded, real=True)  # KID
+
+        # # CUDA memory management
+        # del x, _, x_hat, loss, x_expanded, x_hat_expanded
+        # # # Delete attribute kl from vae.encoder.kl
+        # # delattr(vae.encoder, "kl")
 
         n_samples = len(dataloader.dataset)
         val_loss_epoch = val_loss / n_samples
