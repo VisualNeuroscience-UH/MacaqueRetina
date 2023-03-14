@@ -725,18 +725,16 @@ class RetinaVAE:
         self.response_type = response_type
 
         # N epochs for both single training and ray tune runs
-        self.epochs = 5
+        self.epochs = 500
 
         # "train_model" or "tune_model" or "load_model"
         # training_mode = "tune_model"
-        training_mode = "train_model"
+        training_mode = "load_model"
         # self.model_path = "C:\Users\simov\Laskenta\GitRepos\MacaqueRetina\retina\models" # For most recent single trials from "train_model"
         # self.model_path = "/opt2/Git_Repos/MacaqueRetina/retina/models/"  # For most recent single trials from "train_model"
-        self.trial_name = "TrainableVAE_4d8a2_00003"  # From ray_results table/folder
+        self.trial_name = "TrainableVAE_b8cb3_00002"  # From ray_results table/folder
 
         # TÄHÄN JÄIT:
-        # Testaa KID 64 - 2048 vaikutus KID mean arvoon
-        # TARVITSEEKO LISÄTÄ PRECISION JA RECALL metrics? IMPLEMENTAATIO.
         # tune until sun runs out of hydrogen, eli Ray Tune
 
         #######################
@@ -809,43 +807,50 @@ class RetinaVAE:
         # self._prep_training()
         self._get_and_split_apricot_data()
 
-        # KID comparison btw real and noise images
-        if 1:
+        # KID comparison btw real and fake images
+        if 0:
+            # self.train_by = [["parasol"], ["on", "off"]]
+            # self._get_and_split_apricot_data()
             dataloader_real = self._augment_and_get_dataloader(
                 data_type="train",
                 augmentation_dict=None,
                 batch_size=self.batch_size,
-                shuffle=False,
+                shuffle=True,
             )
 
-            dataloader_noise = self._augment_and_get_dataloader(
+            # self.train_by = [["midget"], ["on", "off"]]
+            # self._get_and_split_apricot_data()
+            dataloader_fake = self._augment_and_get_dataloader(
                 data_type="train",
                 augmentation_dict=self.augmentation_dict,
+                # augmentation_dict=None,
                 batch_size=self.batch_size,
-                shuffle=False,
+                shuffle=True,
             )
 
+            # dataloader_fake = dataloader_real
+
             kid_mean, kid_std = self.kid_compare(
-                dataloader_real, dataloader_noise, n_features=64
+                dataloader_real, dataloader_fake, n_features=64
             )
             print(f"KID mean: {kid_mean}, KID std: {kid_std} for 64 features")
 
             kid_mean, kid_std = self.kid_compare(
-                dataloader_real, dataloader_noise, n_features=192
+                dataloader_real, dataloader_fake, n_features=192
             )
             print(f"KID mean: {kid_mean}, KID std: {kid_std} for 192 features")
 
             kid_mean, kid_std = self.kid_compare(
-                dataloader_real, dataloader_noise, n_features=768
+                dataloader_real, dataloader_fake, n_features=768
             )
             print(f"KID mean: {kid_mean}, KID std: {kid_std} for 768 features")
 
             kid_mean, kid_std = self.kid_compare(
-                dataloader_real, dataloader_noise, n_features=2048
+                dataloader_real, dataloader_fake, n_features="2048"
             )
             print(f"KID mean: {kid_mean}, KID std: {kid_std} for 2048 features")
 
-            sys.exit()
+            exit()
 
         match training_mode:
             case "train_model":
@@ -995,7 +1000,7 @@ class RetinaVAE:
             sample_start_stop=[10, 25],
         )
 
-        if training_mode in ["train_model", "load_model"]:
+        if training_mode in ["train_model"]:
             self._plot_ae_outputs(
                 self.vae.encoder, self.vae.decoder, ds_name="train_ds"
             )
@@ -1878,7 +1883,7 @@ class RetinaVAE:
         # Set evaluation mode for encoder and decoder
         kid = KernelInceptionDistance(
             n_features=n_features,
-            reset_real_features=False,
+            reset_real_features=True,
             normalize=True,
             subset_size=16,
         )
