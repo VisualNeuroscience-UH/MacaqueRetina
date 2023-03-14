@@ -485,7 +485,7 @@ class VariationalAutoencoder(nn.Module):
         # )
         # Allowed n_features: 64, 192, 768, 2048
         self.kid = KernelInceptionDistance(
-            n_features=2048, reset_real_features=False, normalize=True, subset_size=4
+            n_features=64, reset_real_features=False, normalize=True, subset_size=16
         )
         self.ssim = StructuralSimilarityIndexMeasure()
 
@@ -725,14 +725,14 @@ class RetinaVAE:
         self.response_type = response_type
 
         # N epochs for both single training and ray tune runs
-        self.epochs = 500
+        self.epochs = 5
 
         # "train_model" or "tune_model" or "load_model"
         # training_mode = "tune_model"
-        training_mode = "load_model"
+        training_mode = "train_model"
         # self.model_path = "C:\Users\simov\Laskenta\GitRepos\MacaqueRetina\retina\models" # For most recent single trials from "train_model"
         # self.model_path = "/opt2/Git_Repos/MacaqueRetina/retina/models/"  # For most recent single trials from "train_model"
-        self.trial_name = "TrainableVAE_d7f0e_00000"  # From ray_results table/folder
+        self.trial_name = "TrainableVAE_4d8a2_00003"  # From ray_results table/folder
 
         # TÄHÄN JÄIT:
         # Testaa KID 64 - 2048 vaikutus KID mean arvoon
@@ -761,7 +761,7 @@ class RetinaVAE:
         augmentation_dict = {
             "rotation": 15.0,  # rotation in degrees
             "translation": (0.0, 0.0),  # fraction of image, (x, y) -directions
-            "noise": 0.0,  # noise float in [0, 1] (noise is added to the image)
+            "noise": 1.0,  # noise float in [0, 1] (noise is added to the image)
         }
         self.augmentation_dict = augmentation_dict
         # self.augmentation_dict = None
@@ -808,6 +808,44 @@ class RetinaVAE:
         # # Create model and set optimizer and learning rate scheduler
         # self._prep_training()
         self._get_and_split_apricot_data()
+
+        # KID comparison btw real and noise images
+        if 1:
+            dataloader_real = self._augment_and_get_dataloader(
+                data_type="train",
+                augmentation_dict=None,
+                batch_size=self.batch_size,
+                shuffle=False,
+            )
+
+            dataloader_noise = self._augment_and_get_dataloader(
+                data_type="train",
+                augmentation_dict=self.augmentation_dict,
+                batch_size=self.batch_size,
+                shuffle=False,
+            )
+
+            kid_mean, kid_std = self.kid_compare(
+                dataloader_real, dataloader_noise, n_features=64
+            )
+            print(f"KID mean: {kid_mean}, KID std: {kid_std} for 64 features")
+
+            kid_mean, kid_std = self.kid_compare(
+                dataloader_real, dataloader_noise, n_features=192
+            )
+            print(f"KID mean: {kid_mean}, KID std: {kid_std} for 192 features")
+
+            kid_mean, kid_std = self.kid_compare(
+                dataloader_real, dataloader_noise, n_features=768
+            )
+            print(f"KID mean: {kid_mean}, KID std: {kid_std} for 768 features")
+
+            kid_mean, kid_std = self.kid_compare(
+                dataloader_real, dataloader_noise, n_features=2048
+            )
+            print(f"KID mean: {kid_mean}, KID std: {kid_std} for 2048 features")
+
+            sys.exit()
 
         match training_mode:
             case "train_model":
@@ -867,8 +905,8 @@ class RetinaVAE:
                     "batch_norm": [False],
                     "rotation": [0],  # Augment: max rotation in degrees
                     # Augment: fract of im, max in (x, y)/[xy] dir
-                    "translation": [0, 0.1],
-                    "noise": [0],  # Augment: noise float in [0, 1] (noise added)
+                    "translation": [0],
+                    "noise": [0, 1],  # Augment: noise float in [0, 1] (noise added)
                     "num_models": 2,  # repetitions of the same model
                 }
 
@@ -957,7 +995,7 @@ class RetinaVAE:
             sample_start_stop=[10, 25],
         )
 
-        if training_mode == "train_model":
+        if training_mode in ["train_model", "load_model"]:
             self._plot_ae_outputs(
                 self.vae.encoder, self.vae.decoder, ds_name="train_ds"
             )
@@ -1834,6 +1872,36 @@ class RetinaVAE:
             kid_mean_epoch,
             kid_std_epoch,
         )
+
+    def kid_compare(self, dataloader_real, dataloader_fake, n_features=64):
+
+        # Set evaluation mode for encoder and decoder
+        kid = KernelInceptionDistance(
+            n_features=n_features,
+            reset_real_features=False,
+            normalize=True,
+            subset_size=16,
+        )
+
+        kid.reset()
+        kid.to(self.device)
+
+        with torch.no_grad():  # No need to track the gradients
+            # for x, _ in dataloader_real:
+            for real_batch, fake_batch in zip(dataloader_real, dataloader_fake):
+                # Move tensor to the proper device
+                real_img_batch = real_batch[0].to(self.device)
+                fake_img_batch = fake_batch[0].to(self.device)
+                # Expand dim 1 to 3 for x and x_hat
+                real_img_batch_expanded = real_img_batch.expand(-1, 3, -1, -1)
+                fake_img_batch_hat_expanded = fake_img_batch.expand(-1, 3, -1, -1)
+
+                kid.update(real_img_batch_expanded, real=True)  # KID
+                kid.update(fake_img_batch_hat_expanded, real=False)  # KID
+
+        kid_mean_epoch, kid_std_epoch = kid.compute()
+
+        return kid_mean_epoch, kid_std_epoch
 
     def _plot_ae_outputs(
         self, encoder, decoder, ds_name="test_ds", sample_start_stop=[0, 10]
