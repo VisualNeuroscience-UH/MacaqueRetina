@@ -728,11 +728,11 @@ class RetinaVAE:
 
         # N epochs for both single training and ray tune runs
         self.epochs = 200
-        self.time_budget = 60 * 60  # in seconds
+        self.time_budget = 60 * 30  # in seconds
 
         # "train_model" or "tune_model" or "load_model"
-        # training_mode = "tune_model"
-        training_mode = "load_model"
+        training_mode = "tune_model"
+        # training_mode = "load_model"
         # self.model_path = "C:\Users\simov\Laskenta\GitRepos\MacaqueRetina\retina\models" # For most recent single trials from "train_model"
         # self.model_path = "/opt2/Git_Repos/MacaqueRetina/retina/models/"  # For most recent single trials from "train_model"
         self.trial_name = "TrainableVAE_146a6ed7"  # From ray_results table/folder
@@ -879,7 +879,7 @@ class RetinaVAE:
 
                 # Fraction of GPU per trial. 0.25 for smaller models is enough. Larger may need 0.33 or 0.5.
                 # Increase if you get CUDA out of memory errors.
-                self.gpu_fraction = 0.25
+                self.gpu_fraction = 0.33
 
                 tuner = self._set_ray_tuner()
                 self.result_grid = tuner.fit()
@@ -1156,6 +1156,21 @@ class RetinaVAE:
                 ),
             )
         else:
+
+            initial_params = [
+                {
+                    "lr": 0.0003,
+                    "latent_dim": 2,
+                    "ksp": "k7s1",
+                    "channels": 16,
+                    "batch_size": 64,
+                    "conv_layers": 3,
+                    "batch_norm": False,
+                    "rotation": 0,
+                    "translation": 0,
+                    "noise": 0.0,
+                }
+            ]
             # tune uniform etc require two positional arguments, so we need to unpack the list
             rot_0, rot_1 = (
                 self.search_space["rotation"][0],
@@ -1199,8 +1214,7 @@ class RetinaVAE:
                 search_alg=OptunaSearch(
                     metric="kid_mean",
                     mode="min",
-                    # points_to_evaluate=self.points_to_evaluate,
-                    # random_state_seed=42,
+                    points_to_evaluate=initial_params,
                 ),
                 time_budget_s=self.time_budget,
                 num_samples=-1
