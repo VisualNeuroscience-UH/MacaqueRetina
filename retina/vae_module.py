@@ -727,8 +727,8 @@ class RetinaVAE:
         self.response_type = response_type
 
         # N epochs for both single training and ray tune runs
-        self.epochs = 1000
-        self.time_budget = 60 * 60 * 14  # in seconds
+        self.epochs = 10
+        self.time_budget = 60 * 60 * 9  # in seconds
 
         # "train_model" or "tune_model" or "load_model"
         training_mode = "tune_model"
@@ -858,21 +858,21 @@ class RetinaVAE:
                 # Grid search: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#ray.tune.grid_search
                 # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
                 self.search_space = {
-                    "lr": [0.0001, 0.01],
+                    "lr": [0.00031],
                     # "lr": [0.0001, 0.001],
-                    "latent_dim": [2, 4, 8, 16, 32, 64, 128],
+                    "latent_dim": [2],
                     # k3s2,k3s1,k5s2,k5s1,k7s1 Kernel-stride-padding for conv layers. NOTE you cannot use >3 conv layers with stride 2
-                    "ksp": ["k3s1", "k5s1", "k7s1"],
-                    "channels": [8, 16, 32],
+                    "ksp": ["k7s1"],
+                    "channels": [16],
                     "batch_size": [64],
-                    "conv_layers": [1, 2, 3, 4, 5],
+                    "conv_layers": [3],
                     "batch_norm": [False],
-                    "rotation": [0, 90],  # Augment: max rotation in degrees
+                    "rotation": [0],  # Augment: max rotation in degrees
                     # Augment: fract of im, max in (x, y)/[xy] dir
-                    "translation": [0, 0.2],
+                    "translation": [0],
                     "noise": [
-                        0.01,
-                        0.1,
+                        0.0,
+                        0.5,
                     ],  # Augment: noise float in [0, 1] (noise added)
                     "num_models": 1,  # repetitions of the same model
                 }
@@ -1223,11 +1223,11 @@ class RetinaVAE:
                         0
                     ],  # Only first metric is used for early stopping
                     mode=self.multi_objective["mode"][0],
-                    max_t=self.epochs,
+                    max_t=self.epochs,  # TRIED, 32 min
                     grace_period=5,
                     reduction_factor=2,
                 ),
-                time_budget_s=self.time_budget,
+                time_budget_s=self.time_budget,  # TRIED no effect
                 num_samples=-1,
             )
 
