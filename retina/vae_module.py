@@ -727,8 +727,8 @@ class RetinaVAE:
         self.response_type = response_type
 
         # N epochs for both single training and ray tune runs
-        self.epochs = 200
-        self.time_budget = 60 * 30  # in seconds
+        self.epochs = 50
+        self.time_budget = 300  # in seconds
 
         # "train_model" or "tune_model" or "load_model"
         training_mode = "tune_model"
@@ -875,8 +875,8 @@ class RetinaVAE:
                 }
 
                 self.multi_objective = {
-                    "metric": ["kid_mean", "ssim"],
-                    "mode": ["min", "max"],
+                    "metric": ["val_loss", "kid_mean", "ssim"],
+                    "mode": ["min", "min", "max"],
                 }
 
                 # Fraction of GPU per trial. 0.25 for smaller models is enough. Larger may need 0.33 or 0.5.
@@ -1170,7 +1170,7 @@ class RetinaVAE:
                     "batch_norm": False,
                     "rotation": 0,
                     "translation": 0,
-                    "noise": 0.0001,
+                    "noise": 0.02,
                     "model_id": "model_0",
                 }
             ]
@@ -1213,6 +1213,16 @@ class RetinaVAE:
                     metric=self.multi_objective["metric"],
                     mode=self.multi_objective["mode"],
                     points_to_evaluate=initial_params,
+                ),
+                scheduler=ASHAScheduler(
+                    time_attr="training_iteration",
+                    metric=self.multi_objective["metric"][
+                        0
+                    ],  # Only first metric is used for early stopping
+                    mode=self.multi_objective["mode"][0],
+                    max_t=self.epochs,
+                    grace_period=5,
+                    reduction_factor=2,
                 ),
                 time_budget_s=self.time_budget,
                 num_samples=-1,
