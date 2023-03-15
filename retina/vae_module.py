@@ -735,10 +735,7 @@ class RetinaVAE:
         # training_mode = "load_model"
         # self.model_path = "C:\Users\simov\Laskenta\GitRepos\MacaqueRetina\retina\models" # For most recent single trials from "train_model"
         # self.model_path = "/opt2/Git_Repos/MacaqueRetina/retina/models/"  # For most recent single trials from "train_model"
-        self.trial_name = "TrainableVAE_146a6ed7"  # From ray_results table/folder
-
-        # TÄHÄN JÄIT:
-        # tune until sun runs out of hydrogen, eli Ray Tune
+        self.trial_name = "TrainableVAE_ea16d5ed"  # From ray_results table/folder
 
         #######################
         # Single run parameters
@@ -861,8 +858,8 @@ class RetinaVAE:
                 # Grid search: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#ray.tune.grid_search
                 # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
                 self.search_space = {
-                    # "lr": [0.0003],
-                    "lr": [0.0001, 0.001],
+                    "lr": [0.0003],
+                    # "lr": [0.0001, 0.001],
                     "latent_dim": [2],
                     # k3s2,k3s1,k5s2,k5s1,k7s1 Kernel-stride-padding for conv layers. NOTE you cannot use >3 conv layers with stride 2
                     "ksp": ["k7s1"],
@@ -875,6 +872,11 @@ class RetinaVAE:
                     "translation": [0],
                     "noise": [0.0, 1.0],  # Augment: noise float in [0, 1] (noise added)
                     "num_models": 1,  # repetitions of the same model
+                }
+
+                self.multi_objective = {
+                    "metric": ["kid_mean", "ssim"],
+                    "mode": ["min", "max"],
                 }
 
                 # Fraction of GPU per trial. 0.25 for smaller models is enough. Larger may need 0.33 or 0.5.
@@ -1168,26 +1170,15 @@ class RetinaVAE:
                     "batch_norm": False,
                     "rotation": 0,
                     "translation": 0,
-                    "noise": 0.0,
+                    "noise": 0.0001,
+                    "model_id": "model_0",
                 }
             ]
-            # tune uniform etc require two positional arguments, so we need to unpack the list
-            rot_0, rot_1 = (
-                self.search_space["rotation"][0],
-                self.search_space["rotation"][-1],
-            )
-            trans_0, trans_1 = (
-                self.search_space["translation"][0],
-                self.search_space["translation"][-1],
-            )
-            noise_0, noise_1 = (
-                self.search_space["noise"][0],
-                self.search_space["noise"][-1],
-            )
 
+            # tune (log)uniform etc require two positional arguments, so we need to unpack the list
             param_space = {
                 "lr": tune.loguniform(
-                    self.search_space["lr"][0], self.search_space["lr"][1]
+                    self.search_space["lr"][0], self.search_space["lr"][-1]
                 ),
                 "latent_dim": tune.choice(self.search_space["latent_dim"]),
                 "ksp": tune.choice(self.search_space["ksp"]),
@@ -1195,9 +1186,16 @@ class RetinaVAE:
                 "batch_size": tune.choice(self.search_space["batch_size"]),
                 "conv_layers": tune.choice(self.search_space["conv_layers"]),
                 "batch_norm": tune.choice(self.search_space["batch_norm"]),
-                "rotation": tune.uniform(rot_0, rot_1),
-                "translation": tune.uniform(trans_0, trans_1),
-                "noise": tune.uniform(noise_0, noise_1),
+                "rotation": tune.uniform(
+                    self.search_space["rotation"][0], self.search_space["rotation"][-1]
+                ),
+                "translation": tune.uniform(
+                    self.search_space["translation"][0],
+                    self.search_space["translation"][-1],
+                ),
+                "noise": tune.uniform(
+                    self.search_space["noise"][0], self.search_space["noise"][-1]
+                ),
                 "model_id": tune.choice(
                     [
                         "model_{}".format(i)
@@ -1212,14 +1210,12 @@ class RetinaVAE:
             # https://docs.ray.io/en/latest/ray-air/package-ref.html#ray.tune.tune_config.TuneConfig
             tune_config = tune.TuneConfig(
                 search_alg=OptunaSearch(
-                    metric="kid_mean",
-                    mode="min",
+                    metric=self.multi_objective["metric"],
+                    mode=self.multi_objective["mode"],
                     points_to_evaluate=initial_params,
                 ),
                 time_budget_s=self.time_budget,
-                num_samples=-1
-                # metric="kid_std",
-                # mode="max",
+                num_samples=-1,
             )
 
         # Runtime configuration that is specific to individual trials. Will overwrite the run config passed to the Trainer.
