@@ -17,7 +17,6 @@ from torch import nn
 import torch.nn.functional as F
 
 from torch.utils.tensorboard import SummaryWriter
-from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.kid import KernelInceptionDistance
 from torchmetrics import StructuralSimilarityIndexMeasure
 from torchmetrics import MeanSquaredError
@@ -28,6 +27,9 @@ from torchsummary import summary
 from ray import air, tune
 from ray.tune.schedulers import ASHAScheduler
 from ray.tune import CLIReporter
+
+# from ray.tune.search.hyperopt import HyperOptSearch
+from ray.tune.search.optuna import OptunaSearch
 
 
 # Viz
@@ -725,14 +727,15 @@ class RetinaVAE:
         self.response_type = response_type
 
         # N epochs for both single training and ray tune runs
-        self.epochs = 500
+        self.epochs = 200
+        self.time_budget = 60 * 60  # in seconds
 
         # "train_model" or "tune_model" or "load_model"
         # training_mode = "tune_model"
         training_mode = "load_model"
         # self.model_path = "C:\Users\simov\Laskenta\GitRepos\MacaqueRetina\retina\models" # For most recent single trials from "train_model"
         # self.model_path = "/opt2/Git_Repos/MacaqueRetina/retina/models/"  # For most recent single trials from "train_model"
-        self.trial_name = "TrainableVAE_b8cb3_00002"  # From ray_results table/folder
+        self.trial_name = "TrainableVAE_146a6ed7"  # From ray_results table/folder
 
         # TÄHÄN JÄIT:
         # tune until sun runs out of hydrogen, eli Ray Tune
@@ -807,50 +810,8 @@ class RetinaVAE:
         # self._prep_training()
         self._get_and_split_apricot_data()
 
-        # KID comparison btw real and fake images
-        if 0:
-            # self.train_by = [["parasol"], ["on", "off"]]
-            # self._get_and_split_apricot_data()
-            dataloader_real = self._augment_and_get_dataloader(
-                data_type="train",
-                augmentation_dict=None,
-                batch_size=self.batch_size,
-                shuffle=True,
-            )
-
-            # self.train_by = [["midget"], ["on", "off"]]
-            # self._get_and_split_apricot_data()
-            dataloader_fake = self._augment_and_get_dataloader(
-                data_type="train",
-                augmentation_dict=self.augmentation_dict,
-                # augmentation_dict=None,
-                batch_size=self.batch_size,
-                shuffle=True,
-            )
-
-            # dataloader_fake = dataloader_real
-
-            kid_mean, kid_std = self.kid_compare(
-                dataloader_real, dataloader_fake, n_features=64
-            )
-            print(f"KID mean: {kid_mean}, KID std: {kid_std} for 64 features")
-
-            kid_mean, kid_std = self.kid_compare(
-                dataloader_real, dataloader_fake, n_features=192
-            )
-            print(f"KID mean: {kid_mean}, KID std: {kid_std} for 192 features")
-
-            kid_mean, kid_std = self.kid_compare(
-                dataloader_real, dataloader_fake, n_features=768
-            )
-            print(f"KID mean: {kid_mean}, KID std: {kid_std} for 768 features")
-
-            kid_mean, kid_std = self.kid_compare(
-                dataloader_real, dataloader_fake, n_features="2048"
-            )
-            print(f"KID mean: {kid_mean}, KID std: {kid_std} for 2048 features")
-
-            exit()
+        # # KID comparison btw real and fake images
+        # self.check_kid_and_exit()
 
         match training_mode:
             case "train_model":
@@ -900,7 +861,8 @@ class RetinaVAE:
                 # Grid search: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#ray.tune.grid_search
                 # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
                 self.search_space = {
-                    "lr": [0.0003],
+                    # "lr": [0.0003],
+                    "lr": [0.0001, 0.001],
                     "latent_dim": [2],
                     # k3s2,k3s1,k5s2,k5s1,k7s1 Kernel-stride-padding for conv layers. NOTE you cannot use >3 conv layers with stride 2
                     "ksp": ["k7s1"],
@@ -911,8 +873,8 @@ class RetinaVAE:
                     "rotation": [0],  # Augment: max rotation in degrees
                     # Augment: fract of im, max in (x, y)/[xy] dir
                     "translation": [0],
-                    "noise": [0, 1],  # Augment: noise float in [0, 1] (noise added)
-                    "num_models": 2,  # repetitions of the same model
+                    "noise": [0.0, 1.0],  # Augment: noise float in [0, 1] (noise added)
+                    "num_models": 1,  # repetitions of the same model
                 }
 
                 # Fraction of GPU per trial. 0.25 for smaller models is enough. Larger may need 0.33 or 0.5.
@@ -1066,7 +1028,10 @@ class RetinaVAE:
 
             for result in results_grid:
                 if idx == 0:
-                    label = ",".join(f"{x}={result.config[x]}" for x in varied_cols)
+                    try:
+                        label = ",".join(f"{x}={result.config[x]}" for x in varied_cols)
+                    except:
+                        pdb.set_trace()
                     legend = True
                 else:
                     legend = False
@@ -1117,7 +1082,7 @@ class RetinaVAE:
             ]
         )
 
-    def _set_ray_tuner(self):
+    def _set_ray_tuner(self, grid_search=False):
         """Set ray tuner"""
 
         # List of strings from the self.search_space dictionary which should be reported.
@@ -1161,33 +1126,87 @@ class RetinaVAE:
             },
         )
 
-        param_space = {
-            "lr": tune.grid_search(self.search_space["lr"]),
-            "latent_dim": tune.grid_search(self.search_space["latent_dim"]),
-            "ksp": tune.grid_search(self.search_space["ksp"]),
-            "channels": tune.grid_search(self.search_space["channels"]),
-            "batch_size": tune.grid_search(self.search_space["batch_size"]),
-            "conv_layers": tune.grid_search(self.search_space["conv_layers"]),
-            "batch_norm": tune.grid_search(self.search_space["batch_norm"]),
-            "rotation": tune.grid_search(self.search_space["rotation"]),
-            "translation": tune.grid_search(self.search_space["translation"]),
-            "noise": tune.grid_search(self.search_space["noise"]),
-            "model_id": tune.grid_search(
-                ["model_{}".format(i) for i in range(self.search_space["num_models"])]
-            ),
-        }
+        if grid_search:
+            param_space = {
+                "lr": tune.grid_search(self.search_space["lr"]),
+                "latent_dim": tune.grid_search(self.search_space["latent_dim"]),
+                "ksp": tune.grid_search(self.search_space["ksp"]),
+                "channels": tune.grid_search(self.search_space["channels"]),
+                "batch_size": tune.grid_search(self.search_space["batch_size"]),
+                "conv_layers": tune.grid_search(self.search_space["conv_layers"]),
+                "batch_norm": tune.grid_search(self.search_space["batch_norm"]),
+                "rotation": tune.grid_search(self.search_space["rotation"]),
+                "translation": tune.grid_search(self.search_space["translation"]),
+                "noise": tune.grid_search(self.search_space["noise"]),
+                "model_id": tune.grid_search(
+                    [
+                        "model_{}".format(i)
+                        for i in range(self.search_space["num_models"])
+                    ]
+                ),
+            }
 
-        # Efficient hyperparameter selection. Search Algorithms are wrappers around open-source
-        # optimization libraries. Each library has a
-        # specific way of defining the search space.
-        # https://docs.ray.io/en/latest/ray-air/package-ref.html#ray.tune.tune_config.TuneConfig
-        tune_config = tune.TuneConfig(
-            search_alg=tune.search.basic_variant.BasicVariantGenerator(
-                constant_grid_search=True,
-            ),
-            # metric="kid_std",
-            # mode="max",
-        )
+            # Efficient hyperparameter selection. Search Algorithms are wrappers around open-source
+            # optimization libraries. Each library has a
+            # specific way of defining the search space.
+            # https://docs.ray.io/en/latest/ray-air/package-ref.html#ray.tune.tune_config.TuneConfig
+            tune_config = tune.TuneConfig(
+                search_alg=tune.search.basic_variant.BasicVariantGenerator(
+                    constant_grid_search=True,
+                ),
+            )
+        else:
+            # tune uniform etc require two positional arguments, so we need to unpack the list
+            rot_0, rot_1 = (
+                self.search_space["rotation"][0],
+                self.search_space["rotation"][-1],
+            )
+            trans_0, trans_1 = (
+                self.search_space["translation"][0],
+                self.search_space["translation"][-1],
+            )
+            noise_0, noise_1 = (
+                self.search_space["noise"][0],
+                self.search_space["noise"][-1],
+            )
+
+            param_space = {
+                "lr": tune.loguniform(
+                    self.search_space["lr"][0], self.search_space["lr"][1]
+                ),
+                "latent_dim": tune.choice(self.search_space["latent_dim"]),
+                "ksp": tune.choice(self.search_space["ksp"]),
+                "channels": tune.choice(self.search_space["channels"]),
+                "batch_size": tune.choice(self.search_space["batch_size"]),
+                "conv_layers": tune.choice(self.search_space["conv_layers"]),
+                "batch_norm": tune.choice(self.search_space["batch_norm"]),
+                "rotation": tune.uniform(rot_0, rot_1),
+                "translation": tune.uniform(trans_0, trans_1),
+                "noise": tune.uniform(noise_0, noise_1),
+                "model_id": tune.choice(
+                    [
+                        "model_{}".format(i)
+                        for i in range(self.search_space["num_models"])
+                    ]
+                ),
+            }
+
+            # Efficient hyperparameter selection. Search Algorithms are wrappers around open-source
+            # optimization libraries. Each library has a
+            # specific way of defining the search space.
+            # https://docs.ray.io/en/latest/ray-air/package-ref.html#ray.tune.tune_config.TuneConfig
+            tune_config = tune.TuneConfig(
+                search_alg=OptunaSearch(
+                    metric="kid_mean",
+                    mode="min",
+                    # points_to_evaluate=self.points_to_evaluate,
+                    # random_state_seed=42,
+                ),
+                time_budget_s=self.time_budget,
+                num_samples=-1
+                # metric="kid_std",
+                # mode="max",
+            )
 
         # Runtime configuration that is specific to individual trials. Will overwrite the run config passed to the Trainer.
         # for API, see https://docs.ray.io/en/latest/ray-air/package-ref.html#ray.air.config.RunConfig
@@ -1351,9 +1370,14 @@ class RetinaVAE:
             )
 
             # Load the model from the checkpoint folder.
-            checkpoint_folder_name = [
-                p for p in Path(correct_trial_folder).glob("checkpoint_*")
-            ][0]
+            try:
+                checkpoint_folder_name = [
+                    p for p in Path(correct_trial_folder).glob("checkpoint_*")
+                ][0]
+            except IndexError:
+                raise FileNotFoundError(
+                    f"Could not find checkpoint folder in {correct_trial_folder}. Aborting..."
+                )
             model_path = Path.joinpath(checkpoint_folder_name, "model.pth")
 
             self.vae.load_state_dict(torch.load(model_path))
@@ -1878,36 +1902,6 @@ class RetinaVAE:
             kid_std_epoch,
         )
 
-    def kid_compare(self, dataloader_real, dataloader_fake, n_features=64):
-
-        # Set evaluation mode for encoder and decoder
-        kid = KernelInceptionDistance(
-            n_features=n_features,
-            reset_real_features=True,
-            normalize=True,
-            subset_size=16,
-        )
-
-        kid.reset()
-        kid.to(self.device)
-
-        with torch.no_grad():  # No need to track the gradients
-            # for x, _ in dataloader_real:
-            for real_batch, fake_batch in zip(dataloader_real, dataloader_fake):
-                # Move tensor to the proper device
-                real_img_batch = real_batch[0].to(self.device)
-                fake_img_batch = fake_batch[0].to(self.device)
-                # Expand dim 1 to 3 for x and x_hat
-                real_img_batch_expanded = real_img_batch.expand(-1, 3, -1, -1)
-                fake_img_batch_hat_expanded = fake_img_batch.expand(-1, 3, -1, -1)
-
-                kid.update(real_img_batch_expanded, real=True)  # KID
-                kid.update(fake_img_batch_hat_expanded, real=False)  # KID
-
-        kid_mean_epoch, kid_std_epoch = kid.compute()
-
-        return kid_mean_epoch, kid_std_epoch
-
     def _plot_ae_outputs(
         self, encoder, decoder, ds_name="test_ds", sample_start_stop=[0, 10]
     ):
@@ -2152,6 +2146,82 @@ class RetinaVAE:
         )
         ax0.set(xlabel="tsne-2d-one", ylabel="tsne-2d-two")
         plt.title("TSNE plot of encoded samples")
+
+    def check_kid_and_exit(self):
+        """
+        Check KernelInceptionDistance between real and fake data and exit.
+        """
+
+        def kid_compare(dataloader_real, dataloader_fake, n_features=64):
+
+            # Set evaluation mode for encoder and decoder
+            kid = KernelInceptionDistance(
+                n_features=n_features,
+                reset_real_features=True,
+                normalize=True,
+                subset_size=16,
+            )
+
+            kid.reset()
+            kid.to(self.device)
+
+            with torch.no_grad():  # No need to track the gradients
+                # for x, _ in dataloader_real:
+                for real_batch, fake_batch in zip(dataloader_real, dataloader_fake):
+                    # Move tensor to the proper device
+                    real_img_batch = real_batch[0].to(self.device)
+                    fake_img_batch = fake_batch[0].to(self.device)
+                    # Expand dim 1 to 3 for x and x_hat
+                    real_img_batch_expanded = real_img_batch.expand(-1, 3, -1, -1)
+                    fake_img_batch_hat_expanded = fake_img_batch.expand(-1, 3, -1, -1)
+
+                    kid.update(real_img_batch_expanded, real=True)  # KID
+                    kid.update(fake_img_batch_hat_expanded, real=False)  # KID
+
+            kid_mean_epoch, kid_std_epoch = kid.compute()
+
+            return kid_mean_epoch, kid_std_epoch
+
+        # self.train_by = [["parasol"], ["on", "off"]]
+        # self._get_and_split_apricot_data()
+        dataloader_real = self._augment_and_get_dataloader(
+            data_type="train",
+            augmentation_dict=None,
+            batch_size=self.batch_size,
+            shuffle=True,
+        )
+
+        # self.train_by = [["midget"], ["on", "off"]]
+        # self._get_and_split_apricot_data()
+        dataloader_fake = self._augment_and_get_dataloader(
+            data_type="train",
+            augmentation_dict=self.augmentation_dict,
+            # augmentation_dict=None,
+            batch_size=self.batch_size,
+            shuffle=True,
+        )
+
+        # dataloader_fake = dataloader_real
+
+        kid_mean, kid_std = kid_compare(dataloader_real, dataloader_fake, n_features=64)
+        print(f"KID mean: {kid_mean}, KID std: {kid_std} for 64 features")
+
+        kid_mean, kid_std = kid_compare(
+            dataloader_real, dataloader_fake, n_features=192
+        )
+        print(f"KID mean: {kid_mean}, KID std: {kid_std} for 192 features")
+
+        kid_mean, kid_std = kid_compare(
+            dataloader_real, dataloader_fake, n_features=768
+        )
+        print(f"KID mean: {kid_mean}, KID std: {kid_std} for 768 features")
+
+        kid_mean, kid_std = kid_compare(
+            dataloader_real, dataloader_fake, n_features="2048"
+        )
+        print(f"KID mean: {kid_mean}, KID std: {kid_std} for 2048 features")
+
+        exit()
 
 
 if __name__ == "__main__":
