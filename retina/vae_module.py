@@ -752,8 +752,8 @@ class RetinaVAE:
         self.response_type = response_type
 
         # N epochs for both single training and ray tune runs
-        self.epochs = 10
-        self.time_budget = 1200  # in seconds
+        self.epochs = 1000
+        self.time_budget = 60 * 60 * 24 * 4  # in seconds
         self.grid_search = False  # False for tune by Optuna, True for grid search
 
         # "train_model" or "tune_model" or "load_model"
@@ -762,6 +762,9 @@ class RetinaVAE:
         # self.model_path = "C:\Users\simov\Laskenta\GitRepos\MacaqueRetina\retina\models" # For most recent single trials from "train_model"
         # self.model_path = "/opt2/Git_Repos/MacaqueRetina/retina/models/"  # For most recent single trials from "train_model"
         self.trial_name = "TrainableVAE_ea16d5ed"  # From ray_results table/folder
+
+        # TÄHÄN JÄIT: OPETTELE PENKOMAAN EXPRIMENT JSON. KANNATTANEE TUUNATA ILMAN CHECKPOINTTEJA ISOSTI. SEN JÄLKEEN EHKÄ
+        # CHECKPOINTIT TAI YKSITTÄISET AJOT.
 
         #######################
         # Single run parameters
@@ -884,34 +887,31 @@ class RetinaVAE:
                 # Grid search: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#ray.tune.grid_search
                 # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
                 self.search_space = {
-                    "lr": [0.00031],
-                    # "lr": [0.0001, 0.001],
-                    "latent_dim": [2],
+                    # "lr": [0.00031],
+                    "lr": [0.0001, 0.001],
+                    "latent_dim": [2, 4, 8, 16, 32],
                     # k3s2,k3s1,k5s2,k5s1,k7s1 Kernel-stride-padding for conv layers. NOTE you cannot use >3 conv layers with stride 2
-                    "ksp": ["k7s1"],
-                    "channels": [16],
+                    "ksp": ["k3s1", "k5s1", "k7s1"],
+                    "channels": [4, 8, 16, 32, 64],
                     "batch_size": [64],
-                    "conv_layers": [3],
+                    "conv_layers": [1, 2, 3, 4, 5],
                     "batch_norm": [False],
-                    "rotation": [0],  # Augment: max rotation in degrees
+                    "rotation": [0, 90],  # Augment: max rotation in degrees
                     # Augment: fract of im, max in (x, y)/[xy] dir
-                    "translation": [0],
-                    "noise": [
-                        0.0,
-                        0.5,
-                    ],  # Augment: noise float in [0, 1] (noise added)
+                    "translation": [0, 0.5],
+                    "noise": [0.0, 0.25],  # Augment: noise added, btw [0., 1.]
                     "num_models": 1,  # repetitions of the same model
                 }
 
                 # The first metric is the one that will be used to prioritize the checkpoints and pruning.
                 self.multi_objective = {
-                    "metric": ["kid_mean", "val_loss", "ssim"],
+                    "metric": ["val_loss", "kid_mean", "ssim"],
                     "mode": ["min", "min", "max"],
                 }
 
                 # Fraction of GPU per trial. 0.25 for smaller models is enough. Larger may need 0.33 or 0.5.
                 # Increase if you get CUDA out of memory errors.
-                self.gpu_fraction = 0.33
+                self.gpu_fraction = 0.5
 
                 tuner = self._set_ray_tuner(grid_search=self.grid_search)
                 self.result_grid = tuner.fit()
@@ -1253,7 +1253,7 @@ class RetinaVAE:
                     ],  # Only 1st metric used for pruning
                     mode=self.multi_objective["mode"][0],
                     max_t=self.epochs,
-                    grace_period=2,
+                    grace_period=50,
                     reduction_factor=2,
                 ),
                 time_budget_s=self.time_budget,
