@@ -26,10 +26,13 @@ from torchsummary import summary
 
 from ray import air, tune
 from ray.tune.schedulers import ASHAScheduler
-from ray.tune import CLIReporter
+from ray.tune import CLIReporter, Callback
 
 # from ray.tune.search.hyperopt import HyperOptSearch
 from ray.tune.search.optuna import OptunaSearch
+
+# import the corresponding search algorithm TPESampler
+from optuna.samplers import TPESampler, CmaEsSampler
 
 
 # Viz
@@ -52,6 +55,14 @@ import subprocess
 import itertools
 from collections import OrderedDict
 from sys import exit
+
+import warnings
+
+warnings.filterwarnings(
+    "ignore",
+    message="Metric `Kernel Inception Distance`",
+)
+warnings.filterwarnings("ignore", message="FutureWarning:")
 
 
 class AugmentedDataset(torch.utils.data.Dataset):
@@ -487,7 +498,10 @@ class VariationalAutoencoder(nn.Module):
         # )
         # Allowed n_features: 64, 192, 768, 2048
         self.kid = KernelInceptionDistance(
-            n_features=64, reset_real_features=False, normalize=True, subset_size=16
+            n_features=64,
+            reset_real_features=False,
+            normalize=True,
+            subset_size=16,
         )
         self.ssim = StructuralSimilarityIndexMeasure()
 
@@ -708,6 +722,17 @@ class TrainableVAE(tune.Trainable):
         self.model.load_state_dict(torch.load(checkpoint_path))
 
 
+# class MyCallback(Callback):
+#     def on_trial_result(self, iteration, trials, trial, result, **info):
+#         # pdb.set_trace()
+#         print(f"\nGot result: {result['iteration']} for trial {trial.trial_id}")
+
+#     # # def on_checkpoint(self, iteration, trials, trial, checkpoint, **info):
+#     # def on_trial_complete(self, iteration, trials, trial, **info):
+#     #     pdb.set_trace()
+#     #     print(f"Got result: {result['metric']}")
+
+
 class RetinaVAE:
     """
     Class to apply variational autoencoder to Apricot retina data and run single learning run
@@ -728,7 +753,8 @@ class RetinaVAE:
 
         # N epochs for both single training and ray tune runs
         self.epochs = 10
-        self.time_budget = 60 * 60 * 9  # in seconds
+        self.time_budget = 1200  # in seconds
+        self.grid_search = False  # False for tune by Optuna, True for grid search
 
         # "train_model" or "tune_model" or "load_model"
         training_mode = "tune_model"
@@ -877,6 +903,7 @@ class RetinaVAE:
                     "num_models": 1,  # repetitions of the same model
                 }
 
+                # The first metric is the one that will be used to prioritize the checkpoints and pruning.
                 self.multi_objective = {
                     "metric": ["kid_mean", "val_loss", "ssim"],
                     "mode": ["min", "min", "max"],
@@ -886,7 +913,7 @@ class RetinaVAE:
                 # Increase if you get CUDA out of memory errors.
                 self.gpu_fraction = 0.33
 
-                tuner = self._set_ray_tuner()
+                tuner = self._set_ray_tuner(grid_search=self.grid_search)
                 self.result_grid = tuner.fit()
 
                 results_df = self.result_grid.get_dataframe()
@@ -1087,7 +1114,7 @@ class RetinaVAE:
             ]
         )
 
-    def _set_ray_tuner(self, grid_search=False):
+    def _set_ray_tuner(self, grid_search=True):
         """Set ray tuner"""
 
         # List of strings from the self.search_space dictionary which should be reported.
@@ -1212,7 +1239,9 @@ class RetinaVAE:
             # specific way of defining the search space.
             # https://docs.ray.io/en/latest/ray-air/package-ref.html#ray.tune.tune_config.TuneConfig
             tune_config = tune.TuneConfig(
+                # Local optuna search will generate study name "optuna" indicating in-memory storage
                 search_alg=OptunaSearch(
+                    sampler=TPESampler(),
                     metric=self.multi_objective["metric"],
                     mode=self.multi_objective["mode"],
                     points_to_evaluate=initial_params,
@@ -1221,13 +1250,13 @@ class RetinaVAE:
                     time_attr="training_iteration",
                     metric=self.multi_objective["metric"][
                         0
-                    ],  # Only first metric is used for early stopping
+                    ],  # Only 1st metric used for pruning
                     mode=self.multi_objective["mode"][0],
-                    max_t=self.epochs,  # TRIED, 32 min
-                    grace_period=5,
+                    max_t=self.epochs,
+                    grace_period=2,
                     reduction_factor=2,
                 ),
-                time_budget_s=self.time_budget,  # TRIED no effect
+                time_budget_s=self.time_budget,
                 num_samples=-1,
             )
 
@@ -1238,11 +1267,15 @@ class RetinaVAE:
                 stop={"training_iteration": self.epochs},
                 progress_reporter=reporter,
                 local_dir=self.ray_dir,
+                # callbacks=[MyCallback()],
                 checkpoint_config=air.CheckpointConfig(
-                    checkpoint_at_end=True,
-                    num_to_keep=1,  # Keep only the best checkpoint
+                    checkpoint_score_attribute=self.multi_objective["metric"][0],
+                    checkpoint_score_order=self.multi_objective["mode"][0],
+                    num_to_keep=1,
+                    checkpoint_at_end=False,
+                    checkpoint_frequency=0,
                 ),
-                verbose=2,
+                verbose=1,
             ),
         )
 
