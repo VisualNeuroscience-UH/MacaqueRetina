@@ -512,13 +512,13 @@ class Viz:
         ConstructRetina call.
         """
 
-        temporal_filter_parameters = mosaic.temp_stat_to_show[
+        temporal_filter_parameters = mosaic.temporal_statistics_to_show[
             "temporal_filter_parameters"
         ]
-        distrib_params = mosaic.temp_stat_to_show["distrib_params"]
-        suptitle = mosaic.temp_stat_to_show["suptitle"]
-        all_fits_df = mosaic.temp_stat_to_show["all_fits_df"]
-        good_data_indices = mosaic.temp_stat_to_show["good_data_indices"]
+        distrib_params = mosaic.temporal_statistics_to_show["distrib_params"]
+        suptitle = mosaic.temporal_statistics_to_show["suptitle"]
+        all_data_fits_df = mosaic.temporal_statistics_to_show["all_data_fits_df"]
+        good_data_indices = mosaic.temporal_statistics_to_show["good_data_indices"]
 
         plt.subplots(2, 3)
         plt.suptitle(suptitle)
@@ -526,7 +526,7 @@ class Viz:
             plt.subplot(2, 3, i + 1)
             ax = plt.gca()
             shape, loc, scale = distrib_params[i, :]
-            param_array = np.array(all_fits_df.iloc[good_data_indices][param_name])
+            param_array = np.array(all_data_fits_df.iloc[good_data_indices][param_name])
 
             x_min, x_max = stats.gamma.ppf(
                 [0.001, 0.999], a=shape, loc=loc, scale=scale

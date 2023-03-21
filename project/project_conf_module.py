@@ -318,11 +318,11 @@ if __name__ == "__main__":
 
     # options are defined in my_retina_options
 
-    # PM.construct_retina.build()
+    PM.construct_retina.build()
 
     # PM.construct_retina.save_mosaic()
 
-    # PM.construct_retina.show_build_process(show_all_spatial_fits=True)
+    PM.construct_retina.show_build_process(show_all_spatial_fits=False)
 
     #################################
     ### Create stimulus ###
@@ -389,9 +389,9 @@ if __name__ == "__main__":
     ### Run multiple trials for single cell ###
     #################################
 
-    PM.working_retina.run_with_my_run_options()
+    # PM.working_retina.run_with_my_run_options()
 
-    PM.viz.show_gc_responses(PM.working_retina)
+    # PM.viz.show_gc_responses(PM.working_retina)
 
     # PM.viz.show_stimulus_with_gcs(
     #     PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51

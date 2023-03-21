@@ -216,6 +216,9 @@ class ConstructRetina(RetinaMath):
                     self.mean_surround_sd,
                     self.temporal_filters_to_show,
                     self.spatial_filters_to_show,
+                    self.spatial_statistics_to_show,
+                    self.temporal_statistics_to_show,
+                    self.tonic_drives_to_show,
                 ) = Fit(
                     self.context.apricot_data_folder, gc_type, response_type
                 ).get_statistics()
@@ -229,13 +232,18 @@ class ConstructRetina(RetinaMath):
 
         elif self.model_type == "VAE":
             # Fit variational autoencoder to generate receptive fields
-            self.vae_model = RetinaVAE(
-                self.context.apricot_data_folder, gc_type, response_type
+            self.retina_vae = RetinaVAE(
+                self.context.apricot_data_folder,
+                gc_type,
+                response_type,
+                self.context.output_folder,
             )
+            # Alternative: read in previously generated models
+            pdb.set_trace()
             print("Back from VAE!")
         elif self.model_type == "GAN":
             # Fit variational autoencoder to generate receptive fields
-            self.gan_model = GAN(
+            self.retina_gan = GAN(
                 self.context.apricot_data_folder, gc_type, response_type
             )
             print("Back from GAN!")
@@ -770,6 +778,7 @@ class ConstructRetina(RetinaMath):
 
         elif self.model_type == "VAE":
             # Use the generative variational autoencoder model to provide spatial and temporal receptive fields
+            pdb.set_trace()
             pass
         elif self.model_type == "GAN":
             # Use the generative adversarial network model to provide spatial and temporal receptive fields
@@ -811,4 +820,5 @@ class ConstructRetina(RetinaMath):
         self goes as argument, to be available for viz
         """
 
+        # The argument "self" becomes available in the Viz class as "mosaic"
         self.viz.show_build_process(self, show_all_spatial_fits=show_all_spatial_fits)

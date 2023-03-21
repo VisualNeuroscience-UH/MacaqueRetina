@@ -722,17 +722,6 @@ class TrainableVAE(tune.Trainable):
         self.model.load_state_dict(torch.load(checkpoint_path))
 
 
-# class MyCallback(Callback):
-#     def on_trial_result(self, iteration, trials, trial, result, **info):
-#         # pdb.set_trace()
-#         print(f"\nGot result: {result['iteration']} for trial {trial.trial_id}")
-
-#     # # def on_checkpoint(self, iteration, trials, trial, checkpoint, **info):
-#     # def on_trial_complete(self, iteration, trials, trial, **info):
-#     #     pdb.set_trace()
-#     #     print(f"Got result: {result['metric']}")
-
-
 class RetinaVAE:
     """
     Class to apply variational autoencoder to Apricot retina data and run single learning run
@@ -752,12 +741,12 @@ class RetinaVAE:
         self.response_type = response_type
 
         # N epochs for both single training and ray tune runs
-        self.epochs = 1000
+        self.epochs = 100
         self.time_budget = 60 * 60 * 24 * 4  # in seconds
         self.grid_search = False  # False for tune by Optuna, True for grid search
 
         # "train_model" or "tune_model" or "load_model"
-        training_mode = "tune_model"
+        training_mode = "train_model"
         # training_mode = "load_model"
         # self.model_path = "C:\Users\simov\Laskenta\GitRepos\MacaqueRetina\retina\models" # For most recent single trials from "train_model"
         # self.model_path = "/opt2/Git_Repos/MacaqueRetina/retina/models/"  # For most recent single trials from "train_model"
@@ -1310,7 +1299,8 @@ class RetinaVAE:
         # Create models folder if it does not exist using pathlib
 
         print(f"Saving model to {model_path}")
-        torch.save(self.vae.state_dict(), model_path)
+        # torch.save(self.vae.state_dict(), model_path)
+        torch.save(self.vae, model_path)
         return model_path
 
     def _load_model(self, model_path=None, best_result=None, trial_name=None):

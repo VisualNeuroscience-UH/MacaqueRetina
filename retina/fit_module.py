@@ -611,11 +611,11 @@ class Fit(ApricotData, RetinaMath):
             shape, loc, scale = stats.gamma.fit(param_array)
             distrib_params[i, :] = [shape, loc, scale]
 
-        self.temp_stat_to_show = {
+        self.temporal_statistics_to_show = {
             "temporal_filter_parameters": temporal_filter_parameters,
             "distrib_params": distrib_params,
             "suptitle": self.gc_type + " " + self.response_type,
-            "all_data_fits_df_df": self.all_data_fits_df,
+            "all_data_fits_df": self.all_data_fits_df,
             "good_data_indices": self.good_data_indices,
         }
 
@@ -747,6 +747,9 @@ class Fit(ApricotData, RetinaMath):
             mean_surround_sd,
             self.temporal_filters_to_show,
             self.spatial_filters_to_show,
+            self.spatial_statistics_to_show,
+            self.temporal_statistics_to_show,
+            self.tonic_drives_to_show,
         )
 
 

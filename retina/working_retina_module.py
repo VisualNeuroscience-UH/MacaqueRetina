@@ -552,9 +552,15 @@ class WorkingRetina(RetinaMath):
             The row-dimension is the number of pixels in the stimulus
             The column-dimension is the number of frames in the stimulus
         """
+        # tmp
+        import matplotlib.pyplot as plt
 
         if self.model_type == "FIT":
             spatial_filter = self._create_spatial_filter(cell_index)
+            plt.imshow(spatial_filter)
+            plt.colorbar()
+            plt.show()
+            pdb.set_trace()
             s = self.spatial_filter_sidelen
             spatial_filter_1d = np.array([np.reshape(spatial_filter, s**2)]).T
 
@@ -565,6 +571,7 @@ class WorkingRetina(RetinaMath):
             )  # (Nx1) * (1xT) = NxT
         elif self.model_type == "VAE":
             spatiotemporal_filter = self._filter_from_VAE_model(cell_index)
+            pdb.set_trace()
 
         if called_from_loop is False:
             self.spatiotemporal_filter_to_show = {
