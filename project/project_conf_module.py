@@ -379,11 +379,11 @@ if __name__ == "__main__":
     ### Show single ganglion cell response ###
     #################################
 
-    example_gc = 2  # int or 'None'
-    PM.working_retina.convolve_stimulus(example_gc)
+    # example_gc = 2  # int or 'None'
+    # PM.working_retina.convolve_stimulus(example_gc)
 
-    PM.viz.show_spatiotemporal_filter(PM.working_retina)
-    PM.viz.show_convolved_stimulus(PM.working_retina)
+    # PM.viz.show_spatiotemporal_filter(PM.working_retina)
+    # PM.viz.show_convolved_stimulus(PM.working_retina)
 
     #################################
     ### Run multiple trials for single cell ###
@@ -393,7 +393,9 @@ if __name__ == "__main__":
 
     PM.viz.show_gc_responses(PM.working_retina)
 
-    # PM.viz.show_stimulus_with_gcs(PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51)
+    # PM.viz.show_stimulus_with_gcs(
+    #     PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51
+    # )
 
     # PM.viz.show_single_gc_view(PM.working_retina, cell_index=example_gc, frame_number=21)
 
@@ -412,7 +414,7 @@ if __name__ == "__main__":
     ### Run all cells ###
     #################################
 
-    # PM.working_retina.run_all_cells(spike_generator_model='poisson',save_data=False)
+    # PM.working_retina.run_all_cells(spike_generator_model="poisson", save_data=False)
     # PM.viz.show_gc_responses(PM.working_retina)
 
     # PM.working_retina.save_spikes_csv(filename='testi_spikes.csv') # => METADATA

@@ -759,9 +759,8 @@ class WorkingRetina(RetinaMath):
             net.run(duration)
             t_end.append((net.t / b2u.second) * b2u.second)
 
-            # for old visualization
-            spiketrains = np.array(list(spike_monitor.spike_trains().values()))
-            all_spiketrains.append(spiketrains.flatten())
+            spiketrains = list(spike_monitor.spike_trains().values())
+            all_spiketrains.extend(spiketrains)
 
             # Cxsystem spikemon save natively supports multiple monitors
             spikemons.append(spike_monitor)
