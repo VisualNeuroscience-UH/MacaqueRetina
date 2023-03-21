@@ -809,7 +809,8 @@ class Viz:
 
         # Prepare data for manual visualization
         if n_trials > 1 and n_cells == 1:
-            for_eventplot = np.array(all_spiketrains)
+            # for_eventplot = np.array(all_spiketrains)
+            for_eventplot = all_spiketrains
             for_histogram = np.concatenate(all_spiketrains)
             for_generatorplot = exp_generator_potential.flatten()
             n_samples = n_trials
@@ -822,7 +823,7 @@ class Viz:
             sample_name = "Cell #"
         else:
             raise ValueError(
-                """You attempted to visualize gc activity, but you have either n_trials or n_cells must be 1, and the other > 1"""
+                """You attempted to visualize gc activity, but either n_trials or n_cells must be 1, and the other > 1"""
             )
 
         plt.subplots(2, 1, sharex=True)
