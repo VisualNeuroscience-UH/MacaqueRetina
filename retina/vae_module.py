@@ -767,7 +767,7 @@ class RetinaVAE:
         #######################
 
         # Set common VAE model parameters
-        self.latent_dim = 2
+        self.latent_dim = 4
         self.channels = 16
         self.lr = 0.0003
 
@@ -1005,7 +1005,7 @@ class RetinaVAE:
 
         self._reconstruct_grid_images()
 
-        encoded_samples = self._get_encoded_samples(ds_name="test_ds")
+        encoded_samples = self.get_encoded_samples(ds_name="test_ds")
 
         # Figure 3
         self._plot_latent_space(encoded_samples)
@@ -1014,7 +1014,7 @@ class RetinaVAE:
         self._plot_tsne_space(encoded_samples)
 
         if training_mode == "train_model":
-            encoded_samples = self._get_encoded_samples(ds_name="train_ds")
+            encoded_samples = self.get_encoded_samples(ds_name="train_ds")
             self._plot_latent_space(encoded_samples)
             self._plot_tsne_space(encoded_samples)
 
@@ -1965,7 +1965,7 @@ class RetinaVAE:
         self, encoder, decoder, ds_name="test_ds", sample_start_stop=[0, 10]
     ):
         """
-        Plot the outputs of the autoencoder, one for each label.
+        Plot the outputs of the autoencoder.
         """
 
         if ds_name == "train_ds":
@@ -2148,10 +2148,10 @@ class RetinaVAE:
                 np.arange(0 + sidelength / 2, sidelength * 10, sidelength), y_ticks
             )
             # X label and Y label
-            plt.xlabel("Enc. Variable 0")
-            plt.ylabel("Enc. Variable 1")
+            plt.xlabel("EncVariable 0")
+            plt.ylabel("EncVariable 1")
 
-    def _get_encoded_samples(self, ds_name="test_ds"):
+    def get_encoded_samples(self, ds_name="test_ds"):
 
         if ds_name == "train_ds":
             ds = self.train_ds
@@ -2171,7 +2171,7 @@ class RetinaVAE:
             # Append to list
             encoded_img = encoded_img.flatten().cpu().numpy()
             encoded_sample = {
-                f"Enc. Variable {i}": enc for i, enc in enumerate(encoded_img)
+                f"EncVariable {i}": enc for i, enc in enumerate(encoded_img)
             }
             encoded_sample["label"] = label
             encoded_samples.append(encoded_sample)
@@ -2183,8 +2183,8 @@ class RetinaVAE:
     def _plot_latent_space(self, encoded_samples):
         sns.relplot(
             data=encoded_samples,
-            x="Enc. Variable 0",
-            y="Enc. Variable 1",
+            x="EncVariable 0",
+            y="EncVariable 1",
             hue=encoded_samples.label.astype(str),
         )
         plt.title("Encoded samples")
