@@ -6,6 +6,7 @@ import scipy.stats as stats
 import pandas as pd
 
 import torch
+from torch.utils.data import DataLoader
 
 # from scipy.signal import convolve
 # from scipy.interpolate import interp1d
@@ -775,11 +776,38 @@ class ConstructRetina(RetinaMath):
             self._create_tonic_drive()
 
         elif self.model_type == "VAE":
-            # TÄHÄN JÄIT
-            # RAKENNA VAE MALLISTA PILLOW IMAG STACK JOSSA CENTER LOCATION JA SCALED RESAMPLED DATA
+            # -- Second, endow cells with spatial receptive fields using the generative variational autoencoder model
+            # --- 1. make a probability density function of the latent space
+            latent_dim = self.retina_vae.latent_dim
+            retina_vae = self.retina_vae
+            latent_pdf = self.make_pdf_of_latent_space(retina_vae)
 
-            # Use the generative variational autoencoder model to provide spatial and temporal receptive fields
+            # --- 2. sample from the pdf
+            n_samples = len(self.gc_df)
+            latent_samples = torch.tensor(latent_pdf.resample(n_samples).T).to(
+                retina_vae.device
+            )
+            # Change the dtype to float32
+            latent_samples = latent_samples.type(torch.float32)
+
+            # # plot the samples on top of the estimated kde
+            # fig, ax = plt.subplots()
+            # ax.plot(x, y, label="Estimated PDF")
+            # ax.scatter(latent_samples[0], latent_samples[1], label="Samples")
+            # ax.legend()
+            # plt.show()
+
+            # --- 3. decode the samples
+            img_stack = self.retina_vae.vae.decoder(latent_samples)
+            # TÄHÄN JÄIT. VISUALISOI LATENT KDE JA NEW SAMPLES. VISUALISOI IMGS.
+            # POHDI: TALLENNA, LAITA DF:ÄN POLUT JA MYÖHEMMIN KÄYTÄ NÄITÄ TIEDOSTOJA. VAI MUU VAIHTOEHTO?
             pdb.set_trace()
+            # -- Third, endow cells with temporal receptive fields
+            self._create_temporal_receptive_fields()
+
+            # -- Fourth, endow cells with tonic drive
+            self._create_tonic_drive()
+
             self.save_generated_rfs(img_stack, output_path)
 
         elif self.model_type == "GAN":
@@ -790,6 +818,24 @@ class ConstructRetina(RetinaMath):
 
         n_rgc = len(self.gc_df)
         print(f"Built RGC mosaic with {n_rgc} cells")
+
+    def make_pdf_of_latent_space(self, retina_vae):
+        """
+        Make a probability density function of the latent space
+        """
+        # Get the latent space data
+        train_df = retina_vae.get_encoded_samples(ds_name="train_ds")
+        valid_df = retina_vae.get_encoded_samples(ds_name="val_ds")
+        test_df = retina_vae.get_encoded_samples(ds_name="test_ds")
+        latent_df = pd.concat([train_df, valid_df, test_df], axis=0, ignore_index=True)
+
+        # Extract data from latent_df into a numpy array from columns whose title include "EncVariable"
+        latent_data = latent_df.filter(regex="EncVariable").to_numpy()
+
+        # Make a probability density function of the latent_data
+        latent_pdf = stats.gaussian_kde(latent_data.T)
+
+        return latent_pdf
 
     def save_mosaic(self, filename=None):
         """
