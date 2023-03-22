@@ -733,7 +733,7 @@ class RetinaVAE:
     SSIM : Wang_2009_IEEESignProcMag, Wang_2004_IEEETransImProc
     """
 
-    def __init__(self, apricot_data_folder, gc_type, response_type):
+    def __init__(self, apricot_data_folder, gc_type, response_type, output_folder=None):
         super().__init__()
 
         self.apricot_data_folder = apricot_data_folder
@@ -799,7 +799,7 @@ class RetinaVAE:
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         self.this_folder = self._get_this_folder()
-        self.models_folder = self._set_models_folder()
+        self.models_folder = self._set_models_folder(output_folder=output_folder)
         self.ray_dir = self.this_folder / "ray_results"
         self.dependent_variables = [
             "train_loss",
@@ -861,7 +861,7 @@ class RetinaVAE:
                 self.writer.close()
 
                 # Save model
-                model_path = self._save_model()
+                model_path = self._save_model(output_folder=output_folder)
                 summary(
                     self.vae,
                     input_size=(1, self.resolution_hw[0], self.resolution_hw[1]),
@@ -1284,9 +1284,13 @@ class RetinaVAE:
         this_folder = Path(vv.__file__).parent
         return this_folder
 
-    def _set_models_folder(self):
+    def _set_models_folder(self, output_folder=None):
         """Set the folder where models are saved"""
-        models_folder = self.this_folder / "models"
+
+        if output_folder is None:
+            output_folder = output_folder
+        else:
+            models_folder = self.this_folder / "models"
         Path(models_folder).mkdir(parents=True, exist_ok=True)
 
         return models_folder
@@ -1295,6 +1299,7 @@ class RetinaVAE:
         """
         Save model for single trial, a.k.a. 'train_model' training_mode
         """
+
         model_path = f"{self.models_folder}/model_{self.timestamp}.pt"
         # Create models folder if it does not exist using pathlib
 
