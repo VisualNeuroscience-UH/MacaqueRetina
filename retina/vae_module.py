@@ -733,7 +733,14 @@ class RetinaVAE:
     SSIM : Wang_2009_IEEESignProcMag, Wang_2004_IEEETransImProc
     """
 
-    def __init__(self, apricot_data_folder, gc_type, response_type, output_folder=None):
+    def __init__(
+        self,
+        gc_type,
+        response_type,
+        training_mode,
+        apricot_data_folder,
+        output_folder=None,
+    ):
         super().__init__()
 
         self.apricot_data_folder = apricot_data_folder
@@ -742,11 +749,11 @@ class RetinaVAE:
 
         # N epochs for both single training and ray tune runs
         self.epochs = 100
-        self.time_budget = 60 * 60 * 24 * 4  # in seconds
+        self.time_budget = 60  # in seconds
         self.grid_search = False  # False for tune by Optuna, True for grid search
 
         # "train_model" or "tune_model" or "load_model"
-        training_mode = "train_model"
+        # training_mode = "train_model"
         # training_mode = "load_model"
         # self.model_path = "C:\Users\simov\Laskenta\GitRepos\MacaqueRetina\retina\models" # For most recent single trials from "train_model"
         # self.model_path = "/opt2/Git_Repos/MacaqueRetina/retina/models/"  # For most recent single trials from "train_model"
@@ -861,7 +868,7 @@ class RetinaVAE:
                 self.writer.close()
 
                 # Save model
-                model_path = self._save_model(output_folder=output_folder)
+                model_path = self._save_model()
                 summary(
                     self.vae,
                     input_size=(1, self.resolution_hw[0], self.resolution_hw[1]),
@@ -1287,8 +1294,9 @@ class RetinaVAE:
     def _set_models_folder(self, output_folder=None):
         """Set the folder where models are saved"""
 
-        if output_folder is None:
-            output_folder = output_folder
+        # If output_folder is Path instance or string, use it as models_folder
+        if isinstance(output_folder, Path) or isinstance(output_folder, str):
+            models_folder = output_folder
         else:
             models_folder = self.this_folder / "models"
         Path(models_folder).mkdir(parents=True, exist_ok=True)

@@ -5,11 +5,14 @@ import scipy.io as sio
 import scipy.stats as stats
 import pandas as pd
 
+import torch
+
 # from scipy.signal import convolve
 # from scipy.interpolate import interp1d
 
 # Data IO
-import cv2
+# import cv2
+from PIL import Image
 
 # Viz
 from tqdm import tqdm
@@ -19,20 +22,13 @@ from tqdm import tqdm
 # import brian2.units as b2u
 
 # Local
-# from cxsystem2.core.tools import write_to_file, load_from_file
 from retina.fit_module import Fit
 from retina.retina_math_module import RetinaMath
-
-# from retina.vae_module import ApricotVAE
 from retina.vae_module import RetinaVAE
 from retina.gan_module import GAN
 
 # Builtin
-# import sys
 from pathlib import Path
-
-# import os
-# from copy import deepcopy
 import pdb
 
 
@@ -125,6 +121,8 @@ class ConstructRetina(RetinaMath):
         self.deg_per_mm = my_retina["deg_per_mm"]
 
         self.model_type = my_retina["model_type"]
+        if self.model_type in ["VAE", "GAN"]:
+            self.training_mode = my_retina["training_mode"]
 
         proportion_of_parasol_gc_type = my_retina["proportion_of_parasol_gc_type"]
         proportion_of_midget_gc_type = my_retina["proportion_of_midget_gc_type"]
@@ -233,14 +231,14 @@ class ConstructRetina(RetinaMath):
         elif self.model_type == "VAE":
             # Fit variational autoencoder to generate receptive fields
             self.retina_vae = RetinaVAE(
-                self.context.apricot_data_folder,
                 gc_type,
                 response_type,
+                self.training_mode,
+                self.context.apricot_data_folder,
                 self.context.output_folder,
             )
-            # Alternative: read in previously generated models
-            pdb.set_trace()
             print("Back from VAE!")
+
         elif self.model_type == "GAN":
             # Fit variational autoencoder to generate receptive fields
             self.retina_gan = GAN(
@@ -777,9 +775,13 @@ class ConstructRetina(RetinaMath):
             self._create_tonic_drive()
 
         elif self.model_type == "VAE":
+            # TÄHÄN JÄIT
+            # RAKENNA VAE MALLISTA PILLOW IMAG STACK JOSSA CENTER LOCATION JA SCALED RESAMPLED DATA
+
             # Use the generative variational autoencoder model to provide spatial and temporal receptive fields
             pdb.set_trace()
-            pass
+            self.save_generated_rfs(img_stack, output_path)
+
         elif self.model_type == "GAN":
             # Use the generative adversarial network model to provide spatial and temporal receptive fields
             pass
@@ -813,6 +815,24 @@ class ConstructRetina(RetinaMath):
 
         print("Saving model mosaic to %s" % filepath)
         self.gc_df.to_csv(filepath)
+
+    def save_generated_rfs(self, img_stack, output_path):
+        """
+        Saves a 3D image stack as a series of 2D image files using Pillow.
+
+        Parameters
+        ----------
+            img_stack (numpy.ndarray): The 3D image stack to be saved, with shape (N, N, M).
+            output_path (str): The path to the output folder where the image files will be saved.
+        """
+        # Loop through each slice in the image stack
+        for i in range(img_stack.shape[2]):
+            # Create a PIL Image object from the current slice
+            img = Image.fromarray(img_stack[:, :, i])
+            # Convert the image to 16-bit depth
+            img = img.convert("I;16")
+            # Save the image file with a unique name based on the slice index
+            img.save(output_path + f"/slice_{i+1}.png")
 
     def show_build_process(self, show_all_spatial_fits=False):
         """
