@@ -2103,7 +2103,7 @@ class RetinaVAE:
                 # sample grid of vectors between -1.5 and 1.5 in both dimensions
                 grid = torch.linspace(-scale, scale, 10)
                 latent = (
-                    torch.stack(torch.meshgrid(grid, grid))
+                    torch.stack(torch.meshgrid(grid, grid, indexing="xy"))
                     .reshape(2, -1)
                     .T.to(self.device)
                 )
@@ -2190,7 +2190,7 @@ class RetinaVAE:
         plt.title("Encoded samples")
 
     def _plot_tsne_space(self, encoded_samples):
-        tsne = TSNE(n_components=2)
+        tsne = TSNE(n_components=2, init="pca", learning_rate="auto", perplexity=30)
 
         if encoded_samples.shape[0] < tsne.perplexity:
             tsne.perplexity = encoded_samples.shape[0] - 1
