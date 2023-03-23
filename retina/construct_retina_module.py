@@ -789,22 +789,23 @@ class ConstructRetina(RetinaMath):
 
             # --- 2. sample from the pdf
             n_samples = len(self.gc_df)
-            n_samples = 1000
+            # n_samples = 1000
             latent_samples = torch.tensor(latent_pdf.resample(n_samples).T).to(
                 retina_vae.device
             )
             # Change the dtype to float32
             latent_samples = latent_samples.type(torch.float32)
 
-            # plot the samples on top of an estimated kde, one sublot for each successive two dimensions of latent_dim
-            self.plot_latent_samples(
-                deepcopy(latent_samples).cpu(), latent_data, latent_dim
-            )
+            # # plot the samples on top of an estimated kde, one sublot for each successive two dimensions of latent_dim
+            # self.plot_latent_samples(
+            #     deepcopy(latent_samples).cpu(), latent_data, latent_dim
+            # )
 
             # --- 3. decode the samples
             img_stack = self.retina_vae.vae.decoder(latent_samples)
-            # TÄHÄN JÄIT. VISUALISOI LATENT KDE JA NEW SAMPLES. VISUALISOI IMGS.
-            # POHDI: TALLENNA, LAITA DF:ÄN POLUT JA MYÖHEMMIN KÄYTÄ NÄITÄ TIEDOSTOJA. VAI MUU VAIHTOEHTO?
+
+            # self.plot_rfs_from_vae(img_stack, n_examples=4)
+
             pdb.set_trace()
             # -- Third, endow cells with temporal receptive fields
             self._create_temporal_receptive_fields()
@@ -822,6 +823,27 @@ class ConstructRetina(RetinaMath):
 
         n_rgc = len(self.gc_df)
         print(f"Built RGC mosaic with {n_rgc} cells")
+
+    def plot_rfs_from_vae(self, img_stack, n_examples=4):
+        """
+        Show n_examples of the generated receptive fields
+        """
+        import matplotlib.pyplot as plt
+
+        # Make a grid of subplots
+        n_cols = 4
+        n_rows = int(np.ceil(n_examples / n_cols))
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(10, 2 * n_rows))
+        axes = axes.flatten()
+
+        for i in range(n_examples):
+            ax = axes[i]
+            img = img_stack[i, 0, :, :].detach().cpu().numpy()
+            ax.imshow(img, cmap="gray")
+            ax.set_title(f"RF {i}")
+            ax.axis("off")
+
+        plt.show()
 
     def plot_latent_samples(self, latent_samples, latent_data, latent_dim):
         """
@@ -921,7 +943,7 @@ class ConstructRetina(RetinaMath):
 
     def get_data_at_latent_space(self, retina_vae):
         """
-        Make a probability density function of the latent space
+        Get original image data as projected through encoder to the latent space
         """
         # Get the latent space data
         train_df = retina_vae.get_encoded_samples(ds_name="train_ds")
