@@ -778,7 +778,7 @@ class RetinaVAE:
         #######################
 
         # Set common VAE model parameters
-        self.latent_dim = 4  # 2**1 - 2**6, use powers of 2
+        self.latent_dim = 4  # 2**1 - 2**6, use powers of 2 btw 2 and 128
         self.channels = 16
         self.lr = 0.0003
 
@@ -992,42 +992,43 @@ class RetinaVAE:
         self.test_loader = self._augment_and_get_dataloader(
             data_type="test", shuffle=False
         )
+        if 0:
 
-        # Figure 1
-        self._plot_ae_outputs(
-            self.vae.encoder,
-            self.vae.decoder,
-            ds_name="test_ds",
-            sample_start_stop=[10, 25],
-        )
-
-        if training_mode in ["train_model"]:
+            # Figure 1
             self._plot_ae_outputs(
-                self.vae.encoder, self.vae.decoder, ds_name="train_ds"
-            )
-            self._plot_ae_outputs(
-                self.vae.encoder, self.vae.decoder, ds_name="valid_ds"
+                self.vae.encoder,
+                self.vae.decoder,
+                ds_name="test_ds",
+                sample_start_stop=[10, 25],
             )
 
-        self.vae.eval()
+            if training_mode in ["train_model"]:
+                self._plot_ae_outputs(
+                    self.vae.encoder, self.vae.decoder, ds_name="train_ds"
+                )
+                self._plot_ae_outputs(
+                    self.vae.encoder, self.vae.decoder, ds_name="valid_ds"
+                )
 
-        # Figure 2
-        self._reconstruct_random_images()
+            self.vae.eval()
 
-        self._reconstruct_grid_images()
+            # Figure 2
+            self._reconstruct_random_images()
 
-        encoded_samples = self.get_encoded_samples(ds_name="test_ds")
+            self._reconstruct_grid_images()
 
-        # Figure 3
-        self._plot_latent_space(encoded_samples)
+            encoded_samples = self.get_encoded_samples(ds_name="test_ds")
 
-        # Figure 4
-        self._plot_tsne_space(encoded_samples)
-
-        if training_mode == "train_model":
-            encoded_samples = self.get_encoded_samples(ds_name="train_ds")
+            # Figure 3
             self._plot_latent_space(encoded_samples)
+
+            # Figure 4
             self._plot_tsne_space(encoded_samples)
+
+            if training_mode == "train_model":
+                encoded_samples = self.get_encoded_samples(ds_name="train_ds")
+                self._plot_latent_space(encoded_samples)
+                self._plot_tsne_space(encoded_samples)
 
     def _plot_dependent_variables(self, results_grid):
         """Plot results from ray tune"""

@@ -323,7 +323,7 @@ if __name__ == "__main__":
 
     # PM.construct_retina.save_mosaic()
 
-    PM.construct_retina.show_build_process(show_all_spatial_fits=False)
+    # PM.construct_retina.show_build_process(show_all_spatial_fits=False)
 
     #################################
     ### Create stimulus ###

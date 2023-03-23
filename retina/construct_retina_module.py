@@ -6,7 +6,8 @@ import scipy.stats as stats
 import pandas as pd
 
 import torch
-from torch.utils.data import DataLoader
+
+# from torch.utils.data import DataLoader
 
 # from scipy.signal import convolve
 # from scipy.interpolate import interp1d
@@ -31,6 +32,7 @@ from retina.gan_module import GAN
 # Builtin
 from pathlib import Path
 import pdb
+from copy import deepcopy
 
 
 class ConstructRetina(RetinaMath):
@@ -780,22 +782,24 @@ class ConstructRetina(RetinaMath):
             # --- 1. make a probability density function of the latent space
             latent_dim = self.retina_vae.latent_dim
             retina_vae = self.retina_vae
-            latent_pdf = self.make_pdf_of_latent_space(retina_vae)
+            latent_data = self.get_data_at_latent_space(retina_vae)
+
+            # Make a probability density function of the latent_data
+            latent_pdf = stats.gaussian_kde(latent_data.T)
 
             # --- 2. sample from the pdf
             n_samples = len(self.gc_df)
+            n_samples = 1000
             latent_samples = torch.tensor(latent_pdf.resample(n_samples).T).to(
                 retina_vae.device
             )
             # Change the dtype to float32
             latent_samples = latent_samples.type(torch.float32)
 
-            # # plot the samples on top of the estimated kde
-            # fig, ax = plt.subplots()
-            # ax.plot(x, y, label="Estimated PDF")
-            # ax.scatter(latent_samples[0], latent_samples[1], label="Samples")
-            # ax.legend()
-            # plt.show()
+            # plot the samples on top of an estimated kde, one sublot for each successive two dimensions of latent_dim
+            self.plot_latent_samples(
+                deepcopy(latent_samples).cpu(), latent_data, latent_dim
+            )
 
             # --- 3. decode the samples
             img_stack = self.retina_vae.vae.decoder(latent_samples)
@@ -819,7 +823,103 @@ class ConstructRetina(RetinaMath):
         n_rgc = len(self.gc_df)
         print(f"Built RGC mosaic with {n_rgc} cells")
 
-    def make_pdf_of_latent_space(self, retina_vae):
+    def plot_latent_samples(self, latent_samples, latent_data, latent_dim):
+        """
+        Plot the latent samples on top of the estimated kde, one sublot for each successive two dimensions of latent_dim
+
+        Parameters
+        ----------
+        latent_samples : torch.tensor
+            Samples from the latent space
+        latent_data :
+            Original data in latent space to estimate scipy.stats.gaussian_kde
+        latent_dim : int
+            Dimensionality of the latent space
+        """
+        import matplotlib.pyplot as plt
+
+        # import inset_axes
+        from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+
+        # pdb.set_trace()
+        # Make a grid of subplots
+        n_cols = 4
+        n_rows = int(np.ceil(latent_dim / n_cols))
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(10, 2 * n_rows))
+        axes = axes.flatten()
+
+        for ax_idx, i in enumerate(range(0, latent_dim, 2)):
+            # Get only two dimensions at a time
+            values = latent_data[:, [i, i + 1]].T
+            # Evaluate the kde using only the same two dimensions
+            kernel = stats.gaussian_kde(values)
+            # Construct X and Y grids using the same two dimensions
+            x = np.linspace(latent_data[:, i].min(), latent_data[:, i].max(), 100)
+            y = np.linspace(
+                latent_data[:, i + 1].min(), latent_data[:, i + 1].max(), 100
+            )
+            X, Y = np.meshgrid(x, y)
+            positions = np.vstack([X.ravel(), Y.ravel()])
+            Z = np.reshape(kernel(positions).T, X.shape)
+
+            # Plot the estimated kde and samples on top of it
+            axes[ax_idx].contour(X, Y, Z, levels=10)
+            axes[ax_idx].scatter(latent_samples[:, i], latent_samples[:, i + 1])
+
+            # Make marginal plots of the contours as contours and samples as histograms.
+            # Place the marginal plots on the right and top of the main plot
+            ax_marg_x = inset_axes(
+                axes[ax_idx],
+                width="100%",  # width  of parent_bbox width
+                height="30%",  # height : 1 inch
+                loc="upper right",
+                # bbox_to_anchor=(1.05, 1.05),
+                bbox_to_anchor=(0, 0.95, 1, 0.3),
+                bbox_transform=axes[ax_idx].transAxes,
+                borderpad=0,
+            )
+            ax_marg_y = inset_axes(
+                axes[ax_idx],
+                width="30%",  # width of parent_bbox width
+                height="100%",  # height : 1 inch
+                loc="lower left",
+                # bbox_to_anchor=(-0.05, -0.05),
+                bbox_to_anchor=(1, 0, 0.4, 1),
+                bbox_transform=axes[ax_idx].transAxes,
+                borderpad=0,
+            )
+
+            # Plot the marginal plots
+            nx, bins, _ = ax_marg_x.hist(latent_samples[:, i], bins=20, density=True)
+            ny, bins, _ = ax_marg_y.hist(
+                latent_samples[:, i + 1],
+                bins=20,
+                density=True,
+                orientation="horizontal",
+            )
+
+            # Plot the one-dimensional marginal shapes of the kde
+            # pdb.set_trace()
+            x_margin_contour = nx.max() * Z.mean(axis=0) / Z.mean(axis=0).max()
+            y_margin_contour = ny.max() * Z.mean(axis=1) / Z.mean(axis=1).max()
+            ax_marg_x.plot(x, x_margin_contour, color="r")
+            ax_marg_y.plot(y_margin_contour, y, color="r")
+
+            # Remove the ticks from the marginal plots
+            ax_marg_x.tick_params(
+                axis="both", which="both", bottom=False, top=False, labelbottom=False
+            )
+            ax_marg_y.tick_params(
+                axis="both", which="both", left=False, right=False, labelleft=False
+            )
+
+            # Set the title of the main plot
+            axes[ax_idx].set_title(f"Latent dims {i}, {i+1}")
+
+        plt.tight_layout()
+        plt.show()
+
+    def get_data_at_latent_space(self, retina_vae):
         """
         Make a probability density function of the latent space
         """
@@ -832,10 +932,7 @@ class ConstructRetina(RetinaMath):
         # Extract data from latent_df into a numpy array from columns whose title include "EncVariable"
         latent_data = latent_df.filter(regex="EncVariable").to_numpy()
 
-        # Make a probability density function of the latent_data
-        latent_pdf = stats.gaussian_kde(latent_data.T)
-
-        return latent_pdf
+        return latent_data
 
     def save_mosaic(self, filename=None):
         """
