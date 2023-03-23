@@ -766,9 +766,7 @@ class RetinaVAE:
         # "train_model" or "tune_model" or "load_model"
         # training_mode = "train_model"
         # training_mode = "load_model"
-        # self.model_path = "C:\Users\simov\Laskenta\GitRepos\MacaqueRetina\retina\models" # For most recent single trials from "train_model"
-        # self.model_path = "/opt2/Git_Repos/MacaqueRetina/retina/models/"  # For most recent single trials from "train_model"
-        self.trial_name = "TrainableVAE_ea16d5ed"  # From ray_results table/folder
+        # self.trial_name = "TrainableVAE_ea16d5ed"  # From ray_results table/folder
 
         # TÄHÄN JÄIT: OPETTELE PENKOMAAN EXPRIMENT JSON. KANNATTANEE TUUNATA ILMAN CHECKPOINTTEJA ISOSTI. SEN JÄLKEEN EHKÄ
         # CHECKPOINTIT TAI YKSITTÄISET AJOT.
@@ -967,13 +965,13 @@ class RetinaVAE:
                         results_grid=result_grid,
                     )
 
-                elif hasattr(self, "model_path"):
+                elif hasattr(self, "models_folder"):
                     state_dict = self._load_model(
-                        model_path=self.model_path, trial_name=None
+                        model_path=self.models_folder, trial_name=None
                     )
                 else:
                     raise ValueError(
-                        "No model path or trial name given, cannot load model, aborting..."
+                        "No output path (models_folder) or trial name given, cannot load model, aborting..."
                     )
 
                 # # Evoke new subprocess and run tensorboard at tb_dir folder
@@ -1378,7 +1376,10 @@ class RetinaVAE:
             elif Path.exists(model_path) and model_path.is_dir():
                 try:
                     model_path = max(Path(self.models_folder).glob("*.pt"))
-                    self.vae.load_state_dict(torch.load(str(model_path)))
+                    try:
+                        self.vae.load_state_dict(torch.load(str(model_path)))
+                    except TypeError:
+                        self.vae = torch.load(str(model_path))
                     print(f"Most recent model is {model_path}.")
                 except ValueError:
                     raise FileNotFoundError("No model files found. Aborting...")
