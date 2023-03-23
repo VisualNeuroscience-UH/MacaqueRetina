@@ -1329,6 +1329,13 @@ class RetinaVAE:
         model_path = f"{self.models_folder}/model_{self.timestamp}.pt"
         # Create models folder if it does not exist using pathlib
 
+        # Get key VAE structural parameters and save them with the full model
+        self.vae.config = {
+            "latent_dims": self.latent_dim,
+            "ksp_key": self.ksp,
+            "channels": self.channels,
+            "conv_layers": self.conv_layers,
+        }
         print(f"Saving model to {model_path}")
         # torch.save(self.vae.state_dict(), model_path)
         torch.save(self.vae, model_path)
