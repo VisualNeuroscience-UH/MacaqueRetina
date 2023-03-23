@@ -969,6 +969,14 @@ class RetinaVAE:
                     state_dict = self._load_model(
                         model_path=self.models_folder, trial_name=None
                     )
+                    # Get datasets for RF generation and vizualization
+                    self.train_loader = self._augment_and_get_dataloader(
+                        data_type="train"
+                    )
+                    self.val_loader = self._augment_and_get_dataloader(data_type="val")
+                    self.test_loader = self._augment_and_get_dataloader(
+                        data_type="test"
+                    )
                 else:
                     raise ValueError(
                         "No output path (models_folder) or trial name given, cannot load model, aborting..."
