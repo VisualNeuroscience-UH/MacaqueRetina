@@ -471,6 +471,17 @@ class VariationalAutoencoder(nn.Module):
                 "s2" not in ksp_key
             ), "stride 2 only supports conv_layers <= 3, check ksp, aborting..."
 
+        # Define the range of valid values for latent_dims
+        min_dim = 2
+        max_dim = 128
+
+        # Check if latent_dims is a power of 2 bwteen min_dim and max_dim
+        assert (
+            (latent_dims & (latent_dims - 1) == 0)
+            and (latent_dims >= min_dim)
+            and (latent_dims <= max_dim)
+        ), "Latent_dims must be a power of 2 between 2 and 128, aborting..."
+
         self._set_ksp_key()
         ksp = self.ksp_keys[ksp_key]
         self.device = device
@@ -767,7 +778,7 @@ class RetinaVAE:
         #######################
 
         # Set common VAE model parameters
-        self.latent_dim = 4
+        self.latent_dim = 4  # 2**1 - 2**6, use powers of 2
         self.channels = 16
         self.lr = 0.0003
 
