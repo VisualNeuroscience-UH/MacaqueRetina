@@ -780,7 +780,6 @@ class ConstructRetina(RetinaMath):
         elif self.model_type == "VAE":
             # -- Second, endow cells with spatial receptive fields using the generative variational autoencoder model
             # --- 1. make a probability density function of the latent space
-            latent_dim = self.retina_vae.latent_dim
             retina_vae = self.retina_vae
             latent_data = self.get_data_at_latent_space(retina_vae)
 
@@ -797,6 +796,12 @@ class ConstructRetina(RetinaMath):
             latent_samples = latent_samples.type(torch.float32)
 
             # # plot the samples on top of an estimated kde, one sublot for each successive two dimensions of latent_dim
+            # match self.training_mode:
+            #     case "load_model":
+            #         latent_dim = self.retina_vae.vae.config["latent_dims"]
+            #     case "train_model":
+            #         latent_dim = self.retina_vae.latent_dim
+
             # self.plot_latent_samples(
             #     deepcopy(latent_samples).cpu(), latent_data, latent_dim
             # )
@@ -806,14 +811,24 @@ class ConstructRetina(RetinaMath):
 
             # self.plot_rfs_from_vae(img_stack, n_examples=4)
 
+            img_stack_np = img_stack.detach().cpu().numpy()
+            img_stack_np_reshaped = np.reshape(
+                img_stack_np,
+                (n_samples, img_stack_np.shape[2], img_stack_np.shape[3]),
+            )
+            output_path = self.context.output_folder
+            self.save_generated_rfs(img_stack_np_reshaped, output_path)
+
+            img_stack_np2 = self.load_generated_rfs(output_path)
             pdb.set_trace()
+
             # -- Third, endow cells with temporal receptive fields
             self._create_temporal_receptive_fields()
 
             # -- Fourth, endow cells with tonic drive
             self._create_tonic_drive()
 
-            self.save_generated_rfs(img_stack, output_path)
+            pdb.set_trace()
 
         elif self.model_type == "GAN":
             # Use the generative adversarial network model to provide spatial and temporal receptive fields
@@ -987,17 +1002,60 @@ class ConstructRetina(RetinaMath):
 
         Parameters
         ----------
-            img_stack (numpy.ndarray): The 3D image stack to be saved, with shape (N, N, M).
-            output_path (str): The path to the output folder where the image files will be saved.
+            img_stack (numpy.ndarray): The 3D image stack to be saved, with shape (M, N, N).
+            output_path (str or Path): The path to the output folder where the image files will be saved.
         """
+        # Convert output_path to a Path object if it's a string
+        if isinstance(output_path, str):
+            output_path = Path(output_path)
+
+        # Create the output directory if it doesn't exist
+        output_path.mkdir(parents=True, exist_ok=True)
+
         # Loop through each slice in the image stack
-        for i in range(img_stack.shape[2]):
+        for i in range(img_stack.shape[0]):
+            # Rescale the pixel values to the range of 0 to 65535
+            img_array = (img_stack[i, :, :] * 65535.0).astype(np.uint16)
+
             # Create a PIL Image object from the current slice
-            img = Image.fromarray(img_stack[:, :, i])
-            # Convert the image to 16-bit depth
-            img = img.convert("I;16")
+            img = Image.fromarray(img_array)
+
             # Save the image file with a unique name based on the slice index
-            img.save(output_path + f"/slice_{i+1}.png")
+            img.save(output_path / f"slice_{i+1}.png")
+
+    def load_generated_rfs(self, input_path):
+        """
+        Loads a series of 2D image files into a 3D image stack using Pillow.
+
+        Parameters
+        ----------
+            input_path (str or Path): The path to the folder containing the image files.
+
+        Returns
+        -------
+            img_stack (numpy.ndarray): The 3D image stack, with shape (M, N, N).
+        """
+        # Convert input_path to a Path object if it's a string
+        if isinstance(input_path, str):
+            input_path = Path(input_path)
+
+        # Get the list of image file paths in the input directory
+        img_paths = sorted(input_path.glob("*.png"))
+
+        # Load each image file as a slice in the image stack
+        img_stack = []
+        for img_path in img_paths:
+            img = Image.open(img_path)
+            img_array = np.array(img, dtype=np.float32)
+            img_stack.append(img_array)
+
+        # Convert the list of image slices to a 3D image stack
+        img_stack = np.stack(img_stack, axis=0)
+
+        # Rescale the pixel values back to the range of 0 to 1
+        img_stack = img_stack.astype(np.float32) / 65535.0
+
+        return img_stack
 
     def show_build_process(self, show_all_spatial_fits=False):
         """
