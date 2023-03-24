@@ -115,7 +115,7 @@ my_retina = {
     "randomize_position": 0.05,
     "stimulus_center": 4.45 + 0j,
     "model_type": "VAE",  # "FIT", "VAE" for variational autoencoder, or GAN for generative adversarial network.
-    "training_mode": "train_model",  # "train_model" or "tune_model" or "load_model" Applies to VAE or GAN only.
+    "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" Applies to VAE or GAN only.
 }
 
 
@@ -323,7 +323,7 @@ if __name__ == "__main__":
 
     # PM.construct_retina.save_mosaic()
 
-    # PM.construct_retina.show_build_process(show_all_spatial_fits=False)
+    PM.construct_retina.show_build_process(show_all_spatial_fits=False)
 
     #################################
     ### Create stimulus ###
