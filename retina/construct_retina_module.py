@@ -478,7 +478,8 @@ class ConstructRetina(RetinaMath):
             ] = scaling_for_coverage_1
 
         # Apply scaling factors to semi_xc and semi_yc. Units are micrometers.
-        # scale_random_distribution = 0.08  # Estimated by eye from Watanabe and Perry data. Normal distribution with scale_random_distribution 0.08 cover about 25% above and below the mean value
+        # scale_random_distribution = 0.08  # Estimated by eye from Watanabe and Perry data.
+        # Normal distribution with scale_random_distribution 0.08 cover about 25% above and below the mean value
         scale_random_distribution = 0.001
         random_normal_distribution1 = 1 + np.random.normal(
             scale=scale_random_distribution, size=n_cells
@@ -505,7 +506,7 @@ class ConstructRetina(RetinaMath):
 
         self.gc_df["orientation_center"] = self.gc_df[
             "positions_polar_angle"
-        ]  # plus some noise here
+        ]  # plus some noise here TODO. See Watanabe 1989 JCompNeurol section Dendritic field orietation
 
     def _densfunc(self, r, d0, beta):
         return d0 * (1 + beta * r) ** (-2)
@@ -755,20 +756,19 @@ class ConstructRetina(RetinaMath):
         # Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
         dendr_diam_vs_ecc_param_dict = self._fit_dendritic_diameter_vs_eccentricity()
 
-        if self.model_type == "FIT":
-            # -- Second, endow cells with spatial receptive fields
-            self._create_spatial_rfs(dendr_diam_vs_ecc_param_dict)
+        # -- Second, endow cells with spatial receptive fields
+        self._create_spatial_rfs(dendr_diam_vs_ecc_param_dict)
 
-            # Scale center and surround amplitude so that Gaussian volume is preserved
-            self._scale_both_amplitudes()  # TODO - what was the purpose of this? Working retina uses amplitudec
+        # Scale center and surround amplitude so that Gaussian volume is preserved
+        self._scale_both_amplitudes()  # TODO - what was the purpose of this? Working retina uses amplitudec
 
-            # At this point the spatial receptive fields are ready.
-            # The positions are in gc_eccentricity, gc_polar_angle, and the rf parameters in gc_rf_models
+        # At this point the spatial receptive fields are ready.
+        # The positions are in gc_eccentricity, gc_polar_angle, and the rf parameters in gc_rf_models
 
-            # Summarize RF semi_xc and semi_yc as "RF radius" (geometric mean)
-            self.gc_df["rf_radius"] = np.sqrt(self.gc_df.semi_xc * self.gc_df.semi_yc)
+        # Summarize RF semi_xc and semi_yc as "RF radius" (geometric mean)
+        self.gc_df["rf_radius"] = np.sqrt(self.gc_df.semi_xc * self.gc_df.semi_yc)
 
-        elif self.model_type == "VAE":
+        if self.model_type == "VAE":
             # -- Second, endow cells with spatial receptive fields using the generative variational autoencoder model
             # --- 1. make a probability density function of the latent space
             retina_vae = self.retina_vae
