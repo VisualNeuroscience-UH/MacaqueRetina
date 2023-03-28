@@ -759,8 +759,8 @@ class RetinaVAE:
         self.response_type = response_type
 
         # N epochs for both single training and ray tune runs
-        self.epochs = 100
-        self.time_budget = 60  # in seconds
+        self.epochs = 500
+        self.time_budget = 60 * 20  # in seconds
         self.grid_search = False  # False for tune by Optuna, True for grid search
 
         # "train_model" or "tune_model" or "load_model"
@@ -894,10 +894,10 @@ class RetinaVAE:
                 self.search_space = {
                     # "lr": [0.00031],
                     "lr": [0.0001, 0.001],
-                    "latent_dim": [2, 4, 8, 16, 32],
+                    "latent_dim": [2, 4, 8, 16],
                     # k3s2,k3s1,k5s2,k5s1,k7s1 Kernel-stride-padding for conv layers. NOTE you cannot use >3 conv layers with stride 2
                     "ksp": ["k3s1", "k5s1", "k7s1"],
-                    "channels": [4, 8, 16, 32, 64],
+                    "channels": [4, 8, 16, 32],
                     "batch_size": [64],
                     "conv_layers": [1, 2, 3, 4, 5],
                     "batch_norm": [False],
@@ -1077,7 +1077,7 @@ class RetinaVAE:
                     try:
                         label = ",".join(f"{x}={result.config[x]}" for x in varied_cols)
                     except:
-                        pdb.set_trace()
+                        raise NotImplementedError("Not implemented yet, aborting...")
                     legend = True
                 else:
                     legend = False

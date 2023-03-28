@@ -14,8 +14,6 @@ start_time = time.time()
 # Local
 from project.project_manager_module import ProjectManager
 
-# from project_manager_module import ProjectManager
-
 """
 This is code for building macaque retinal filters corresponding to midget and parasol cell responses. We keep modular code structure, to be able to add new features at later phase.
 
@@ -320,8 +318,6 @@ if __name__ == "__main__":
     # options are defined in my_retina_options
 
     PM.construct_retina.build()
-
-    # PM.construct_retina.save_mosaic()
 
     PM.construct_retina.show_build_process(show_all_spatial_fits=False)
 
