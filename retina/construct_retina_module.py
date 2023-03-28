@@ -202,32 +202,33 @@ class ConstructRetina(RetinaMath):
         self.gc_df = pd.DataFrame(columns=columns)
         self.dendr_diam_model = "quadratic"  # 'linear' # 'quadratic' # cubic
 
+        # Current version needs Fit for all 'model_type's (FIT, VAE, etc.)
+        # If surround is fixed, the surround position, semi_x, semi_y (aspect_ratio) and orientation are the same as center params. This appears to give better results.
+        self.surround_fixed = 1
+
+        # Make or read fits
+        if fits_from_file is None:
+            (
+                self.statistics_df,
+                self.good_data_indices,
+                self.bad_data_indices,
+                self.mean_center_sd,
+                self.mean_surround_sd,
+                self.temporal_filters_to_show,
+                self.spatial_filters_to_show,
+                self.spatial_statistics_to_show,
+                self.temporal_statistics_to_show,
+                self.tonic_drives_to_show,
+            ) = Fit(
+                self.context.apricot_data_folder, gc_type, response_type
+            ).get_statistics()
+        else:
+            # probably obsolete 230118 SV
+            self.all_fits_df = pd.read_csv(
+                fits_from_file, header=0, index_col=0
+            ).fillna(0.0)
+
         if self.model_type == "FIT":
-
-            # If surround is fixed, the surround position, semi_x, semi_y (aspect_ratio) and orientation are the same as center params. This appears to give better results.
-            self.surround_fixed = 1
-
-            # Make or read fits
-            if fits_from_file is None:
-                (
-                    self.statistics_df,
-                    self.good_data_indices,
-                    self.bad_data_indices,
-                    self.mean_center_sd,
-                    self.mean_surround_sd,
-                    self.temporal_filters_to_show,
-                    self.spatial_filters_to_show,
-                    self.spatial_statistics_to_show,
-                    self.temporal_statistics_to_show,
-                    self.tonic_drives_to_show,
-                ) = Fit(
-                    self.context.apricot_data_folder, gc_type, response_type
-                ).get_statistics()
-            else:
-                # probably obsolete 230118 SV
-                self.all_fits_df = pd.read_csv(
-                    fits_from_file, header=0, index_col=0
-                ).fillna(0.0)
 
             print("Back from FIT!")
 
@@ -405,9 +406,9 @@ class ConstructRetina(RetinaMath):
 
         return dendr_diam_parameters
 
-    def _create_spatial_receptive_fields(
+    def _create_spatial_rfs(
         self,
-        dendr_diam_vs_eccentricity_parameters_dict,
+        dendr_diam_vs_ecc_param_dict,
     ):
         """
         Create spatial receptive fields to model cells.
@@ -423,7 +424,7 @@ class ConstructRetina(RetinaMath):
         # Get rf diameter vs eccentricity
         dendr_diam_model = self.dendr_diam_model  # from __init__ method
         dict_key = "{0}_{1}".format(self.gc_type, dendr_diam_model)
-        diam_fit_params = dendr_diam_vs_eccentricity_parameters_dict[dict_key]
+        diam_fit_params = dendr_diam_vs_ecc_param_dict[dict_key]
 
         if dendr_diam_model == "linear":
             gc_diameters = (
@@ -752,15 +753,11 @@ class ConstructRetina(RetinaMath):
 
         # Get fit parameters for dendritic field diameter with respect to eccentricity. Linear and quadratic fit.
         # Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
-        dendr_diam_vs_eccentricity_parameters_dict = (
-            self._fit_dendritic_diameter_vs_eccentricity()
-        )
+        dendr_diam_vs_ecc_param_dict = self._fit_dendritic_diameter_vs_eccentricity()
 
         if self.model_type == "FIT":
             # -- Second, endow cells with spatial receptive fields
-            self._create_spatial_receptive_fields(
-                dendr_diam_vs_eccentricity_parameters_dict,
-            )
+            self._create_spatial_rfs(dendr_diam_vs_ecc_param_dict)
 
             # Scale center and surround amplitude so that Gaussian volume is preserved
             self._scale_both_amplitudes()  # TODO - what was the purpose of this? Working retina uses amplitudec
@@ -770,12 +767,6 @@ class ConstructRetina(RetinaMath):
 
             # Summarize RF semi_xc and semi_yc as "RF radius" (geometric mean)
             self.gc_df["rf_radius"] = np.sqrt(self.gc_df.semi_xc * self.gc_df.semi_yc)
-
-            # -- Third, endow cells with temporal receptive fields
-            self._create_temporal_receptive_fields()
-
-            # -- Fourth, endow cells with tonic drive
-            self._create_tonic_drive()
 
         elif self.model_type == "VAE":
             # -- Second, endow cells with spatial receptive fields using the generative variational autoencoder model
@@ -817,18 +808,12 @@ class ConstructRetina(RetinaMath):
                 (n_samples, img_stack_np.shape[2], img_stack_np.shape[3]),
             )
             output_path = self.context.output_folder
-            self.save_generated_rfs(img_stack_np_reshaped, output_path)
+            img_paths = self.save_generated_rfs(img_stack_np_reshaped, output_path)
 
-            img_stack_np2 = self.load_generated_rfs(output_path)
-            pdb.set_trace()
+            # Add image paths as a columnd to self.gc_df
+            self.gc_df["img_path"] = img_paths
 
-            # -- Third, endow cells with temporal receptive fields
-            self._create_temporal_receptive_fields()
-
-            # -- Fourth, endow cells with tonic drive
-            self._create_tonic_drive()
-
-            pdb.set_trace()
+            # img_stack_np2 = self.load_generated_rfs(output_path)
 
         elif self.model_type == "GAN":
             # Use the generative adversarial network model to provide spatial and temporal receptive fields
@@ -836,8 +821,17 @@ class ConstructRetina(RetinaMath):
         else:
             raise ValueError("Model type not recognized")
 
+        # -- Third, endow cells with temporal receptive fields
+        self._create_temporal_receptive_fields()
+
+        # -- Fourth, endow cells with tonic drive
+        self._create_tonic_drive()
+
         n_rgc = len(self.gc_df)
         print(f"Built RGC mosaic with {n_rgc} cells")
+
+        # Save the receptive field mosaic
+        self.save_gc_csv()
 
     def plot_rfs_from_vae(self, img_stack, n_examples=4):
         """
@@ -878,7 +872,6 @@ class ConstructRetina(RetinaMath):
         # import inset_axes
         from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
-        # pdb.set_trace()
         # Make a grid of subplots
         n_cols = 4
         n_rows = int(np.ceil(latent_dim / n_cols))
@@ -936,7 +929,6 @@ class ConstructRetina(RetinaMath):
             )
 
             # Plot the one-dimensional marginal shapes of the kde
-            # pdb.set_trace()
             x_margin_contour = nx.max() * Z.mean(axis=0) / Z.mean(axis=0).max()
             y_margin_contour = ny.max() * Z.mean(axis=1) / Z.mean(axis=1).max()
             ax_marg_x.plot(x, x_margin_contour, color="r")
@@ -971,7 +963,7 @@ class ConstructRetina(RetinaMath):
 
         return latent_data
 
-    def save_mosaic(self, filename=None):
+    def save_gc_csv(self, filename=None):
         """
         Save the mosaic to a csv file
 
@@ -1012,6 +1004,9 @@ class ConstructRetina(RetinaMath):
         # Create the output directory if it doesn't exist
         output_path.mkdir(parents=True, exist_ok=True)
 
+        # Create pandas series object, which will hold the full paths to the generated images
+        img_paths_s = pd.Series(index=range(img_stack.shape[0]))
+
         # Loop through each slice in the image stack
         for i in range(img_stack.shape[0]):
             # Rescale the pixel values to the range of 0 to 65535
@@ -1021,7 +1016,13 @@ class ConstructRetina(RetinaMath):
             img = Image.fromarray(img_array)
 
             # Save the image file with a unique name based on the slice index
-            img.save(output_path / f"slice_{i+1}.png")
+            filename_full = output_path / f"slice_{i+1}.png"
+            img.save(filename_full)
+
+            # Add the full path to the image file to the pandas series object
+            img_paths_s[i] = filename_full
+
+        return img_paths_s
 
     def load_generated_rfs(self, input_path):
         """
