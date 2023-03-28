@@ -388,6 +388,8 @@ class WorkingRetina(RetinaMath):
         # Define spatial filter sidelength (based on angular resolution and widest semimajor axis)
         # We use the general rule that the sidelength should be at least 5 times the SD
         # Sidelength always odd number
+        pdb.set_trace()
+        # TÄHÄN JÄIT. FIT SISÄLLYTETTY. INTEGROI VAE, KÄYTÄ ORIENTAATIO, KOKO, SIJAINTI JA RESAMPLAA
         self.spatial_filter_sidelen = (
             2
             * 3
@@ -557,10 +559,9 @@ class WorkingRetina(RetinaMath):
 
         if self.model_type == "FIT":
             spatial_filter = self._create_spatial_filter(cell_index)
-            plt.imshow(spatial_filter)
-            plt.colorbar()
-            plt.show()
-            pdb.set_trace()
+            # plt.imshow(spatial_filter)
+            # plt.colorbar()
+            # plt.show()
             s = self.spatial_filter_sidelen
             spatial_filter_1d = np.array([np.reshape(spatial_filter, s**2)]).T
 
@@ -570,8 +571,8 @@ class WorkingRetina(RetinaMath):
                 spatial_filter_1d * temporal_filter
             )  # (Nx1) * (1xT) = NxT
         elif self.model_type == "VAE":
-            spatiotemporal_filter = self._filter_from_VAE_model(cell_index)
             pdb.set_trace()
+            spatiotemporal_filter = self._filter_from_VAE_model(cell_index)
 
         if called_from_loop is False:
             self.spatiotemporal_filter_to_show = {
