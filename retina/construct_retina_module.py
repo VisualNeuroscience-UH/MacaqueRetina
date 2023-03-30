@@ -767,6 +767,7 @@ class ConstructRetina(RetinaMath):
 
         # Summarize RF semi_xc and semi_yc as "RF radius" (geometric mean)
         self.gc_df["rf_radius"] = np.sqrt(self.gc_df.semi_xc * self.gc_df.semi_yc)
+        self.gc_df["rf_area_cen"] = np.pi * self.gc_df.semi_xc * self.gc_df.semi_yc
 
         if self.model_type == "VAE":
             # -- Second, endow cells with spatial receptive fields using the generative variational autoencoder model
@@ -1023,40 +1024,6 @@ class ConstructRetina(RetinaMath):
             img_paths_s[i] = filename_full
 
         return img_paths_s
-
-    def load_generated_rfs(self, input_path):
-        """
-        Loads a series of 2D image files into a 3D image stack using Pillow.
-
-        Parameters
-        ----------
-            input_path (str or Path): The path to the folder containing the image files.
-
-        Returns
-        -------
-            img_stack (numpy.ndarray): The 3D image stack, with shape (M, N, N).
-        """
-        # Convert input_path to a Path object if it's a string
-        if isinstance(input_path, str):
-            input_path = Path(input_path)
-
-        # Get the list of image file paths in the input directory
-        img_paths = sorted(input_path.glob("*.png"))
-
-        # Load each image file as a slice in the image stack
-        img_stack = []
-        for img_path in img_paths:
-            img = Image.open(img_path)
-            img_array = np.array(img, dtype=np.float32)
-            img_stack.append(img_array)
-
-        # Convert the list of image slices to a 3D image stack
-        img_stack = np.stack(img_stack, axis=0)
-
-        # Rescale the pixel values back to the range of 0 to 1
-        img_stack = img_stack.astype(np.float32) / 65535.0
-
-        return img_stack
 
     def show_build_process(self, show_all_spatial_fits=False):
         """
