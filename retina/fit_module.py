@@ -224,9 +224,9 @@ class Fit(ApricotData, RetinaMath):
             # Drop outlier cells
 
             # # Initial guess for center
-            center_rotation_angle = float(initial_center_values[0, cell_index][4])
-            if center_rotation_angle < 0:  # For negative angles, turn positive
-                center_rotation_angle = center_rotation_angle + 2 * np.pi
+            cen_rot_rad = float(initial_center_values[0, cell_index][4])
+            if cen_rot_rad < 0:  # For negative angles, turn positive
+                cen_rot_rad = cen_rot_rad + 2 * np.pi
 
             # Invert data arrays with negative sign for fitting and display.
             # Fitting assumes that center peak is above mean.
@@ -236,7 +236,7 @@ class Fit(ApricotData, RetinaMath):
             # Set initial guess for fitting
             if surround_model == 1:
                 # Build initial guess for (amplitudec, xoc, yoc, semi_xc, semi_yc, orientation_center, amplitudes, sur_ratio, offset)
-                p0 = np.array([1, 7, 7, 3, 3, center_rotation_angle, 0.1, 3, 0])
+                p0 = np.array([1, 7, 7, 3, 3, cen_rot_rad, 0.1, 3, 0])
                 boundaries = (
                     np.array([0.999, -np.inf, -np.inf, 0, 0, 0, 0, 1, 0]),
                     np.array(
@@ -252,13 +252,13 @@ class Fit(ApricotData, RetinaMath):
                         7,
                         3,
                         3,
-                        center_rotation_angle,
+                        cen_rot_rad,
                         0.1,
                         7,
                         7,
                         3 * 3,
                         3 * 3,
-                        center_rotation_angle,
+                        cen_rot_rad,
                         0,
                     ]
                 )
