@@ -230,7 +230,7 @@ class Fit(ApricotData, RetinaMath):
         print(("Fitting DoG model, surround is {0}".format(surround_status)))
         for cell_index in tqdm(all_viable_cells, desc="Fitting spatial  filters"):
             # pbar(cell_index/n_cells)
-            data_array = gc_spatial_data_array[:, :, cell_index]
+            this_rf = gc_spatial_data_array[:, :, cell_index]
             # Drop outlier cells
 
             # # Initial guess for center
@@ -240,8 +240,8 @@ class Fit(ApricotData, RetinaMath):
 
             # Invert data arrays with negative sign for fitting and display.
             # Fitting assumes that center peak is above mean.
-            if data_array.ravel()[np.argmax(np.abs(data_array))] < 0:
-                data_array = data_array * -1
+            if this_rf.ravel()[np.argmax(np.abs(this_rf))] < 0:
+                this_rf = this_rf * -1
 
             # Set initial guess for fitting
             if surround_model == 1:
@@ -314,17 +314,16 @@ class Fit(ApricotData, RetinaMath):
                     popt, pcov = opt.curve_fit(
                         self.DoG2D_fixed_surround,
                         (x_grid, y_grid),
-                        data_array.ravel(),
+                        this_rf.ravel(),
                         p0=p0,
                         bounds=boundaries,
                     )
                     data_all_viable_cells[cell_index, :] = popt
-
                 else:
                     popt, pcov = opt.curve_fit(
                         self.DoG2D_independent_surround,
                         (x_grid, y_grid),
-                        data_array.ravel(),
+                        this_rf.ravel(),
                         p0=p0,
                         bounds=boundaries,
                     )
@@ -386,8 +385,8 @@ class Fit(ApricotData, RetinaMath):
                 data_fitted = self.DoG2D_independent_surround((x_grid, y_grid), *popt)
 
             data_fitted = data_fitted.reshape(pixel_array_shape_y, pixel_array_shape_x)
-            fit_deviations = data_fitted - data_array
-            data_mean = np.mean(data_array)
+            fit_deviations = data_fitted - this_rf
+            data_mean = np.mean(this_rf)
             # Normalized mean square error
             # Defn per https://se.mathworks.com/help/ident/ref/goodnessoffit.html without 1 - ...
             # 0 = perfect fit, infty = bad fit
@@ -402,11 +401,11 @@ class Fit(ApricotData, RetinaMath):
                 data_fitted[data_fitted < 0]
             )
             dog_filtersum_array[cell_index, 2] = np.sum(data_fitted)
-            dog_filtersum_array[cell_index, 3] = np.sum(data_array[data_array > 0])
+            dog_filtersum_array[cell_index, 3] = np.sum(this_rf[this_rf > 0])
 
             # For visualization
             spatial_filters_to_show[f"cell_ix_{cell_index}"] = {
-                "data_array": data_array,
+                "this_rf": this_rf,
                 "suptitle": f"celltype={self.gc_type}, responsetype={self.response_type}, cell_ix={cell_index}",
             }
 
