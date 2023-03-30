@@ -11,6 +11,8 @@ from scipy.interpolate import interp1d
 
 # Data IO
 import cv2
+from PIL import Image
+
 
 # Viz
 from tqdm import tqdm
@@ -134,7 +136,7 @@ class WorkingRetina(RetinaMath):
         vspace_coords = pd.DataFrame(
             {"x_deg": vspace_pos[:, 0], "y_deg": vspace_pos[:, 1]}
         )
-
+        pdb.set_trace()
         self.gc_df = pd.concat([gc_dataframe, vspace_coords], axis=1)
 
         # Convert RF center radii to degrees as well
@@ -221,7 +223,7 @@ class WorkingRetina(RetinaMath):
 
         return qmin, qmax, rmin, rmax
 
-    def _create_spatial_filter(self, cell_index):
+    def _create_spatial_filter_FIT(self, cell_index):
         """
         Creates the spatial component of the spatiotemporal filter
 
@@ -266,6 +268,50 @@ class WorkingRetina(RetinaMath):
         max_gain = np.max(np.abs(np.fft.fft2(spatial_kernel)))
         # 5.3 here just to give exp(5.3) = 200 Hz max firing rate to sinusoids
         spatial_kernel = (5.3 / max_gain) * spatial_kernel
+
+        return spatial_kernel
+
+    def _create_spatial_filter_VAE(self, cell_index):
+        """
+        Creates the spatial component of the spatiotemporal filter using
+        images saved from construct_retina using VAE model.
+
+        Parameters
+        ----------
+        cell_index : int
+            Index of the cell in the gc_df
+
+        Returns
+        -------
+        spatial_filter : np.ndarray
+            Spatial filter for the given cell
+        """
+        offset = 0.0
+        s = self.spatial_filter_sidelen
+
+        gc = self.gc_df_pixspace.iloc[cell_index]
+        qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
+
+        x_grid, y_grid = np.meshgrid(
+            np.arange(qmin, qmax + 1, 1), np.arange(rmin, rmax + 1, 1)
+        )
+
+        orientation_center = gc.orientation_center * (np.pi / 180)
+
+        # Load image from VAE model
+        image = self.load_generated_rfs(cell_index)
+
+        # Fit image to DoG2D to get orientation, location and size parameters => tämän voisi tehdä jo construction moduulissa
+
+        # Shift center of image to (0,0)
+
+        # Rotate image to match orientation
+
+        # Scale image to match size
+
+        # Resample image to side length s to get spatial kernel
+
+        pdb.set_trace()
 
         return spatial_kernel
 
@@ -388,8 +434,7 @@ class WorkingRetina(RetinaMath):
         # Define spatial filter sidelength (based on angular resolution and widest semimajor axis)
         # We use the general rule that the sidelength should be at least 5 times the SD
         # Sidelength always odd number
-        pdb.set_trace()
-        # TÄHÄN JÄIT. FIT SISÄLLYTETTY. INTEGROI VAE, KÄYTÄ ORIENTAATIO, KOKO, SIJAINTI JA RESAMPLAA
+
         self.spatial_filter_sidelen = (
             2
             * 3
@@ -449,10 +494,6 @@ class WorkingRetina(RetinaMath):
             stimulus_cropped = np.reshape(stimulus_cropped, (sidelen**2, n_frames))
 
         return stimulus_cropped
-
-    def _filter_from_VAE_model(self, cell_index):
-        # Convolve stimulus with VAE model
-        pass
 
     def get_w_z_coords(self):
         """
@@ -558,7 +599,7 @@ class WorkingRetina(RetinaMath):
         import matplotlib.pyplot as plt
 
         if self.model_type == "FIT":
-            spatial_filter = self._create_spatial_filter(cell_index)
+            spatial_filter = self._create_spatial_filter_FIT(cell_index)
             # plt.imshow(spatial_filter)
             # plt.colorbar()
             # plt.show()
@@ -570,9 +611,11 @@ class WorkingRetina(RetinaMath):
             spatiotemporal_filter = (
                 spatial_filter_1d * temporal_filter
             )  # (Nx1) * (1xT) = NxT
+
         elif self.model_type == "VAE":
+
+            spatial_filter = self._create_spatial_filter_VAE(cell_index)
             pdb.set_trace()
-            spatiotemporal_filter = self._filter_from_VAE_model(cell_index)
 
         if called_from_loop is False:
             self.spatiotemporal_filter_to_show = {
@@ -901,6 +944,40 @@ class WorkingRetina(RetinaMath):
         rgc_coords["z_deg"] = 0.0
 
         rgc_coords.to_csv(filename_full, header=False, index=False)
+
+    def load_generated_rfs(self, input_path):
+        """
+        Loads a series of 2D image files into a 3D image stack using Pillow.
+
+        Parameters
+        ----------
+            input_path (str or Path): The path to the folder containing the image files.
+
+        Returns
+        -------
+            img_stack (numpy.ndarray): The 3D image stack, with shape (M, N, N).
+        """
+        # Convert input_path to a Path object if it's a string
+        if isinstance(input_path, str):
+            input_path = Path(input_path)
+
+        # Get the list of image file paths in the input directory
+        img_paths = sorted(input_path.glob("*.png"))
+
+        # Load each image file as a slice in the image stack
+        img_stack = []
+        for img_path in img_paths:
+            img = Image.open(img_path)
+            img_array = np.array(img, dtype=np.float32)
+            img_stack.append(img_array)
+
+        # Convert the list of image slices to a 3D image stack
+        img_stack = np.stack(img_stack, axis=0)
+
+        # Rescale the pixel values back to the range of 0 to 1
+        img_stack = img_stack.astype(np.float32) / 65535.0
+
+        return img_stack
 
 
 class PhotoReceptor:

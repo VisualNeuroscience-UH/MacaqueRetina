@@ -766,7 +766,6 @@ class ConstructRetina(RetinaMath):
         # The positions are in gc_eccentricity, gc_polar_angle, and the rf parameters in gc_rf_models
 
         # Summarize RF semi_xc and semi_yc as "RF radius" (geometric mean)
-        self.gc_df["rf_radius"] = np.sqrt(self.gc_df.semi_xc * self.gc_df.semi_yc)
         self.gc_df["rf_area_cen"] = np.pi * self.gc_df.semi_xc * self.gc_df.semi_yc
 
         if self.model_type == "VAE":
