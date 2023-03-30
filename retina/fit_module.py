@@ -70,6 +70,7 @@ class Fit(ApricotData, RetinaMath):
         data_n_samples = self.metadata["data_temporalfilter_samples"]
 
         good_indices = np.setdiff1d(np.arange(self.n_cells), self.bad_data_indices)
+
         """
         Parameters
         ----------

@@ -318,8 +318,7 @@ if __name__ == "__main__":
     # options are defined in my_retina_options
 
     PM.construct_retina.build()
-
-    PM.construct_retina.show_build_process(show_all_spatial_fits=False)
+    # PM.construct_retina.show_build_process(show_all_spatial_fits=False)
 
     #################################
     ### Create stimulus ###
@@ -327,7 +326,7 @@ if __name__ == "__main__":
 
     # options are defined in my_stimulus_options
     # stimulus video will be saved on output_folder in mp4 format (viewing and hdf5 format (for reloading)
-    # PM.stimulate.make_stimulus_video()
+    PM.stimulate.make_stimulus_video()
 
     ##############################
     ### Create analog stimulus ###
@@ -366,8 +365,8 @@ if __name__ == "__main__":
     #################################
 
     # # # If you want to load with object, it is possible by:
-    # PM.working_retina.load_stimulus(PM.stimulate)
-    PM.working_retina.load_stimulus()
+    PM.working_retina.load_stimulus(PM.stimulate)
+    # PM.working_retina.load_stimulus()
 
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
     # ret.load_stimulus(movie)# => METADATA
@@ -386,7 +385,8 @@ if __name__ == "__main__":
     ### Run multiple trials for single cell ###
     #################################
 
-    # PM.working_retina.run_with_my_run_options()
+    PM.working_retina.run_with_my_run_options()
+    pdb.set_trace()
 
     # PM.viz.show_gc_responses(PM.working_retina)
 
