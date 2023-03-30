@@ -132,6 +132,21 @@ class RetinaMath:
         return model_fit.ravel()
 
     def lowpass(self, t, n, p, tau):
+        """
+        Returns a lowpass filter kernel with a given time constant and order.
+
+        Parameters
+        ----------
+        - t (numpy.ndarray): Time points at which to evaluate the kernel.
+        - n (float): Order of the filter.
+        - p (float): Normalization factor for the kernel.
+        - tau (float): Time constant of the filter.
+
+        Returns
+        -------
+        - y (numpy.ndarray): Lowpass filter kernel evaluated at each time point in `t`.
+        """
+        
         y = p * (t / tau) ** (n) * np.exp(-n * (t / tau - 1))
         return y
 
@@ -199,7 +214,25 @@ class RetinaMath:
         return model_fit.ravel()
 
     def diff_of_lowpass_filters(self, t, n, p1, p2, tau1, tau2):
-        # From Chichilnisky & Kalmar JNeurosci 2002
+        """
+        Returns the difference between two lowpass filters with different time constants and orders.
+        From Chichilnisky & Kalmar JNeurosci 2002
+
+        Parameters
+        ----------
+        - t (numpy.ndarray): Time points at which to evaluate the filters.
+        - n (float): Order of the filters.
+        - p1 (float): Normalization factor for the first filter.
+        - p2 (float): Normalization factor for the second filter.
+        - tau1 (float): Time constant of the first filter.
+        - tau2 (float): Time constant of the second filter.
+
+        Returns
+        -------
+        - y (numpy.ndarray): Difference between the two lowpass filters evaluated at each time point in `t`.
+        """
+
+        #
         y = self.lowpass(t, n, p1, tau1) - self.lowpass(t, n, p2, tau2)
         return y
 
