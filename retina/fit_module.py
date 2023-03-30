@@ -70,6 +70,15 @@ class Fit(ApricotData, RetinaMath):
         data_n_samples = self.metadata["data_temporalfilter_samples"]
 
         good_indices = np.setdiff1d(np.arange(self.n_cells), self.bad_data_indices)
+        """
+        Parameters
+        ----------
+        - n (float): Order of the filters.
+        - p1 (float): Normalization factor for the first filter.
+        - p2 (float): Normalization factor for the second filter.
+        - tau1 (float): Time constant of the first filter.
+        - tau2 (float): Time constant of the second filter.
+        """
         parameter_names = ["n", "p1", "p2", "tau1", "tau2"]
         bounds = (
             [0, 0, 0, 0.1, 3],
