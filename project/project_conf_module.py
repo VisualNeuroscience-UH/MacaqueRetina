@@ -112,7 +112,7 @@ my_retina = {
     "model_density": 1.0,
     "randomize_position": 0.05,
     "stimulus_center": 4.45 + 0j,
-    "model_type": "VAE",  # "FIT", "VAE" for variational autoencoder, or GAN for generative adversarial network.
+    "model_type": "FIT",  # "FIT", "VAE" for variational autoencoder, or GAN for generative adversarial network.
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" Applies to VAE or GAN only.
 }
 
@@ -375,8 +375,8 @@ if __name__ == "__main__":
     ### Show single ganglion cell response ###
     #################################
 
-    # example_gc = 2  # int or 'None'
-    # PM.working_retina.convolve_stimulus(example_gc)
+    example_gc = 2  # int or 'None'
+    PM.working_retina.convolve_stimulus(example_gc)
 
     # PM.viz.show_spatiotemporal_filter(PM.working_retina)
     # PM.viz.show_convolved_stimulus(PM.working_retina)
@@ -386,9 +386,8 @@ if __name__ == "__main__":
     #################################
 
     PM.working_retina.run_with_my_run_options()
-    pdb.set_trace()
 
-    # PM.viz.show_gc_responses(PM.working_retina)
+    PM.viz.show_gc_responses(PM.working_retina)
 
     # PM.viz.show_stimulus_with_gcs(
     #     PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51
