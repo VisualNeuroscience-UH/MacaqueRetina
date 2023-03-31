@@ -134,6 +134,9 @@ class Fit(ApricotData, RetinaMath):
 
     def _fit_spatial_filters(
         self,
+        gc_spatial_data_array,
+        initial_center_values=None,
+        bad_data_indices=None,
         surround_model=1,
         semi_x_always_major=True,
     ):
@@ -157,12 +160,6 @@ class Fit(ApricotData, RetinaMath):
         dataframe with spatial parameters and errors for each cell (n_cells, 8)
 
         """
-
-        (
-            gc_spatial_data_array,
-            initial_center_values,
-            bad_data_indices,
-        ) = self.read_spatial_filter_data()
 
         n_cells = int(gc_spatial_data_array.shape[2])
         pixel_array_shape_y = gc_spatial_data_array.shape[
@@ -445,10 +442,21 @@ class Fit(ApricotData, RetinaMath):
         Fits spatial, temporal and tonic drive parameters to the experimental data.
         Returns the fits as self.all_data_fits_df which is an instance object attribute.
         """
+
+        (
+            gc_spatial_data_array,
+            initial_center_values,
+            bad_data_indices,
+        ) = self.read_spatial_filter_data()
+
         spatial_fits = self._fit_spatial_filters(
+            gc_spatial_data_array=gc_spatial_data_array,
+            initial_center_values=initial_center_values,
+            bad_data_indices=bad_data_indices,
             surround_model=1,
             semi_x_always_major=True,
         )
+
         spatial_filter_sums = self.compute_spatial_filter_sums()
 
         temporal_fits = self._fit_temporal_filters()
