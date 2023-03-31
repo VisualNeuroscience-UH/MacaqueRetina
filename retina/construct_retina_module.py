@@ -241,6 +241,11 @@ class ConstructRetina(RetinaMath):
                 self.context.apricot_data_folder,
                 self.context.output_folder,
             )
+            # TÄHÄN JÄIT: CALL FIT FOR VAE RF FIT AND RESAMPLE (?TARVITAANKO?). JOS KUTSUTAAN WORKING MODULISTA, PÄÄTYY LOOPIN PERUKOILLE.
+            # KS OSITTAINEN RAKENNUS WORKING RETINA MODULISTA
+            # TOIMIVA GENEERINEN FITTI => TARVITAANKO SEN JÄLKEEN ENÄÄ UDELLEENSOVITUSTA?,
+            # KS _create_spatial_filter_VAE
+
             print("Back from VAE!")
 
         elif self.model_type == "GAN":
@@ -765,10 +770,12 @@ class ConstructRetina(RetinaMath):
         # At this point the spatial receptive fields are ready.
         # The positions are in gc_eccentricity, gc_polar_angle, and the rf parameters in gc_rf_models
 
-        # Summarize RF semi_xc and semi_yc as "RF radius" (geometric mean)
-        self.gc_df["rf_area_cen"] = np.pi * self.gc_df.semi_xc * self.gc_df.semi_yc
+        if self.model_type == "FIT":
+            pass
+            # Everything at the moment is done above
+            # This is just to check for model type
 
-        if self.model_type == "VAE":
+        elif self.model_type == "VAE":
             # -- Second, endow cells with spatial receptive fields using the generative variational autoencoder model
             # --- 1. make a probability density function of the latent space
             retina_vae = self.retina_vae
