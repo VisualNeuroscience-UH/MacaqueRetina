@@ -29,10 +29,20 @@ class Fit(ApricotData, RetinaMath):
     Call get_fits method to return the fits from the instance object self.all_data_fits_df
     """
 
-    def __init__(self, apricot_data_folder, gc_type, response_type, _fit_all=True):
+    def __init__(
+        self,
+        apricot_data_folder,
+        gc_type,
+        response_type,
+        spatial_data=None,
+        fit_all=True,
+    ):
 
         super().__init__(apricot_data_folder, gc_type, response_type)
-        if _fit_all is True:
+
+        self.spatial_data = spatial_data
+
+        if fit_all is True:
             # Fit spatial and temporal filters and tonic drive values to experimental data.
             self._fit_all()
 
@@ -443,14 +453,18 @@ class Fit(ApricotData, RetinaMath):
         Returns the fits as self.all_data_fits_df which is an instance object attribute.
         """
 
-        (
-            gc_spatial_data_array,
-            initial_center_values,
-            bad_data_indices,
-        ) = self.read_spatial_filter_data()
+        if self.spatial_data is None:
+            (
+                self.spatial_data,
+                initial_center_values,
+                bad_data_indices,
+            ) = self.read_spatial_filter_data()
+        else:
+            initial_center_values = None
+            bad_data_indices = None
 
         spatial_fits = self._fit_spatial_filters(
-            gc_spatial_data_array=gc_spatial_data_array,
+            gc_spatial_data_array=self.spatial_data,
             initial_center_values=initial_center_values,
             bad_data_indices=bad_data_indices,
             surround_model=1,

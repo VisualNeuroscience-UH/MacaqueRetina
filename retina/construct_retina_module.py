@@ -123,6 +123,9 @@ class ConstructRetina(RetinaMath):
         randomize_position = my_retina["randomize_position"]
         self.deg_per_mm = my_retina["deg_per_mm"]
 
+        self.gc_type = gc_type
+        self.response_type = response_type
+
         self.model_type = my_retina["model_type"]
         if self.model_type in ["VAE", "GAN"]:
             self.training_mode = my_retina["training_mode"]
@@ -227,33 +230,6 @@ class ConstructRetina(RetinaMath):
             self.all_fits_df = pd.read_csv(
                 fits_from_file, header=0, index_col=0
             ).fillna(0.0)
-
-        if self.model_type == "FIT":
-
-            print("Back from FIT!")
-
-        elif self.model_type == "VAE":
-            # Fit variational autoencoder to generate receptive fields
-            self.retina_vae = RetinaVAE(
-                gc_type,
-                response_type,
-                self.training_mode,
-                self.context.apricot_data_folder,
-                self.context.output_folder,
-            )
-            # TÄHÄN JÄIT: CALL FIT FOR VAE RF FIT AND RESAMPLE (?TARVITAANKO?). JOS KUTSUTAAN WORKING MODULISTA, PÄÄTYY LOOPIN PERUKOILLE.
-            # KS OSITTAINEN RAKENNUS WORKING RETINA MODULISTA
-            # TOIMIVA GENEERINEN FITTI => TARVITAANKO SEN JÄLKEEN ENÄÄ UDELLEENSOVITUSTA?,
-            # KS _create_spatial_filter_VAE
-
-            print("Back from VAE!")
-
-        elif self.model_type == "GAN":
-            # Fit variational autoencoder to generate receptive fields
-            self.retina_gan = GAN(
-                self.context.apricot_data_folder, gc_type, response_type
-            )
-            print("Back from GAN!")
 
         self.initialized = True
 
@@ -770,63 +746,94 @@ class ConstructRetina(RetinaMath):
         # At this point the spatial receptive fields are ready.
         # The positions are in gc_eccentricity, gc_polar_angle, and the rf parameters in gc_rf_models
 
-        if self.model_type == "FIT":
-            pass
-            # Everything at the moment is done above
-            # This is just to check for model type
+        match self.model_type:
+            case "FIT":
+                pass
+                # Everything at the moment is done above
+                # This is just to check for model type
 
-        elif self.model_type == "VAE":
-            # -- Second, endow cells with spatial receptive fields using the generative variational autoencoder model
-            # --- 1. make a probability density function of the latent space
-            retina_vae = self.retina_vae
-            latent_data = self.get_data_at_latent_space(retina_vae)
+            case "VAE":
 
-            # Make a probability density function of the latent_data
-            latent_pdf = stats.gaussian_kde(latent_data.T)
+                # Fit variational autoencoder to generate receptive fields
+                self.retina_vae = RetinaVAE(
+                    self.gc_type,
+                    self.response_type,
+                    self.training_mode,
+                    self.context.apricot_data_folder,
+                    self.context.output_folder,
+                )
 
-            # --- 2. sample from the pdf
-            n_samples = len(self.gc_df)
-            # n_samples = 1000
-            latent_samples = torch.tensor(latent_pdf.resample(n_samples).T).to(
-                retina_vae.device
-            )
-            # Change the dtype to float32
-            latent_samples = latent_samples.type(torch.float32)
+                # -- Second, endow cells with spatial receptive fields using the generative variational autoencoder model
+                # --- 1. make a probability density function of the latent space
+                retina_vae = self.retina_vae
+                latent_data = self.get_data_at_latent_space(retina_vae)
 
-            # # plot the samples on top of an estimated kde, one sublot for each successive two dimensions of latent_dim
-            # match self.training_mode:
-            #     case "load_model":
-            #         latent_dim = self.retina_vae.vae.config["latent_dims"]
-            #     case "train_model":
-            #         latent_dim = self.retina_vae.latent_dim
+                # Make a probability density function of the latent_data
+                latent_pdf = stats.gaussian_kde(latent_data.T)
 
-            # self.plot_latent_samples(
-            #     deepcopy(latent_samples).cpu(), latent_data, latent_dim
-            # )
+                # --- 2. sample from the pdf
+                n_samples = len(self.gc_df)
+                # n_samples = 1000
+                latent_samples = torch.tensor(latent_pdf.resample(n_samples).T).to(
+                    retina_vae.device
+                )
+                # Change the dtype to float32
+                latent_samples = latent_samples.type(torch.float32)
 
-            # --- 3. decode the samples
-            img_stack = self.retina_vae.vae.decoder(latent_samples)
+                # # plot the samples on top of an estimated kde, one sublot for each successive two dimensions of latent_dim
+                # match self.training_mode:
+                #     case "load_model":
+                #         latent_dim = self.retina_vae.vae.config["latent_dims"]
+                #     case "train_model":
+                #         latent_dim = self.retina_vae.latent_dim
 
-            # self.plot_rfs_from_vae(img_stack, n_examples=4)
+                # self.plot_latent_samples(
+                #     deepcopy(latent_samples).cpu(), latent_data, latent_dim
+                # )
 
-            img_stack_np = img_stack.detach().cpu().numpy()
-            img_stack_np_reshaped = np.reshape(
-                img_stack_np,
-                (n_samples, img_stack_np.shape[2], img_stack_np.shape[3]),
-            )
-            output_path = self.context.output_folder
-            img_paths = self.save_generated_rfs(img_stack_np_reshaped, output_path)
+                # --- 3. decode the samples
+                img_stack = self.retina_vae.vae.decoder(latent_samples)
 
-            # Add image paths as a columnd to self.gc_df
-            self.gc_df["img_path"] = img_paths
+                # self.plot_rfs_from_vae(img_stack, n_examples=4)
 
-            # img_stack_np2 = self.load_generated_rfs(output_path)
+                img_stack_np = img_stack.detach().cpu().numpy()
+                img_stack_np_reshaped = np.reshape(
+                    img_stack_np,
+                    (n_samples, img_stack_np.shape[2], img_stack_np.shape[3]),
+                )
+                output_path = self.context.output_folder
+                img_paths = self.save_generated_rfs(img_stack_np_reshaped, output_path)
 
-        elif self.model_type == "GAN":
-            # Use the generative adversarial network model to provide spatial and temporal receptive fields
-            pass
-        else:
-            raise ValueError("Model type not recognized")
+                # Add image paths as a columnd to self.gc_df
+                self.gc_df["img_path"] = img_paths
+
+                (
+                    self.statistics_df,
+                    self.good_data_indices,
+                    self.bad_data_indices,
+                    self.mean_center_sd,
+                    self.mean_surround_sd,
+                    self.temporal_filters_to_show,
+                    self.spatial_filters_to_show,
+                    self.spatial_statistics_to_show,
+                    self.temporal_statistics_to_show,
+                    self.tonic_drives_to_show,
+                ) = Fit(
+                    self.context.apricot_data_folder,
+                    self.gc_type,
+                    self.response_type,
+                    spatial_data=img_stack_np,
+                ).get_statistics()
+
+                # TÄHÄN JÄIT:
+                # DEBUG VAE MOODI
+                # MITÄ TIETOJA DF FIt JA DF VAE YHDISTETÄÄN? MIÄ VERRATAAN?
+
+            case "GAN":
+                # Use the generative adversarial network model to provide spatial and temporal receptive fields
+                pass
+            case other:
+                raise ValueError("Model type not recognized")
 
         # -- Third, endow cells with temporal receptive fields
         self._create_temporal_receptive_fields()
