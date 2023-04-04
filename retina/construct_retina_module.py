@@ -829,6 +829,13 @@ class ConstructRetina(RetinaMath):
 
                 # Save the generated receptive fields
                 output_path = self.context.output_folder
+
+                # import matplotlib.pyplot as plt
+
+                # plt.hist(img_stack_np_reshaped.flatten(), bins=100)
+                # plt.show()
+                # pdb.set_trace()
+
                 img_paths = self.save_generated_rfs(img_stack_np_reshaped, output_path)
 
                 # Add image paths as a columnd to self.gc_df
@@ -1062,11 +1069,22 @@ class ConstructRetina(RetinaMath):
 
         return img_paths_s
 
-    def show_build_process(self, show_all_spatial_fits=False):
+    def show_exp_build_process(self, show_all_spatial_fits=False):
         """
         Show the process of building the mosaic
         self goes as argument, to be available for viz
         """
 
-        # The argument "self" becomes available in the Viz class as "mosaic"
-        self.viz.show_build_process(self, show_all_spatial_fits=show_all_spatial_fits)
+        # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
+        self.viz.show_exp_build_process(
+            self, show_all_spatial_fits=show_all_spatial_fits
+        )
+
+    def show_gen_and_exp_spatial_rfs(self, n_samples=2):
+        """
+        Show the experimental (fitted) and generated spatial receptive fields
+        self goes as argument, to be available for viz
+        """
+
+        # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
+        self.viz.show_gen_and_exp_spatial_rfs(self, n_samples=n_samples)

@@ -149,7 +149,7 @@ class Fit(ApricotData, RetinaMath):
 
     def _fit_spatial_filters(
         self,
-        gc_spatial_data_array,
+        spat_data_array,
         cen_rot_rad_all=None,
         bad_idx_for_spatial_fit=None,
         surround_model=1,
@@ -165,22 +165,22 @@ class Fit(ApricotData, RetinaMath):
         semi_x_always_major : bool, optional
             Whether to rotate Gaussians so that semi_x is always the semimajor/longer axis, by default True
 
-        Attributes
-        ----------
-        self.exp_spat_filt_to_viz : dict
-            Dictionary of spatial filters to show with viz
-
         Returns
         -------
         dataframe with spatial parameters and errors for each cell (n_cells, 8)
+        spat_filt_to_viz : dict
+            Dictionary of spatial filters to show with viz
 
         """
 
-        n_cells = int(gc_spatial_data_array.shape[0])
-        num_pix_y = gc_spatial_data_array.shape[
-            1
-        ]  # Check indices: x horizontal, y vertical
-        num_pix_x = gc_spatial_data_array.shape[2]
+        # import matplotlib.pyplot as plt
+
+        # plt.hist(spat_data_array.flatten(), bins=100)
+        # plt.show()
+
+        n_cells = int(spat_data_array.shape[0])
+        num_pix_y = spat_data_array.shape[1]  # Check indices: x horizontal, y vertical
+        num_pix_x = spat_data_array.shape[2]
 
         # Make fit to all cells
         # Note: input coming from matlab, thus indexing starts from 1
@@ -229,7 +229,7 @@ class Fit(ApricotData, RetinaMath):
         error_all_viable_cells = np.zeros((n_cells, 1))
         dog_filtersum_array = np.zeros((n_cells, 4))
 
-        exp_spat_filt_to_viz = {
+        spat_filt_to_viz = {
             "x_grid": x_grid,
             "y_grid": y_grid,
             "surround_model": surround_model,
@@ -319,7 +319,7 @@ class Fit(ApricotData, RetinaMath):
         # Go through all cells
         print(("Fitting DoG model, surround is {0}".format(surround_status)))
         for cell_idx in tqdm(all_viable_cells, desc="Fitting spatial  filters"):
-            this_rf = gc_spatial_data_array[cell_idx, :, :]
+            this_rf = spat_data_array[cell_idx, :, :]
 
             rot = cen_rot_rad_all[cell_idx]
 
@@ -424,12 +424,12 @@ class Fit(ApricotData, RetinaMath):
             dog_filtersum_array[cell_idx, 3] = np.sum(this_rf[this_rf > 0])
 
             # For visualization
-            exp_spat_filt_to_viz[f"cell_ix_{cell_idx}"] = {
-                "this_rf": this_rf,
+            spat_filt_to_viz[f"cell_ix_{cell_idx}"] = {
+                "spatial_data_array": this_rf,
                 "suptitle": f"celltype={self.gc_type}, responsetype={self.response_type}, cell_ix={cell_idx}",
             }
 
-        exp_spat_filt_to_viz["data_all_viable_cells"] = data_all_viable_cells
+        spat_filt_to_viz["data_all_viable_cells"] = data_all_viable_cells
 
         # Finally build a dataframe of the fitted parameters
         fits_df = pd.DataFrame(data_all_viable_cells, columns=parameter_names)
@@ -453,12 +453,21 @@ class Fit(ApricotData, RetinaMath):
             good_indices[i] = 0
         good_indices_df = pd.DataFrame(good_indices, columns=["good_filter_data"])
 
-        # Save for later visualization
-        self.exp_spat_filt_to_viz = exp_spat_filt_to_viz
+        # # Save for later visualization
+        # self.spat_filt_to_viz = spat_filt_to_viz
 
-        return pd.concat(
-            [fits_df, aspect_ratios_df, dog_filtersum_df, error_df, good_indices_df],
-            axis=1,
+        return (
+            pd.concat(
+                [
+                    fits_df,
+                    aspect_ratios_df,
+                    dog_filtersum_df,
+                    error_df,
+                    good_indices_df,
+                ],
+                axis=1,
+            ),
+            spat_filt_to_viz,
         )
 
     def _fit_experimental_data(self):
@@ -477,13 +486,14 @@ class Fit(ApricotData, RetinaMath):
         # Get original Apricot data resolution
         self.apricot_data_resolution_hw = spatial_data.shape[1:3]
 
-        spatial_fits = self._fit_spatial_filters(
-            gc_spatial_data_array=spatial_data,
+        spatial_fits, spat_filt_to_viz = self._fit_spatial_filters(
+            spat_data_array=spatial_data,
             cen_rot_rad_all=cen_rot_rad_all,
             bad_idx_for_spatial_fit=manually_picked_bad_data_idx,
             surround_model=1,
             semi_x_always_major=True,
         )
+        self.exp_spat_filt_to_viz = spat_filt_to_viz
 
         spatial_filter_sums = self.compute_spatial_filter_sums()
 
@@ -512,13 +522,15 @@ class Fit(ApricotData, RetinaMath):
 
         cen_rot_rad_all = np.zeros(spatial_data.shape[0])
 
-        spatial_fits = self._fit_spatial_filters(
-            gc_spatial_data_array=spatial_data,
+        spatial_fits, spat_filt_to_viz = self._fit_spatial_filters(
+            spat_data_array=spatial_data,
             cen_rot_rad_all=cen_rot_rad_all,
             bad_idx_for_spatial_fit=[],
             surround_model=1,
             semi_x_always_major=True,
         )
+
+        self.gen_spat_filt_to_viz = spat_filt_to_viz
 
         # Collect everything into one big dataframe
         self.all_data_fits_df = pd.concat([spatial_fits], axis=1)
@@ -641,7 +653,7 @@ class Fit(ApricotData, RetinaMath):
             "distribution": "beta",
         }
 
-        self.exp_spat_stat_to_viz = {
+        spat_stat_to_viz = {
             "ydata": ydata,
             "spatial_statistics_dict": spatial_statistics_dict,
             "model_fit_data": (x_model_fit, y_model_fit),
@@ -653,7 +665,7 @@ class Fit(ApricotData, RetinaMath):
         spatial_exp_stat_df["domain"] = "spatial"
 
         # Return stats for RF creation
-        return spatial_exp_stat_df
+        return spatial_exp_stat_df, spat_stat_to_viz
 
     def _fit_temporal_statistics(self):
         """
@@ -785,7 +797,7 @@ class Fit(ApricotData, RetinaMath):
         self.good_data_idx = np.setdiff1d(range(self.n_cells_data), self.bad_data_idx)
 
         # Get statistics for spatial filters of good data indices
-        spatial_exp_stat_df = self._fit_spatial_statistics()
+        spatial_exp_stat_df, exp_spat_stat_to_viz = self._fit_spatial_statistics()
 
         # Get statistics for temporal filters of good data indices
         temporal_exp_stat_df = self._fit_temporal_statistics()
@@ -809,7 +821,7 @@ class Fit(ApricotData, RetinaMath):
             exp_spat_sur_sd,
             self.exp_temp_filt_to_viz,
             self.exp_spat_filt_to_viz,
-            self.exp_spat_stat_to_viz,
+            exp_spat_stat_to_viz,
             self.exp_temp_stat_to_viz,
             self.exp_tonic_dr_to_viz,
             self.apricot_data_resolution_hw,
@@ -843,23 +855,23 @@ class Fit(ApricotData, RetinaMath):
         self.good_data_idx = np.setdiff1d(range(self.n_cells_data), self.bad_data_idx)
 
         # Get statistics for spatial filters of good data indices
-        spatial_exp_stat_df = self._fit_spatial_statistics()
+        spatial_gen_stat_df, gen_spat_stat_to_viz = self._fit_spatial_statistics()
 
         # get center and surround sd
         gen_mean_cen_sd, gen_mean_sur_sd = self._get_center_surround_sd()
 
         # Collect everything into one big dataframe
-        exp_stat_df = pd.concat(
-            [spatial_exp_stat_df],
+        gen_stat_df = pd.concat(
+            [spatial_gen_stat_df],
             axis=0,
         )
 
         return (
-            exp_stat_df,
+            gen_stat_df,
             gen_mean_cen_sd,
             gen_mean_sur_sd,
-            self.exp_spat_filt_to_viz,
-            self.exp_spat_stat_to_viz,
+            self.gen_spat_filt_to_viz,
+            gen_spat_stat_to_viz,
         )
 
 

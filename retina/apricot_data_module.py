@@ -133,10 +133,10 @@ class ApricotData:
 
         filepath = self.apricot_data_folder / self.spatial_filename
         gc_spatial_data = sio.loadmat(filepath, variable_names=["c", "stafit"])
-        gc_spatial_data_array = gc_spatial_data["c"]
+        spat_data_array = gc_spatial_data["c"]
         # Rotate dims to put n units the first dim
-        gc_spatial_data_array = np.moveaxis(gc_spatial_data_array, 2, 0)
-        n_spatial_cells = len(gc_spatial_data_array[:, 0, 0])
+        spat_data_array = np.moveaxis(spat_data_array, 2, 0)
+        n_spatial_cells = len(spat_data_array[:, 0, 0])
 
         initial_center_values = gc_spatial_data["stafit"]
 
@@ -154,7 +154,7 @@ class ApricotData:
             % (n_spatial_cells, n_bad)
         )
 
-        return gc_spatial_data_array, cen_rot_rad_all, self.manually_picked_bad_data_idx
+        return spat_data_array, cen_rot_rad_all, self.manually_picked_bad_data_idx
 
     def read_tonicdrive(self, remove_bad_data_idx=True):
 

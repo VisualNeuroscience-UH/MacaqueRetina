@@ -106,21 +106,28 @@ class Viz:
         N_cells = len(cell_ixs_list)
         plt.title(f"{title} ({N_cells} cells)")
 
-    def show_spatial_filter_response(self, mosaic):
+    def show_spatial_filter_response(
+        self,
+        spat_filt_to_viz,
+        n_samples=np.inf,
+        title="",
+        pause_to_show=False,
+    ):
 
-        exp_spat_filt_to_viz = mosaic.exp_spat_filt_to_viz
-
-        data_all_viable_cells = exp_spat_filt_to_viz["data_all_viable_cells"]
-        x_grid = exp_spat_filt_to_viz["x_grid"]
-        y_grid = exp_spat_filt_to_viz["y_grid"]
-        surround_model = exp_spat_filt_to_viz["surround_model"]
-        pixel_array_shape_x = exp_spat_filt_to_viz["pixel_array_shape_x"]
-        pixel_array_shape_y = exp_spat_filt_to_viz["pixel_array_shape_y"]
+        data_all_viable_cells = spat_filt_to_viz["data_all_viable_cells"]
+        x_grid = spat_filt_to_viz["x_grid"]
+        y_grid = spat_filt_to_viz["y_grid"]
+        surround_model = spat_filt_to_viz["surround_model"]
+        pixel_array_shape_x = spat_filt_to_viz["num_pix_x"]
+        pixel_array_shape_y = spat_filt_to_viz["num_pix_y"]
 
         # get cell_ixs
         cell_ixs_list = [
-            ci for ci in exp_spat_filt_to_viz.keys() if ci.startswith("cell_ix_")
+            ci for ci in spat_filt_to_viz.keys() if ci.startswith("cell_ix_")
         ]
+
+        if n_samples < len(cell_ixs_list):
+            cell_ixs_list = np.random.choice(cell_ixs_list, n_samples, replace=False)
 
         for this_cell_ix in cell_ixs_list:
             imshow_cmap = "bwr"
@@ -128,8 +135,9 @@ class Viz:
 
             this_cell_ix_numerical = int(this_cell_ix.split("_")[-1])
             popt = data_all_viable_cells[this_cell_ix_numerical, :]
-            data_array = exp_spat_filt_to_viz[this_cell_ix]["data_array"]
-            suptitle = exp_spat_filt_to_viz[this_cell_ix]["suptitle"]
+            spatial_data_array = spat_filt_to_viz[this_cell_ix]["spatial_data_array"]
+            suptitle = spat_filt_to_viz[this_cell_ix]["suptitle"]
+            suptitle = f"{title}, {suptitle})"
 
             fig, (ax1, ax2) = plt.subplots(figsize=(8, 3), ncols=2)
             plt.suptitle(
@@ -137,9 +145,9 @@ class Viz:
                 fontsize=10,
             )
             cen = ax1.imshow(
-                data_array,
-                vmin=-0.1,
-                vmax=0.4,
+                spatial_data_array,
+                # vmin=-0.1,
+                # vmax=0.4,
                 cmap=imshow_cmap,
                 origin="lower",
                 extent=(x_grid.min(), x_grid.max(), y_grid.min(), y_grid.max()),
@@ -222,13 +230,15 @@ class Viz:
 
             sur = ax2.imshow(
                 data_fitted.reshape(pixel_array_shape_y, pixel_array_shape_x),
-                vmin=-0.1,
-                vmax=0.4,
+                # vmin=-0.1,
+                # vmax=0.4,
                 cmap=imshow_cmap,
                 origin="lower",
             )
             fig.colorbar(sur, ax=ax2)
-            plt.show()
+
+            if pause_to_show:
+                plt.show()
 
     # ConstructRetina visualization
     def show_gc_positions_and_density(self, mosaic):
@@ -549,14 +559,20 @@ class Viz:
         plt.title(title)
         plt.xlabel("Tonic drive (a.u.)")
 
-    def show_build_process(self, mosaic, show_all_spatial_fits=False):
+    def show_exp_build_process(self, mosaic, show_all_spatial_fits=False):
         """
         Visualize retina mosaic build process.
         """
 
         # If show_all_spatial_fits is true, show the spatial fits
         if show_all_spatial_fits is True:
-            self.show_spatial_filter_response(mosaic)
+            spat_filt_to_viz = mosaic.exp_spat_filt_to_viz
+            self.show_spatial_filter_response(
+                spat_filt_to_viz,
+                n_samples=np.inf,
+                title="Experimental",
+                pause_to_show=True,
+            )
             return
 
         self.show_temporal_filter_response(mosaic)
@@ -567,6 +583,26 @@ class Viz:
         self.show_dendrite_diam_vs_ecc(mosaic)
         self.show_temp_stat(mosaic)
         self.show_tonic_drives(mosaic)
+
+    def show_gen_and_exp_spatial_rfs(self, mosaic, n_samples=2):
+        """
+        Show the experimental (fitted) and generated spatial receptive fields
+        """
+        spat_filt_to_viz = mosaic.exp_spat_filt_to_viz
+        self.show_spatial_filter_response(
+            spat_filt_to_viz,
+            n_samples=n_samples,
+            title="Experimental",
+            pause_to_show=False,
+        )
+
+        spat_filt_to_viz = mosaic.gen_spat_filt_to_viz
+        self.show_spatial_filter_response(
+            spat_filt_to_viz,
+            n_samples=n_samples,
+            title="Generated",
+            pause_to_show=False,
+        )
 
     # WorkingRetina visualization
     def show_stimulus_with_gcs(self, retina, frame_number=0, ax=None, example_gc=5):
