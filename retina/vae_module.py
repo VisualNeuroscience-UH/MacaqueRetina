@@ -1792,12 +1792,12 @@ class RetinaVAE:
             (
                 gc_spatial_data_np_orig,
                 _,
-                bad_data_indices,
+                bad_data_idx,
             ) = apricot_data.read_spatial_filter_data()
 
             # Drop bad data
             gc_spatial_data_np = np.delete(
-                gc_spatial_data_np_orig, bad_data_indices, axis=0
+                gc_spatial_data_np_orig, bad_data_idx, axis=0
             )
 
             gc_spatial_data_np = np.expand_dims(gc_spatial_data_np, axis=1)

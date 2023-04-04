@@ -83,19 +83,19 @@ class Viz:
         """
         Show temporal filter response for each cell.
         """
-        temporal_filters_to_show = mosaic.temporal_filters_to_show
-        xdata = temporal_filters_to_show["xdata"]
-        xdata_finer = temporal_filters_to_show["xdata_finer"]
-        title = temporal_filters_to_show["title"]
+        exp_temp_filt_to_viz = mosaic.exp_temp_filt_to_viz
+        xdata = exp_temp_filt_to_viz["xdata"]
+        xdata_finer = exp_temp_filt_to_viz["xdata_finer"]
+        title = exp_temp_filt_to_viz["title"]
 
         # get cell_ixs
         cell_ixs_list = [
-            ci for ci in temporal_filters_to_show.keys() if ci.startswith("cell_ix_")
+            ci for ci in exp_temp_filt_to_viz.keys() if ci.startswith("cell_ix_")
         ]
 
         for this_cell_ix in cell_ixs_list:
-            ydata = temporal_filters_to_show[f"{this_cell_ix}"]["ydata"]
-            y_fit = temporal_filters_to_show[f"{this_cell_ix}"]["y_fit"]
+            ydata = exp_temp_filt_to_viz[f"{this_cell_ix}"]["ydata"]
+            y_fit = exp_temp_filt_to_viz[f"{this_cell_ix}"]["y_fit"]
             plt.scatter(xdata, ydata)
             plt.plot(
                 xdata_finer,
@@ -108,18 +108,18 @@ class Viz:
 
     def show_spatial_filter_response(self, mosaic):
 
-        spatial_filters_to_show = mosaic.spatial_filters_to_show
+        exp_spat_filt_to_viz = mosaic.exp_spat_filt_to_viz
 
-        data_all_viable_cells = spatial_filters_to_show["data_all_viable_cells"]
-        x_grid = spatial_filters_to_show["x_grid"]
-        y_grid = spatial_filters_to_show["y_grid"]
-        surround_model = spatial_filters_to_show["surround_model"]
-        pixel_array_shape_x = spatial_filters_to_show["pixel_array_shape_x"]
-        pixel_array_shape_y = spatial_filters_to_show["pixel_array_shape_y"]
+        data_all_viable_cells = exp_spat_filt_to_viz["data_all_viable_cells"]
+        x_grid = exp_spat_filt_to_viz["x_grid"]
+        y_grid = exp_spat_filt_to_viz["y_grid"]
+        surround_model = exp_spat_filt_to_viz["surround_model"]
+        pixel_array_shape_x = exp_spat_filt_to_viz["pixel_array_shape_x"]
+        pixel_array_shape_y = exp_spat_filt_to_viz["pixel_array_shape_y"]
 
         # get cell_ixs
         cell_ixs_list = [
-            ci for ci in spatial_filters_to_show.keys() if ci.startswith("cell_ix_")
+            ci for ci in exp_spat_filt_to_viz.keys() if ci.startswith("cell_ix_")
         ]
 
         for this_cell_ix in cell_ixs_list:
@@ -128,8 +128,8 @@ class Viz:
 
             this_cell_ix_numerical = int(this_cell_ix.split("_")[-1])
             popt = data_all_viable_cells[this_cell_ix_numerical, :]
-            data_array = spatial_filters_to_show[this_cell_ix]["data_array"]
-            suptitle = spatial_filters_to_show[this_cell_ix]["suptitle"]
+            data_array = exp_spat_filt_to_viz[this_cell_ix]["data_array"]
+            suptitle = exp_spat_filt_to_viz[this_cell_ix]["suptitle"]
 
             fig, (ax1, ax2) = plt.subplots(figsize=(8, 3), ncols=2)
             plt.suptitle(
@@ -343,11 +343,9 @@ class Viz:
 
         ConstructRetina call.
         """
-        ydata = mosaic.spatial_statistics_to_show["ydata"]
-        spatial_statistics_dict = mosaic.spatial_statistics_to_show[
-            "spatial_statistics_dict"
-        ]
-        model_fit_data = mosaic.spatial_statistics_to_show["model_fit_data"]
+        ydata = mosaic.exp_spat_stat_to_viz["ydata"]
+        spatial_statistics_dict = mosaic.exp_spat_stat_to_viz["spatial_statistics_dict"]
+        model_fit_data = mosaic.exp_spat_stat_to_viz["model_fit_data"]
 
         distributions = [key for key in spatial_statistics_dict.keys()]
         n_distributions = len(spatial_statistics_dict)
@@ -512,13 +510,13 @@ class Viz:
         ConstructRetina call.
         """
 
-        temporal_filter_parameters = mosaic.temporal_statistics_to_show[
+        temporal_filter_parameters = mosaic.exp_temp_stat_to_viz[
             "temporal_filter_parameters"
         ]
-        distrib_params = mosaic.temporal_statistics_to_show["distrib_params"]
-        suptitle = mosaic.temporal_statistics_to_show["suptitle"]
-        all_data_fits_df = mosaic.temporal_statistics_to_show["all_data_fits_df"]
-        good_data_indices = mosaic.temporal_statistics_to_show["good_data_indices"]
+        distrib_params = mosaic.exp_temp_stat_to_viz["distrib_params"]
+        suptitle = mosaic.exp_temp_stat_to_viz["suptitle"]
+        all_data_fits_df = mosaic.exp_temp_stat_to_viz["all_data_fits_df"]
+        good_data_idx = mosaic.exp_temp_stat_to_viz["good_data_idx"]
 
         plt.subplots(2, 3)
         plt.suptitle(suptitle)
@@ -526,7 +524,7 @@ class Viz:
             plt.subplot(2, 3, i + 1)
             ax = plt.gca()
             shape, loc, scale = distrib_params[i, :]
-            param_array = np.array(all_data_fits_df.iloc[good_data_indices][param_name])
+            param_array = np.array(all_data_fits_df.iloc[good_data_idx][param_name])
 
             x_min, x_max = stats.gamma.ppf(
                 [0.001, 0.999], a=shape, loc=loc, scale=scale
@@ -541,10 +539,10 @@ class Viz:
         """
         ConstructRetina call.
         """
-        xs = mosaic.tonic_drives_to_show["xs"]
-        pdf = mosaic.tonic_drives_to_show["pdf"]
-        tonicdrive_array = mosaic.tonic_drives_to_show["tonicdrive_array"]
-        title = mosaic.tonic_drives_to_show["title"]
+        xs = mosaic.exp_tonic_dr_to_viz["xs"]
+        pdf = mosaic.exp_tonic_dr_to_viz["pdf"]
+        tonicdrive_array = mosaic.exp_tonic_dr_to_viz["tonicdrive_array"]
+        title = mosaic.exp_tonic_dr_to_viz["title"]
 
         plt.plot(xs, pdf)
         plt.hist(tonicdrive_array, density=True)

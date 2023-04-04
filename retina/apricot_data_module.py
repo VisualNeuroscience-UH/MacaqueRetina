@@ -136,8 +136,8 @@ class ApricotData:
         gc_spatial_data_array = gc_spatial_data["c"]
         # Rotate dims to put n units the first dim
         gc_spatial_data_array = np.moveaxis(gc_spatial_data_array, 2, 0)
-        n_spatial_cells = len(gc_spatial_data_array[:, 0, 0 ])
-        
+        n_spatial_cells = len(gc_spatial_data_array[:, 0, 0])
+
         initial_center_values = gc_spatial_data["stafit"]
 
         # Pick out the initial guess for rotation of center ellipse
@@ -156,7 +156,7 @@ class ApricotData:
 
         return gc_spatial_data_array, cen_rot_rad_all, self.manually_picked_bad_data_idx
 
-    def read_tonicdrive(self, remove_bad_data_indices=True):
+    def read_tonicdrive(self, remove_bad_data_idx=True):
 
         tonicdrive = np.array(
             [
@@ -164,7 +164,7 @@ class ApricotData:
                 for cellnum in range(self.n_cells)
             ]
         )
-        if remove_bad_data_indices is True:
+        if remove_bad_data_idx is True:
             tonicdrive[self.manually_picked_bad_data_idx] = 0.0
 
         return tonicdrive
@@ -195,13 +195,13 @@ class ApricotData:
 
         return temporal_filters
 
-    def compute_spatial_filter_sums(self, remove_bad_data_indices=True):
+    def compute_spatial_filter_sums(self, remove_bad_data_idx=True):
         """
         Computes the pixelwise sum of the values in the rank-1 spatial filters.
 
         Parameters
         ----------
-        remove_bad_data_indices : bool
+        remove_bad_data_idx : bool
             If True, the sums for the bad data indices are set to zero.
 
         Returns
@@ -224,7 +224,7 @@ class ApricotData:
             )
             filter_sums[i, 2] = np.sum(data_spatial_filter)
 
-        if remove_bad_data_indices is True:
+        if remove_bad_data_idx is True:
             filter_sums[self.manually_picked_bad_data_idx, :] = 0
 
         return pd.DataFrame(
@@ -236,7 +236,7 @@ class ApricotData:
             ],
         )
 
-    def compute_temporal_filter_sums(self, remove_bad_data_indices=True):
+    def compute_temporal_filter_sums(self, remove_bad_data_idx=True):
 
         temporal_filters = self.read_temporal_filter_data(
             flip_negs=True
@@ -248,7 +248,7 @@ class ApricotData:
             filter_sums[i, 1] = (-1) * np.sum(filter[filter < 0])
             filter_sums[i, 2] = np.sum(filter)
 
-        if remove_bad_data_indices is True:
+        if remove_bad_data_idx is True:
             filter_sums[self.manually_picked_bad_data_idx] = 0
 
         return pd.DataFrame(

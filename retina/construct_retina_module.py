@@ -213,16 +213,16 @@ class ConstructRetina(RetinaMath):
         # Make or read fits
         if fits_from_file is None:
             (
-                self.statistics_df,
-                self.good_data_indices,
-                self.bad_data_indices,
-                self.exp_mean_cen_sd,
-                self.exp_mean_sur_sd,
-                self.temporal_filters_to_show,
-                self.spatial_filters_to_show,
-                self.spatial_statistics_to_show,
-                self.temporal_statistics_to_show,
-                self.tonic_drives_to_show,
+                self.exp_stat_df,
+                self.good_data_idx,
+                self.bad_data_idx,
+                self.exp_spat_cen_sd,
+                self.exp_spat_sur_sd,
+                self.exp_temp_filt_to_viz,
+                self.exp_spat_filt_to_viz,
+                self.exp_spat_stat_to_viz,
+                self.exp_temp_stat_to_viz,
+                self.exp_tonic_dr_to_viz,
                 self.apricot_data_resolution_hw,
             ) = Fit(
                 self.context.apricot_data_folder,
@@ -436,7 +436,7 @@ class ConstructRetina(RetinaMath):
 
         # Set parameters for all cells
         n_cells = len(self.gc_df)
-        spatial_df = self.statistics_df[self.statistics_df["domain"] == "spatial"]
+        spatial_df = self.exp_stat_df[self.exp_stat_df["domain"] == "spatial"]
         for param_name, row in spatial_df.iterrows():
             shape, loc, scale, distribution, _ = row
             self.gc_df[param_name] = self._get_random_samples(
@@ -679,7 +679,7 @@ class ConstructRetina(RetinaMath):
     def _create_temporal_receptive_fields(self):
 
         n_cells = len(self.gc_df)
-        temporal_df = self.statistics_df[self.statistics_df["domain"] == "temporal"]
+        temporal_df = self.exp_stat_df[self.exp_stat_df["domain"] == "temporal"]
         for param_name, row in temporal_df.iterrows():
             shape, loc, scale, distribution, _ = row
             self.gc_df[param_name] = self._get_random_samples(
@@ -701,7 +701,7 @@ class ConstructRetina(RetinaMath):
         # amplitudes = np.zeros(n_rgc)
 
         for i in range(n_rgc):
-            amplitudec[i] = self.exp_mean_cen_sd**2 / (
+            amplitudec[i] = self.exp_spat_cen_sd**2 / (
                 self.gc_df.iloc[i].semi_xc * self.gc_df.iloc[i].semi_yc
             )
 
@@ -716,7 +716,7 @@ class ConstructRetina(RetinaMath):
         """
         Create tonic drive for each cell.
         """
-        tonic_df = self.statistics_df[self.statistics_df["domain"] == "tonic"]
+        tonic_df = self.exp_stat_df[self.exp_stat_df["domain"] == "tonic"]
         for param_name, row in tonic_df.iterrows():
             shape, loc, scale, distribution, _ = row
             self.gc_df[param_name] = self._get_random_samples(
@@ -835,11 +835,11 @@ class ConstructRetina(RetinaMath):
                 self.gc_df["img_path"] = img_paths
 
                 (
-                    statistics_df,
-                    mean_center_sd,
-                    mean_surround_sd,
-                    self.spatial_filters_to_show,
-                    self.spatial_statistics_to_show,
+                    self.gen_stat_df,
+                    self.gen_spat_cen_sd,
+                    self.gen_spat_sur_sd,
+                    self.gen_spat_filt_to_viz,
+                    self.gen_spat_stat_to_viz,
                 ) = Fit(
                     self.context.apricot_data_folder,
                     self.gc_type,
