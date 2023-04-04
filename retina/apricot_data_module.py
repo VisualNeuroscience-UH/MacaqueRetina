@@ -36,29 +36,29 @@ class ApricotData:
         # Non-spatial data are read from the original data files.
         if gc_type == "parasol" and response_type == "on":
             self.spatial_filename = "Parasol_ON_spatial.mat"
-            # self.bad_data_indices=[15, 67, 71, 86, 89]   # Simo's; Manually selected for Chichilnisky apricot (spatial) data
-            self.bad_data_indices = [15, 71, 86, 89]
+            # self.manually_picked_bad_data_idx=[15, 67, 71, 86, 89]   # Simo's; Manually selected for Chichilnisky apricot (spatial) data
+            self.manually_picked_bad_data_idx = [15, 71, 86, 89]
 
             self.filename_nonspatial = "mosaicGLM_apricot_ONParasol-1-mat.mat"
 
         elif gc_type == "parasol" and response_type == "off":
             self.spatial_filename = "Parasol_OFF_spatial.mat"
-            # self.bad_data_indices = [6, 31, 73]  # Simo's
-            self.bad_data_indices = [6, 31, 40, 76]
+            # self.manually_picked_bad_data_idx = [6, 31, 73]  # Simo's
+            self.manually_picked_bad_data_idx = [6, 31, 40, 76]
 
             self.filename_nonspatial = "mosaicGLM_apricot_OFFParasol-1-mat.mat"
 
         elif gc_type == "midget" and response_type == "on":
             self.spatial_filename = "Midget_ON_spatial.mat"
-            # self.bad_data_indices = [6, 13, 19, 23, 26, 28, 55, 74, 93, 99, 160, 162, 203, 220]  # Simo's
-            self.bad_data_indices = [13]
+            # self.manually_picked_bad_data_idx = [6, 13, 19, 23, 26, 28, 55, 74, 93, 99, 160, 162, 203, 220]  # Simo's
+            self.manually_picked_bad_data_idx = [13]
             self.filename_nonspatial = "mosaicGLM_apricot_ONMidget-1-mat.mat"
 
         elif gc_type == "midget" and response_type == "off":
             self.spatial_filename = "Midget_OFF_spatial.mat"
-            # self.bad_data_indices = [4, 5, 13, 23, 39, 43, 50, 52, 55, 58, 71, 72, 86, 88, 94, 100, 104, 119, 137,
+            # self.manually_picked_bad_data_idx = [4, 5, 13, 23, 39, 43, 50, 52, 55, 58, 71, 72, 86, 88, 94, 100, 104, 119, 137,
             #                     154, 155, 169, 179, 194, 196, 224, 230, 234, 235, 239, 244, 250, 259, 278]  # Simo's
-            self.bad_data_indices = [39, 43, 50, 56, 109, 129, 137]
+            self.manually_picked_bad_data_idx = [39, 43, 50, 56, 109, 129, 137]
             self.filename_nonspatial = "mosaicGLM_apricot_OFFMidget-1-mat.mat"
 
         else:
@@ -134,17 +134,27 @@ class ApricotData:
         filepath = self.apricot_data_folder / self.spatial_filename
         gc_spatial_data = sio.loadmat(filepath, variable_names=["c", "stafit"])
         gc_spatial_data_array = gc_spatial_data["c"]
+        # Rotate dims to put n units the first dim
+        gc_spatial_data_array = np.moveaxis(gc_spatial_data_array, 2, 0)
+        n_spatial_cells = len(gc_spatial_data_array[:, 0, 0 ])
+        
         initial_center_values = gc_spatial_data["stafit"]
 
-        n_spatial_cells = len(gc_spatial_data_array[0, 0, :])
-        n_bad = len(self.bad_data_indices)
+        # Pick out the initial guess for rotation of center ellipse
+        cen_rot_rad_all = np.zeros(n_spatial_cells)
+        for cell_idx in range(n_spatial_cells):
+            cen_rot_rad = float(initial_center_values[0, cell_idx][4])
+            if cen_rot_rad < 0:  # For negative angles, turn positive
+                cen_rot_rad_all[cell_idx] = cen_rot_rad + 2 * np.pi
+
+        n_bad = len(self.manually_picked_bad_data_idx)
         print("\n[%s %s]" % (self.gc_type, self.response_type))
         print(
             "Read %d cells from datafile and then removed %d bad cells (handpicked)"
             % (n_spatial_cells, n_bad)
         )
 
-        return gc_spatial_data_array, initial_center_values, self.bad_data_indices
+        return gc_spatial_data_array, cen_rot_rad_all, self.manually_picked_bad_data_idx
 
     def read_tonicdrive(self, remove_bad_data_indices=True):
 
@@ -155,7 +165,7 @@ class ApricotData:
             ]
         )
         if remove_bad_data_indices is True:
-            tonicdrive[self.bad_data_indices] = 0.0
+            tonicdrive[self.manually_picked_bad_data_idx] = 0.0
 
         return tonicdrive
 
@@ -215,7 +225,7 @@ class ApricotData:
             filter_sums[i, 2] = np.sum(data_spatial_filter)
 
         if remove_bad_data_indices is True:
-            filter_sums[self.bad_data_indices, :] = 0
+            filter_sums[self.manually_picked_bad_data_idx, :] = 0
 
         return pd.DataFrame(
             filter_sums,
@@ -239,7 +249,7 @@ class ApricotData:
             filter_sums[i, 2] = np.sum(filter)
 
         if remove_bad_data_indices is True:
-            filter_sums[self.bad_data_indices] = 0
+            filter_sums[self.manually_picked_bad_data_idx] = 0
 
         return pd.DataFrame(
             filter_sums,

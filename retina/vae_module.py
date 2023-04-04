@@ -1797,11 +1797,9 @@ class RetinaVAE:
 
             # Drop bad data
             gc_spatial_data_np = np.delete(
-                gc_spatial_data_np_orig, bad_data_indices, axis=2
+                gc_spatial_data_np_orig, bad_data_indices, axis=0
             )
 
-            # Reshape  pytorch (n_samples, 1, xdim, ydim)
-            gc_spatial_data_np = np.moveaxis(gc_spatial_data_np, 2, 0)
             gc_spatial_data_np = np.expand_dims(gc_spatial_data_np, axis=1)
 
             # Collate data

@@ -6,6 +6,7 @@ import scipy.stats as stats
 import pandas as pd
 
 import torch
+import torch.nn.functional as F
 
 # from torch.utils.data import DataLoader
 
@@ -215,16 +216,20 @@ class ConstructRetina(RetinaMath):
                 self.statistics_df,
                 self.good_data_indices,
                 self.bad_data_indices,
-                self.mean_center_sd,
-                self.mean_surround_sd,
+                self.exp_mean_cen_sd,
+                self.exp_mean_sur_sd,
                 self.temporal_filters_to_show,
                 self.spatial_filters_to_show,
                 self.spatial_statistics_to_show,
                 self.temporal_statistics_to_show,
                 self.tonic_drives_to_show,
+                self.apricot_data_resolution_hw,
             ) = Fit(
-                self.context.apricot_data_folder, gc_type, response_type
-            ).get_statistics()
+                self.context.apricot_data_folder,
+                gc_type,
+                response_type,
+                fit_type="experimental",
+            ).get_experimental_statistics()
         else:
             # probably obsolete 230118 SV
             self.all_fits_df = pd.read_csv(
@@ -696,7 +701,7 @@ class ConstructRetina(RetinaMath):
         # amplitudes = np.zeros(n_rgc)
 
         for i in range(n_rgc):
-            amplitudec[i] = self.mean_center_sd**2 / (
+            amplitudec[i] = self.exp_mean_cen_sd**2 / (
                 self.gc_df.iloc[i].semi_xc * self.gc_df.iloc[i].semi_yc
             )
 
@@ -794,13 +799,35 @@ class ConstructRetina(RetinaMath):
                 # --- 3. decode the samples
                 img_stack = self.retina_vae.vae.decoder(latent_samples)
 
-                # self.plot_rfs_from_vae(img_stack, n_examples=4)
+                # Images were upsampled for VAE training.
+                # Downsample generated images back to the Apricot size
+                img_stack_downsampled = F.interpolate(
+                    img_stack,
+                    size=self.apricot_data_resolution_hw,
+                    mode="bilinear",
+                    align_corners=True,
+                )
+                # if 0:
+                #     import matplotlib.pyplot as plt
 
-                img_stack_np = img_stack.detach().cpu().numpy()
+                #     plt.subplot(1, 2, 1)
+                #     plt.imshow(img_stack.detach().cpu().numpy()[0][0, :, :])
+                #     plt.colorbar()
+                #     plt.subplot(1, 2, 2)
+                #     plt.imshow(img_stack_downsampled.detach().cpu().numpy()[0][0, :, :])
+                #     plt.colorbar()
+                #     plt.show()
+
+                img_stack_np = img_stack_downsampled.detach().cpu().numpy()
+
+                # The shape of img_stack_np is (n_samples, 1, img_size, img_size)
+                # Reshape to (n_samples, img_size, img_size)
                 img_stack_np_reshaped = np.reshape(
                     img_stack_np,
                     (n_samples, img_stack_np.shape[2], img_stack_np.shape[3]),
                 )
+
+                # Save the generated receptive fields
                 output_path = self.context.output_folder
                 img_paths = self.save_generated_rfs(img_stack_np_reshaped, output_path)
 
@@ -808,26 +835,23 @@ class ConstructRetina(RetinaMath):
                 self.gc_df["img_path"] = img_paths
 
                 (
-                    self.statistics_df,
-                    self.good_data_indices,
-                    self.bad_data_indices,
-                    self.mean_center_sd,
-                    self.mean_surround_sd,
-                    self.temporal_filters_to_show,
+                    statistics_df,
+                    mean_center_sd,
+                    mean_surround_sd,
                     self.spatial_filters_to_show,
                     self.spatial_statistics_to_show,
-                    self.temporal_statistics_to_show,
-                    self.tonic_drives_to_show,
                 ) = Fit(
                     self.context.apricot_data_folder,
                     self.gc_type,
                     self.response_type,
-                    spatial_data=img_stack_np,
-                ).get_statistics()
+                    spatial_data=img_stack_np_reshaped,
+                    fit_type="generated",
+                ).get_generated_spatial_statistics()
 
+                # pdb.set_trace()
                 # TÄHÄN JÄIT:
-                # DEBUG VAE MOODI
-                # MITÄ TIETOJA DF FIt JA DF VAE YHDISTETÄÄN? MIÄ VERRATAAN?
+                # PITÄÄKÖ DF FIT JA DF VAE YHDISTÄÄ?
+                # VAI SIIRRETÄÄNKÖ VAIN SPAT FILTTERIT JA STATISTIIKAT VIZ MODULIIN?
 
             case "GAN":
                 # Use the generative adversarial network model to provide spatial and temporal receptive fields

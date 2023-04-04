@@ -35,16 +35,19 @@ class Fit(ApricotData, RetinaMath):
         gc_type,
         response_type,
         spatial_data=None,
-        fit_all=True,
+        fit_type="experimental",
     ):
 
         super().__init__(apricot_data_folder, gc_type, response_type)
 
-        self.spatial_data = spatial_data
-
-        if fit_all is True:
-            # Fit spatial and temporal filters and tonic drive values to experimental data.
-            self._fit_all()
+        match fit_type:
+            case "experimental":
+                # Fit spatial and temporal filters and tonic drive values to experimental data.
+                self._fit_experimental_data()
+            case "generated":
+                # Fit only spatial filters to generated data.
+                # self.spatial_data = spatial_data
+                self._fit_generated_data(spatial_data)
 
     def _fit_temporal_filters(self, normalize_before_fit=False):
         """
@@ -79,7 +82,9 @@ class Fit(ApricotData, RetinaMath):
         data_fps = self.metadata["data_fps"]
         data_n_samples = self.metadata["data_temporalfilter_samples"]
 
-        good_indices = np.setdiff1d(np.arange(self.n_cells), self.bad_data_indices)
+        good_indices = np.setdiff1d(
+            np.arange(self.n_cells), self.manually_picked_bad_data_idx
+        )
 
         """
         Parameters
@@ -145,8 +150,8 @@ class Fit(ApricotData, RetinaMath):
     def _fit_spatial_filters(
         self,
         gc_spatial_data_array,
-        initial_center_values=None,
-        bad_data_indices=None,
+        cen_rot_rad_all=None,
+        bad_idx_for_spatial_fit=None,
         surround_model=1,
         semi_x_always_major=True,
     ):
@@ -171,20 +176,19 @@ class Fit(ApricotData, RetinaMath):
 
         """
 
-        n_cells = int(gc_spatial_data_array.shape[2])
-        pixel_array_shape_y = gc_spatial_data_array.shape[
-            0
+        n_cells = int(gc_spatial_data_array.shape[0])
+        num_pix_y = gc_spatial_data_array.shape[
+            1
         ]  # Check indices: x horizontal, y vertical
-        pixel_array_shape_x = gc_spatial_data_array.shape[1]
+        num_pix_x = gc_spatial_data_array.shape[2]
 
         # Make fit to all cells
-        x_position_indices = np.linspace(
-            1, pixel_array_shape_x, pixel_array_shape_x
-        )  # Note: input coming from matlab, thus indexing starts from 1
-        y_position_indices = np.linspace(1, pixel_array_shape_y, pixel_array_shape_y)
+        # Note: input coming from matlab, thus indexing starts from 1
+        x_position_indices = np.linspace(1, num_pix_x, num_pix_x)
+        y_position_indices = np.linspace(1, num_pix_y, num_pix_y)
         x_grid, y_grid = np.meshgrid(x_position_indices, y_position_indices)
 
-        all_viable_cells = np.setdiff1d(np.arange(n_cells), bad_data_indices)
+        all_viable_cells = np.setdiff1d(np.arange(n_cells), bad_idx_for_spatial_fit)
 
         if surround_model == 1:
             parameter_names = [
@@ -229,95 +233,104 @@ class Fit(ApricotData, RetinaMath):
             "x_grid": x_grid,
             "y_grid": y_grid,
             "surround_model": surround_model,
-            "pixel_array_shape_x": pixel_array_shape_x,
-            "pixel_array_shape_y": pixel_array_shape_y,
+            "num_pix_x": num_pix_x,
+            "num_pix_y": num_pix_y,
         }
+
+        # Set initial guess for fitting
+        rot = 0.0
+        if surround_model == 1:
+            # Build initial guess for (amplitudec, xoc, yoc, semi_xc, semi_yc, orientation_center, amplitudes, sur_ratio, offset)
+            p0 = np.array(
+                [
+                    1,
+                    num_pix_y // 2,
+                    num_pix_x // 2,
+                    num_pix_y // 4,
+                    num_pix_x // 4,
+                    rot,
+                    0.1,
+                    3,
+                    0,
+                ]
+            )
+            boundaries = (
+                np.array([0.999, -np.inf, -np.inf, 0, 0, 0, 0, 1, 0]),
+                np.array(
+                    [1, np.inf, np.inf, np.inf, np.inf, 2 * np.pi, 1, np.inf, 0.001]
+                ),
+            )
+        else:
+            # Build initial guess for (amplitudec, xoc, yoc, semi_xc, semi_yc, orientation_center, amplitudes, xos, yos, semi_xs, semi_ys, orientation_surround, offset)
+            p0 = np.array(
+                [
+                    1,
+                    num_pix_y // 2,
+                    num_pix_x // 2,
+                    num_pix_y // 4,
+                    num_pix_x // 4,
+                    rot,
+                    0.1,
+                    num_pix_y // 2,
+                    num_pix_x // 2,
+                    (num_pix_y // 4) * 3,
+                    (num_pix_x // 4) * 3,
+                    rot,
+                    0,
+                ]
+            )
+            boundaries = (
+                np.array(
+                    [
+                        0.999,
+                        -np.inf,
+                        -np.inf,
+                        0,
+                        0,
+                        -2 * np.pi,
+                        0,
+                        -np.inf,
+                        -np.inf,
+                        0,
+                        0,
+                        -2 * np.pi,
+                        -np.inf,
+                    ]
+                ),
+                np.array(
+                    [
+                        1,
+                        np.inf,
+                        np.inf,
+                        np.inf,
+                        np.inf,
+                        2 * np.pi,
+                        1,
+                        np.inf,
+                        np.inf,
+                        np.inf,
+                        np.inf,
+                        2 * np.pi,
+                        np.inf,
+                    ]
+                ),
+            )
 
         # Go through all cells
         print(("Fitting DoG model, surround is {0}".format(surround_status)))
-        for cell_index in tqdm(all_viable_cells, desc="Fitting spatial  filters"):
-            # pbar(cell_index/n_cells)
-            this_rf = gc_spatial_data_array[:, :, cell_index]
-            # Drop outlier cells
+        for cell_idx in tqdm(all_viable_cells, desc="Fitting spatial  filters"):
+            this_rf = gc_spatial_data_array[cell_idx, :, :]
 
-            # # Initial guess for center
-            cen_rot_rad = float(initial_center_values[0, cell_index][4])
-            if cen_rot_rad < 0:  # For negative angles, turn positive
-                cen_rot_rad = cen_rot_rad + 2 * np.pi
+            rot = cen_rot_rad_all[cell_idx]
 
             # Invert data arrays with negative sign for fitting and display.
             # Fitting assumes that center peak is above mean.
             if this_rf.ravel()[np.argmax(np.abs(this_rf))] < 0:
                 this_rf = this_rf * -1
 
-            # Set initial guess for fitting
-            if surround_model == 1:
-                # Build initial guess for (amplitudec, xoc, yoc, semi_xc, semi_yc, orientation_center, amplitudes, sur_ratio, offset)
-                p0 = np.array([1, 7, 7, 3, 3, cen_rot_rad, 0.1, 3, 0])
-                boundaries = (
-                    np.array([0.999, -np.inf, -np.inf, 0, 0, 0, 0, 1, 0]),
-                    np.array(
-                        [1, np.inf, np.inf, np.inf, np.inf, 2 * np.pi, 1, np.inf, 0.001]
-                    ),
-                )
-            else:
-                # Build initial guess for (amplitudec, xoc, yoc, semi_xc, semi_yc, orientation_center, amplitudes, xos, yos, semi_xs, semi_ys, orientation_surround, offset)
-                p0 = np.array(
-                    [
-                        1,
-                        7,
-                        7,
-                        3,
-                        3,
-                        cen_rot_rad,
-                        0.1,
-                        7,
-                        7,
-                        3 * 3,
-                        3 * 3,
-                        cen_rot_rad,
-                        0,
-                    ]
-                )
-                boundaries = (
-                    np.array(
-                        [
-                            0.999,
-                            -np.inf,
-                            -np.inf,
-                            0,
-                            0,
-                            -2 * np.pi,
-                            0,
-                            -np.inf,
-                            -np.inf,
-                            0,
-                            0,
-                            -2 * np.pi,
-                            -np.inf,
-                        ]
-                    ),
-                    np.array(
-                        [
-                            1,
-                            np.inf,
-                            np.inf,
-                            np.inf,
-                            np.inf,
-                            2 * np.pi,
-                            1,
-                            np.inf,
-                            np.inf,
-                            np.inf,
-                            np.inf,
-                            2 * np.pi,
-                            np.inf,
-                        ]
-                    ),
-                )
-
             try:
                 if surround_model == 1:
+                    p0[5] = rot
                     popt, pcov = opt.curve_fit(
                         self.DoG2D_fixed_surround,
                         (x_grid, y_grid),
@@ -325,8 +338,10 @@ class Fit(ApricotData, RetinaMath):
                         p0=p0,
                         bounds=boundaries,
                     )
-                    data_all_viable_cells[cell_index, :] = popt
+                    data_all_viable_cells[cell_idx, :] = popt
                 else:
+                    p0[5] = rot
+                    p0[11] = rot
                     popt, pcov = opt.curve_fit(
                         self.DoG2D_independent_surround,
                         (x_grid, y_grid),
@@ -334,56 +349,54 @@ class Fit(ApricotData, RetinaMath):
                         p0=p0,
                         bounds=boundaries,
                     )
-                    data_all_viable_cells[cell_index, :] = popt
+                    data_all_viable_cells[cell_idx, :] = popt
             except:
-                print(("Fitting failed for cell {0}".format(str(cell_index))))
-                data_all_viable_cells[cell_index, :] = np.nan
-                bad_data_indices.append(cell_index)
+                print(("Fitting failed for cell {0}".format(str(cell_idx))))
+                data_all_viable_cells[cell_idx, :] = np.nan
+                bad_idx_for_spatial_fit.append(cell_idx)
                 continue
 
             # Set rotation angle between 0 and pi
-            data_all_viable_cells[cell_index, 5] = (
-                data_all_viable_cells[cell_index, 5] % np.pi
+            data_all_viable_cells[cell_idx, 5] = (
+                data_all_viable_cells[cell_idx, 5] % np.pi
             )
 
             # Rotate fit so that semi_x is always the semimajor axis (longer radius)
             if semi_x_always_major is True:
                 if (
-                    data_all_viable_cells[cell_index, 3]
-                    < data_all_viable_cells[cell_index, 4]
+                    data_all_viable_cells[cell_idx, 3]
+                    < data_all_viable_cells[cell_idx, 4]
                 ):
-                    sd_x = data_all_viable_cells[cell_index, 3]
-                    sd_y = data_all_viable_cells[cell_index, 4]
-                    rotation = data_all_viable_cells[cell_index, 5]
+                    sd_x = data_all_viable_cells[cell_idx, 3]
+                    sd_y = data_all_viable_cells[cell_idx, 4]
+                    rotation = data_all_viable_cells[cell_idx, 5]
 
-                    data_all_viable_cells[cell_index, 3] = sd_y
-                    data_all_viable_cells[cell_index, 4] = sd_x
-                    data_all_viable_cells[cell_index, 5] = (
-                        rotation + np.pi / 2
-                    ) % np.pi
+                    data_all_viable_cells[cell_idx, 3] = sd_y
+                    data_all_viable_cells[cell_idx, 4] = sd_x
+                    data_all_viable_cells[cell_idx, 5] = (rotation + np.pi / 2) % np.pi
 
                 # Rotate also the surround if it is defined separately
                 if surround_model == 0:
                     if (
-                        data_all_viable_cells[cell_index, 9]
-                        < data_all_viable_cells[cell_index, 10]
+                        data_all_viable_cells[cell_idx, 9]
+                        < data_all_viable_cells[cell_idx, 10]
                     ):
-                        sd_x_sur = data_all_viable_cells[cell_index, 9]
-                        sd_y_sur = data_all_viable_cells[cell_index, 10]
-                        rotation = data_all_viable_cells[cell_index, 11]
+                        sd_x_sur = data_all_viable_cells[cell_idx, 9]
+                        sd_y_sur = data_all_viable_cells[cell_idx, 10]
+                        rotation = data_all_viable_cells[cell_idx, 11]
 
-                        data_all_viable_cells[cell_index, 9] = sd_y_sur
-                        data_all_viable_cells[cell_index, 10] = sd_x_sur
-                        data_all_viable_cells[cell_index, 11] = (
+                        data_all_viable_cells[cell_idx, 9] = sd_y_sur
+                        data_all_viable_cells[cell_idx, 10] = sd_x_sur
+                        data_all_viable_cells[cell_idx, 11] = (
                             rotation + np.pi / 2
                         ) % np.pi
 
             # Set rotation angle between -pi/2 and pi/2 (otherwise hist bimodal)
-            rotation = data_all_viable_cells[cell_index, 5]
+            rotation = data_all_viable_cells[cell_idx, 5]
             if rotation > np.pi / 2:
-                data_all_viable_cells[cell_index, 5] = rotation - np.pi
+                data_all_viable_cells[cell_idx, 5] = rotation - np.pi
             else:
-                data_all_viable_cells[cell_index, 5] = rotation
+                data_all_viable_cells[cell_idx, 5] = rotation
 
             # Compute fitting error
             if surround_model == 1:
@@ -391,7 +404,7 @@ class Fit(ApricotData, RetinaMath):
             else:
                 data_fitted = self.DoG2D_independent_surround((x_grid, y_grid), *popt)
 
-            data_fitted = data_fitted.reshape(pixel_array_shape_y, pixel_array_shape_x)
+            data_fitted = data_fitted.reshape(num_pix_y, num_pix_x)
             fit_deviations = data_fitted - this_rf
             data_mean = np.mean(this_rf)
             # Normalized mean square error
@@ -400,20 +413,20 @@ class Fit(ApricotData, RetinaMath):
 
             # MSE
             fit_error = np.sum(fit_deviations**2) / (13 * 13)
-            error_all_viable_cells[cell_index, 0] = fit_error
+            error_all_viable_cells[cell_idx, 0] = fit_error
 
             # Save DoG fit sums
-            dog_filtersum_array[cell_index, 0] = np.sum(data_fitted[data_fitted > 0])
-            dog_filtersum_array[cell_index, 1] = (-1) * np.sum(
+            dog_filtersum_array[cell_idx, 0] = np.sum(data_fitted[data_fitted > 0])
+            dog_filtersum_array[cell_idx, 1] = (-1) * np.sum(
                 data_fitted[data_fitted < 0]
             )
-            dog_filtersum_array[cell_index, 2] = np.sum(data_fitted)
-            dog_filtersum_array[cell_index, 3] = np.sum(this_rf[this_rf > 0])
+            dog_filtersum_array[cell_idx, 2] = np.sum(data_fitted)
+            dog_filtersum_array[cell_idx, 3] = np.sum(this_rf[this_rf > 0])
 
             # For visualization
-            spatial_filters_to_show[f"cell_ix_{cell_index}"] = {
+            spatial_filters_to_show[f"cell_ix_{cell_idx}"] = {
                 "this_rf": this_rf,
-                "suptitle": f"celltype={self.gc_type}, responsetype={self.response_type}, cell_ix={cell_index}",
+                "suptitle": f"celltype={self.gc_type}, responsetype={self.response_type}, cell_ix={cell_idx}",
             }
 
         spatial_filters_to_show["data_all_viable_cells"] = data_all_viable_cells
@@ -435,7 +448,8 @@ class Fit(ApricotData, RetinaMath):
 
         error_df = pd.DataFrame(error_all_viable_cells, columns=["spatialfit_mse"])
         good_indices = np.ones(len(data_all_viable_cells))
-        for i in self.bad_data_indices:
+
+        for i in bad_idx_for_spatial_fit:
             good_indices[i] = 0
         good_indices_df = pd.DataFrame(good_indices, columns=["good_filter_data"])
 
@@ -447,26 +461,26 @@ class Fit(ApricotData, RetinaMath):
             axis=1,
         )
 
-    def _fit_all(self):
+    def _fit_experimental_data(self):
         """
         Fits spatial, temporal and tonic drive parameters to the experimental data.
         Returns the fits as self.all_data_fits_df which is an instance object attribute.
         """
 
-        if self.spatial_data is None:
-            (
-                self.spatial_data,
-                initial_center_values,
-                bad_data_indices,
-            ) = self.read_spatial_filter_data()
-        else:
-            initial_center_values = None
-            bad_data_indices = None
+        # Read Apricot data and manually picked bad data indices
+        (
+            spatial_data,
+            cen_rot_rad_all,
+            manually_picked_bad_data_idx,
+        ) = self.read_spatial_filter_data()
+
+        # Get original Apricot data resolution
+        self.apricot_data_resolution_hw = spatial_data.shape[1:3]
 
         spatial_fits = self._fit_spatial_filters(
-            gc_spatial_data_array=self.spatial_data,
-            initial_center_values=initial_center_values,
-            bad_data_indices=bad_data_indices,
+            gc_spatial_data_array=spatial_data,
+            cen_rot_rad_all=cen_rot_rad_all,
+            bad_idx_for_spatial_fit=manually_picked_bad_data_idx,
             surround_model=1,
             semi_x_always_major=True,
         )
@@ -489,6 +503,25 @@ class Fit(ApricotData, RetinaMath):
             ],
             axis=1,
         )
+
+    def _fit_generated_data(self, spatial_data):
+        """
+        Fits spatial, temporal and tonic drive parameters to the experimental data.
+        Returns the fits as self.all_data_fits_df which is an instance object attribute.
+        """
+
+        cen_rot_rad_all = np.zeros(spatial_data.shape[0])
+
+        spatial_fits = self._fit_spatial_filters(
+            gc_spatial_data_array=spatial_data,
+            cen_rot_rad_all=cen_rot_rad_all,
+            bad_idx_for_spatial_fit=[],
+            surround_model=1,
+            semi_x_always_major=True,
+        )
+
+        # Collect everything into one big dataframe
+        self.all_data_fits_df = pd.concat([spatial_fits], axis=1)
 
     def save(self, filepath):
         self.all_data_fits_df.to_csv(filepath)
@@ -724,7 +757,7 @@ class Fit(ApricotData, RetinaMath):
         )
         return mean_center_sd, mean_surround_sd
 
-    def get_statistics(self):
+    def get_experimental_statistics(self):
         """
         Statistical receptive field model from data.
 
@@ -736,9 +769,9 @@ class Fit(ApricotData, RetinaMath):
             Columns are shape, loc, scale, distribution ('gamma', 'beta'), domain ('spatial', 'temporal', 'tonic')
         good_data_indices
         bad_data_indices
-        mean_center_sd : float
+        exp_mean_cen_sd : float
             Mean center standard deviation in millimeters
-        mean_surround_sd : float
+        exp_mean_sur_sd : float
             Mean surround standard deviation in millimeters
         temporal_filters_to_show : dict
             Dictionary with temporal filter parameters and distributions
@@ -763,7 +796,7 @@ class Fit(ApricotData, RetinaMath):
         tonicdrive_statistics_df = self._fit_tonicdrive_statistics()
 
         # get center and surround sd
-        mean_center_sd, mean_surround_sd = self._get_center_surround_sd()
+        exp_mean_cen_sd, exp_mean_sur_sd = self._get_center_surround_sd()
 
         # Collect everything into one big dataframe
         statistics_df = pd.concat(
@@ -774,13 +807,63 @@ class Fit(ApricotData, RetinaMath):
             statistics_df,
             self.good_data_indices,
             self.bad_data_indices,
-            mean_center_sd,
-            mean_surround_sd,
+            exp_mean_cen_sd,
+            exp_mean_sur_sd,
             self.temporal_filters_to_show,
             self.spatial_filters_to_show,
             self.spatial_statistics_to_show,
             self.temporal_statistics_to_show,
             self.tonic_drives_to_show,
+            self.apricot_data_resolution_hw,
+        )
+
+    def get_generated_spatial_statistics(self):
+        """
+        Statistical receptive field model from data.
+
+        Return
+        ------
+        statistics_df : pd.DataFrame
+            Statistical model parameters for spatial, temporal, and tonic filters
+            Indices are the parameter names
+            Columns are shape, loc, scale, distribution ('gamma', 'beta'), domain ('spatial', 'temporal', 'tonic')
+        good_data_indices
+        bad_data_indices
+        gen_mean_cen_sd : float
+            Mean center standard deviation in millimeters
+        gen_mean_sur_sd : float
+            Mean surround standard deviation in millimeters
+        temporal_filters_to_show : dict
+            Dictionary with temporal filter parameters and distributions
+        spatial_filters_to_show : dict
+            Dictionary with spatial filter parameters and distributions
+        """
+        self.n_cells_data = len(self.all_data_fits_df)
+        self.bad_data_indices = np.where((self.all_data_fits_df == 0.0).all(axis=1))[
+            0
+        ].tolist()
+        self.good_data_indices = np.setdiff1d(
+            range(self.n_cells_data), self.bad_data_indices
+        )
+
+        # Get statistics for spatial filters of good data indices
+        spatial_statistics_df = self._fit_spatial_statistics()
+
+        # get center and surround sd
+        gen_mean_cen_sd, gen_mean_sur_sd = self._get_center_surround_sd()
+
+        # Collect everything into one big dataframe
+        statistics_df = pd.concat(
+            [spatial_statistics_df],
+            axis=0,
+        )
+
+        return (
+            statistics_df,
+            gen_mean_cen_sd,
+            gen_mean_sur_sd,
+            self.spatial_filters_to_show,
+            self.spatial_statistics_to_show,
         )
 
 
