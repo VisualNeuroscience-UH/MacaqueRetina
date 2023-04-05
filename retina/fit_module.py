@@ -43,13 +43,22 @@ class Fit(ApricotData, RetinaMath):
         match fit_type:
             case "experimental":
                 # Fit spatial and temporal filters and tonic drive values to experimental data.
-                self._fit_experimental_data()
+                (
+                    self.all_data_fits_df,
+                    self.exp_spat_filt_to_viz,
+                    self.exp_temp_filt_to_viz,
+                    self.apricot_data_resolution_hw,
+                    self.good_idx,
+                ) = self._fit_experimental_data()
             case "generated":
                 # Fit only spatial filters to generated data.
-                # self.spatial_data = spatial_data
-                self._fit_generated_data(spatial_data)
+                # All filters are accepted, so no need to return good_idx.
+                (
+                    self.all_data_fits_df,
+                    self.gen_spat_filt_to_viz,
+                ) = self._fit_generated_data(spatial_data)
 
-    def _fit_temporal_filters(self, normalize_before_fit=False):
+    def _fit_temporal_filters(self, good_idx, normalize_before_fit=False):
         """
         Fits each temporal filter to a function consisting of the difference of two cascades of lowpass filters.
         This follows Chichilnisky&Kalmar 2002 JNeurosci. Uses retinal spike triggered average (STA) data.
@@ -82,10 +91,6 @@ class Fit(ApricotData, RetinaMath):
         data_fps = self.metadata["data_fps"]
         data_n_samples = self.metadata["data_temporalfilter_samples"]
 
-        good_indices = np.setdiff1d(
-            np.arange(self.n_cells), self.manually_picked_bad_data_idx
-        )
-
         """
         Parameters
         ----------
@@ -113,7 +118,7 @@ class Fit(ApricotData, RetinaMath):
             "title": f"{self.gc_type}_{self.response_type}",
         }
 
-        for cell_ix in tqdm(good_indices, desc="Fitting temporal filters"):
+        for cell_ix in tqdm(good_idx, desc="Fitting temporal filters"):
             ydata = temporal_filters[cell_ix, :]
 
             try:
@@ -142,10 +147,7 @@ class Fit(ApricotData, RetinaMath):
 
         error_df = pd.DataFrame(error_array, columns=["temporalfit_mse"])
 
-        # For visualization in separate viz module
-        self.exp_temp_filt_to_viz = exp_temp_filt_to_viz
-
-        return pd.concat([parameters_df, error_df], axis=1)
+        return pd.concat([parameters_df, error_df], axis=1), exp_temp_filt_to_viz
 
     def _fit_spatial_filters(
         self,
@@ -447,14 +449,11 @@ class Fit(ApricotData, RetinaMath):
         )
 
         error_df = pd.DataFrame(error_all_viable_cells, columns=["spatialfit_mse"])
-        good_indices = np.ones(len(data_all_viable_cells))
+        good_mask = np.ones(len(data_all_viable_cells))
 
         for i in bad_idx_for_spatial_fit:
-            good_indices[i] = 0
-        good_indices_df = pd.DataFrame(good_indices, columns=["good_filter_data"])
-
-        # # Save for later visualization
-        # self.spat_filt_to_viz = spat_filt_to_viz
+            good_mask[i] = 0
+        good_mask_df = pd.DataFrame(good_mask, columns=["good_filter_data"])
 
         return (
             pd.concat(
@@ -463,11 +462,12 @@ class Fit(ApricotData, RetinaMath):
                     aspect_ratios_df,
                     dog_filtersum_df,
                     error_df,
-                    good_indices_df,
+                    good_mask_df,
                 ],
                 axis=1,
             ),
             spat_filt_to_viz,
+            good_mask,
         )
 
     def _fit_experimental_data(self):
@@ -483,27 +483,33 @@ class Fit(ApricotData, RetinaMath):
             manually_picked_bad_data_idx,
         ) = self.read_spatial_filter_data()
 
-        # Get original Apricot data resolution
-        self.apricot_data_resolution_hw = spatial_data.shape[1:3]
+        # Get original Apricot data spatial resolution
+        apricot_data_resolution_hw = spatial_data.shape[1:3]
 
-        spatial_fits, spat_filt_to_viz = self._fit_spatial_filters(
+        spatial_fits, spat_filt_to_viz, good_mask = self._fit_spatial_filters(
             spat_data_array=spatial_data,
             cen_rot_rad_all=cen_rot_rad_all,
             bad_idx_for_spatial_fit=manually_picked_bad_data_idx,
             surround_model=1,
             semi_x_always_major=True,
         )
-        self.exp_spat_filt_to_viz = spat_filt_to_viz
 
+        good_idx = np.where(good_mask == 1)[0]
+
+        # Note that this ignores only manually picked bad data indices,
+        # if remove_bad_data_idx=True.
         spatial_filter_sums = self.compute_spatial_filter_sums()
 
-        temporal_fits = self._fit_temporal_filters()
+        temporal_fits, temp_filt_to_viz = self._fit_temporal_filters(good_idx)
+
+        # Note that this ignores only manually picked bad data indices,
+        # if remove_bad_data_idx=True.
         temporal_filter_sums = self.compute_temporal_filter_sums()
 
         tonicdrives = pd.DataFrame(self.read_tonicdrive(), columns=["tonicdrive"])
 
         # Collect everything into one big dataframe
-        self.all_data_fits_df = pd.concat(
+        all_data_fits_df = pd.concat(
             [
                 spatial_fits,
                 spatial_filter_sums,
@@ -514,6 +520,14 @@ class Fit(ApricotData, RetinaMath):
             axis=1,
         )
 
+        return (
+            all_data_fits_df,
+            spat_filt_to_viz,
+            temp_filt_to_viz,
+            apricot_data_resolution_hw,
+            good_idx,
+        )
+
     def _fit_generated_data(self, spatial_data):
         """
         Fits spatial, temporal and tonic drive parameters to the experimental data.
@@ -522,7 +536,7 @@ class Fit(ApricotData, RetinaMath):
 
         cen_rot_rad_all = np.zeros(spatial_data.shape[0])
 
-        spatial_fits, spat_filt_to_viz = self._fit_spatial_filters(
+        spatial_fits, spat_filt_to_viz, _ = self._fit_spatial_filters(
             spat_data_array=spatial_data,
             cen_rot_rad_all=cen_rot_rad_all,
             bad_idx_for_spatial_fit=[],
@@ -530,39 +544,23 @@ class Fit(ApricotData, RetinaMath):
             semi_x_always_major=True,
         )
 
-        self.gen_spat_filt_to_viz = spat_filt_to_viz
-
         # Collect everything into one big dataframe
-        self.all_data_fits_df = pd.concat([spatial_fits], axis=1)
+        all_data_fits_df = pd.concat([spatial_fits], axis=1)
 
-    def save(self, filepath):
-        self.all_data_fits_df.to_csv(filepath)
+        return all_data_fits_df, spat_filt_to_viz
 
-    def _fit_spatial_statistics(self):
+    def _fit_spatial_statistics(self, good_idx):
         """
         Fit spatial statistics of the spatial filter parameters. Returns gamma distribution parameters,
         except for orientation where it returns beta distribution parameters.
 
-        Returns
-        -------
-        spatial_exp_stat_df : pd.DataFrame
-            Dataframe with spatial statistics
         """
 
-        # parameter_names, data_all_viable_cells, bad_cell_indices = fitdata
-        data_all_viable_cells = np.array(self.all_data_fits_df)
+        data_all_cells = np.array(self.all_data_fits_df)
+        all_viable_cells = data_all_cells[good_idx]
 
-        bad_cell_indices = np.where((self.all_data_fits_df == 0.0).all(axis=1))[
-            0
-        ].tolist()
         parameter_names = self.all_data_fits_df.columns.tolist()
-
-        all_viable_cells = np.delete(data_all_viable_cells, bad_cell_indices, 0)
-
         spatial_data_df = pd.DataFrame(data=all_viable_cells, columns=parameter_names)
-
-        # Save stats description to gc object
-        self.rf_datafit_description_series = spatial_data_df.describe()
 
         # Calculate xy_aspect_ratio
         xy_aspect_ratio_pd_series = (
@@ -579,7 +577,7 @@ class Fit(ApricotData, RetinaMath):
             "sur_ratio",
             "orientation_center",
         ]
-        self.rf_parameter_names = rf_parameter_names  # For reference
+
         n_distributions = len(rf_parameter_names)
         shape = np.zeros(
             [n_distributions - 1]
@@ -659,15 +657,15 @@ class Fit(ApricotData, RetinaMath):
             "model_fit_data": (x_model_fit, y_model_fit),
         }
 
-        spatial_exp_stat_df = pd.DataFrame.from_dict(
+        spatial_stat_df = pd.DataFrame.from_dict(
             spatial_statistics_dict, orient="index"
         )
-        spatial_exp_stat_df["domain"] = "spatial"
+        spatial_stat_df["domain"] = "spatial"
 
         # Return stats for RF creation
-        return spatial_exp_stat_df, spat_stat_to_viz
+        return spatial_stat_df, spat_stat_to_viz
 
-    def _fit_temporal_statistics(self):
+    def _fit_temporal_statistics(self, good_idx):
         """
         Fit temporal statistics of the temporal filter parameters. Uses gamma distribution.
 
@@ -681,18 +679,16 @@ class Fit(ApricotData, RetinaMath):
         distrib_params = np.zeros((len(temporal_filter_parameters), 3))
 
         for i, param_name in enumerate(temporal_filter_parameters):
-            param_array = np.array(
-                self.all_data_fits_df.iloc[self.good_data_idx][param_name]
-            )
+            param_array = np.array(self.all_data_fits_df.iloc[good_idx][param_name])
             shape, loc, scale = stats.gamma.fit(param_array)
             distrib_params[i, :] = [shape, loc, scale]
 
-        self.exp_temp_stat_to_viz = {
+        temp_stat_to_viz = {
             "temporal_filter_parameters": temporal_filter_parameters,
             "distrib_params": distrib_params,
             "suptitle": self.gc_type + " " + self.response_type,
             "all_data_fits_df": self.all_data_fits_df,
-            "good_data_idx": self.good_data_idx,
+            "good_idx": good_idx,
         }
 
         temporal_exp_stat_df = pd.DataFrame(
@@ -704,9 +700,9 @@ class Fit(ApricotData, RetinaMath):
         temporal_exp_stat_df["distribution"] = "gamma"
         temporal_exp_stat_df["domain"] = "temporal"
 
-        return temporal_exp_stat_df
+        return temporal_exp_stat_df, temp_stat_to_viz
 
-    def _fit_tonicdrive_statistics(self):
+    def _fit_tonicdrive_statistics(self, good_idx):
         """
         Fit tonic drive statistics to tonic drive value fits. Uses gamma distribution.
 
@@ -716,9 +712,7 @@ class Fit(ApricotData, RetinaMath):
             DataFrame with tonic drive statistics.
         """
 
-        tonicdrive_array = np.array(
-            self.all_data_fits_df.iloc[self.good_data_idx].tonicdrive
-        )
+        tonicdrive_array = np.array(self.all_data_fits_df.iloc[good_idx].tonicdrive)
         shape, loc, scale = stats.gamma.fit(tonicdrive_array)
 
         x_min, x_max = stats.gamma.ppf([0.001, 0.999], a=shape, loc=loc, scale=scale)
@@ -726,7 +720,7 @@ class Fit(ApricotData, RetinaMath):
         pdf = stats.gamma.pdf(xs, a=shape, loc=loc, scale=scale)
         title = self.gc_type + " " + self.response_type
 
-        self.exp_tonic_dr_to_viz = {
+        exp_tonic_dr_to_viz = {
             "xs": xs,
             "pdf": pdf,
             "tonicdrive_array": tonicdrive_array,
@@ -746,9 +740,9 @@ class Fit(ApricotData, RetinaMath):
             orient="index",
         )
 
-        return td_df
+        return td_df, exp_tonic_dr_to_viz
 
-    def _get_center_surround_sd(self):
+    def _get_center_surround_sd(self, good_idx):
         """
         Get center and surround amplitudes so that the spatial RF volume scaling.
 
@@ -759,7 +753,7 @@ class Fit(ApricotData, RetinaMath):
         mean_surround_sd : float
             Mean surround standard deviation in millimeters
         """
-        df = self.all_data_fits_df.iloc[self.good_data_idx]
+        df = self.all_data_fits_df.iloc[good_idx]
 
         # Get mean center and surround RF size from data in millimeters
         mean_center_sd = np.mean(np.sqrt(df.semi_xc * df.semi_yc)) * self.DATA_PIXEL_LEN
@@ -779,8 +773,10 @@ class Fit(ApricotData, RetinaMath):
             Statistical model parameters for spatial, temporal, and tonic filters
             Indices are the parameter names
             Columns are shape, loc, scale, distribution ('gamma', 'beta'), domain ('spatial', 'temporal', 'tonic')
-        good_data_idx
-        bad_data_idx
+        good_data_fit_idx: list
+            List of good data indeces after spatial fit
+        bad_data_fit_idx: list
+            List of bad data indeces after spatial fit
         exp_spat_cen_sd : float
             Mean center standard deviation in millimeters
         exp_spat_sur_sd : float
@@ -790,23 +786,34 @@ class Fit(ApricotData, RetinaMath):
         exp_spat_filt_to_viz : dict
             Dictionary with spatial filter parameters and distributions
         """
-        self.n_cells_data = len(self.all_data_fits_df)
-        self.bad_data_idx = np.where((self.all_data_fits_df == 0.0).all(axis=1))[
+
+        # Get good and bad data indeces from all_data_fits_df. The spatial fit
+        # may add bad indices to the data frame
+        n_cells_data = len(self.all_data_fits_df)
+        bad_data_fit_idx = np.where((self.all_data_fits_df == 0.0).all(axis=1))[
             0
         ].tolist()
-        self.good_data_idx = np.setdiff1d(range(self.n_cells_data), self.bad_data_idx)
+        good_data_fit_idx = np.setdiff1d(range(n_cells_data), bad_data_fit_idx)
 
         # Get statistics for spatial filters of good data indices
-        spatial_exp_stat_df, exp_spat_stat_to_viz = self._fit_spatial_statistics()
+        spatial_exp_stat_df, exp_spat_stat_to_viz = self._fit_spatial_statistics(
+            good_data_fit_idx
+        )
 
         # Get statistics for temporal filters of good data indices
-        temporal_exp_stat_df = self._fit_temporal_statistics()
+        temporal_exp_stat_df, exp_temp_stat_to_viz = self._fit_temporal_statistics(
+            good_data_fit_idx
+        )
 
         # Get statistics for tonic drives of good data indices
-        tonicdrive_exp_stat_df = self._fit_tonicdrive_statistics()
+        tonicdrive_exp_stat_df, exp_tonic_dr_to_viz = self._fit_tonicdrive_statistics(
+            good_data_fit_idx
+        )
 
         # get center and surround sd
-        exp_spat_cen_sd, exp_spat_sur_sd = self._get_center_surround_sd()
+        exp_spat_cen_sd, exp_spat_sur_sd = self._get_center_surround_sd(
+            good_data_fit_idx
+        )
 
         # Collect everything into one big dataframe
         exp_stat_df = pd.concat(
@@ -815,15 +822,15 @@ class Fit(ApricotData, RetinaMath):
         )
         return (
             exp_stat_df,
-            self.good_data_idx,
-            self.bad_data_idx,
+            good_data_fit_idx,
+            bad_data_fit_idx,
             exp_spat_cen_sd,
             exp_spat_sur_sd,
             self.exp_temp_filt_to_viz,
             self.exp_spat_filt_to_viz,
             exp_spat_stat_to_viz,
-            self.exp_temp_stat_to_viz,
-            self.exp_tonic_dr_to_viz,
+            exp_temp_stat_to_viz,
+            exp_tonic_dr_to_viz,
             self.apricot_data_resolution_hw,
         )
 
@@ -837,8 +844,6 @@ class Fit(ApricotData, RetinaMath):
             Statistical model parameters for spatial, temporal, and tonic filters
             Indices are the parameter names
             Columns are shape, loc, scale, distribution ('gamma', 'beta'), domain ('spatial', 'temporal', 'tonic')
-        good_data_idx
-        bad_data_idx
         gen_mean_cen_sd : float
             Mean center standard deviation in millimeters
         gen_mean_sur_sd : float
@@ -848,21 +853,19 @@ class Fit(ApricotData, RetinaMath):
         exp_spat_filt_to_viz : dict
             Dictionary with spatial filter parameters and distributions
         """
-        self.n_cells_data = len(self.all_data_fits_df)
-        self.bad_data_idx = np.where((self.all_data_fits_df == 0.0).all(axis=1))[
-            0
-        ].tolist()
-        self.good_data_idx = np.setdiff1d(range(self.n_cells_data), self.bad_data_idx)
 
-        # Get statistics for spatial filters of good data indices
-        spatial_gen_stat_df, gen_spat_stat_to_viz = self._fit_spatial_statistics()
+        # For generated data, all data indeces are good
+        good_idx = range(len(self.all_data_fits_df))
+
+        # Get statistics for spatial filters
+        gen_spat_stat_df, gen_spat_stat_to_viz = self._fit_spatial_statistics(good_idx)
 
         # get center and surround sd
-        gen_mean_cen_sd, gen_mean_sur_sd = self._get_center_surround_sd()
+        gen_mean_cen_sd, gen_mean_sur_sd = self._get_center_surround_sd(good_idx)
 
         # Collect everything into one big dataframe
         gen_stat_df = pd.concat(
-            [spatial_gen_stat_df],
+            [gen_spat_stat_df],
             axis=0,
         )
 
