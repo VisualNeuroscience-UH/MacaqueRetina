@@ -229,7 +229,7 @@ class ConstructRetina(RetinaMath):
                 gc_type,
                 response_type,
                 fit_type="experimental",
-            ).get_experimental_statistics()
+            ).get_experimental_fits()
         else:
             # probably obsolete 230118 SV
             self.all_fits_df = pd.read_csv(
@@ -853,12 +853,15 @@ class ConstructRetina(RetinaMath):
                     self.response_type,
                     spatial_data=img_stack_np_reshaped,
                     fit_type="generated",
-                ).get_generated_spatial_statistics()
+                ).get_generated_spatial_fits()
 
                 # pdb.set_trace()
                 # TÄHÄN JÄIT:
-                # PITÄÄKÖ DF FIT JA DF VAE YHDISTÄÄ?
-                # VAI SIIRRETÄÄNKÖ VAIN SPAT FILTTERIT JA STATISTIIKAT VIZ MODULIIN?
+                # REFAKTOROI FIT SITEN ETTÄ SELF.ATTRIBUUTTI SIVUVAIKUTUKSET MUUTTUVAT FUNKTIONAALSIKSI
+                # GENEROIDUT RF:T :
+                #   VERTAA FIT HISTOGRAMMEIHIN, MITEN RAKENTAA VASTAAVIA?
+                #   MIKÄ ON VAE INPUT JA OUTPUT HISTOGRAMMI?
+                #   SOVITA MEDIAN = 0 JA MAX(ABS()) POSITIIVISEKSI ENNEN FITTIÄ.
 
             case "GAN":
                 # Use the generative adversarial network model to provide spatial and temporal receptive fields

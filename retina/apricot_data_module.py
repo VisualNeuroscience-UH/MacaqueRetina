@@ -154,7 +154,7 @@ class ApricotData:
             % (n_spatial_cells, n_bad)
         )
 
-        return spat_data_array, cen_rot_rad_all, self.manually_picked_bad_data_idx
+        return spat_data_array, cen_rot_rad_all
 
     def read_tonicdrive(self, remove_bad_data_idx=True):
 

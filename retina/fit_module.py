@@ -26,7 +26,8 @@ import pdb
 class Fit(ApricotData, RetinaMath):
     """
     Methods for deriving spatial and temporal receptive field parameters from the apricot dataset (Field_2010)
-    Call get_fits method to return the fits from the instance object self.all_data_fits_df
+    Call get_experimental_fits or get_generated_spatial_fits method to return the fits from the instance object
+    self.all_data_fits_df and other data to visualize the fits.
     """
 
     def __init__(
@@ -38,6 +39,8 @@ class Fit(ApricotData, RetinaMath):
         fit_type="experimental",
     ):
 
+        # Assigns to self the following attributes, which are necessary in this module:
+        # gc_type, response_type, DATA_PIXEL_LEN, manually_picked_bad_data_idx, n_cells, metadata
         super().__init__(apricot_data_folder, gc_type, response_type)
 
         match fit_type:
@@ -480,7 +483,6 @@ class Fit(ApricotData, RetinaMath):
         (
             spatial_data,
             cen_rot_rad_all,
-            manually_picked_bad_data_idx,
         ) = self.read_spatial_filter_data()
 
         # Get original Apricot data spatial resolution
@@ -489,7 +491,7 @@ class Fit(ApricotData, RetinaMath):
         spatial_fits, spat_filt_to_viz, good_mask = self._fit_spatial_filters(
             spat_data_array=spatial_data,
             cen_rot_rad_all=cen_rot_rad_all,
-            bad_idx_for_spatial_fit=manually_picked_bad_data_idx,
+            bad_idx_for_spatial_fit=self.manually_picked_bad_data_idx,
             surround_model=1,
             semi_x_always_major=True,
         )
@@ -763,7 +765,7 @@ class Fit(ApricotData, RetinaMath):
         )
         return mean_center_sd, mean_surround_sd
 
-    def get_experimental_statistics(self):
+    def get_experimental_fits(self):
         """
         Statistical receptive field model from data.
 
@@ -834,7 +836,7 @@ class Fit(ApricotData, RetinaMath):
             self.apricot_data_resolution_hw,
         )
 
-    def get_generated_spatial_statistics(self):
+    def get_generated_spatial_fits(self):
         """
         Statistical receptive field model from data.
 
