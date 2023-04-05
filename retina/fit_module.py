@@ -64,23 +64,33 @@ class Fit(ApricotData, RetinaMath):
     def _fit_temporal_filters(self, good_idx, normalize_before_fit=False):
         """
         Fits each temporal filter to a function consisting of the difference of two cascades of lowpass filters.
-        This follows Chichilnisky&Kalmar 2002 JNeurosci. Uses retinal spike triggered average (STA) data.
+        This follows the method described by Chichilnisky & Kalmar in their 2002 JNeurosci paper, using retinal spike
+        triggered average (STA) data.
 
         Parameters
         ----------
-        normalize_before_fit : bool
+        good_idx : array-like of int
+            Indices of the cells to fit the temporal filters for.
+        normalize_before_fit : bool, default False
             If True, normalize each temporal filter before fitting.
             If False, fit the raw temporal filters.
 
-        Attributes
-        ----------
-        self.exp_temp_filt_to_viz : dict
-            Dictionary of temporal filters to show with viz
-
         Returns
         -------
-        fitted_parameters : np.ndarray
-            Array of shape (n_cells, 5) containing the fitted parameters for each cell.
+        tuple
+            A tuple containing:
+            - fitted_parameters (pandas.DataFrame):
+                DataFrame of shape (n_cells, 5) containing the fitted parameters for each cell. The columns are:
+                - 'n': Order of the filters.
+                - 'p1': Normalization factor for the first filter.
+                - 'p2': Normalization factor for the second filter.
+                - 'tau1': Time constant of the first filter in milliseconds.
+                - 'tau2': Time constant of the second filter in milliseconds.
+            - exp_temp_filt_to_viz (dict):
+                Dictionary of temporal filters to show with viz. The keys are strings of the format 'cell_ix_{cell_idx}',
+                where cell_idx is the index of the cell. Each value is a dictionary with the following keys:
+                - 'ydata': The temporal filter data for the cell.
+                - 'y_fit': The fitted temporal filter data for the cell.
         """
 
         # shape (n_cells, 15); 15 time points @ 30 Hz (500 ms)
@@ -161,27 +171,43 @@ class Fit(ApricotData, RetinaMath):
         semi_x_always_major=True,
     ):
         """
-        Fit spatial filters to a difference of Gaussians (DoG) model. Uses retinal spike triggered average (STA) data.
+        Fit difference of Gaussians (DoG) model spatial filters using retinal spike triggered average (STA) data.
 
         Parameters
         ----------
+        spat_data_array : numpy.ndarray
+            Array of shape `(n_cells, num_pix_y, num_pix_x)` containing the spatial data for each cell to fit.
+        cen_rot_rad_all : numpy.ndarray or None, optional
+            Array of shape `(n_cells,)` containing the rotation angle for each cell. If None, rotation is set to 0, by default None
+        bad_idx_for_spatial_fit : numpy.ndarray or None, optional
+            Indices of cells to exclude from fitting, by default None
         surround_model : int, optional
-            0=fit center and surround separately, 1=surround midpoint same as center midpoint, by default 1
+            Whether to fit center and surround separately (0) or to fix surround midpoint to be the same as center midpoint (1), by default 1
         semi_x_always_major : bool, optional
             Whether to rotate Gaussians so that semi_x is always the semimajor/longer axis, by default True
 
         Returns
         -------
-        dataframe with spatial parameters and errors for each cell (n_cells, 8)
-        spat_filt_to_viz : dict
-            Dictionary of spatial filters to show with viz
+        tuple
+            A dataframe with spatial parameters and errors for each cell, and a dictionary of spatial filters to show with visualization.
+            The dataframe has shape `(n_cells, 8)` and columns: ['amplitudec', 'xoc', 'yoc', 'semi_xc', 'semi_yc', 'orientation_center',
+            'amplitudes', 'sur_ratio', 'offset'] if surround_model=1, or shape `(n_cells, 13)` and columns:
+            ['amplitudec', 'xoc', 'yoc', 'semi_xc', 'semi_yc', 'orientation_center', 'amplitudes', 'xos', 'yos', 'semi_xs',
+            'semi_ys', 'orientation_surround', 'offset'] if surround_model=0.
+            The dictionary spat_filt_to_viz has keys:
+                'x_grid': numpy.ndarray of shape `(num_pix_y, num_pix_x)`, X-coordinates of the grid points
+                'y_grid': numpy.ndarray of shape `(num_pix_y, num_pix_x)`, Y-coordinates of the grid points
+                'surround_model': int, the type of surround model used (0 or 1)
+                'num_pix_x': int, the number of pixels in the x-dimension
+                'num_pix_y': int, the number of pixels in the y-dimension
+                'filters': numpy.ndarray of shape `(n_cells, num_pix_y, num_pix_x)`, containing the fitted spatial filters for each cell
+            good_mask: numpy.ndarray of shape `(n_cells,)`, containing a boolean mask of cells that were successfully fitted
 
+        Raises
+        ------
+        ValueError
+            If the shape of spat_data_array is not `(n_cells, num_pix_y, num_pix_x)`.
         """
-
-        # import matplotlib.pyplot as plt
-
-        # plt.hist(spat_data_array.flatten(), bins=100)
-        # plt.show()
 
         n_cells = int(spat_data_array.shape[0])
         num_pix_y = spat_data_array.shape[1]  # Check indices: x horizontal, y vertical
@@ -476,7 +502,22 @@ class Fit(ApricotData, RetinaMath):
     def _fit_experimental_data(self):
         """
         Fits spatial, temporal and tonic drive parameters to the experimental data.
-        Returns the fits as self.all_data_fits_df which is an instance object attribute.
+
+        Returns
+        -------
+        Tuple:
+            all_data_fits_df : pandas.DataFrame
+                DataFrame containing all the fitted data, including spatial and temporal filter
+                parameters, sums of the spatial and temporal filters, and tonic drives.
+            spat_filt_to_viz : numpy.ndarray
+                Array of spatial filters in the format required for visualization.
+            temp_filt_to_viz : numpy.ndarray
+                Array of temporal filters in the format required for visualization.
+            apricot_data_resolution_hw : Tuple[int, int]
+                Tuple containing the height and width of the original Apricot data.
+            good_idx : numpy.ndarray
+                Array of indices of good data after manually picked bad data and
+                failed spatial fit indeces have been removed.
         """
 
         # Read Apricot data and manually picked bad data indices
@@ -532,8 +573,19 @@ class Fit(ApricotData, RetinaMath):
 
     def _fit_generated_data(self, spatial_data):
         """
-        Fits spatial, temporal and tonic drive parameters to the experimental data.
-        Returns the fits as self.all_data_fits_df which is an instance object attribute.
+        Fits spatial, temporal, and tonic drive parameters to the generated data.
+
+        Parameters:
+        -----------
+        spatial_data : numpy.ndarray
+            Array of shape (n_samples, height, width) containing the generated spatial data.
+
+        Returns:
+        --------
+        all_data_fits_df : pandas.DataFrame
+            A DataFrame containing the fitted parameters for the spatial filter.
+        spat_filt_to_viz : numpy.ndarray
+            Array of shape (n_samples, height, width) containing the visualized spatial filters.
         """
 
         cen_rot_rad_all = np.zeros(spatial_data.shape[0])
@@ -553,9 +605,22 @@ class Fit(ApricotData, RetinaMath):
 
     def _fit_spatial_statistics(self, good_idx):
         """
-        Fit spatial statistics of the spatial filter parameters. Returns gamma distribution parameters,
-        except for orientation where it returns beta distribution parameters.
+        Fits gamma distribution parameters for the 'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes',
+        and 'sur_ratio' RF parameters, and fits beta distribution parameters for the 'orientation_center' RF parameter.
 
+        Parameters:
+        -----------
+        good_idx : array_like
+            A list of indices indicating the selected good cells.
+
+        Returns:
+        --------
+        spatial_stat_df : pandas DataFrame
+            A DataFrame containing gamma distribution parameters for the RF parameters 'semi_xc', 'semi_yc',
+            'xy_aspect_ratio', 'amplitudes', and 'sur_ratio', and beta distribution parameters for the 'orientation_center'.
+        spat_stat_to_viz : dict
+            A dictionary containing data that can be used to visualize the RF parameters' spatial statistics.
+            Includes 'ydata', 'spatial_statistics_dict', and 'model_fit_data'.
         """
 
         data_all_cells = np.array(self.all_data_fits_df)
@@ -669,12 +734,23 @@ class Fit(ApricotData, RetinaMath):
 
     def _fit_temporal_statistics(self, good_idx):
         """
-        Fit temporal statistics of the temporal filter parameters. Uses gamma distribution.
+        Fit temporal statistics of the temporal filter parameters using the gamma distribution.
+
+        Parameters
+        ----------
+        good_idx : ndarray
+            Boolean index array indicating which rows of `self.all_data_fits_df` to use for fitting.
 
         Returns
         -------
         temporal_exp_stat_df : pd.DataFrame
-            Dataframe with temporal statistics.
+            A DataFrame containing the temporal statistics of the temporal filter parameters, including the shape, loc,
+            and scale parameters of the fitted gamma distribution, as well as the name of the distribution and the domain.
+
+        temp_stat_to_viz : dict
+            A dictionary containing information needed for visualization, including the temporal filter parameters, the
+            fitted distribution parameters, the super title of the plot, `self.gc_type`, `self.response_type`, the
+            `self.all_data_fits_df` DataFrame, and the `good_idx` Boolean index array.
         """
 
         temporal_filter_parameters = ["n", "p1", "p2", "tau1", "tau2"]
@@ -706,12 +782,24 @@ class Fit(ApricotData, RetinaMath):
 
     def _fit_tonicdrive_statistics(self, good_idx):
         """
-        Fit tonic drive statistics to tonic drive value fits. Uses gamma distribution.
+        Fits tonic drive statistics to tonic drive value fits using gamma distribution.
+
+        Parameters
+        ----------
+        good_idx : list of int
+            List of indices of good data fits to be used for fitting the tonic drive statistics.
 
         Returns
         -------
-        tonicdrive_exp_stat_df : pandas.DataFrame
-            DataFrame with tonic drive statistics.
+        td_df : pandas.DataFrame
+            DataFrame with tonic drive statistics, including shape, loc, and scale parameters for the gamma distribution
+            as well as the distribution type (gamma) and domain (tonic).
+        exp_tonic_dr_to_viz : dict
+            Dictionary containing the following visualization data:
+            - xs: an array of 100 x-values to plot the probability density function of the gamma distribution
+            - pdf: an array of 100 y-values representing the probability density function of the gamma distribution
+            - tonicdrive_array: a numpy array of tonic drive values used for fitting
+            - title: a string representing the title of the plot, which includes the gc_type and response_type.
         """
 
         tonicdrive_array = np.array(self.all_data_fits_df.iloc[good_idx].tonicdrive)
@@ -746,14 +834,19 @@ class Fit(ApricotData, RetinaMath):
 
     def _get_center_surround_sd(self, good_idx):
         """
-        Get center and surround amplitudes so that the spatial RF volume scaling.
+        Calculates mean center and surround standard deviations in millimeters for spatial RF volume scaling.
 
-        Return
-        ------
+        Parameters
+        ----------
+        good_idx : ndarray or boolean mask
+            Indices or boolean mask for selecting valid data fits.
+
+        Returns
+        -------
         mean_center_sd : float
-            Mean center standard deviation in millimeters
+            Mean center standard deviation in millimeters.
         mean_surround_sd : float
-            Mean surround standard deviation in millimeters
+            Mean surround standard deviation in millimeters.
         """
         df = self.all_data_fits_df.iloc[good_idx]
 
@@ -769,16 +862,16 @@ class Fit(ApricotData, RetinaMath):
         """
         Statistical receptive field model from data.
 
-        Return
-        ------
+        Returns
+        -------
         exp_stat_df : pd.DataFrame
-            Statistical model parameters for spatial, temporal, and tonic filters
+            DataFrame containing statistical model parameters for spatial, temporal, and tonic filters
             Indices are the parameter names
             Columns are shape, loc, scale, distribution ('gamma', 'beta'), domain ('spatial', 'temporal', 'tonic')
-        good_data_fit_idx: list
-            List of good data indeces after spatial fit
-        bad_data_fit_idx: list
-            List of bad data indeces after spatial fit
+        good_data_fit_idx : list
+            List of good data indices after spatial fit
+        bad_data_fit_idx : list
+            List of bad data indices after spatial fit
         exp_spat_cen_sd : float
             Mean center standard deviation in millimeters
         exp_spat_sur_sd : float
@@ -787,6 +880,14 @@ class Fit(ApricotData, RetinaMath):
             Dictionary with temporal filter parameters and distributions
         exp_spat_filt_to_viz : dict
             Dictionary with spatial filter parameters and distributions
+        exp_spat_stat_to_viz : dict
+            Dictionary with spatial filter statistics for visualization
+        exp_temp_stat_to_viz : dict
+            Dictionary with temporal filter statistics for visualization
+        exp_tonic_dr_to_viz : dict
+            Dictionary with tonic drive statistics for visualization
+        apricot_data_resolution_hw : tuple
+            Tuple containing the height and width of the Apricot dataset in pixels
         """
 
         # Get good and bad data indeces from all_data_fits_df. The spatial fit
@@ -838,11 +939,11 @@ class Fit(ApricotData, RetinaMath):
 
     def get_generated_spatial_fits(self):
         """
-        Statistical receptive field model from data.
+        Generate statistical receptive field model from simulated data.
 
         Return
         ------
-        exp_stat_df : pd.DataFrame
+        gen_stat_df : pd.DataFrame
             Statistical model parameters for spatial, temporal, and tonic filters
             Indices are the parameter names
             Columns are shape, loc, scale, distribution ('gamma', 'beta'), domain ('spatial', 'temporal', 'tonic')
@@ -850,10 +951,10 @@ class Fit(ApricotData, RetinaMath):
             Mean center standard deviation in millimeters
         gen_mean_sur_sd : float
             Mean surround standard deviation in millimeters
-        exp_temp_filt_to_viz : dict
-            Dictionary with temporal filter parameters and distributions
-        exp_spat_filt_to_viz : dict
+        gen_spat_filt_to_viz : dict
             Dictionary with spatial filter parameters and distributions
+        gen_spat_stat_to_viz : dict
+            Dictionary with spatial filter statistics and distributions
         """
 
         # For generated data, all data indeces are good
