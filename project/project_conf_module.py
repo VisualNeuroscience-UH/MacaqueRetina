@@ -101,9 +101,11 @@ output_folder = "out"
 root_path = Path(root_path)
 path = Path.joinpath(root_path, Path(project), experiment)
 
-
+# When training or tuning generative models, multiple hyperparameters are set at the RetinaVAE class.
+# For training, see __init__ method. For tuning, the __init__ contains search space and
+# _set_ray_tuner contains the starting point.
 my_retina = {
-    "gc_type": "parasol",
+    "gc_type": "midget",
     "response_type": "on",
     # "ecc_limits": [4.8, 5.2],
     # "sector_limits": [-0.4, 0.4],
@@ -113,7 +115,7 @@ my_retina = {
     "randomize_position": 0.05,
     "stimulus_center": 4.45 + 0j,
     "model_type": "VAE",  # "FIT", "VAE" for variational autoencoder, or GAN for generative adversarial network.
-    "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" Applies to VAE or GAN only.
+    "training_mode": "train_model",  # "train_model" or "tune_model" or "load_model" Applies to VAE or GAN only.
 }
 
 
