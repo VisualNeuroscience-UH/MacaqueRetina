@@ -7,32 +7,27 @@ from sklearn.model_selection import train_test_split
 from scipy.ndimage import rotate, fourier_shift
 
 
-# Pytorch
-# import random
+# Machine learning and hyperparameter optimization
 import torch
 import torchvision
 from torchvision import transforms
 from torch.utils.data import DataLoader, Subset, random_split
 from torch import nn
-import torch.nn.functional as F
+
+# import torch.nn.functional as F
 
 from torch.utils.tensorboard import SummaryWriter
 from torchmetrics.image.kid import KernelInceptionDistance
 from torchmetrics import StructuralSimilarityIndexMeasure
 from torchmetrics import MeanSquaredError
-
-# import torch._dynamo as dynamo
 from torchsummary import summary
 
 from ray import air, tune
 from ray.tune.schedulers import ASHAScheduler
-from ray.tune import CLIReporter, Callback
-
-# from ray.tune.search.hyperopt import HyperOptSearch
+from ray.tune import CLIReporter
 from ray.tune.search.optuna import OptunaSearch
 
-# import the corresponding search algorithm TPESampler
-from optuna.samplers import TPESampler, CmaEsSampler
+from optuna.samplers import TPESampler
 
 
 # Viz
@@ -52,7 +47,6 @@ from itertools import product
 import os
 import time
 import subprocess
-import itertools
 from collections import OrderedDict
 from sys import exit
 
@@ -128,7 +122,8 @@ class AugmentedDataset(torch.utils.data.Dataset):
 
     def _feature_scaling(self, data):
         """
-        Scale data to range [0, 1]]
+        Scale data to range [0, 1]]. Before scaling the data, the abs median value is close to 0.0,
+        consistently =< 0.02 for both parasol and midget data.
 
         Parameters
         ----------
@@ -140,9 +135,7 @@ class AugmentedDataset(torch.utils.data.Dataset):
         data_scaled : np.ndarray
             Scaled data
         """
-        import matplotlib.pyplot as plt
 
-        pdb.set_trace()
         feature_range = (0, 1)
         feat_min, feat_max = feature_range
         data_std = (data - data.min()) / (data.max() - data.min())
