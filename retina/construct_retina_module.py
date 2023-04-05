@@ -759,7 +759,7 @@ class ConstructRetina(RetinaMath):
 
             case "VAE":
 
-                # Fit variational autoencoder to generate receptive fields
+                # Fit or load variational autoencoder to generate receptive fields
                 self.retina_vae = RetinaVAE(
                     self.gc_type,
                     self.response_type,
@@ -807,22 +807,12 @@ class ConstructRetina(RetinaMath):
                     mode="bilinear",
                     align_corners=True,
                 )
-                # if 0:
-                #     import matplotlib.pyplot as plt
-
-                #     plt.subplot(1, 2, 1)
-                #     plt.imshow(img_stack.detach().cpu().numpy()[0][0, :, :])
-                #     plt.colorbar()
-                #     plt.subplot(1, 2, 2)
-                #     plt.imshow(img_stack_downsampled.detach().cpu().numpy()[0][0, :, :])
-                #     plt.colorbar()
-                #     plt.show()
 
                 img_stack_np = img_stack_downsampled.detach().cpu().numpy()
 
                 # The shape of img_stack_np is (n_samples, 1, img_size, img_size)
                 # Reshape to (n_samples, img_size, img_size)
-                img_stack_np_reshaped = np.reshape(
+                img_reshaped = np.reshape(
                     img_stack_np,
                     (n_samples, img_stack_np.shape[2], img_stack_np.shape[3]),
                 )
@@ -830,13 +820,32 @@ class ConstructRetina(RetinaMath):
                 # Save the generated receptive fields
                 output_path = self.context.output_folder
 
+                # The images are in img_reshaped of shape (n_samples, img_size, img_size)
+                # For each image, get the median value across 2D image
+                medians = np.median(img_reshaped, axis=(1, 2))
+
+                # Then, subtract the median value from the image. This sets the median value to 0.
+                img_median_removed = img_reshaped - medians[:, None, None]
+
+                # For each image,
+                #   if the abs(min) > abs(max), then the image is flipped so that the strongest deviation becomes positive.
+                img_flipped = img_median_removed
+                for i in range(img_flipped.shape[0]):
+                    if abs(np.min(img_flipped[i])) > abs(np.max(img_flipped[i])):
+                        img_flipped[i] = -img_flipped[i]
+
                 # import matplotlib.pyplot as plt
 
-                # plt.hist(img_stack_np_reshaped.flatten(), bins=100)
+                # plt.subplot(1, 2, 1)
+                # plt.hist(img_reshaped.flatten(), bins=100)
+                # plt.subplot(1, 2, 2)
+                # plt.hist(img_stack_median_zero_negat_flip_np.flatten(), bins=100)
+                # # plot median value for the img_stack_median_zero_negat_flip_np as a vertical line
+                # plt.axvline(np.median(img_stack_median_zero_negat_flip_np), color="r")
+                # plt.title("median value: " + str(np.median(img_stack_median_zero_negat_flip_np)))
                 # plt.show()
-                # pdb.set_trace()
 
-                img_paths = self.save_generated_rfs(img_stack_np_reshaped, output_path)
+                img_paths = self.save_generated_rfs(img_flipped, output_path)
 
                 # Add image paths as a columnd to self.gc_df
                 self.gc_df["img_path"] = img_paths
@@ -851,17 +860,9 @@ class ConstructRetina(RetinaMath):
                     self.context.apricot_data_folder,
                     self.gc_type,
                     self.response_type,
-                    spatial_data=img_stack_np_reshaped,
+                    spatial_data=img_flipped,
                     fit_type="generated",
                 ).get_generated_spatial_fits()
-
-                # pdb.set_trace()
-                # TÄHÄN JÄIT:
-                # REFAKTOROI FIT SITEN ETTÄ SELF.ATTRIBUUTTI SIVUVAIKUTUKSET MUUTTUVAT FUNKTIONAALSIKSI
-                # GENEROIDUT RF:T :
-                #   VERTAA FIT HISTOGRAMMEIHIN, MITEN RAKENTAA VASTAAVIA?
-                #   MIKÄ ON VAE INPUT JA OUTPUT HISTOGRAMMI?
-                #   SOVITA MEDIAN = 0 JA MAX(ABS()) POSITIIVISEKSI ENNEN FITTIÄ.
 
             case "GAN":
                 # Use the generative adversarial network model to provide spatial and temporal receptive fields
