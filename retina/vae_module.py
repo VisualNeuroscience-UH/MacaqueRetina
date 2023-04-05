@@ -13,6 +13,7 @@ import torchvision
 from torchvision import transforms
 from torch.utils.data import DataLoader, Subset, random_split
 from torch import nn
+import torch.optim.lr_scheduler as lr_scheduler
 
 # import torch.nn.functional as F
 
@@ -771,24 +772,24 @@ class RetinaVAE:
         #######################
 
         # Set common VAE model parameters
-        self.latent_dim = 4  # 2**1 - 2**6, use powers of 2 btw 2 and 128
+        self.latent_dim = 2  # 2**1 - 2**6, use powers of 2 btw 2 and 128
         self.channels = 16
         self.lr = 0.0003
 
-        self.batch_size = 64  # None will take the batch size from test_split size.
+        self.batch_size = 128  # None will take the batch size from test_split size.
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
-        self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
-        # self.train_by = [["midget"], ["on", "off"]]  # Train by these factors
+        # self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
+        self.train_by = [["midget"], ["on", "off"]]  # Train by these factors
 
-        self.ksp = "k3s2"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
-        self.conv_layers = 3
+        self.ksp = "k7s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
+        self.conv_layers = 3  # 1 - 5
         self.batch_norm = True
 
         # Augment training and validation data.
         augmentation_dict = {
-            "rotation": 15.0,  # rotation in degrees
-            "translation": (0.0, 0.0),  # fraction of image, (x, y) -directions
-            "noise": 1.0,  # noise float in [0, 1] (noise is added to the image)
+            "rotation": 45,  # rotation in degrees
+            "translation": (0.1, 0.1),  # fraction of image, (x, y) -directions
+            "noise": 0.01,  # noise float in [0, 1] (noise is added to the image)
         }
         self.augmentation_dict = augmentation_dict
         # self.augmentation_dict = None
@@ -1869,6 +1870,9 @@ class RetinaVAE:
             self.vae.parameters(), lr=self.lr, weight_decay=1e-5
         )
 
+        # Define the scheduler with a step size and gamma factor
+        self.scheduler = lr_scheduler.StepLR(self.optim, step_size=10, gamma=0.9)
+
         print(f"Selected device: {self.device}")
         self.vae.to(self.device)
 
@@ -1917,6 +1921,10 @@ class RetinaVAE:
             # # Print batch loss
             # print("\t partial train loss (single batch): %f" % (loss.item()))
             train_loss += loss.item()
+
+        # Update the learning rate at the end of each epoch
+        self.scheduler.step()
+        # pdb.set_trace()
 
         train_loss_out = float(train_loss)
         del train_loss, loss, x, x_hat
@@ -2058,6 +2066,7 @@ class RetinaVAE:
                 f""" 
                 EPOCH {epoch + 1}/{self.epochs} \t train_loss {train_loss:.3f} \t val loss {val_loss_epoch:.3f}
                 mse {mse_loss_epoch:.3f} \t ssim {ssim_loss_epoch:.3f} \t kid mean {kid_mean_epoch:.3f} \t kid std {kid_std_epoch:.3f}
+                Learning rate: {self.optim.param_groups[0]['lr']:.3e}
                 """
             )
 
