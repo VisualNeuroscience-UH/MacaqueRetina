@@ -140,7 +140,9 @@ class AugmentedDataset(torch.utils.data.Dataset):
         data_scaled : np.ndarray
             Scaled data
         """
+        import matplotlib.pyplot as plt
 
+        pdb.set_trace()
         feature_range = (0, 1)
         feat_min, feat_max = feature_range
         data_std = (data - data.min()) / (data.max() - data.min())
@@ -1788,11 +1790,10 @@ class RetinaVAE:
         ):
             print(f"Loading data for {gc_type}_{response_type} (label {label})")
             apricot_data = ApricotData(self.apricot_data_folder, gc_type, response_type)
-
+            bad_data_idx = apricot_data.manually_picked_bad_data_idx
             (
                 gc_spatial_data_np_orig,
                 _,
-                bad_data_idx,
             ) = apricot_data.read_spatial_filter_data()
 
             # Drop bad data
