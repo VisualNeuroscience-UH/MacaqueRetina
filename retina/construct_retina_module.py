@@ -784,17 +784,17 @@ class ConstructRetina(RetinaMath):
                 )
                 # Change the dtype to float32
                 latent_samples = latent_samples.type(torch.float32)
+                match self.training_mode:
+                    case "load_model":
+                        latent_dim = self.retina_vae.vae.config["latent_dims"]
+                    case "train_model":
+                        latent_dim = self.retina_vae.latent_dim
 
-                # # plot the samples on top of an estimated kde, one sublot for each successive two dimensions of latent_dim
-                # match self.training_mode:
-                #     case "load_model":
-                #         latent_dim = self.retina_vae.vae.config["latent_dims"]
-                #     case "train_model":
-                #         latent_dim = self.retina_vae.latent_dim
-
-                # self.plot_latent_samples(
-                #     deepcopy(latent_samples).cpu(), latent_data, latent_dim
-                # )
+                self.gen_latent_space_to_viz = {
+                    "samples": latent_samples.to("cpu").numpy(),
+                    "dim": latent_dim,
+                    "data": latent_data,
+                }
 
                 # --- 3. decode the samples
                 img_stack = self.retina_vae.vae.decoder(latent_samples)
@@ -834,16 +834,16 @@ class ConstructRetina(RetinaMath):
                     if abs(np.min(img_flipped[i])) > abs(np.max(img_flipped[i])):
                         img_flipped[i] = -img_flipped[i]
 
-                # import matplotlib.pyplot as plt
+                # Set self attribute for later visualization of image histograms
+                self.gen_spat_img_to_viz = {
+                    "img_processed": img_flipped,
+                    "img_raw": img_reshaped,
+                }
 
-                # plt.subplot(1, 2, 1)
-                # plt.hist(img_reshaped.flatten(), bins=100)
-                # plt.subplot(1, 2, 2)
-                # plt.hist(img_stack_median_zero_negat_flip_np.flatten(), bins=100)
-                # # plot median value for the img_stack_median_zero_negat_flip_np as a vertical line
-                # plt.axvline(np.median(img_stack_median_zero_negat_flip_np), color="r")
-                # plt.title("median value: " + str(np.median(img_stack_median_zero_negat_flip_np)))
-                # plt.show()
+                # TÄHÄN JÄIT:
+                # SIIRRÄ VIZ => VIZ
+                # INTEGROI VAE GENEROIDUT RF:T WORKING RETINAAN
+                # SISÄLLYTÄ MUUTTUVA LR OPTIMOINTIIN?
 
                 img_paths = self.save_generated_rfs(img_flipped, output_path)
 
@@ -901,100 +901,6 @@ class ConstructRetina(RetinaMath):
             ax.set_title(f"RF {i}")
             ax.axis("off")
 
-        plt.show()
-
-    def plot_latent_samples(self, latent_samples, latent_data, latent_dim):
-        """
-        Plot the latent samples on top of the estimated kde, one sublot for each successive two dimensions of latent_dim
-
-        Parameters
-        ----------
-        latent_samples : torch.tensor
-            Samples from the latent space
-        latent_data :
-            Original data in latent space to estimate scipy.stats.gaussian_kde
-        latent_dim : int
-            Dimensionality of the latent space
-        """
-        import matplotlib.pyplot as plt
-
-        # import inset_axes
-        from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-
-        # Make a grid of subplots
-        n_cols = 4
-        n_rows = int(np.ceil(latent_dim / n_cols))
-        fig, axes = plt.subplots(n_rows, n_cols, figsize=(10, 2 * n_rows))
-        axes = axes.flatten()
-
-        for ax_idx, i in enumerate(range(0, latent_dim, 2)):
-            # Get only two dimensions at a time
-            values = latent_data[:, [i, i + 1]].T
-            # Evaluate the kde using only the same two dimensions
-            kernel = stats.gaussian_kde(values)
-            # Construct X and Y grids using the same two dimensions
-            x = np.linspace(latent_data[:, i].min(), latent_data[:, i].max(), 100)
-            y = np.linspace(
-                latent_data[:, i + 1].min(), latent_data[:, i + 1].max(), 100
-            )
-            X, Y = np.meshgrid(x, y)
-            positions = np.vstack([X.ravel(), Y.ravel()])
-            Z = np.reshape(kernel(positions).T, X.shape)
-
-            # Plot the estimated kde and samples on top of it
-            axes[ax_idx].contour(X, Y, Z, levels=10)
-            axes[ax_idx].scatter(latent_samples[:, i], latent_samples[:, i + 1])
-
-            # Make marginal plots of the contours as contours and samples as histograms.
-            # Place the marginal plots on the right and top of the main plot
-            ax_marg_x = inset_axes(
-                axes[ax_idx],
-                width="100%",  # width  of parent_bbox width
-                height="30%",  # height : 1 inch
-                loc="upper right",
-                # bbox_to_anchor=(1.05, 1.05),
-                bbox_to_anchor=(0, 0.95, 1, 0.3),
-                bbox_transform=axes[ax_idx].transAxes,
-                borderpad=0,
-            )
-            ax_marg_y = inset_axes(
-                axes[ax_idx],
-                width="30%",  # width of parent_bbox width
-                height="100%",  # height : 1 inch
-                loc="lower left",
-                # bbox_to_anchor=(-0.05, -0.05),
-                bbox_to_anchor=(1, 0, 0.4, 1),
-                bbox_transform=axes[ax_idx].transAxes,
-                borderpad=0,
-            )
-
-            # Plot the marginal plots
-            nx, bins, _ = ax_marg_x.hist(latent_samples[:, i], bins=20, density=True)
-            ny, bins, _ = ax_marg_y.hist(
-                latent_samples[:, i + 1],
-                bins=20,
-                density=True,
-                orientation="horizontal",
-            )
-
-            # Plot the one-dimensional marginal shapes of the kde
-            x_margin_contour = nx.max() * Z.mean(axis=0) / Z.mean(axis=0).max()
-            y_margin_contour = ny.max() * Z.mean(axis=1) / Z.mean(axis=1).max()
-            ax_marg_x.plot(x, x_margin_contour, color="r")
-            ax_marg_y.plot(y_margin_contour, y, color="r")
-
-            # Remove the ticks from the marginal plots
-            ax_marg_x.tick_params(
-                axis="both", which="both", bottom=False, top=False, labelbottom=False
-            )
-            ax_marg_y.tick_params(
-                axis="both", which="both", left=False, right=False, labelleft=False
-            )
-
-            # Set the title of the main plot
-            axes[ax_idx].set_title(f"Latent dims {i}, {i+1}")
-
-        plt.tight_layout()
         plt.show()
 
     def get_data_at_latent_space(self, retina_vae):
@@ -1092,3 +998,22 @@ class ConstructRetina(RetinaMath):
 
         # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
         self.viz.show_gen_and_exp_spatial_rfs(self, n_samples=n_samples)
+
+    def show_gen_spat_postprocessing(self):
+        """
+        Show the original experimental spatial receptive fields and
+        the generated spatial receptive fields before and after postprocessing
+        """
+
+        # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
+        self.viz.show_gen_spat_postprocessing(self)
+
+    def show_latent_space_and_samples(self):
+        """
+        Plot the latent samples on top of the estimated kde, one sublot
+        for each successive two dimensions of latent_dim
+        self goes as argument, to be available for viz
+        """
+
+        # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
+        self.viz.show_latent_space_and_samples(self)
