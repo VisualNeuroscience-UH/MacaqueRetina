@@ -604,6 +604,43 @@ class Viz:
             pause_to_show=False,
         )
 
+    def show_gen_spat_postprocessing(self, mosaic):
+        """
+        Show the original experimental spatial receptive fields and
+        the generated spatial receptive fields before and after postprocessing
+        """
+        
+        # Get the keys for the cell_ix arrays
+        cell_key_list = [
+            key for key in mosaic.exp_spat_filt_to_viz.keys() if "cell_ix" in key
+        ]
+        img_shape = mosaic.exp_spat_filt_to_viz["cell_ix_0"]["spatial_data_array"].shape
+        # The shape of the array is N cells, y_pixels, x_pixels
+        img_exp = np.zeros([len(cell_key_list), img_shape[0], img_shape[1]])
+        for i, cell_key in enumerate(cell_key_list):
+            img_exp[i, :, :] = mosaic.exp_spat_filt_to_viz[cell_key][
+                "spatial_data_array"
+            ]
+
+        img_pre = mosaic.gen_spat_img_to_viz["img_raw"]
+        img_post = mosaic.gen_spat_img_to_viz["img_processed"]
+
+        plt.subplot(1, 3, 1)
+        plt.hist(img_exp.flatten(), bins=100)
+        # plot median value as a vertical line
+        plt.axvline(np.median(img_exp), color="r")
+        plt.title(f"Experimental, median: {np.median(img_exp):.2f}")
+
+        plt.subplot(1, 3, 2)
+        plt.hist(img_pre.flatten(), bins=100)
+        plt.axvline(np.median(img_pre), color="r")
+        plt.title(f"Generated raw, median: {np.median(img_pre):.2f}")
+
+        plt.subplot(1, 3, 3)
+        plt.hist(img_post.flatten(), bins=100)
+        plt.axvline(np.median(img_post), color="r")
+        plt.title(f"Generated processed, median: {np.median(img_post):.2f}")
+
     # WorkingRetina visualization
     def show_stimulus_with_gcs(self, retina, frame_number=0, ax=None, example_gc=5):
         """
