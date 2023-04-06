@@ -25,10 +25,12 @@ from torchmetrics import StructuralSimilarityIndexMeasure
 from torchmetrics import MeanSquaredError
 from torchsummary import summary
 
+import ray
 from ray import air, tune
 from ray.tune.schedulers import ASHAScheduler
 from ray.tune import CLIReporter
 from ray.tune.search.optuna import OptunaSearch
+from ray.tune import Callback
 
 from optuna.samplers import TPESampler
 
@@ -62,17 +64,22 @@ warnings.filterwarnings(
 warnings.filterwarnings("ignore", message="FutureWarning:")
 
 
-class HardDiskWatchDog(tune.Callback):
-    # NOT TESTED
-    def on_train_result(self, trainer, result):
+class HardDiskWatchDog(Callback):
+    def __init__(self, output_path, disk_usage_threshold=90):
+        self.disk_usage_threshold = disk_usage_threshold
+        self.output_path = output_path
+
+    def on_trial_result(self, iteration, trials, trial, result, **info):
         if result["training_iteration"] % 100 == 0:
-            disk_usage = psutil.disk_usage("/")
-            if disk_usage.percent > 80:
+            disk_usage = psutil.disk_usage(str(self.output_path))
+            if disk_usage.percent > self.disk_usage_threshold:
                 print(
-                    "WARNING: Disk is almost full! ({:.2f}%)".format(disk_usage.percent)
+                    f"""
+                    WARNING: disk_usage_threshold exceeded ({disk_usage.percent:.2f}%
+                    Shutting down ray and exiting.
+                    """
                 )
-            else:
-                print("Disk usage: {:.2f}%".format(disk_usage.percent))
+                ray.shutdown()
 
 
 class AugmentedDataset(torch.utils.data.Dataset):
@@ -780,7 +787,7 @@ class RetinaVAE:
         self.response_type = response_type
 
         # Fixed values for both single training and ray tune runs
-        self.epochs = 10
+        self.epochs = 101
         self.scheduler_step_size = 5  # Learning rate decay step size (in epochs)
         self.scheduler_gamma = 0.9  # Learning rate decay (multiplier for learning rate)
 
@@ -917,7 +924,7 @@ class RetinaVAE:
                     "lr": [0.001],
                     "latent_dim": [16],
                     # k3s2,k3s1,k5s2,k5s1,k7s1 Kernel-stride-padding for conv layers. NOTE you cannot use >3 conv layers with stride 2
-                    "ksp": ["k7s1", "k5s1", "k5s2", "k3s1"],
+                    "ksp": ["k7s1", "k5s1", "k3s1"],
                     "channels": [16],
                     "batch_size": [128],
                     "conv_layers": [1],
@@ -938,15 +945,10 @@ class RetinaVAE:
                 # Fraction of GPU per trial. 0.25 for smaller models is enough. Larger may need 0.33 or 0.5.
                 # Increase if you get CUDA out of memory errors.
                 self.gpu_fraction = 0.25
+                self.disk_usage_threshold = 90  # 90% of disk usage
 
                 # Save tuned models. > 100 MB / model.
                 self.save_tuned_models = save_tuned_models
-
-                # if save_tuned_models is True:
-                #     print(
-                #         "WARNING: Save tuned models True. This will save > 100 MB / model."
-                #     )
-                #     self._set_hard_disk_watchdog()
 
                 tuner = self._set_ray_tuner(grid_search=self.grid_search)
                 self.result_grid = tuner.fit()
@@ -1068,17 +1070,6 @@ class RetinaVAE:
                 encoded_samples = self.get_encoded_samples(ds_name="train_ds")
                 self._plot_latent_space(encoded_samples)
                 self._plot_tsne_space(encoded_samples)
-
-    # def _set_hard_disk_watchdog(self):
-    #     """
-    #     Set a watchdog to check if the hard disk is full.
-    #     """
-    #     disk_usage = psutil.disk_usage(str(self.models_folder))
-    #     pdb.set_trace()
-    #     if disk_usage.percent > 80:
-    #         print("Alert! Disk usage is above 80%.")
-    #     else:
-    #         print("Disk usage is normal.")
 
     def _update_vae_to_match_best_model(self, best_result):
         """
@@ -1360,12 +1351,22 @@ class RetinaVAE:
 
         # Runtime configuration that is specific to individual trials. Will overwrite the run config passed to the
         # Trainer. for API, see https://docs.ray.io/en/latest/ray-air/package-ref.html#ray.air.config.RunConfig
+
+        if self.save_tuned_models is True:
+            hard_disk_watchdog = [
+                HardDiskWatchDog(
+                    self.ray_dir, disk_usage_threshold=self.disk_usage_threshold
+                )
+            ]
+        else:
+            hard_disk_watchdog = None
+
         run_config = (
             air.RunConfig(
                 stop={"training_iteration": self.epochs},
                 progress_reporter=reporter,
                 local_dir=self.ray_dir,
-                callbacks=[HardDiskWatchDog()],
+                callbacks=hard_disk_watchdog,
                 checkpoint_config=air.CheckpointConfig(
                     checkpoint_score_attribute=self.multi_objective["metric"][0],
                     checkpoint_score_order=self.multi_objective["mode"][0],
