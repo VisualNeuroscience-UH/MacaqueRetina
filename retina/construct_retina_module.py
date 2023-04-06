@@ -771,6 +771,7 @@ class ConstructRetina(RetinaMath):
                 # -- Second, endow cells with spatial receptive fields using the generative variational autoencoder model
                 # --- 1. make a probability density function of the latent space
                 retina_vae = self.retina_vae
+
                 latent_data = self.get_data_at_latent_space(retina_vae)
 
                 # Make a probability density function of the latent_data
@@ -784,11 +785,10 @@ class ConstructRetina(RetinaMath):
                 )
                 # Change the dtype to float32
                 latent_samples = latent_samples.type(torch.float32)
-                match self.training_mode:
-                    case "load_model":
-                        latent_dim = self.retina_vae.vae.config["latent_dims"]
-                    case "train_model":
-                        latent_dim = self.retina_vae.latent_dim
+                if self.training_mode == "load_model":
+                    latent_dim = self.retina_vae.vae.config["latent_dims"]
+                else:
+                    latent_dim = self.retina_vae.latent_dim
 
                 self.gen_latent_space_to_viz = {
                     "samples": latent_samples.to("cpu").numpy(),
@@ -886,6 +886,7 @@ class ConstructRetina(RetinaMath):
         Get original image data as projected through encoder to the latent space
         """
         # Get the latent space data
+        # pdb.set_trace()
         train_df = retina_vae.get_encoded_samples(ds_name="train_ds")
         valid_df = retina_vae.get_encoded_samples(ds_name="val_ds")
         test_df = retina_vae.get_encoded_samples(ds_name="test_ds")

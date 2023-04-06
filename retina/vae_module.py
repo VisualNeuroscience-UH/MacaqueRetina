@@ -762,18 +762,17 @@ class RetinaVAE:
         self.gc_type = gc_type
         self.response_type = response_type
 
-        # N epochs and scheduler decay params are fixed for both single training and ray tune runs
-        self.epochs = 50
+        # Fixed values for both single training and ray tune runs
+        self.epochs = 10
         self.scheduler_step_size = 5  # Learning rate decay step size (in epochs)
         self.scheduler_gamma = 0.9  # Learning rate decay (multiplier for learning rate)
 
-        # time_budget and grid_search are for ray tune only
+        # For ray tune only
         # If grid_search is True, time_budget is ignored
         self.time_budget = 120  # in seconds
-        self.grid_search = False  # False for tune by Optuna, True for grid search
-        self.grace_period = (
-            10  # in epochs. Only for Optuna. If poor improvement, stop training
-        )
+        self.grid_search = True  # False for tune by Optuna, True for grid search
+        self.grace_period = 10  # epochs. ASHA stops earliest at grace period.
+        self.save_tuned_models = True  # Save tuned models. > 100 MB / model.
 
         # TÄHÄN JÄIT: OPETTELE PENKOMAAN EXPRIMENT JSON. KANNATTANEE TUUNATA ILMAN CHECKPOINTTEJA ISOSTI. SEN JÄLKEEN EHKÄ
         # CHECKPOINTIT TAI YKSITTÄISET AJOT.
@@ -794,7 +793,7 @@ class RetinaVAE:
 
         self.ksp = "k7s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
         self.conv_layers = 1  # 1 - 5
-        self.batch_norm = True
+        self.batch_norm = False
 
         # Augment training and validation data.
         augmentation_dict = {
@@ -823,7 +822,9 @@ class RetinaVAE:
 
         self.this_folder = self._get_this_folder()
         self.models_folder = self._set_models_folder(output_folder=output_folder)
-        self.ray_dir = self.this_folder / "ray_results"
+        self.ray_dir = self.models_folder / "ray_results"
+        self.tb_log_folder = self.models_folder / "tb_logs"
+
         self.dependent_variables = [
             "train_loss",
             "val_loss",
@@ -836,7 +837,6 @@ class RetinaVAE:
         self.device = (
             torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         )
-        # self.device = torch.device("cpu")
 
         # # Visualize the augmentation effects and exit
         # self._visualize_augmentation()
@@ -854,8 +854,6 @@ class RetinaVAE:
         match training_mode:
             case "train_model":
                 # Create datasets and dataloaders
-                # self._prep_apricot_data()
-                # self._prep_minst_data()
 
                 self.train_loader = self._augment_and_get_dataloader(
                     data_type="train",
@@ -874,9 +872,9 @@ class RetinaVAE:
                 self._prep_training()
                 print(self.vae)
 
-                # Init tensorboard
-                self.tb_log_folder = "tb_logs"
-                self._prep_tensorboard_logging()
+                # # Init tensorboard
+                # self.tb_log_folder = "tb_logs"
+                # self._prep_tensorboard_logging()
 
                 # Train
                 self._train()
@@ -903,14 +901,14 @@ class RetinaVAE:
                     "lr": [0.001],
                     "latent_dim": [16],
                     # k3s2,k3s1,k5s2,k5s1,k7s1 Kernel-stride-padding for conv layers. NOTE you cannot use >3 conv layers with stride 2
-                    "ksp": ["k3s1", "k5s1", "k7s1"],
+                    "ksp": ["k7s1"],
                     "channels": [16],
                     "batch_size": [128],
-                    "conv_layers": [1, 2],
+                    "conv_layers": [1],
                     "batch_norm": [False],
                     "rotation": [0],  # Augment: max rotation in degrees
                     # Augment: fract of im, max in (x, y)/[xy] dir
-                    "translation": [0],
+                    "translation": [0.0],
                     "noise": [0.0],  # Augment: noise added, btw [0., 1.]
                     "num_models": 1,  # repetitions of the same model
                 }
@@ -946,15 +944,17 @@ class RetinaVAE:
                     ].index.values,
                 )
 
-                best_result = self.result_grid.get_best_result(
-                    metric="kid_mean", mode="min"
+                self.best_result = self.result_grid.get_best_result(
+                    metric="val_loss", mode="min"
                 )
-                print("Best result:", best_result)
-                result_df = best_result.metrics_dataframe
+                print("Best result:", self.best_result)
+                result_df = self.best_result.metrics_dataframe
                 result_df[["training_iteration", "val_loss", "time_total_s"]]
 
                 # Load model state dict from checkpoint to new self.vae and return the state dict.
-                state_dict = self._load_model(best_result=best_result)
+                state_dict = self._load_model(best_result=self.best_result)
+
+                self._update_vae_to_match_best_model(self.best_result)
 
                 # Give one second to write the checkpoint to disk
                 time.sleep(1)
@@ -1002,6 +1002,7 @@ class RetinaVAE:
                 #     results_grid=result_grid,
                 # )
 
+        # This attaches test data to the model.
         self.test_loader = self._augment_and_get_dataloader(
             data_type="test", shuffle=False
         )
@@ -1042,6 +1043,42 @@ class RetinaVAE:
                 encoded_samples = self.get_encoded_samples(ds_name="train_ds")
                 self._plot_latent_space(encoded_samples)
                 self._plot_tsne_space(encoded_samples)
+
+    def _update_vae_to_match_best_model(self, best_result):
+        """
+        Update the VAE to match the best model found by the tuner.
+        """
+
+        self.latent_dim = best_result.config["latent_dim"]
+        self.channels = best_result.config["channels"]
+        self.lr = best_result.config["lr"]
+
+        self.batch_size = best_result.config["batch_size"]
+        self.ksp = best_result.config["ksp"]
+        self.conv_layers = best_result.config["conv_layers"]
+        self.batch_norm = best_result.config["batch_norm"]
+
+        self.augmentation_dict = {
+            "rotation": best_result.config["rotation"],
+            "translation": (
+                best_result.config["translation"],
+                best_result.config["translation"],
+            ),
+            "noise": best_result.config["noise"],
+        }
+
+        self.train_loader = self._augment_and_get_dataloader(
+            data_type="train",
+            augmentation_dict=self.augmentation_dict,
+            batch_size=self.batch_size,
+            shuffle=True,
+        )
+        self.val_loader = self._augment_and_get_dataloader(
+            data_type="val",
+            augmentation_dict=self.augmentation_dict,
+            batch_size=self.batch_size,
+            shuffle=True,
+        )
 
     def _plot_dependent_variables(self, results_grid):
         """Plot results from ray tune"""
@@ -1299,7 +1336,7 @@ class RetinaVAE:
                     checkpoint_score_attribute=self.multi_objective["metric"][0],
                     checkpoint_score_order=self.multi_objective["mode"][0],
                     num_to_keep=1,
-                    checkpoint_at_end=False,
+                    checkpoint_at_end=self.save_tuned_models,
                     checkpoint_frequency=0,
                 ),
                 verbose=1,
@@ -1379,7 +1416,13 @@ class RetinaVAE:
                 batch_norm=batch_norm,
                 device=self.device,
             )
-            model.load_state_dict(torch.load(checkpoint_path))
+            model_or_state_dict = torch.load(checkpoint_path)
+            if isinstance(model_or_state_dict, dict):
+                model.load_state_dict(model_or_state_dict)
+            else:
+                model = model_or_state_dict
+
+            # model.load_state_dict(torch.load(checkpoint_path))
             self.latent_dim = latent_dim
             self.channels = channels
             self.vae = model.to(self.device)
@@ -1628,6 +1671,9 @@ class RetinaVAE:
             augmentation_dict (dict): augmentation dictionary
             batch_size (int): batch size
             shuffle (bool): shuffle data
+
+        Returns:
+            dataloader (torch.utils.data.DataLoader): dataloader
         """
 
         # Assert that data_type is "train", "val" or "test"
@@ -1905,18 +1951,17 @@ class RetinaVAE:
         """
 
         # Create a folder for the experiment tensorboard logs
-        exp_folder = self.this_folder.joinpath(self.tb_log_folder)
-        Path.mkdir(exp_folder, parents=True, exist_ok=True)
+        Path.mkdir(self.tb_log_folde, parents=True, exist_ok=True)
 
         # Clear files and folders under exp_folder
-        for f in exp_folder.iterdir():
+        for f in self.tb_log_folde.iterdir():
             if f.is_dir():
                 shutil.rmtree(f)
             else:
                 f.unlink()
 
         # This creates new scalar/time series line in tensorboard
-        self.writer = SummaryWriter(str(exp_folder), max_queue=100)
+        self.writer = SummaryWriter(str(self.tb_log_folde), max_queue=100)
 
     ### Training function
     def _train_epoch(self, vae, device, dataloader, optimizer, scheduler):
@@ -2199,6 +2244,18 @@ class RetinaVAE:
             plt.ylabel("EncVariable 1")
 
     def get_encoded_samples(self, ds_name="test_ds"):
+        """Get encoded samples from a dataset.
+
+        Parameters
+        ----------
+        ds_name : str, optional
+            Dataset name, by default "test_ds"
+
+        Returns
+        -------
+        pd.DataFrame
+            Encoded samples
+        """
 
         if ds_name == "train_ds":
             ds = self.train_ds
