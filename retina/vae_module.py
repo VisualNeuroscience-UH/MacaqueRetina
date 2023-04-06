@@ -619,6 +619,7 @@ class TrainableVAE(tune.Trainable):
         data_dict=None,
         device=None,
         methods=None,
+        fixed_params=None,
     ):
 
         # Assert that none of the optional arguments are None
@@ -676,10 +677,16 @@ class TrainableVAE(tune.Trainable):
         self.optim = torch.optim.Adam(
             self.model.parameters(), lr=config.get("lr"), weight_decay=1e-5
         )
+        # Define the scheduler with a step size and gamma factor
+        self.scheduler = lr_scheduler.StepLR(
+            self.optim,
+            step_size=fixed_params["scheduler_step_size"],
+            gamma=fixed_params["scheduler_gamma"],
+        )
 
     def step(self):
         train_loss = self._train_epoch(
-            self.model, self.device, self.train_loader, self.optim
+            self.model, self.device, self.train_loader, self.optim, self.scheduler
         )
 
         (
@@ -721,7 +728,8 @@ class TrainableVAE(tune.Trainable):
 
     def save_checkpoint(self, tmp_checkpoint_dir):
         checkpoint_path = os.path.join(tmp_checkpoint_dir, "model.pth")
-        torch.save(self.model.state_dict(), checkpoint_path)
+        # torch.save(self.model.state_dict(), checkpoint_path)
+        torch.save(self.model, checkpoint_path)
         return tmp_checkpoint_dir
 
     def load_checkpoint(self, tmp_checkpoint_dir):
@@ -754,15 +762,18 @@ class RetinaVAE:
         self.gc_type = gc_type
         self.response_type = response_type
 
-        # N epochs for both single training and ray tune runs
-        self.epochs = 500
-        self.time_budget = 60 * 20  # in seconds
-        self.grid_search = False  # False for tune by Optuna, True for grid search
+        # N epochs and scheduler decay params are fixed for both single training and ray tune runs
+        self.epochs = 50
+        self.scheduler_step_size = 5  # Learning rate decay step size (in epochs)
+        self.scheduler_gamma = 0.9  # Learning rate decay (multiplier for learning rate)
 
-        # "train_model" or "tune_model" or "load_model"
-        # training_mode = "train_model"
-        # training_mode = "load_model"
-        # self.trial_name = "TrainableVAE_ea16d5ed"  # From ray_results table/folder
+        # time_budget and grid_search are for ray tune only
+        # If grid_search is True, time_budget is ignored
+        self.time_budget = 120  # in seconds
+        self.grid_search = False  # False for tune by Optuna, True for grid search
+        self.grace_period = (
+            10  # in epochs. Only for Optuna. If poor improvement, stop training
+        )
 
         # TÄHÄN JÄIT: OPETTELE PENKOMAAN EXPRIMENT JSON. KANNATTANEE TUUNATA ILMAN CHECKPOINTTEJA ISOSTI. SEN JÄLKEEN EHKÄ
         # CHECKPOINTIT TAI YKSITTÄISET AJOT.
@@ -772,23 +783,23 @@ class RetinaVAE:
         #######################
 
         # Set common VAE model parameters
-        self.latent_dim = 2  # 2**1 - 2**6, use powers of 2 btw 2 and 128
-        self.channels = 16
-        self.lr = 0.0003
+        self.latent_dim = 32  # 2**1 - 2**6, use powers of 2 btw 2 and 128
+        self.channels = 32
+        self.lr = 0.001
 
         self.batch_size = 128  # None will take the batch size from test_split size.
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         # self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
-        self.train_by = [["midget"], ["on", "off"]]  # Train by these factors
+        self.train_by = [["midget"], ["off"]]  # Train by these factors
 
         self.ksp = "k7s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
-        self.conv_layers = 3  # 1 - 5
+        self.conv_layers = 1  # 1 - 5
         self.batch_norm = True
 
         # Augment training and validation data.
         augmentation_dict = {
-            "rotation": 45,  # rotation in degrees
-            "translation": (0.1, 0.1),  # fraction of image, (x, y) -directions
+            "rotation": 5,  # rotation in degrees
+            "translation": (0.05, 0.05),  # fraction of image, (x, y) -directions
             "noise": 0.01,  # noise float in [0, 1] (noise is added to the image)
         }
         self.augmentation_dict = augmentation_dict
@@ -885,22 +896,22 @@ class RetinaVAE:
                 # This will be captured at _set_ray_tuner
                 # Search space of the tuning job. Both preprocessor and dataset can be tuned here.
                 # Use grid search to try out all values for each parameter. values: iterable
+                # Note that initial_params under _set_ray_tuner MUST be included in the search space.
                 # Grid search: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#ray.tune.grid_search
                 # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
                 self.search_space = {
-                    # "lr": [0.00031],
-                    "lr": [0.0001, 0.001],
-                    "latent_dim": [2, 4, 8, 16],
+                    "lr": [0.001],
+                    "latent_dim": [16],
                     # k3s2,k3s1,k5s2,k5s1,k7s1 Kernel-stride-padding for conv layers. NOTE you cannot use >3 conv layers with stride 2
                     "ksp": ["k3s1", "k5s1", "k7s1"],
-                    "channels": [4, 8, 16, 32],
-                    "batch_size": [64],
-                    "conv_layers": [1, 2, 3, 4, 5],
+                    "channels": [16],
+                    "batch_size": [128],
+                    "conv_layers": [1, 2],
                     "batch_norm": [False],
-                    "rotation": [0, 90],  # Augment: max rotation in degrees
+                    "rotation": [0],  # Augment: max rotation in degrees
                     # Augment: fract of im, max in (x, y)/[xy] dir
-                    "translation": [0, 0.5],
-                    "noise": [0.0, 0.25],  # Augment: noise added, btw [0., 1.]
+                    "translation": [0],
+                    "noise": [0.0],  # Augment: noise added, btw [0., 1.]
                     "num_models": 1,  # repetitions of the same model
                 }
 
@@ -912,7 +923,7 @@ class RetinaVAE:
 
                 # Fraction of GPU per trial. 0.25 for smaller models is enough. Larger may need 0.33 or 0.5.
                 # Increase if you get CUDA out of memory errors.
-                self.gpu_fraction = 0.5
+                self.gpu_fraction = 0.25
 
                 tuner = self._set_ray_tuner(grid_search=self.grid_search)
                 self.result_grid = tuner.fit()
@@ -1166,6 +1177,10 @@ class RetinaVAE:
                 "_validate_epoch": self._validate_epoch,
                 "_augment_and_get_dataloader": self._augment_and_get_dataloader,
             },
+            fixed_params={
+                "scheduler_step_size": self.scheduler_step_size,
+                "scheduler_gamma": self.scheduler_gamma,
+            },
         )
 
         if grid_search:
@@ -1199,18 +1214,19 @@ class RetinaVAE:
             )
         else:
 
+            # Note that the initial parameters must be included in the search space
             initial_params = [
                 {
                     "lr": 0.0003,
-                    "latent_dim": 2,
+                    "latent_dim": 16,
                     "ksp": "k7s1",
                     "channels": 16,
-                    "batch_size": 64,
-                    "conv_layers": 3,
+                    "batch_size": 128,
+                    "conv_layers": 2,
                     "batch_norm": False,
                     "rotation": 0,
                     "translation": 0,
-                    "noise": 0.02,
+                    "noise": 0.0,
                     "model_id": "model_0",
                 }
             ]
@@ -1244,9 +1260,10 @@ class RetinaVAE:
                 ),
             }
 
+            # TÄHÄN JÄIT: ETSI MISSÄ SAVE/NOT SAVE MODEL IN OPTUNA SEARCH
+
             # Efficient hyperparameter selection. Search Algorithms are wrappers around open-source
-            # optimization libraries. Each library has a
-            # specific way of defining the search space.
+            # optimization libraries. Each library has a specific way of defining the search space.
             # https://docs.ray.io/en/latest/ray-air/package-ref.html#ray.tune.tune_config.TuneConfig
             tune_config = tune.TuneConfig(
                 # Local optuna search will generate study name "optuna" indicating in-memory storage
@@ -1263,15 +1280,15 @@ class RetinaVAE:
                     ],  # Only 1st metric used for pruning
                     mode=self.multi_objective["mode"][0],
                     max_t=self.epochs,
-                    grace_period=50,
+                    grace_period=self.grace_period,
                     reduction_factor=2,
                 ),
                 time_budget_s=self.time_budget,
                 num_samples=-1,
             )
 
-        # Runtime configuration that is specific to individual trials. Will overwrite the run config passed to the Trainer.
-        # for API, see https://docs.ray.io/en/latest/ray-air/package-ref.html#ray.air.config.RunConfig
+        # Runtime configuration that is specific to individual trials. Will overwrite the run config passed to the
+        # Trainer. for API, see https://docs.ray.io/en/latest/ray-air/package-ref.html#ray.air.config.RunConfig
         run_config = (
             air.RunConfig(
                 stop={"training_iteration": self.epochs},
@@ -1871,7 +1888,9 @@ class RetinaVAE:
         )
 
         # Define the scheduler with a step size and gamma factor
-        self.scheduler = lr_scheduler.StepLR(self.optim, step_size=10, gamma=0.9)
+        self.scheduler = lr_scheduler.StepLR(
+            self.optim, step_size=self.scheduler_step_size, gamma=self.scheduler_gamma
+        )
 
         print(f"Selected device: {self.device}")
         self.vae.to(self.device)
@@ -1900,7 +1919,7 @@ class RetinaVAE:
         self.writer = SummaryWriter(str(exp_folder), max_queue=100)
 
     ### Training function
-    def _train_epoch(self, vae, device, dataloader, optimizer):
+    def _train_epoch(self, vae, device, dataloader, optimizer, scheduler):
         # Set train mode for both the encoder and the decoder
         vae.train()
         train_loss = 0.0
@@ -1923,8 +1942,7 @@ class RetinaVAE:
             train_loss += loss.item()
 
         # Update the learning rate at the end of each epoch
-        self.scheduler.step()
-        # pdb.set_trace()
+        scheduler.step()
 
         train_loss_out = float(train_loss)
         del train_loss, loss, x, x_hat
@@ -2050,7 +2068,7 @@ class RetinaVAE:
         """
         for epoch in range(self.epochs):
             train_loss = self._train_epoch(
-                self.vae, self.device, self.train_loader, self.optim
+                self.vae, self.device, self.train_loader, self.optim, self.scheduler
             )
             (
                 val_loss_epoch,

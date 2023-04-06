@@ -841,7 +841,6 @@ class ConstructRetina(RetinaMath):
                 }
 
                 # TÄHÄN JÄIT:
-                # SIIRRÄ VIZ => VIZ
                 # INTEGROI VAE GENEROIDUT RF:T WORKING RETINAAN
                 # SISÄLLYTÄ MUUTTUVA LR OPTIMOINTIIN?
 
@@ -881,27 +880,6 @@ class ConstructRetina(RetinaMath):
 
         # Save the receptive field mosaic
         self.save_gc_csv()
-
-    def plot_rfs_from_vae(self, img_stack, n_examples=4):
-        """
-        Show n_examples of the generated receptive fields
-        """
-        import matplotlib.pyplot as plt
-
-        # Make a grid of subplots
-        n_cols = 4
-        n_rows = int(np.ceil(n_examples / n_cols))
-        fig, axes = plt.subplots(n_rows, n_cols, figsize=(10, 2 * n_rows))
-        axes = axes.flatten()
-
-        for i in range(n_examples):
-            ax = axes[i]
-            img = img_stack[i, 0, :, :].detach().cpu().numpy()
-            ax.imshow(img, cmap="gray")
-            ax.set_title(f"RF {i}")
-            ax.axis("off")
-
-        plt.show()
 
     def get_data_at_latent_space(self, retina_vae):
         """
