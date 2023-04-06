@@ -13,6 +13,7 @@ import brian2.units as b2u
 # Viz
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 # from tqdm import tqdm
 # import seaborn as sns
@@ -587,6 +588,12 @@ class Viz:
     def show_gen_and_exp_spatial_rfs(self, mosaic, n_samples=2):
         """
         Show the experimental (fitted) and generated spatial receptive fields
+
+        Parameters
+        ----------
+        mosaic : ConstructRetina object
+        n_samples : int
+            Number of samples to show
         """
         spat_filt_to_viz = mosaic.exp_spat_filt_to_viz
         self.show_spatial_filter_response(
@@ -604,12 +611,118 @@ class Viz:
             pause_to_show=False,
         )
 
+    def show_latent_space_and_samples(self, mosaic):
+        """
+        Plot the latent samples on top of the estimated kde, one sublot for each successive two dimensions of latent_dim
+
+        Parameters
+        ----------
+        mosaic : ConstructRetina object
+        """
+        from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+
+        latent_samples = mosaic.gen_latent_space_to_viz["samples"]
+        latent_data = mosaic.gen_latent_space_to_viz["data"]
+        latent_dim = mosaic.gen_latent_space_to_viz["dim"]
+
+        # Make a grid of subplots
+        n_cols = 4
+        n_rows = int(np.ceil(latent_dim / n_cols))
+        if n_rows == 1:
+            n_cols = latent_dim
+        elif n_rows > 4:
+            n_rows = 4
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(10, 2 * n_rows))
+        fig_suptitle_text = "Latent space and samples"
+        axes = axes.flatten()
+        # pdb.set_trace()
+        # Plot the latent samples on top of the estimated kde
+        for ax_idx, i in enumerate(range(0, latent_dim, 2)):
+            if ax_idx > 15:
+                fig_suptitle_text = (
+                    "Latent space and samples (plotting only the first 32 dimensions)"
+                )
+                break
+
+            # Get only two dimensions at a time
+            values = latent_data[:, [i, i + 1]].T
+            # Evaluate the kde using only the same two dimensions
+            kernel = stats.gaussian_kde(values)
+            # Construct X and Y grids using the same two dimensions
+            x = np.linspace(latent_data[:, i].min(), latent_data[:, i].max(), 100)
+            y = np.linspace(
+                latent_data[:, i + 1].min(), latent_data[:, i + 1].max(), 100
+            )
+            X, Y = np.meshgrid(x, y)
+            positions = np.vstack([X.ravel(), Y.ravel()])
+            Z = np.reshape(kernel(positions).T, X.shape)
+
+            # Plot the estimated kde and samples on top of it
+            axes[ax_idx].contour(X, Y, Z, levels=10)
+            axes[ax_idx].scatter(latent_samples[:, i], latent_samples[:, i + 1])
+
+            # Make marginal plots of the contours as contours and samples as histograms.
+            # Place the marginal plots on the right and top of the main plot
+            ax_marg_x = inset_axes(
+                axes[ax_idx],
+                width="100%",  # width  of parent_bbox width
+                height="30%",  # height : 1 inch
+                loc="upper right",
+                # bbox_to_anchor=(1.05, 1.05),
+                bbox_to_anchor=(0, 0.95, 1, 0.3),
+                bbox_transform=axes[ax_idx].transAxes,
+                borderpad=0,
+            )
+            ax_marg_y = inset_axes(
+                axes[ax_idx],
+                width="30%",  # width of parent_bbox width
+                height="100%",  # height : 1 inch
+                loc="lower left",
+                # bbox_to_anchor=(-0.05, -0.05),
+                bbox_to_anchor=(1, 0, 0.4, 1),
+                bbox_transform=axes[ax_idx].transAxes,
+                borderpad=0,
+            )
+
+            # Plot the marginal plots
+            nx, bins, _ = ax_marg_x.hist(latent_samples[:, i], bins=20, density=True)
+            ny, bins, _ = ax_marg_y.hist(
+                latent_samples[:, i + 1],
+                bins=20,
+                density=True,
+                orientation="horizontal",
+            )
+
+            # Plot the one-dimensional marginal shapes of the kde
+            x_margin_contour = nx.max() * Z.mean(axis=0) / Z.mean(axis=0).max()
+            y_margin_contour = ny.max() * Z.mean(axis=1) / Z.mean(axis=1).max()
+            ax_marg_x.plot(x, x_margin_contour, color="r")
+            ax_marg_y.plot(y_margin_contour, y, color="r")
+
+            # Remove the ticks from the marginal plots
+            ax_marg_x.tick_params(
+                axis="both", which="both", bottom=False, top=False, labelbottom=False
+            )
+            ax_marg_y.tick_params(
+                axis="both", which="both", left=False, right=False, labelleft=False
+            )
+
+            # Set the title of the main plot
+            axes[ax_idx].set_title(f"Latent dims {i}, {i+1}")
+
+        # plt.tight_layout()
+        fig.suptitle(fig_suptitle_text)
+
     def show_gen_spat_postprocessing(self, mosaic):
         """
         Show the original experimental spatial receptive fields and
         the generated spatial receptive fields before and after postprocessing
+
+        Parameters
+        ----------
+        mosaic : ConstructRetina object
         """
-        
+
         # Get the keys for the cell_ix arrays
         cell_key_list = [
             key for key in mosaic.exp_spat_filt_to_viz.keys() if "cell_ix" in key
