@@ -766,6 +766,7 @@ class ConstructRetina(RetinaMath):
                     self.training_mode,
                     self.context.apricot_data_folder,
                     self.context.output_folder,
+                    save_tuned_models=True,
                 )
 
                 # -- Second, endow cells with spatial receptive fields using the generative variational autoencoder model

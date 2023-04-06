@@ -6,6 +6,8 @@ from sklearn.manifold import TSNE
 from sklearn.model_selection import train_test_split
 from scipy.ndimage import rotate, fourier_shift
 
+# System
+import psutil
 
 # Machine learning and hyperparameter optimization
 import torch
@@ -58,6 +60,19 @@ warnings.filterwarnings(
     message="Metric `Kernel Inception Distance`",
 )
 warnings.filterwarnings("ignore", message="FutureWarning:")
+
+
+class HardDiskWatchDog(tune.Callback):
+    # NOT TESTED
+    def on_train_result(self, trainer, result):
+        if result["training_iteration"] % 100 == 0:
+            disk_usage = psutil.disk_usage("/")
+            if disk_usage.percent > 80:
+                print(
+                    "WARNING: Disk is almost full! ({:.2f}%)".format(disk_usage.percent)
+                )
+            else:
+                print("Disk usage: {:.2f}%".format(disk_usage.percent))
 
 
 class AugmentedDataset(torch.utils.data.Dataset):
@@ -734,7 +749,8 @@ class TrainableVAE(tune.Trainable):
 
     def load_checkpoint(self, tmp_checkpoint_dir):
         checkpoint_path = os.path.join(tmp_checkpoint_dir, "model.pth")
-        self.model.load_state_dict(torch.load(checkpoint_path))
+        # self.model.load_state_dict(torch.load(checkpoint_path))
+        self.model = torch.load(checkpoint_path)
 
 
 class RetinaVAE:
@@ -755,6 +771,7 @@ class RetinaVAE:
         training_mode,
         apricot_data_folder,
         output_folder=None,
+        save_tuned_models=False,
     ):
         super().__init__()
 
@@ -772,7 +789,6 @@ class RetinaVAE:
         self.time_budget = 120  # in seconds
         self.grid_search = True  # False for tune by Optuna, True for grid search
         self.grace_period = 10  # epochs. ASHA stops earliest at grace period.
-        self.save_tuned_models = True  # Save tuned models. > 100 MB / model.
 
         # TÄHÄN JÄIT: OPETTELE PENKOMAAN EXPRIMENT JSON. KANNATTANEE TUUNATA ILMAN CHECKPOINTTEJA ISOSTI. SEN JÄLKEEN EHKÄ
         # CHECKPOINTIT TAI YKSITTÄISET AJOT.
@@ -782,11 +798,11 @@ class RetinaVAE:
         #######################
 
         # Set common VAE model parameters
-        self.latent_dim = 32  # 2**1 - 2**6, use powers of 2 btw 2 and 128
-        self.channels = 32
-        self.lr = 0.001
+        self.latent_dim = 8  # 2**1 - 2**6, use powers of 2 btw 2 and 128
+        self.channels = 8
+        self.lr = 0.0003
 
-        self.batch_size = 128  # None will take the batch size from test_split size.
+        self.batch_size = 64  # None will take the batch size from test_split size.
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         # self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
         self.train_by = [["midget"], ["off"]]  # Train by these factors
@@ -872,9 +888,9 @@ class RetinaVAE:
                 self._prep_training()
                 print(self.vae)
 
-                # # Init tensorboard
-                # self.tb_log_folder = "tb_logs"
-                # self._prep_tensorboard_logging()
+                # Init tensorboard
+                self.tb_log_folder = "tb_logs"
+                self._prep_tensorboard_logging()
 
                 # Train
                 self._train()
@@ -901,7 +917,7 @@ class RetinaVAE:
                     "lr": [0.001],
                     "latent_dim": [16],
                     # k3s2,k3s1,k5s2,k5s1,k7s1 Kernel-stride-padding for conv layers. NOTE you cannot use >3 conv layers with stride 2
-                    "ksp": ["k7s1"],
+                    "ksp": ["k7s1", "k5s1", "k5s2", "k3s1"],
                     "channels": [16],
                     "batch_size": [128],
                     "conv_layers": [1],
@@ -922,6 +938,15 @@ class RetinaVAE:
                 # Fraction of GPU per trial. 0.25 for smaller models is enough. Larger may need 0.33 or 0.5.
                 # Increase if you get CUDA out of memory errors.
                 self.gpu_fraction = 0.25
+
+                # Save tuned models. > 100 MB / model.
+                self.save_tuned_models = save_tuned_models
+
+                # if save_tuned_models is True:
+                #     print(
+                #         "WARNING: Save tuned models True. This will save > 100 MB / model."
+                #     )
+                #     self._set_hard_disk_watchdog()
 
                 tuner = self._set_ray_tuner(grid_search=self.grid_search)
                 self.result_grid = tuner.fit()
@@ -952,7 +977,7 @@ class RetinaVAE:
                 result_df[["training_iteration", "val_loss", "time_total_s"]]
 
                 # Load model state dict from checkpoint to new self.vae and return the state dict.
-                state_dict = self._load_model(best_result=self.best_result)
+                self.vae = self._load_model(best_result=self.best_result)
 
                 self._update_vae_to_match_best_model(self.best_result)
 
@@ -964,7 +989,7 @@ class RetinaVAE:
                 # Load model to self.vae and return state dict. The numbers are in the state dict.
 
                 if hasattr(self, "trial_name"):
-                    state_dict, result_grid, tb_dir = self._load_model(
+                    self.vae, result_grid, tb_dir = self._load_model(
                         model_path=None, trial_name=self.trial_name
                     )
                     # Dep vars: train_loss, val_loss, mse, ssim, kid_std, kid_mean,
@@ -973,7 +998,7 @@ class RetinaVAE:
                     )
 
                 elif hasattr(self, "models_folder"):
-                    state_dict = self._load_model(
+                    self.vae = self._load_model(
                         model_path=self.models_folder, trial_name=None
                     )
                     # Get datasets for RF generation and vizualization
@@ -1043,6 +1068,17 @@ class RetinaVAE:
                 encoded_samples = self.get_encoded_samples(ds_name="train_ds")
                 self._plot_latent_space(encoded_samples)
                 self._plot_tsne_space(encoded_samples)
+
+    # def _set_hard_disk_watchdog(self):
+    #     """
+    #     Set a watchdog to check if the hard disk is full.
+    #     """
+    #     disk_usage = psutil.disk_usage(str(self.models_folder))
+    #     pdb.set_trace()
+    #     if disk_usage.percent > 80:
+    #         print("Alert! Disk usage is above 80%.")
+    #     else:
+    #         print("Disk usage is normal.")
 
     def _update_vae_to_match_best_model(self, best_result):
         """
@@ -1297,8 +1333,6 @@ class RetinaVAE:
                 ),
             }
 
-            # TÄHÄN JÄIT: ETSI MISSÄ SAVE/NOT SAVE MODEL IN OPTUNA SEARCH
-
             # Efficient hyperparameter selection. Search Algorithms are wrappers around open-source
             # optimization libraries. Each library has a specific way of defining the search space.
             # https://docs.ray.io/en/latest/ray-air/package-ref.html#ray.tune.tune_config.TuneConfig
@@ -1331,7 +1365,7 @@ class RetinaVAE:
                 stop={"training_iteration": self.epochs},
                 progress_reporter=reporter,
                 local_dir=self.ray_dir,
-                # callbacks=[MyCallback()],
+                callbacks=[HardDiskWatchDog()],
                 checkpoint_config=air.CheckpointConfig(
                     checkpoint_score_attribute=self.multi_objective["metric"][0],
                     checkpoint_score_order=self.multi_objective["mode"][0],
@@ -1402,55 +1436,20 @@ class RetinaVAE:
             ][0]
             checkpoint_path = os.path.join(log_dir, checkpoint_dir, "model.pth")
 
-            latent_dim = best_result.config["latent_dim"]
-            ksp = best_result.config["ksp"]
-            channels = best_result.config["channels"]
-            conv_layers = best_result.config["conv_layers"]
-            batch_norm = best_result.config["batch_norm"]
-            # Get model with correct layer dimensions
-            model = VariationalAutoencoder(
-                latent_dims=latent_dim,
-                ksp_key=ksp,
-                channels=channels,
-                conv_layers=conv_layers,
-                batch_norm=batch_norm,
-                device=self.device,
-            )
-            model_or_state_dict = torch.load(checkpoint_path)
-            if isinstance(model_or_state_dict, dict):
-                model.load_state_dict(model_or_state_dict)
-            else:
-                model = model_or_state_dict
-
-            # model.load_state_dict(torch.load(checkpoint_path))
-            self.latent_dim = latent_dim
-            self.channels = channels
-            self.vae = model.to(self.device)
+            vae_model = torch.load(checkpoint_path)
 
         elif model_path is not None:
-
-            self.vae = VariationalAutoencoder(
-                latent_dims=self.latent_dim,
-                ksp_key=self.ksp,
-                channels=self.channels,
-                conv_layers=self.conv_layers,
-                batch_norm=self.batch_norm,
-                device=self.device,
-            )
 
             model_path = Path(model_path)
             if Path.exists(model_path) and model_path.is_file():
                 print(
                     f"Loading model from {model_path}. \nWARNING: This will replace the current model in-place."
                 )
-                self.vae.load_state_dict(torch.load(str(model_path)))
+                vae_model = torch.load(model_path)
             elif Path.exists(model_path) and model_path.is_dir():
                 try:
                     model_path = max(Path(self.models_folder).glob("*.pt"))
-                    try:
-                        self.vae.load_state_dict(torch.load(str(model_path)))
-                    except TypeError:
-                        self.vae = torch.load(str(model_path))
+                    vae_model = torch.load(model_path)
                     print(f"Most recent model is {model_path}.")
                 except ValueError:
                     raise FileNotFoundError("No model files found. Aborting...")
@@ -1478,39 +1477,6 @@ class RetinaVAE:
             results_folder = correct_trial_folder.parents[0]
             tuner = tune.Tuner.restore(str(results_folder))
             results = tuner.get_results()
-            df = results.get_dataframe()
-
-            # Check the latent_dim, change if necessary and update the model
-            new_latent_dim = df[df["logdir"] == str(correct_trial_folder)][
-                "config/latent_dim"
-            ].values[0]
-            # check new ksp and update
-            new_ksp = df[df["logdir"] == str(correct_trial_folder)][
-                "config/ksp"
-            ].values[0]
-            new_channels = int(
-                df[df["logdir"] == str(correct_trial_folder)]["config/channels"].values[
-                    0
-                ]
-            )
-            new_conv_layers = int(
-                df[df["logdir"] == str(correct_trial_folder)][
-                    "config/conv_layers"
-                ].values[0]
-            )
-            new_batch_norm = df[df["logdir"] == str(correct_trial_folder)][
-                "config/batch_norm"
-            ].values[0]
-
-            self.latent_dim = new_latent_dim
-            self.vae = VariationalAutoencoder(
-                latent_dims=self.latent_dim,
-                ksp_key=new_ksp,
-                channels=new_channels,
-                conv_layers=new_conv_layers,
-                batch_norm=new_batch_norm,
-                device=self.device,
-            )
 
             # Load the model from the checkpoint folder.
             try:
@@ -1522,34 +1488,24 @@ class RetinaVAE:
                     f"Could not find checkpoint folder in {correct_trial_folder}. Aborting..."
                 )
             model_path = Path.joinpath(checkpoint_folder_name, "model.pth")
-
-            self.vae.load_state_dict(torch.load(model_path))
+            vae_model = torch.load(model_path)
 
             # Move new model to same device as the input data
-            self.vae.to(self.device)
-            return self.vae.state_dict(), results, correct_trial_folder
+            vae_model.to(self.device)
+            return vae_model, results, correct_trial_folder
 
         else:
-            self.vae = VariationalAutoencoder(
-                latent_dims=self.latent_dim,
-                ksp_key=self.ksp,
-                channels=self.channels,
-                conv_layers=self.conv_layers,
-                batch_norm=self.batch_norm,
-                device=self.device,
-            )
             # Get the most recent model. Max recognizes the timestamp with the largest value
             try:
                 model_path = max(Path(self.models_folder).glob("*.pt"))
                 print(f"Most recent model is {model_path}.")
             except ValueError:
                 raise FileNotFoundError("No model files found. Aborting...")
-            self.vae.load_state_dict(torch.load(model_path))
+            vae_model = torch.load(model_path)
 
-            # Move new model to same device as the input data
-            self.vae.to(self.device)
+        vae_model.to(self.device)
 
-        return self.vae.state_dict()
+        return vae_model
 
     def _visualize_augmentation(self):
         """
@@ -1949,19 +1905,20 @@ class RetinaVAE:
         to tensorboard. You will see old graph, old scalars, if they are not overwritten
         by new ones.
         """
+        self.tb_log_folder = Path(self.tb_log_folder)
 
         # Create a folder for the experiment tensorboard logs
-        Path.mkdir(self.tb_log_folde, parents=True, exist_ok=True)
+        Path.mkdir(self.tb_log_folder, parents=True, exist_ok=True)
 
         # Clear files and folders under exp_folder
-        for f in self.tb_log_folde.iterdir():
+        for f in self.tb_log_folder.iterdir():
             if f.is_dir():
                 shutil.rmtree(f)
             else:
                 f.unlink()
 
         # This creates new scalar/time series line in tensorboard
-        self.writer = SummaryWriter(str(self.tb_log_folde), max_queue=100)
+        self.writer = SummaryWriter(str(self.tb_log_folder), max_queue=100)
 
     ### Training function
     def _train_epoch(self, vae, device, dataloader, optimizer, scheduler):
