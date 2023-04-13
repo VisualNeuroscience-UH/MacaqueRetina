@@ -98,7 +98,6 @@ class AugmentedDataset(torch.utils.data.Dataset):
     # RandomErasing([p, scale, ratio, value, inplace]) -> Randomly selects a rectangle region in an image and erases its pixels.
 
     def __init__(self, data, labels, resolution_hw, augmentation_dict=None):
-
         self.data = data
         self.labels = self._to_tensor(labels)
 
@@ -120,15 +119,33 @@ class AugmentedDataset(torch.utils.data.Dataset):
 
         else:
             self.transform = transforms.Compose(
-                [
-                    transforms.Lambda(self._feature_scaling),
-                    transforms.Lambda(self._add_noise),
-                    transforms.Lambda(self._random_rotate_image),
-                    transforms.Lambda(self._random_shift_image),
-                    transforms.Lambda(self._to_tensor),
-                    transforms.Resize(resolution_hw),
-                ]
+                [transforms.Lambda(self._feature_scaling)]
             )
+
+            if self.augmentation_dict["noise"] > 0:
+                self.transform.transforms.append(transforms.Lambda(self._add_noise))
+
+            if self.augmentation_dict["rotation"] > 0:
+                self.transform.transforms.append(
+                    transforms.Lambda(self._random_rotate_image)
+                )
+
+            if np.sum(self.augmentation_dict["translation"]) > 0:
+                self.transform.transforms.append(
+                    transforms.Lambda(self._random_shift_image)
+                )
+
+            self.transform.transforms.append(transforms.Lambda(self._to_tensor))
+
+            if self.augmentation_dict["flip"] > 0:
+                self.transform.transforms.append(
+                    transforms.RandomHorizontalFlip(self.augmentation_dict["flip"])
+                )
+                self.transform.transforms.append(
+                    transforms.RandomVerticalFlip(self.augmentation_dict["flip"])
+                )
+
+            self.transform.transforms.append(transforms.Resize(resolution_hw))
 
     def __len__(self):
         return len(self.data)
@@ -287,7 +304,6 @@ class VariationalEncoder(nn.Module):
         batch_norm=True,
         device=None,
     ):
-
         # super(VariationalEncoder, self).__init__()
         super().__init__()
         if ksp is None:
@@ -643,7 +659,6 @@ class TrainableVAE(tune.Trainable):
         methods=None,
         fixed_params=None,
     ):
-
         # Assert that none of the optional arguments are None
         assert data_dict is not None, "val_ds is None, aborting..."
         assert device is not None, "device is None, aborting..."
@@ -656,14 +671,13 @@ class TrainableVAE(tune.Trainable):
 
         # Augment training and validation data.
         augmentation_dict = {
-            "rotation": config.get("rotation"),  # rotation in degrees
+            "rotation": config.get("rotation"),
             "translation": (
                 config.get("translation"),
                 config.get("translation"),
-            ),  # fraction of image, (x, y) -directions
-            "noise": config.get(
-                "noise"
-            ),  # noise float in [0, 1] (noise is added to the image)
+            ),
+            "noise": config.get("noise"),
+            "flip": config.get("flip"),
         }
 
         self._augment_and_get_dataloader = methods["_augment_and_get_dataloader"]
@@ -787,8 +801,8 @@ class RetinaVAE:
         self.response_type = response_type
 
         # Fixed values for both single training and ray tune runs
-        self.epochs = 101
-        self.scheduler_step_size = 5  # Learning rate decay step size (in epochs)
+        self.epochs = 100
+        self.scheduler_step_size = 10  # Learning rate decay step size (in epochs)
         self.scheduler_gamma = 0.9  # Learning rate decay (multiplier for learning rate)
 
         # For ray tune only
@@ -803,26 +817,28 @@ class RetinaVAE:
         #######################
         # Single run parameters
         #######################
-
+        # pdb.set_trace()
         # Set common VAE model parameters
         self.latent_dim = 8  # 2**1 - 2**6, use powers of 2 btw 2 and 128
         self.channels = 8
-        self.lr = 0.0003
+        # lr will be reduced by scheduler down to lr * gamma ** (epochs/step_size)
+        self.lr = 0.001
 
         self.batch_size = 64  # None will take the batch size from test_split size.
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         # self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
-        self.train_by = [["midget"], ["off"]]  # Train by these factors
+        self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
 
         self.ksp = "k7s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
-        self.conv_layers = 1  # 1 - 5
+        self.conv_layers = 3  # 1 - 5
         self.batch_norm = False
 
         # Augment training and validation data.
         augmentation_dict = {
-            "rotation": 5,  # rotation in degrees
-            "translation": (0.05, 0.05),  # fraction of image, (x, y) -directions
-            "noise": 0.01,  # noise float in [0, 1] (noise is added to the image)
+            "rotation": 45,  # rotation in degrees
+            "translation": (0.1, 0.1),  # fraction of image, (x, y) -directions
+            "noise": 0.1,  # noise float in [0, 1] (noise is added to the image)
+            "flip": 0.5,  # flip probability, both horizontal and vertical
         }
         self.augmentation_dict = augmentation_dict
         # self.augmentation_dict = None
@@ -913,7 +929,6 @@ class RetinaVAE:
                 )
 
             case "tune_model":
-
                 # This will be captured at _set_ray_tuner
                 # Search space of the tuning job. Both preprocessor and dataset can be tuned here.
                 # Use grid search to try out all values for each parameter. values: iterable
@@ -933,7 +948,8 @@ class RetinaVAE:
                     # Augment: fract of im, max in (x, y)/[xy] dir
                     "translation": [0.0],
                     "noise": [0.0],  # Augment: noise added, btw [0., 1.]
-                    "num_models": 1,  # repetitions of the same model
+                    "flip": [0.0, 0.5],  # Augment: flip prob, both horiz and vert
+                    "num_models": 2,  # repetitions of the same model
                 }
 
                 # The first metric is the one that will be used to prioritize the checkpoints and pruning.
@@ -945,7 +961,8 @@ class RetinaVAE:
                 # Fraction of GPU per trial. 0.25 for smaller models is enough. Larger may need 0.33 or 0.5.
                 # Increase if you get CUDA out of memory errors.
                 self.gpu_fraction = 0.25
-                self.disk_usage_threshold = 90  # 90% of disk usage
+
+                self.disk_usage_threshold = 90  # %, stops training if exceeded
 
                 # Save tuned models. > 100 MB / model.
                 self.save_tuned_models = save_tuned_models
@@ -1034,7 +1051,6 @@ class RetinaVAE:
             data_type="test", shuffle=False
         )
         if 0:
-
             # Figure 1
             self._plot_ae_outputs(
                 self.vae.encoder,
@@ -1092,6 +1108,7 @@ class RetinaVAE:
                 best_result.config["translation"],
             ),
             "noise": best_result.config["noise"],
+            "flip": best_result.config["flip"],
         }
 
         self.train_loader = self._augment_and_get_dataloader(
@@ -1259,6 +1276,7 @@ class RetinaVAE:
                 "rotation": tune.grid_search(self.search_space["rotation"]),
                 "translation": tune.grid_search(self.search_space["translation"]),
                 "noise": tune.grid_search(self.search_space["noise"]),
+                "flip": tune.grid_search(self.search_space["flip"]),
                 "model_id": tune.grid_search(
                     [
                         "model_{}".format(i)
@@ -1277,7 +1295,6 @@ class RetinaVAE:
                 ),
             )
         else:
-
             # Note that the initial parameters must be included in the search space
             initial_params = [
                 {
@@ -1291,6 +1308,7 @@ class RetinaVAE:
                     "rotation": 0,
                     "translation": 0,
                     "noise": 0.0,
+                    "flip": 0.0,
                     "model_id": "model_0",
                 }
             ]
@@ -1315,6 +1333,9 @@ class RetinaVAE:
                 ),
                 "noise": tune.uniform(
                     self.search_space["noise"][0], self.search_space["noise"][-1]
+                ),
+                "flip": tune.uniform(
+                    self.search_space["flip"][0], self.search_space["flip"][-1]
                 ),
                 "model_id": tune.choice(
                     [
@@ -1424,6 +1445,7 @@ class RetinaVAE:
         print(f"Saving model to {model_path}")
         # torch.save(self.vae.state_dict(), model_path)
         torch.save(self.vae, model_path)
+
         return model_path
 
     def _load_model(self, model_path=None, best_result=None, trial_name=None):
@@ -1440,7 +1462,6 @@ class RetinaVAE:
             vae_model = torch.load(checkpoint_path)
 
         elif model_path is not None:
-
             model_path = Path(model_path)
             if Path.exists(model_path) and model_path.is_file():
                 print(
@@ -1527,11 +1548,16 @@ class RetinaVAE:
 
         # Augment training and validation data
         train_val_ds = AugmentedDataset(
-            train_val_data, train_val_labels, augmentation_dict=self.augmentation_dict
+            train_val_data,
+            train_val_labels,
+            self.resolution_hw,
+            augmentation_dict=self.augmentation_dict,
         )
 
         # Do not augment test data
-        test_ds = AugmentedDataset(test_data, test_labels, augmentation_dict=None)
+        test_ds = AugmentedDataset(
+            test_data, test_labels, self.resolution_hw, augmentation_dict=None
+        )
 
         # Split into train and validation
         train_ds, val_ds = random_split(
@@ -1876,7 +1902,6 @@ class RetinaVAE:
         self.test_loader = test_loader
 
     def _prep_training(self):
-
         self.vae = VariationalAutoencoder(
             latent_dims=self.latent_dim,
             ksp_key=self.ksp,
@@ -2125,7 +2150,6 @@ class RetinaVAE:
 
     def _reconstruct_random_images(self):
         with torch.no_grad():
-
             # # sample latent vectors from the normal distribution
             # latent = torch.randn(128, self.latent_dim, device=self.device)
 
@@ -2146,7 +2170,6 @@ class RetinaVAE:
             ax.set_title("Decoded images from a random sample of latent space")
 
     def _reconstruct_grid_images(self):
-
         if self.latent_dim == 2:
             with torch.no_grad():
                 scale = self.latent_space_plot_scale
@@ -2274,7 +2297,6 @@ class RetinaVAE:
         """
 
         def kid_compare(dataloader_real, dataloader_fake, n_features=64):
-
             # Set evaluation mode for encoder and decoder
             kid = KernelInceptionDistance(
                 n_features=n_features,
@@ -2346,5 +2368,4 @@ class RetinaVAE:
 
 
 if __name__ == "__main__":
-
     pass

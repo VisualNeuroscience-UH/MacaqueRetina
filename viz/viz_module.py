@@ -180,14 +180,15 @@ class Viz:
                     fill=False,
                     linestyle="--",
                 )
-                print(
-                    popt[0],
-                    popt[np.array([1, 2])],
-                    popt[3],
-                    popt[4],
-                    -popt[5] * 180 / np.pi,
-                )
-                print(popt[6], "sur_ratio=", popt[7], "offset=", popt[8])
+                if 0:
+                    print(
+                        popt[0],
+                        popt[np.array([1, 2])],
+                        popt[3],
+                        popt[4],
+                        -popt[5] * 180 / np.pi,
+                    )
+                    print(popt[6], "sur_ratio=", popt[7], "offset=", popt[8])
             else:
                 data_fitted = self.DoG2D_independent_surround((x_grid, y_grid), *popt)
                 e1 = Ellipse(
@@ -209,22 +210,23 @@ class Viz:
                     fill=False,
                     linestyle="--",
                 )
-                print(
-                    popt[0],
-                    popt[np.array([1, 2])],
-                    popt[3],
-                    popt[4],
-                    -popt[5] * 180 / np.pi,
-                )
-                print(
-                    popt[6],
-                    popt[np.array([7, 8])],
-                    popt[9],
-                    popt[10],
-                    -popt[11] * 180 / np.pi,
-                )
+                if 0:
+                    print(
+                        popt[0],
+                        popt[np.array([1, 2])],
+                        popt[3],
+                        popt[4],
+                        -popt[5] * 180 / np.pi,
+                    )
+                    print(
+                        popt[6],
+                        popt[np.array([7, 8])],
+                        popt[9],
+                        popt[10],
+                        -popt[11] * 180 / np.pi,
+                    )
 
-            print("\n")
+                    print("\n")
 
             ax1.add_artist(e1)
             ax1.add_artist(e2)
