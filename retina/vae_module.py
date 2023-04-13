@@ -132,7 +132,7 @@ class AugmentedDataset(torch.utils.data.Dataset):
                 [
                     transforms.Lambda(self._feature_scaling),
                     transforms.Lambda(self._to_tensor),
-                    transforms.Resize(resolution_hw),
+                    transforms.Resize(resolution_hw, antialias=True),
                 ]
             )
 
@@ -164,7 +164,9 @@ class AugmentedDataset(torch.utils.data.Dataset):
                     transforms.RandomVerticalFlip(self.augmentation_dict["flip"])
                 )
 
-            self.transform.transforms.append(transforms.Resize(resolution_hw))
+            self.transform.transforms.append(
+                transforms.Resize(resolution_hw, antialias=True)
+            )
 
     def __len__(self):
         return len(self.data)
@@ -650,6 +652,21 @@ class VariationalAutoencoder(nn.Module):
                 "opad2": 0,
                 "opad1": 0,
             },
+            "k9s1": {
+                "kernel": 9,
+                "stride": 1,
+                "pad1": 4,
+                "pad2": 4,
+                "pad3": 4,
+                "pad4": 4,
+                "pad5": 4,
+                "conv3_sidelen": 28,
+                "opad5": 0,
+                "opad4": 0,
+                "opad3": 0,
+                "opad2": 0,
+                "opad1": 0,
+            },
         }
 
 
@@ -820,7 +837,7 @@ class RetinaVAE:
         self.response_type = response_type
 
         # Fixed values for both single training and ray tune runs
-        self.epochs = 200
+        self.epochs = 5
         self.scheduler_step_size = 10  # Learning rate decay step size (in epochs)
         self.scheduler_gamma = 0.9  # Learning rate decay (multiplier for learning rate)
 
@@ -838,28 +855,29 @@ class RetinaVAE:
         #######################
         # Set common VAE model parameters
         self.latent_dim = 8  # 2**1 - 2**6, use powers of 2 btw 2 and 128
-        self.channels = 8
+        self.channels = 16
         # lr will be reduced by scheduler down to lr * gamma ** (epochs/step_size)
         self.lr = 0.001
 
-        self.batch_size = 64  # None will take the batch size from test_split size.
+        self.batch_size = 128  # None will take the batch size from test_split size.
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
-        # self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
+        # self.train_by = [["midget"], ["on", "off"]]  # Train by these factors
 
-        self.ksp = "k7s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
+        self.ksp = "k9s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
         self.conv_layers = 3  # 1 - 5
-        self.batch_norm = True
+        self.batch_norm = False
 
         # Augment training and validation data.
         augmentation_dict = {
-            "rotation": 45,  # rotation in degrees
+            "rotation": 0,  # rotation in degrees
             "translation": (0.1, 0.1),  # fraction of image, (x, y) -directions
-            "noise": 0.1,  # noise float in [0, 1] (noise is added to the image)
+            "noise": 0.01,  # noise float in [0, 1] (noise is added to the image)
             "flip": 0.5,  # flip probability, both horizontal and vertical
         }
         self.augmentation_dict = augmentation_dict
-        self.data_multiplier = 10  # how many times to get the data if augmented
+        # how many times to get the data, applied only if augmentation_dict is not None
+        self.data_multiplier = 5
         # self.augmentation_dict = None
 
         ####################
@@ -928,7 +946,7 @@ class RetinaVAE:
 
                 # Create model and set optimizer and learning rate scheduler
                 self._prep_training()
-                print(self.vae)
+                # print(self.vae)
 
                 # Init tensorboard
                 self.tb_log_folder = "tb_logs"
@@ -956,19 +974,19 @@ class RetinaVAE:
                 # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
                 self.search_space = {
                     "lr": [0.001],
-                    "latent_dim": [16],
+                    "latent_dim": [2, 4, 8, 16, 32],
                     # k3s2,k3s1,k5s2,k5s1,k7s1 Kernel-stride-padding for conv layers. NOTE you cannot use >3 conv layers with stride 2
-                    "ksp": ["k7s1", "k5s1", "k3s1"],
-                    "channels": [16],
+                    "ksp": ["k7s1"],
+                    "channels": [4, 8, 16],
                     "batch_size": [128],
-                    "conv_layers": [1],
+                    "conv_layers": [1, 2, 3],
                     "batch_norm": [False],
                     "rotation": [0],  # Augment: max rotation in degrees
                     # Augment: fract of im, max in (x, y)/[xy] dir
-                    "translation": [0.0],
-                    "noise": [0.0],  # Augment: noise added, btw [0., 1.]
-                    "flip": [0.0, 0.5],  # Augment: flip prob, both horiz and vert
-                    "num_models": 2,  # repetitions of the same model
+                    "translation": [0.05],
+                    "noise": [0.005],  # Augment: noise added, btw [0., 1.]
+                    "flip": [0.5],  # Augment: flip prob, both horiz and vert
+                    "num_models": 1,  # repetitions of the same model
                 }
 
                 # The first metric is the one that will be used to prioritize the checkpoints and pruning.
@@ -1069,7 +1087,7 @@ class RetinaVAE:
         self.test_loader = self._augment_and_get_dataloader(
             data_type="test", shuffle=False
         )
-        if 0:
+        if 1:
             # Figure 1
             self._plot_ae_outputs(
                 self.vae.encoder,
@@ -1710,84 +1728,7 @@ class RetinaVAE:
 
         data_loader = DataLoader(data_ds, batch_size=batch_size, shuffle=shuffle)
 
-        # # set self. attribute "train_loader", "val_loader" or "test_loader"
-        # setattr(self, data_type + "_loader", data_loader)
-
         return data_loader
-
-    def _prep_apricot_data(self, tune_augmentation=False):
-        """
-        OBSOLETE, REPLACED BY _get_and_split_apricot_data AND _augment_and_get_dataloader
-        Prep apricot data for training. This includes:
-        - Loading data
-        - Splitting into training, validation and testing
-        - Augmenting data
-        - Preprocessing data
-        - Creating dataloaders
-        """
-
-        # Get numpy data
-        data_np, labels_np, data_names2labels_dict = self._get_spatial_apricot_data()
-
-        # Split to training, validation and testing
-        train_val_data, test_data, train_val_labels, test_labels = train_test_split(
-            data_np,
-            labels_np,
-            test_size=self.test_split,
-            random_state=self.random_seed,
-            stratify=labels_np,
-        )
-
-        if tune_augmentation is True:
-            self.train_val_data = train_val_data
-            self.train_val_labels = train_val_labels
-
-        # Augment training and validation data
-        train_val_ds = AugmentedDataset(
-            train_val_data,
-            train_val_labels,
-            self.resolution_hw,
-            augmentation_dict=self.augmentation_dict,
-        )
-
-        # Do not augment test data
-        test_ds = AugmentedDataset(
-            test_data,
-            test_labels,
-            self.resolution_hw,
-            augmentation_dict=None,
-        )
-
-        test_ds.labels = test_ds.labels  # MNIST uses targets instead of labels
-        self.test_ds = test_ds
-
-        # Split into train and validation
-        train_ds, val_ds = random_split(
-            train_val_ds,
-            [
-                int(np.round(len(train_val_ds) * (1 - self.test_split))),
-                int(np.round(len(train_val_ds) * self.test_split)),
-            ],
-        )
-
-        # Save for later use, this may be a problem with bigger datasets
-        self.train_ds = train_ds
-        self.val_ds = val_ds
-        self.train_ds.labels = train_val_ds.labels[self.train_ds.indices]
-        self.val_ds.labels = train_val_ds.labels[self.val_ds.indices]
-
-        # Get n items for the three sets
-        self.n_train = len(train_ds)
-        self.n_val = len(val_ds)
-        self.n_test = len(test_ds)
-
-        train_loader = DataLoader(train_ds, batch_size=self.batch_size, shuffle=True)
-        val_loader = DataLoader(val_ds, batch_size=self.batch_size, shuffle=True)
-        test_loader = DataLoader(test_ds, batch_size=self.batch_size)
-
-        self.train_loader = train_loader
-        self.val_loader = val_loader
-        self.test_loader = test_loader
 
     def _get_spatial_apricot_data(self):
         """
