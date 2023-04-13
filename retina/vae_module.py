@@ -564,7 +564,7 @@ class VariationalAutoencoder(nn.Module):
         # )
         # Allowed n_features: 64, 192, 768, 2048
         self.kid = KernelInceptionDistance(
-            n_features=64,
+            n_features=768,
             reset_real_features=False,
             normalize=True,
             subset_size=16,
@@ -837,15 +837,15 @@ class RetinaVAE:
         self.response_type = response_type
 
         # Fixed values for both single training and ray tune runs
-        self.epochs = 5
+        self.epochs = 500
         self.scheduler_step_size = 10  # Learning rate decay step size (in epochs)
         self.scheduler_gamma = 0.9  # Learning rate decay (multiplier for learning rate)
 
         # For ray tune only
         # If grid_search is True, time_budget is ignored
-        self.time_budget = 120  # in seconds
-        self.grid_search = True  # False for tune by Optuna, True for grid search
-        self.grace_period = 10  # epochs. ASHA stops earliest at grace period.
+        self.time_budget = 60 * 60 * 24 * 4  # in seconds
+        self.grid_search = False  # False for tune by Optuna, True for grid search
+        self.grace_period = 20  # epochs. ASHA stops earliest at grace period.
 
         # TÄHÄN JÄIT: OPETTELE PENKOMAAN EXPRIMENT JSON. KANNATTANEE TUUNATA ILMAN CHECKPOINTTEJA ISOSTI. SEN JÄLKEEN EHKÄ
         # CHECKPOINTIT TAI YKSITTÄISET AJOT.
@@ -854,18 +854,21 @@ class RetinaVAE:
         # Single run parameters
         #######################
         # Set common VAE model parameters
-        self.latent_dim = 8  # 2**1 - 2**6, use powers of 2 btw 2 and 128
-        self.channels = 16
+        self.latent_dim = 2  # 2**1 - 2**6, use powers of 2 btw 2 and 128
+        self.channels = 4
         # lr will be reduced by scheduler down to lr * gamma ** (epochs/step_size)
         self.lr = 0.001
+        self._calculate_lr_decay(
+            self.lr, self.scheduler_gamma, self.scheduler_step_size, self.epochs
+        )
 
-        self.batch_size = 128  # None will take the batch size from test_split size.
+        self.batch_size = 256  # None will take the batch size from test_split size.
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
         # self.train_by = [["midget"], ["on", "off"]]  # Train by these factors
 
         self.ksp = "k9s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
-        self.conv_layers = 3  # 1 - 5
+        self.conv_layers = 1  # 1 - 5
         self.batch_norm = False
 
         # Augment training and validation data.
@@ -975,8 +978,8 @@ class RetinaVAE:
                 self.search_space = {
                     "lr": [0.001],
                     "latent_dim": [2, 4, 8, 16, 32],
-                    # k3s2,k3s1,k5s2,k5s1,k7s1 Kernel-stride-padding for conv layers. NOTE you cannot use >3 conv layers with stride 2
-                    "ksp": ["k7s1"],
+                    # k3s2,k3s1,k5s2,k5s1,k7s1, k9s1 Kernel-stride-padding for conv layers. NOTE you cannot use >3 conv layers with stride 2
+                    "ksp": ["k7s1", "k9s1"],
                     "channels": [4, 8, 16],
                     "batch_size": [128],
                     "conv_layers": [1, 2, 3],
@@ -997,7 +1000,7 @@ class RetinaVAE:
 
                 # Fraction of GPU per trial. 0.25 for smaller models is enough. Larger may need 0.33 or 0.5.
                 # Increase if you get CUDA out of memory errors.
-                self.gpu_fraction = 0.25
+                self.gpu_fraction = 1.0
 
                 self.disk_usage_threshold = 90  # %, stops training if exceeded
 
@@ -1123,6 +1126,14 @@ class RetinaVAE:
                 encoded_samples = self.get_encoded_samples(ds_name="train_ds")
                 self._plot_latent_space(encoded_samples)
                 self._plot_tsne_space(encoded_samples)
+
+    def _calculate_lr_decay(self, lr, gamma, step_size, epochs):
+        lrs = np.zeros(epochs)
+        for this_epoch in range(epochs):
+            lrs[this_epoch] = lr * gamma ** np.floor(this_epoch / step_size)
+        plt.plot(lrs)
+        plt.show()
+        exit()
 
     def _update_vae_to_match_best_model(self, best_result):
         """
@@ -1914,11 +1925,10 @@ class RetinaVAE:
         train_loss = 0.0
         # Iterate the dataloader (we do not need the label values, this is unsupervised learning)
 
-        # for x, _ in dataloader: # MNIST
-        for x, _ in dataloader:  # Apricot
-            # Move tensor to the proper device
+        for x, _ in dataloader:
             x = x.to(device)
             x_hat = vae(x)
+
             # Evaluate loss
             loss = ((x - x_hat) ** 2).sum() + vae.encoder.kl
 
