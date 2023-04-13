@@ -752,8 +752,8 @@ class TrainableVAE(tune.Trainable):
         # Define the scheduler with a step size and gamma factor
         self.scheduler = lr_scheduler.StepLR(
             self.optim,
-            step_size=fixed_params["scheduler_step_size"],
-            gamma=fixed_params["scheduler_gamma"],
+            step_size=fixed_params["lr_step_size"],
+            gamma=fixed_params["lr_gamma"],
         )
 
     def step(self):
@@ -838,8 +838,8 @@ class RetinaVAE:
 
         # Fixed values for both single training and ray tune runs
         self.epochs = 500
-        self.scheduler_step_size = 10  # Learning rate decay step size (in epochs)
-        self.scheduler_gamma = 0.9  # Learning rate decay (multiplier for learning rate)
+        self.lr_step_size = 10  # Learning rate decay step size (in epochs)
+        self.lr_gamma = 0.9  # Learning rate decay (multiplier for learning rate)
 
         # For ray tune only
         # If grid_search is True, time_budget is ignored
@@ -858,9 +858,7 @@ class RetinaVAE:
         self.channels = 4
         # lr will be reduced by scheduler down to lr * gamma ** (epochs/step_size)
         self.lr = 0.001
-        self._calculate_lr_decay(
-            self.lr, self.scheduler_gamma, self.scheduler_step_size, self.epochs
-        )
+        # self._show_lr_decay(self.lr, self.lr_gamma, self.lr_step_size, self.epochs)
 
         self.batch_size = 256  # None will take the batch size from test_split size.
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
@@ -919,9 +917,6 @@ class RetinaVAE:
 
         # # Visualize the augmentation effects and exit
         # self._visualize_augmentation()
-
-        # # Create datasets and dataloaders
-        # # self._prep_minst_data()
 
         # # Create model and set optimizer and learning rate scheduler
         # self._prep_training()
@@ -1127,7 +1122,7 @@ class RetinaVAE:
                 self._plot_latent_space(encoded_samples)
                 self._plot_tsne_space(encoded_samples)
 
-    def _calculate_lr_decay(self, lr, gamma, step_size, epochs):
+    def _show_lr_decay(self, lr, gamma, step_size, epochs):
         lrs = np.zeros(epochs)
         for this_epoch in range(epochs):
             lrs[this_epoch] = lr * gamma ** np.floor(this_epoch / step_size)
@@ -1307,8 +1302,8 @@ class RetinaVAE:
                 "_augment_and_get_dataloader": self._augment_and_get_dataloader,
             },
             fixed_params={
-                "scheduler_step_size": self.scheduler_step_size,
-                "scheduler_gamma": self.scheduler_gamma,
+                "lr_step_size": self.lr_step_size,
+                "lr_gamma": self.lr_gamma,
             },
         )
 
@@ -1828,51 +1823,6 @@ class RetinaVAE:
             apricot_data.data_names2labels_dict,
         )
 
-    def _prep_minst_data(self):
-        data_dir = "dataset"
-
-        train_transform = transforms.Compose(
-            [
-                transforms.ToTensor(),
-            ]
-        )
-
-        test_transform = transforms.Compose(
-            [
-                transforms.ToTensor(),
-            ]
-        )
-
-        _train_ds = torchvision.datasets.MNIST(
-            data_dir, train=True, download=True, transform=train_transform
-        )
-        _test_ds = torchvision.datasets.MNIST(
-            data_dir, train=False, download=True, transform=test_transform
-        )
-
-        # Cut for testing. It is disappointing how complex this needs to be.
-        train_indices = torch.arange(6000)
-        test_indices = torch.arange(1000)
-        train_val_ds = Subset(_train_ds, train_indices)
-        test_ds = Subset(_test_ds, test_indices)
-        test_ds.labels = torch.from_numpy(
-            np.fromiter((_test_ds.targets[i] for i in test_indices), int)
-        )  # Add targets for the plotting
-
-        self.test_ds = test_ds
-
-        m = len(train_val_ds)
-
-        train_ds, val_ds = random_split(train_val_ds, [int(m - m * 0.2), int(m * 0.2)])
-
-        train_loader = DataLoader(train_ds, batch_size=self.batch_size)
-        val_loader = DataLoader(val_ds, batch_size=self.batch_size)
-        test_loader = DataLoader(test_ds, batch_size=self.batch_size, shuffle=True)
-
-        self.train_loader = train_loader
-        self.val_loader = val_loader
-        self.test_loader = test_loader
-
     def _prep_training(self):
         self.vae = VariationalAutoencoder(
             latent_dims=self.latent_dim,
@@ -1889,7 +1839,7 @@ class RetinaVAE:
 
         # Define the scheduler with a step size and gamma factor
         self.scheduler = lr_scheduler.StepLR(
-            self.optim, step_size=self.scheduler_step_size, gamma=self.scheduler_gamma
+            self.optim, step_size=self.lr_step_size, gamma=self.lr_gamma
         )
 
         print(f"Selected device: {self.device}")
