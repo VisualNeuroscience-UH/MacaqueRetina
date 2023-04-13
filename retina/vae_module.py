@@ -94,10 +94,29 @@ class AugmentedDataset(torch.utils.data.Dataset):
     logged into the ApricotDataset instance object.
     """
 
-    # TODO: Add noise and rectangular dropauts to the augmentation dictionary and pass it to the transforms.Compose() method.
-    # RandomErasing([p, scale, ratio, value, inplace]) -> Randomly selects a rectangle region in an image and erases its pixels.
+    def __init__(
+        self, data, labels, resolution_hw, augmentation_dict=None, data_multiplier=1.0
+    ):
+        if augmentation_dict is not None:
+            # Multiply the amount of images by the data_multiplier. Take random samples from the data
+            len_data = data.shape[0]
 
-    def __init__(self, data, labels, resolution_hw, augmentation_dict=None):
+            # Get the number of images to be added
+            n_images_to_add = int(data_multiplier * len_data) - len_data
+
+            # Get the indices of the images to be added
+            indices_to_add = np.random.choice(len_data, n_images_to_add, replace=True)
+
+            # Get the images to be added
+            data_to_add = data[indices_to_add]
+
+            # Get the labels to be added
+            labels_to_add = labels[indices_to_add]
+
+            # Concatenate the data and labels
+            data = np.concatenate((data, data_to_add), axis=0)
+            labels = np.concatenate((labels, labels_to_add), axis=0)
+
         self.data = data
         self.labels = self._to_tensor(labels)
 
@@ -801,7 +820,7 @@ class RetinaVAE:
         self.response_type = response_type
 
         # Fixed values for both single training and ray tune runs
-        self.epochs = 100
+        self.epochs = 200
         self.scheduler_step_size = 10  # Learning rate decay step size (in epochs)
         self.scheduler_gamma = 0.9  # Learning rate decay (multiplier for learning rate)
 
@@ -817,7 +836,6 @@ class RetinaVAE:
         #######################
         # Single run parameters
         #######################
-        # pdb.set_trace()
         # Set common VAE model parameters
         self.latent_dim = 8  # 2**1 - 2**6, use powers of 2 btw 2 and 128
         self.channels = 8
@@ -831,7 +849,7 @@ class RetinaVAE:
 
         self.ksp = "k7s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
         self.conv_layers = 3  # 1 - 5
-        self.batch_norm = False
+        self.batch_norm = True
 
         # Augment training and validation data.
         augmentation_dict = {
@@ -841,6 +859,7 @@ class RetinaVAE:
             "flip": 0.5,  # flip probability, both horizontal and vertical
         }
         self.augmentation_dict = augmentation_dict
+        self.data_multiplier = 10  # how many times to get the data if augmented
         # self.augmentation_dict = None
 
         ####################
@@ -1680,6 +1699,7 @@ class RetinaVAE:
             labels,
             self.resolution_hw,
             augmentation_dict=augmentation_dict,
+            data_multiplier=self.data_multiplier,
         )
 
         # set self. attribute "n_train", "n_val" or "n_test"
