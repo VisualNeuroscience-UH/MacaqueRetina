@@ -1,6 +1,9 @@
 # Numerical
 import numpy as np
 
+# Machine learning
+from ray import tune
+
 # Builtin
 from pathlib import Path
 import os
@@ -29,12 +32,10 @@ from context.context_module import Context
 
 
 class DataIO(DataIOBase):
-
     # self.context. attributes
     _properties_list = ["path", "input_folder", "output_folder"]
 
     def __init__(self, context) -> None:
-
         self.context = context.set_context(self._properties_list)
 
         # Attach cxsystem2 methods
@@ -92,7 +93,6 @@ class DataIO(DataIOBase):
         return paths
 
     def most_recent(self, path, substring=None, exclude_substring=None):
-
         paths = self.listdir_loop(path, substring, exclude_substring)
 
         if not paths:
@@ -244,9 +244,7 @@ class DataIO(DataIOBase):
             self._recursively_save_dict_contents_to_group(h5file, "/", dic)
 
     def _recursively_save_dict_contents_to_group(self, h5file, path, dic):
-
         for key, item in dic.items():
-
             if isinstance(item, (np.ndarray)):
                 h5file.create_dataset(
                     path + key, data=item, compression="gzip", compression_opts=6
@@ -273,7 +271,6 @@ class DataIO(DataIOBase):
             return self._recursively_load_dict_contents_from_group(h5file, "/")
 
     def _recursively_load_dict_contents_from_group(self, h5file, path):
-
         ans = {}
         for key, item in h5file[path].items():
             if isinstance(item, h5py._hl.dataset.Dataset):
@@ -472,7 +469,6 @@ class DataIO(DataIOBase):
         w_coord=None,
         frameduration=None,
     ):
-
         assert all(
             [
                 filename_out is not None,
@@ -497,3 +493,21 @@ class DataIO(DataIOBase):
 
         sio.savemat(filename_out_full, mat_out_dict)
         print(f"Duration of stimulus is {total_duration} seconds")
+
+    def load_ray_results_grid(self, most_recent=True, exp_name=None):
+        ray_dir = self.context.output_folder / "ray_results"
+
+        if most_recent:
+            exp_name = sorted(os.listdir(ray_dir))[-1]
+        else:
+            assert (
+                exp_name is not None
+            ), "exp_name must be specified if most_recent is False, aborting..."
+
+        experiment_path = f"{ray_dir}/{exp_name}"
+        print(f"Loading results from {experiment_path}...")
+
+        restored_tuner = tune.Tuner.restore(experiment_path)
+        result_grid = restored_tuner.get_results()
+
+        return result_grid
