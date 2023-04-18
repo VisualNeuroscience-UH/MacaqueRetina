@@ -564,7 +564,7 @@ class VariationalAutoencoder(nn.Module):
         # )
         # Allowed n_features: 64, 192, 768, 2048
         self.kid = KernelInceptionDistance(
-            n_features=768,
+            n_features=2048,
             reset_real_features=False,
             normalize=True,
             subset_size=16,
@@ -840,12 +840,14 @@ class RetinaVAE:
         self.epochs = 500
         self.lr_step_size = 10  # Learning rate decay step size (in epochs)
         self.lr_gamma = 0.9  # Learning rate decay (multiplier for learning rate)
+        # how many times to get the data, applied only if augmentation_dict is not None
+        self.data_multiplier = 4
 
         # For ray tune only
         # If grid_search is True, time_budget is ignored
         self.time_budget = 60 * 60 * 24 * 4  # in seconds
-        self.grid_search = False  # False for tune by Optuna, True for grid search
-        self.grace_period = 20  # epochs. ASHA stops earliest at grace period.
+        self.grid_search = True  # False for tune by Optuna, True for grid search
+        self.grace_period = 50  # epochs. ASHA stops earliest at grace period.
 
         # TÄHÄN JÄIT: OPETTELE PENKOMAAN EXPRIMENT JSON. KANNATTANEE TUUNATA ILMAN CHECKPOINTTEJA ISOSTI. SEN JÄLKEEN EHKÄ
         # CHECKPOINTIT TAI YKSITTÄISET AJOT.
@@ -854,31 +856,32 @@ class RetinaVAE:
         # Single run parameters
         #######################
         # Set common VAE model parameters
-        self.latent_dim = 2  # 2**1 - 2**6, use powers of 2 btw 2 and 128
-        self.channels = 4
+        self.latent_dim = 8  # 2**1 - 2**6, use powers of 2 btw 2 and 128
+        self.channels = 8
         # lr will be reduced by scheduler down to lr * gamma ** (epochs/step_size)
         self.lr = 0.001
         # self._show_lr_decay(self.lr, self.lr_gamma, self.lr_step_size, self.epochs)
 
-        self.batch_size = 256  # None will take the batch size from test_split size.
+        self.batch_size = 128  # None will take the batch size from test_split size.
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
         self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
         # self.train_by = [["midget"], ["on", "off"]]  # Train by these factors
 
         self.ksp = "k9s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
-        self.conv_layers = 1  # 1 - 5
+        self.conv_layers = 3  # 1 - 5
         self.batch_norm = False
 
         # Augment training and validation data.
         augmentation_dict = {
             "rotation": 0,  # rotation in degrees
-            "translation": (0.1, 0.1),  # fraction of image, (x, y) -directions
-            "noise": 0.01,  # noise float in [0, 1] (noise is added to the image)
+            "translation": (
+                0.07692307692307693,
+                0.07692307692307693,
+            ),  # fraction of image, (x, y) -directions
+            "noise": 0.005,  # noise float in [0, 1] (noise is added to the image)
             "flip": 0.5,  # flip probability, both horizontal and vertical
         }
         self.augmentation_dict = augmentation_dict
-        # how many times to get the data, applied only if augmentation_dict is not None
-        self.data_multiplier = 5
         # self.augmentation_dict = None
 
         ####################
@@ -981,16 +984,16 @@ class RetinaVAE:
                     "batch_norm": [False],
                     "rotation": [0],  # Augment: max rotation in degrees
                     # Augment: fract of im, max in (x, y)/[xy] dir
-                    "translation": [0.05],
+                    "translation": [0.07692307692307693],  # 1/13 pixels
                     "noise": [0.005],  # Augment: noise added, btw [0., 1.]
                     "flip": [0.5],  # Augment: flip prob, both horiz and vert
-                    "num_models": 1,  # repetitions of the same model
+                    "num_models": 4,  # repetitions of the same model
                 }
 
                 # The first metric is the one that will be used to prioritize the checkpoints and pruning.
                 self.multi_objective = {
-                    "metric": ["val_loss", "kid_mean", "ssim"],
-                    "mode": ["min", "min", "max"],
+                    "metric": ["val_loss"],
+                    "mode": ["min"],
                 }
 
                 # Fraction of GPU per trial. 0.25 for smaller models is enough. Larger may need 0.33 or 0.5.
@@ -1341,7 +1344,7 @@ class RetinaVAE:
             # Note that the initial parameters must be included in the search space
             initial_params = [
                 {
-                    "lr": 0.0003,
+                    "lr": 0.001,
                     "latent_dim": 16,
                     "ksp": "k7s1",
                     "channels": 16,
@@ -1351,7 +1354,7 @@ class RetinaVAE:
                     "rotation": 0,
                     "translation": 0,
                     "noise": 0.0,
-                    "flip": 0.0,
+                    "flip": 0.5,
                     "model_id": "model_0",
                 }
             ]
