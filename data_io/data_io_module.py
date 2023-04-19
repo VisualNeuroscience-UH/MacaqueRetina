@@ -507,7 +507,26 @@ class DataIO(DataIOBase):
         experiment_path = f"{ray_dir}/{exp_name}"
         print(f"Loading results from {experiment_path}...")
 
-        restored_tuner = tune.Tuner.restore(experiment_path)
+        from retina.vae_module import TrainableVAE
+
+        # # The following line errors at tuner_internal.py in crossplatform use.
+        # # Patched tuner_internal.py patch at lines 322-336 (after correction) when using tune.Tuner.restore crossplatform
+        # # Load trainable and tuner state
+        # # SV Note 230419: The original code was changed to work with Windows
+        # import sys
+        # if sys.platform.startswith('win'):
+        #     import pathlib
+        #     temp = pathlib.PosixPath
+        #     pathlib.PosixPath = pathlib.WindowsPath
+        # with open(experiment_checkpoint_path / _TRAINABLE_PKL, "rb") as fp:
+        #     trainable = pickle.load(fp)
+
+        # with open(experiment_checkpoint_path / _TUNER_PKL, "rb") as fp:
+        #     tuner = pickle.load(fp)
+        #     self.__dict__.update(tuner.__dict__)
+
+        # pathlib.PosixPath = temp
+        restored_tuner = tune.Tuner.restore(experiment_path, trainable=TrainableVAE)
         result_grid = restored_tuner.get_results()
 
         return result_grid
