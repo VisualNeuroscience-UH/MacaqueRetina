@@ -704,6 +704,8 @@ class TrainableVAE(tune.Trainable):
         self.train_labels = data_dict["train_labels"]
         self.val_data = data_dict["val_data"]
         self.val_labels = data_dict["val_labels"]
+        self.test_data = data_dict["test_data"]
+        self.test_labels = data_dict["test_labels"]
 
         # Augment training and validation data.
         augmentation_dict = {
@@ -744,6 +746,11 @@ class TrainableVAE(tune.Trainable):
             batch_norm=config.get("batch_norm"),
             device=self.device,
         )
+
+        # Will be saved with checkpoint model
+        self.model.test_data = self.test_data
+        self.model.test_labels = self.test_labels
+
         self.model.to(self.device)
 
         self.optim = torch.optim.Adam(
@@ -837,7 +844,7 @@ class RetinaVAE:
         self.response_type = response_type
 
         # Fixed values for both single training and ray tune runs
-        self.epochs = 500
+        self.epochs = 5
         self.lr_step_size = 10  # Learning rate decay step size (in epochs)
         self.lr_gamma = 0.9  # Learning rate decay (multiplier for learning rate)
         # how many times to get the data, applied only if augmentation_dict is not None
@@ -1297,6 +1304,8 @@ class RetinaVAE:
                 "train_labels": self.train_labels,
                 "val_data": self.val_data,
                 "val_labels": self.val_labels,
+                "test_data": self.test_data,  # For later evaluation and viz
+                "test_labels": self.test_labels,
             },
             device=self.device,
             methods={
@@ -1835,6 +1844,10 @@ class RetinaVAE:
             batch_norm=self.batch_norm,
             device=self.device,
         )
+
+        # Will be saved with model for later eval and viz
+        self.vae.test_data = self.test_data
+        self.vae.test_labels = self.test_labels
 
         self.optim = torch.optim.Adam(
             self.vae.parameters(), lr=self.lr, weight_decay=1e-5

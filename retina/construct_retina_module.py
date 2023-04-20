@@ -78,7 +78,6 @@ class ConstructRetina(RetinaMath):
     ]
 
     def __init__(self, context, data_io, viz) -> None:
-
         # Dependency injection at ProjectManager construction
         self._context = context.set_context(self._properties_list)
         self._data_io = data_io
@@ -99,7 +98,6 @@ class ConstructRetina(RetinaMath):
         return self._viz
 
     def _initialize(self, fits_from_file=None):
-
         """
         Initialize the ganglion cell mosaic.
             First: sets ConstructRetina instance parameters from conf file my_retina
@@ -533,7 +531,6 @@ class ConstructRetina(RetinaMath):
         for eccentricity_group_index, current_step in enumerate(
             np.arange(int(n_steps))
         ):
-
             if (
                 true_eccentricity_end
             ):  # If the eccentricity has been adjusted below inside the loop
@@ -677,7 +674,6 @@ class ConstructRetina(RetinaMath):
         self.gc_density_func_params = gc_density_func_params
 
     def _create_temporal_receptive_fields(self):
-
         n_cells = len(self.gc_df)
         temporal_df = self.exp_stat_df[self.exp_stat_df["domain"] == "temporal"]
         for param_name, row in temporal_df.iterrows():
@@ -758,7 +754,6 @@ class ConstructRetina(RetinaMath):
                 # This is just to check for model type
 
             case "VAE":
-
                 # Fit or load variational autoencoder to generate receptive fields
                 self.retina_vae = RetinaVAE(
                     self.gc_type,
@@ -997,3 +992,12 @@ class ConstructRetina(RetinaMath):
 
         # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
         self.viz.show_latent_space_and_samples(self)
+
+    def show_ray_experiment(self, exp_name, this_dep_var):
+        """
+        Show the ray experiment
+        self goes as argument, to be available for viz
+        """
+
+        # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
+        self.viz.show_ray_experiment(self, exp_name, this_dep_var)

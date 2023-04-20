@@ -126,7 +126,7 @@ my_retina = {
     "randomize_position": 0.05,
     "stimulus_center": 4.45 + 0j,
     "model_type": "VAE",  # "FIT", "VAE" for variational autoencoder, or GAN for generative adversarial network.
-    "training_mode": "tune_model",  # "train_model" or "tune_model" or "load_model" Applies to VAE or GAN only.
+    "training_mode": "train_model",  # "train_model" or "tune_model" or "load_model" Applies to VAE or GAN only.
 }
 
 
@@ -330,14 +330,22 @@ if __name__ == "__main__":
     # options are defined in my_retina_options
 
     # PM.construct_retina.build()
+
+    # The following visualizations are dependent on the ConstructRetina instance.
+    # This is why they are called via the construct_retina attribute. The instance
+    # object is attached to the call for viz.
+
     # PM.construct_retina.show_exp_build_process(show_all_spatial_fits=True)
     # PM.construct_retina.show_gen_and_exp_spatial_rfs(n_samples=5)
     # PM.construct_retina.show_gen_spat_postprocessing()
     # PM.construct_retina.show_latent_space_and_samples()
 
-    exp_name = "TrainableVAE_2023-04-13_19-14-10"
-    PM.viz.show_ray_experiment(exp_name)
-    # pdb.set_trace()
+    # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
+    this_dep_var = "ssim"
+    exp_name = "TrainableVAE_2023-04-13_19-14-10"  # None for most recent
+
+    PM.construct_retina.show_ray_experiment(exp_name, this_dep_var)
+    pdb.set_trace()
 
     #################################
     ### Create stimulus ###

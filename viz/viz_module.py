@@ -5,6 +5,10 @@ import scipy.io as sio
 import scipy.stats as stats
 import pandas as pd
 
+# Machine learning
+import torch
+import torchvision.transforms.functional as TF
+
 # import cv2
 
 # Comput Neurosci
@@ -18,9 +22,11 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 # from tqdm import tqdm
 # import seaborn as sns
 
+# Local
+from retina.vae_module import AugmentedDataset
+
 # Builtin
-# import os
-# import sys
+import os
 from pathlib import Path
 import pdb
 
@@ -139,6 +145,7 @@ class Viz:
             suptitle = f"{title}, {suptitle})"
 
             fig, (ax1, ax2) = plt.subplots(figsize=(8, 3), ncols=2)
+
             plt.suptitle(
                 suptitle,
                 fontsize=10,
@@ -754,7 +761,7 @@ class Viz:
         plt.axvline(np.median(img_post), color="r")
         plt.title(f"Generated processed, median: {np.median(img_post):.2f}")
 
-    def show_ray_experiment(self, ray_exp=None):
+    def show_ray_experiment(self, mosaic, ray_exp, this_dep_var):
         """
         Show the results of a ray experiment. If ray_exp is None, then
         the most recent experiment is shown.
@@ -807,22 +814,106 @@ class Viz:
                 best_trials.append(df[dep_var].idxmin())
             elif dep_var_best == "max":
                 best_trials.append(df[dep_var].idxmax())
+            if this_dep_var in dep_var:
+                this_dep_var_best = dep_var_best
 
+        df_filtered = df[exp_info_columns].loc[best_trials]
         # Print the exp_info_columns for the best trials
         print(f"Best trials: in order of {dep_vars=}")
-        print(df[exp_info_columns].loc[best_trials])
+        print(df_filtered)
 
         nrows = 6
         ncols = len(dep_vars)
-        plt.figure(figsize=(nrows, ncols * 5))
+        nsamples = 10
+        # plt.figure(figsize=(nrows, ncols * 5))
+        layout = [
+            ["dv0", "dv1", "dv2", "dv3", "dv4", "dv5", ".", ".", ".", "."],
+            ["im0", "im1", "im2", "im3", "im4", "im5", "im6", "im7", "im8", "im9"],
+            ["va0", "va1", "va2", "va3", "va4", "va5", "va6", "va7", "va8", "va9"],
+        ]
+        fig, axd = plt.subplot_mosaic(layout, figsize=(nrows, ncols * 5))
 
-        # TÄHÄN JÄIT: tee tähän visualisointi
-        use_row = 0
-        self._plot_dependent_variables(
-            result_grid, dep_vars, best_trials, use_row, ncols
+        self._subplot_dependent_variables(axd, "dv", result_grid, dep_vars, best_trials)
+
+        if hasattr(mosaic, "exp_spat_filt_to_viz"):
+            exp_spat_filt_to_viz = mosaic.exp_spat_filt_to_viz
+        else:
+            mosaic._initialize()
+            exp_spat_filt_to_viz = mosaic.exp_spat_filt_to_viz
+
+        # # Choose trial to show
+        # this_dep_var = (
+        #     "ssim"  # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
+        # )
+
+        # Get images
+        img, rec_img, samples = self._get_imgs(
+            this_dep_var, df, nsamples, exp_spat_filt_to_viz, this_dep_var_best
         )
-        # plt.show()
-        # pdb.set_trace()
+
+        title = f"Original images"
+        self._subplot_img_recoimg(axd, "im", img, samples, title)
+
+        title = f"Reconstructed images for {this_dep_var}"
+        self._subplot_img_recoimg(axd, "va", rec_img, samples, title)
+
+        plt.show()
+        pdb.set_trace()
+
+    def _get_imgs(
+        self, this_dep_var, df, nsamples, exp_spat_filt_to_viz, this_dep_var_best
+    ):
+        if this_dep_var_best == "min":
+            this_trial_idx = df[this_dep_var].idxmin()
+        elif this_dep_var_best == "max":
+            this_trial_idx = df[this_dep_var].idxmax()
+
+        this_trial_id = df.loc[this_trial_idx, "trial_id"]
+        log_dir = df["logdir"][this_trial_idx]
+        # Get folder name starting "checkpoint"
+        checkpoint_folder_name = [f for f in os.listdir(log_dir) if "checkpoint" in f][
+            0
+        ]
+        checkpoint_path = Path(log_dir) / checkpoint_folder_name / "model.pth"
+
+        # Load the model
+        model = torch.load(checkpoint_path)
+        encoder = model.encoder
+        decoder = model.decoder
+
+        if hasattr(model, "test_data"):
+            test_data = model.test_data[:nsamples, :, :, :]
+        else:
+            test_data = np.zeros(
+                [
+                    nsamples,
+                    1,
+                    exp_spat_filt_to_viz["num_pix_y"],
+                    exp_spat_filt_to_viz["num_pix_x"],
+                ]
+            )
+            for i in range(nsamples):
+                test_data[i, 0, :, :] = exp_spat_filt_to_viz[f"cell_ix_{i}"][
+                    "spatial_data_array"
+                ]
+            test_data = torch.from_numpy(test_data).float()
+            img_size = model.decoder.unflatten.unflattened_size
+            test_data = TF.resize(test_data, img_size[-2:])
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        samples = range(0, nsamples)
+
+        encoder.eval()
+        decoder.eval()
+
+        img = test_data.to(self.device)
+        with torch.no_grad():
+            rec_img = decoder(encoder(img))
+
+        img = img.cpu().squeeze().numpy()
+        rec_img = rec_img.cpu().squeeze().numpy()
+
+        return img, rec_img, samples
 
     # WorkingRetina visualization
     def show_stimulus_with_gcs(self, retina, frame_number=0, ax=None, example_gc=5):
@@ -1189,9 +1280,7 @@ class Viz:
         plt.figure()
         plt.plot(data.T)
 
-    def _plot_dependent_variables(
-        self, result_grid, dep_vars, best_trials, use_row, ncols
-    ):
+    def _subplot_dependent_variables(self, axd, kw, result_grid, dep_vars, best_trials):
         """Plot dependent variables as a function of epochs."""
 
         df = result_grid.get_dataframe()
@@ -1218,7 +1307,8 @@ class Viz:
         for idx, dep_var in enumerate(dep_vars):
             # Create a new plot for each label
             color_idx = 0
-            ax = plt.subplot(use_row + 1, ncols, use_row * ncols + idx + 1)
+            # ax = plt.subplot(start_row + 1, ncols, start_row * ncols + idx + 1)
+            ax = axd[f"{kw}{idx}"]
 
             for i, result in enumerate(result_grid):
                 if i not in best_trials:
@@ -1261,9 +1351,23 @@ class Viz:
                 color_idx += 1
 
             # Add legend and bring it to the front
-            first_ax.legend(loc="lower left", bbox_to_anchor=(0.0, 0.8, 1.0, 0.2))
+            first_ax.legend(
+                loc="center left", bbox_to_anchor=((idx + 2.0), 0.5, 1.0, 0.2)
+            )
             first_ax.set_zorder(1)
 
             ax.set_title(f"{dep_var}")
             ax.set_ylabel(dep_var)
             ax.grid(True)
+
+    def _subplot_img_recoimg(self, axd, kw, img, samples, title):
+        """
+        Plot sample images
+        """
+        for pos_idx, sample_idx in enumerate(samples):
+            ax = axd[f"{kw}{pos_idx}"]
+            ax.imshow(img[sample_idx], cmap="gist_gray")
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+            if pos_idx == 0:
+                ax.set_title(title)
