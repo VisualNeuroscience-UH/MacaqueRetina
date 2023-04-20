@@ -915,6 +915,98 @@ class Viz:
 
         return img, rec_img, samples
 
+    def _subplot_dependent_variables(self, axd, kw, result_grid, dep_vars, best_trials):
+        """Plot dependent variables as a function of epochs."""
+
+        df = result_grid.get_dataframe()
+        # Find all columns with string "config/"
+        config_cols = [x for x in df.columns if "config/" in x]
+
+        # From the config_cols, identify columns where there is more than one unique value
+        # These are the columns which were varied in the search space
+        varied_cols = []
+        for col in config_cols:
+            if len(df[col].unique()) > 1:
+                varied_cols.append(col)
+
+        # Drop the "config/" part from the column names
+        varied_cols = [x.replace("config/", "") for x in varied_cols]
+
+        # # remove "model_id" from the varied columns
+        # varied_cols.remove("model_id")
+
+        num_colors = len(best_trials)
+        colors = plt.cm.get_cmap("tab20", num_colors).colors
+
+        # Make one subplot for each dependent variable
+        for idx, dep_var in enumerate(dep_vars):
+            # Create a new plot for each label
+            color_idx = 0
+            # ax = plt.subplot(start_row + 1, ncols, start_row * ncols + idx + 1)
+            ax = axd[f"{kw}{idx}"]
+
+            for i, result in enumerate(result_grid):
+                if i not in best_trials:
+                    continue
+
+                if idx == 0:
+                    label = ",".join(f"{x}={result.config[x]}" for x in varied_cols)
+                    legend = True
+                    first_ax = ax
+                else:
+                    legend = False
+
+                result.metrics_dataframe.plot(
+                    "training_iteration",
+                    dep_var,
+                    ax=ax,
+                    label=label,
+                    color=colors[color_idx],
+                    legend=legend,
+                )
+
+                # At the end (+1) of the x-axis, add mean and SD of last 50 epochs as dot and vertical line, respectively
+                last_50 = result.metrics_dataframe.tail(50)
+                mean = last_50[dep_var].mean()
+                std = last_50[dep_var].std()
+                n_epochs = result.metrics_dataframe.tail(1)["training_iteration"]
+                ax.plot(
+                    n_epochs + n_epochs // 5,
+                    mean,
+                    "o",
+                    color=colors[color_idx],
+                )
+                ax.plot(
+                    [n_epochs + n_epochs // 5] * 2,
+                    [mean - std, mean + std],
+                    "-",
+                    color=colors[color_idx],
+                )
+
+                color_idx += 1
+
+            # Add legend and bring it to the front
+            first_ax.legend(
+                loc="center left", bbox_to_anchor=((idx + 2.0), 0.5, 1.0, 0.2)
+            )
+            first_ax.set_zorder(1)
+
+            ax.set_title(f"{dep_var}")
+            ax.set_ylabel(dep_var)
+            ax.grid(True)
+
+    def _subplot_img_recoimg(self, axd, kw, img, samples, title):
+        """
+        Plot sample images
+        """
+        for pos_idx, sample_idx in enumerate(samples):
+            ax = axd[f"{kw}{pos_idx}"]
+            ax.imshow(img[sample_idx], cmap="gist_gray")
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+            if pos_idx == 0:
+                ax.set_title(title)
+
     # WorkingRetina visualization
     def show_stimulus_with_gcs(self, retina, frame_number=0, ax=None, example_gc=5):
         """
@@ -1280,94 +1372,3 @@ class Viz:
         plt.figure()
         plt.plot(data.T)
 
-    def _subplot_dependent_variables(self, axd, kw, result_grid, dep_vars, best_trials):
-        """Plot dependent variables as a function of epochs."""
-
-        df = result_grid.get_dataframe()
-        # Find all columns with string "config/"
-        config_cols = [x for x in df.columns if "config/" in x]
-
-        # From the config_cols, identify columns where there is more than one unique value
-        # These are the columns which were varied in the search space
-        varied_cols = []
-        for col in config_cols:
-            if len(df[col].unique()) > 1:
-                varied_cols.append(col)
-
-        # Drop the "config/" part from the column names
-        varied_cols = [x.replace("config/", "") for x in varied_cols]
-
-        # # remove "model_id" from the varied columns
-        # varied_cols.remove("model_id")
-
-        num_colors = len(best_trials)
-        colors = plt.cm.get_cmap("tab20", num_colors).colors
-
-        # Make one subplot for each dependent variable
-        for idx, dep_var in enumerate(dep_vars):
-            # Create a new plot for each label
-            color_idx = 0
-            # ax = plt.subplot(start_row + 1, ncols, start_row * ncols + idx + 1)
-            ax = axd[f"{kw}{idx}"]
-
-            for i, result in enumerate(result_grid):
-                if i not in best_trials:
-                    continue
-
-                if idx == 0:
-                    label = ",".join(f"{x}={result.config[x]}" for x in varied_cols)
-                    legend = True
-                    first_ax = ax
-                else:
-                    legend = False
-
-                result.metrics_dataframe.plot(
-                    "training_iteration",
-                    dep_var,
-                    ax=ax,
-                    label=label,
-                    color=colors[color_idx],
-                    legend=legend,
-                )
-
-                # At the end (+1) of the x-axis, add mean and SD of last 50 epochs as dot and vertical line, respectively
-                last_50 = result.metrics_dataframe.tail(50)
-                mean = last_50[dep_var].mean()
-                std = last_50[dep_var].std()
-                n_epochs = result.metrics_dataframe.tail(1)["training_iteration"]
-                ax.plot(
-                    n_epochs + n_epochs // 5,
-                    mean,
-                    "o",
-                    color=colors[color_idx],
-                )
-                ax.plot(
-                    [n_epochs + n_epochs // 5] * 2,
-                    [mean - std, mean + std],
-                    "-",
-                    color=colors[color_idx],
-                )
-
-                color_idx += 1
-
-            # Add legend and bring it to the front
-            first_ax.legend(
-                loc="center left", bbox_to_anchor=((idx + 2.0), 0.5, 1.0, 0.2)
-            )
-            first_ax.set_zorder(1)
-
-            ax.set_title(f"{dep_var}")
-            ax.set_ylabel(dep_var)
-            ax.grid(True)
-
-    def _subplot_img_recoimg(self, axd, kw, img, samples, title):
-        """
-        Plot sample images
-        """
-        for pos_idx, sample_idx in enumerate(samples):
-            ax = axd[f"{kw}{pos_idx}"]
-            ax.imshow(img[sample_idx], cmap="gist_gray")
-            ax.get_xaxis().set_visible(False)
-            ax.get_yaxis().set_visible(False)
-            if pos_idx == 0:
-                ax.set_title(title)
