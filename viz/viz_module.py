@@ -21,6 +21,7 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 # Builtin
 # import os
 # import sys
+from pathlib import Path
 import pdb
 
 
@@ -38,7 +39,6 @@ class Viz:
     ]
 
     def __init__(self, context, data_io, ana, **kwargs) -> None:
-
         self._context = context.set_context(self._properties_list)
         self._data_io = data_io
         self._ana = ana
@@ -63,7 +63,6 @@ class Viz:
         return self._ana
 
     def data_is_valid(self, data, accept_empty=False):
-
         try:
             data = data / data.get_best_unit()
         except:
@@ -114,7 +113,6 @@ class Viz:
         title="",
         pause_to_show=False,
     ):
-
         data_all_viable_cells = spat_filt_to_viz["data_all_viable_cells"]
         x_grid = spat_filt_to_viz["x_grid"]
         y_grid = spat_filt_to_viz["y_grid"]
@@ -756,6 +754,76 @@ class Viz:
         plt.axvline(np.median(img_post), color="r")
         plt.title(f"Generated processed, median: {np.median(img_post):.2f}")
 
+    def show_ray_experiment(self, ray_exp=None):
+        """
+        Show the results of a ray experiment. If ray_exp is None, then
+        the most recent experiment is shown.
+
+        Parameters
+        ----------
+        ray_exp : RayExperiment object
+        """
+
+        info_columns = ["trial_id", "iteration"]
+        dep_vars = ["train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"]
+        dep_vars_best = ["min", "min", "min", "max", "min", "min"]
+        config_prefix = "config/"
+
+        if ray_exp is None:
+            most_recent = True
+        else:
+            most_recent = False
+
+        result_grid = self.data_io.load_ray_results_grid(
+            most_recent=most_recent, ray_exp=ray_exp
+        )
+        df = result_grid.get_dataframe()
+
+        # Get configuration variables
+        config_vars_all = [c for c in df.columns if config_prefix in c]
+
+        # Drop columns that are constant in the experiment
+        constant_cols = []
+        for col in config_vars_all:
+            if len(df[col].unique()) == 1:
+                constant_cols.append(col)
+        config_vars_changed = [
+            col for col in config_vars_all if col not in constant_cols
+        ]
+        config_vars = [col.removeprefix(config_prefix) for col in config_vars_changed]
+
+        # Collect basic data from the experiment
+        n_trials = len(df)
+        n_errors = result_grid.num_errors
+
+        # Columns to describe the experiment
+        exp_info_columns = info_columns + config_vars_changed + dep_vars
+        print(df[exp_info_columns].describe())
+
+        # Find the row indeces of the n best trials
+        best_trials = []
+        for dep_var, dep_var_best in zip(dep_vars, dep_vars_best):
+            if dep_var_best == "min":
+                best_trials.append(df[dep_var].idxmin())
+            elif dep_var_best == "max":
+                best_trials.append(df[dep_var].idxmax())
+
+        # Print the exp_info_columns for the best trials
+        print(f"Best trials: in order of {dep_vars=}")
+        print(df[exp_info_columns].loc[best_trials])
+
+        nrows = 6
+        ncols = len(dep_vars)
+        plt.figure(figsize=(nrows, ncols * 5))
+
+        # TÄHÄN JÄIT: tee tähän visualisointi
+        use_row = 0
+        self._plot_dependent_variables(
+            result_grid, dep_vars, best_trials, use_row, ncols
+        )
+        # plt.show()
+        # pdb.set_trace()
+
     # WorkingRetina visualization
     def show_stimulus_with_gcs(self, retina, frame_number=0, ax=None, example_gc=5):
         """
@@ -1048,7 +1116,6 @@ class Viz:
         plt.legend()
 
     def show_spatiotemporal_filter(self, retina):
-
         """
         WorkingRetina call.
         """
@@ -1121,3 +1188,82 @@ class Viz:
 
         plt.figure()
         plt.plot(data.T)
+
+    def _plot_dependent_variables(
+        self, result_grid, dep_vars, best_trials, use_row, ncols
+    ):
+        """Plot dependent variables as a function of epochs."""
+
+        df = result_grid.get_dataframe()
+        # Find all columns with string "config/"
+        config_cols = [x for x in df.columns if "config/" in x]
+
+        # From the config_cols, identify columns where there is more than one unique value
+        # These are the columns which were varied in the search space
+        varied_cols = []
+        for col in config_cols:
+            if len(df[col].unique()) > 1:
+                varied_cols.append(col)
+
+        # Drop the "config/" part from the column names
+        varied_cols = [x.replace("config/", "") for x in varied_cols]
+
+        # # remove "model_id" from the varied columns
+        # varied_cols.remove("model_id")
+
+        num_colors = len(best_trials)
+        colors = plt.cm.get_cmap("tab20", num_colors).colors
+
+        # Make one subplot for each dependent variable
+        for idx, dep_var in enumerate(dep_vars):
+            # Create a new plot for each label
+            color_idx = 0
+            ax = plt.subplot(use_row + 1, ncols, use_row * ncols + idx + 1)
+
+            for i, result in enumerate(result_grid):
+                if i not in best_trials:
+                    continue
+
+                if idx == 0:
+                    label = ",".join(f"{x}={result.config[x]}" for x in varied_cols)
+                    legend = True
+                    first_ax = ax
+                else:
+                    legend = False
+
+                result.metrics_dataframe.plot(
+                    "training_iteration",
+                    dep_var,
+                    ax=ax,
+                    label=label,
+                    color=colors[color_idx],
+                    legend=legend,
+                )
+
+                # At the end (+1) of the x-axis, add mean and SD of last 50 epochs as dot and vertical line, respectively
+                last_50 = result.metrics_dataframe.tail(50)
+                mean = last_50[dep_var].mean()
+                std = last_50[dep_var].std()
+                n_epochs = result.metrics_dataframe.tail(1)["training_iteration"]
+                ax.plot(
+                    n_epochs + n_epochs // 5,
+                    mean,
+                    "o",
+                    color=colors[color_idx],
+                )
+                ax.plot(
+                    [n_epochs + n_epochs // 5] * 2,
+                    [mean - std, mean + std],
+                    "-",
+                    color=colors[color_idx],
+                )
+
+                color_idx += 1
+
+            # Add legend and bring it to the front
+            first_ax.legend(loc="lower left", bbox_to_anchor=(0.0, 0.8, 1.0, 0.2))
+            first_ax.set_zorder(1)
+
+            ax.set_title(f"{dep_var}")
+            ax.set_ylabel(dep_var)
+            ax.grid(True)

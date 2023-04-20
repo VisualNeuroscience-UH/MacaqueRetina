@@ -494,17 +494,17 @@ class DataIO(DataIOBase):
         sio.savemat(filename_out_full, mat_out_dict)
         print(f"Duration of stimulus is {total_duration} seconds")
 
-    def load_ray_results_grid(self, most_recent=True, exp_name=None):
+    def load_ray_results_grid(self, most_recent=True, ray_exp=None):
         ray_dir = self.context.output_folder / "ray_results"
 
         if most_recent:
-            exp_name = sorted(os.listdir(ray_dir))[-1]
+            ray_exp = sorted(os.listdir(ray_dir))[-1]
         else:
             assert (
-                exp_name is not None
-            ), "exp_name must be specified if most_recent is False, aborting..."
+                ray_exp is not None
+            ), "ray_exp must be specified if most_recent is False, aborting..."
 
-        experiment_path = f"{ray_dir}/{exp_name}"
+        experiment_path = f"{ray_dir}/{ray_exp}"
         print(f"Loading results from {experiment_path}...")
 
         from retina.vae_module import TrainableVAE

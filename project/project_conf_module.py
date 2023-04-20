@@ -329,13 +329,14 @@ if __name__ == "__main__":
 
     # options are defined in my_retina_options
 
-    PM.construct_retina.build()
+    # PM.construct_retina.build()
     # PM.construct_retina.show_exp_build_process(show_all_spatial_fits=True)
-    PM.construct_retina.show_gen_and_exp_spatial_rfs(n_samples=5)
+    # PM.construct_retina.show_gen_and_exp_spatial_rfs(n_samples=5)
     # PM.construct_retina.show_gen_spat_postprocessing()
     # PM.construct_retina.show_latent_space_and_samples()
 
-    # PM.result_grid = PM.data_io.load_ray_results_grid(most_recent=True, exp_name=None)
+    exp_name = "TrainableVAE_2023-04-13_19-14-10"
+    PM.viz.show_ray_experiment(exp_name)
     # pdb.set_trace()
 
     #################################
