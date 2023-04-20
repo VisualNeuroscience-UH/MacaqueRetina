@@ -844,7 +844,7 @@ class RetinaVAE:
         self.response_type = response_type
 
         # Fixed values for both single training and ray tune runs
-        self.epochs = 5
+        self.epochs = 500
         self.lr_step_size = 10  # Learning rate decay step size (in epochs)
         self.lr_gamma = 0.9  # Learning rate decay (multiplier for learning rate)
         # how many times to get the data, applied only if augmentation_dict is not None
@@ -856,8 +856,6 @@ class RetinaVAE:
         self.grid_search = True  # False for tune by Optuna, True for grid search
         self.grace_period = 50  # epochs. ASHA stops earliest at grace period.
 
-        # TÄHÄN JÄIT: OPETTELE PENKOMAAN EXPRIMENT JSON. KANNATTANEE TUUNATA ILMAN CHECKPOINTTEJA ISOSTI. SEN JÄLKEEN EHKÄ
-        # CHECKPOINTIT TAI YKSITTÄISET AJOT.
 
         #######################
         # Single run parameters

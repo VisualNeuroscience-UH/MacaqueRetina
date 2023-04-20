@@ -642,7 +642,7 @@ class Viz:
         fig, axes = plt.subplots(n_rows, n_cols, figsize=(10, 2 * n_rows))
         fig_suptitle_text = "Latent space and samples"
         axes = axes.flatten()
-        # pdb.set_trace()
+
         # Plot the latent samples on top of the estimated kde
         for ax_idx, i in enumerate(range(0, latent_dim, 2)):
             if ax_idx > 15:
@@ -856,9 +856,6 @@ class Viz:
 
         title = f"Reconstructed images for {this_dep_var}"
         self._subplot_img_recoimg(axd, "va", rec_img, samples, title)
-
-        plt.show()
-        pdb.set_trace()
 
     def _get_imgs(
         self, this_dep_var, df, nsamples, exp_spat_filt_to_viz, this_dep_var_best
