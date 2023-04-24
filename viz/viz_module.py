@@ -825,13 +825,18 @@ class Viz:
         nrows = 6
         ncols = len(dep_vars)
         nsamples = 10
-        # plt.figure(figsize=(nrows, ncols * 5))
+
         layout = [
+            ["dh0", "dh1", "dh2", "dh3", "dh4", "dh5", ".", ".", ".", "."],
             ["dv0", "dv1", "dv2", "dv3", "dv4", "dv5", ".", ".", ".", "."],
             ["im0", "im1", "im2", "im3", "im4", "im5", "im6", "im7", "im8", "im9"],
-            ["va0", "va1", "va2", "va3", "va4", "va5", "va6", "va7", "va8", "va9"],
+            ["re0", "re1", "re2", "re3", "re4", "re5", "re6", "re7", "re8", "re9"],
         ]
         fig, axd = plt.subplot_mosaic(layout, figsize=(nrows, ncols * 5))
+
+        self._subplot_dependent_histograms(
+            axd, "dh", result_grid, dep_vars, dep_vars_best
+        )
 
         self._subplot_dependent_variables(axd, "dv", result_grid, dep_vars, best_trials)
 
@@ -854,8 +859,8 @@ class Viz:
         title = f"Original images"
         self._subplot_img_recoimg(axd, "im", img, samples, title)
 
-        title = f"Reconstructed images for {this_dep_var}"
-        self._subplot_img_recoimg(axd, "va", rec_img, samples, title)
+        title = f"Reconstructed images for best {this_dep_var}"
+        self._subplot_img_recoimg(axd, "re", rec_img, samples, title)
 
     def _get_imgs(
         self, this_dep_var, df, nsamples, exp_spat_filt_to_viz, this_dep_var_best
@@ -911,6 +916,48 @@ class Viz:
         rec_img = rec_img.cpu().squeeze().numpy()
 
         return img, rec_img, samples
+
+    def _subplot_dependent_histograms(
+        self, axd, kw, result_grid, dep_vars, dep_vars_best
+    ):
+        """Plot dependent variables as a function of epochs."""
+
+        df = result_grid.get_dataframe()
+        # Find all columns with string "config/"
+        config_cols = [x for x in df.columns if "config/" in x]
+
+        # From the config_cols, identify columns where there is more than one unique value
+        # These are the columns which were varied in the search space
+        varied_cols = []
+        for col in config_cols:
+            if len(df[col].unique()) > 1:
+                varied_cols.append(col)
+
+        # Drop the "config/" part from the column names
+        varied_cols = [x.replace("config/", "") for x in varied_cols]
+
+        # Fraction of best = 1/4
+        frac_best = 0.25
+
+        # Make one subplot for each dependent variable
+        for idx, dep_var in enumerate(dep_vars):
+            ax = axd[f"{kw}{idx}"]
+
+            # get array of values for this dependent variable
+            dep_var_vals = df[dep_var].values
+
+            # get the indices of the frac_best trials
+            num_trials = len(dep_var_vals)
+            num_best_trials = int(num_trials * frac_best)
+            if dep_vars_best[idx] == "min":
+                best_trials = np.argsort(dep_var_vals)[:num_best_trials]
+            elif dep_vars_best[idx] == "max":
+                best_trials = np.argsort(dep_var_vals)[-num_best_trials:]
+
+            # Make histogram of the frac_best trials
+            ax.hist(dep_var_vals[best_trials], bins=20)
+
+            ax.set_title(f"{dep_var}")
 
     def _subplot_dependent_variables(self, axd, kw, result_grid, dep_vars, best_trials):
         """Plot dependent variables as a function of epochs."""
@@ -983,10 +1030,16 @@ class Viz:
                 color_idx += 1
 
             # Add legend and bring it to the front
-            first_ax.legend(
+            leg = first_ax.legend(
                 loc="center left", bbox_to_anchor=((idx + 2.0), 0.5, 1.0, 0.2)
             )
             first_ax.set_zorder(1)
+
+            # get the legend object
+
+            # change the line width for the legend
+            for line in leg.get_lines():
+                line.set_linewidth(4.0)
 
             ax.set_title(f"{dep_var}")
             ax.set_ylabel(dep_var)
@@ -1368,4 +1421,3 @@ class Viz:
 
         plt.figure()
         plt.plot(data.T)
-
