@@ -41,6 +41,7 @@ import seaborn as sns
 
 # Local
 from retina.apricot_data_module import ApricotData
+from retina.retina_math_module import RetinaMath
 
 # Builtin
 from pathlib import Path
@@ -199,8 +200,8 @@ class AugmentedDataset(torch.utils.data.Dataset):
 
         feature_range = (0, 1)
         feat_min, feat_max = feature_range
-        data_std = (data - data.min()) / (data.max() - data.min())
-        data_scaled = data_std * (feat_max - feat_min) + feat_min
+        data_normalized = (data - data.min()) / (data.max() - data.min())
+        data_scaled = data_normalized * (feat_max - feat_min) + feat_min
 
         return data_scaled
 
@@ -817,7 +818,7 @@ class TrainableVAE(tune.Trainable):
         self.model = torch.load(checkpoint_path)
 
 
-class RetinaVAE:
+class RetinaVAE(RetinaMath):
     """
     Class to apply variational autoencoder to Apricot retina data and run single learning run
     or Ray[Tune] hyperparameter search.
@@ -844,7 +845,7 @@ class RetinaVAE:
         self.response_type = response_type
 
         # Fixed values for both single training and ray tune runs
-        self.epochs = 500
+        self.epochs = 5
         self.lr_step_size = 10  # Learning rate decay step size (in epochs)
         self.lr_gamma = 0.9  # Learning rate decay (multiplier for learning rate)
         # how many times to get the data, applied only if augmentation_dict is not None
@@ -1749,7 +1750,7 @@ class RetinaVAE:
     def _get_spatial_apricot_data(self):
         """
         Get spatial ganglion cell data from file using the apricot_data method read_spatial_filter_data().
-        All data is returned, the requested data is looged in the class attributes gc_type and response_type.
+        All data is returned, the requested data is logged in the class attributes gc_type and response_type.
 
         Returns
         -------
@@ -1818,6 +1819,9 @@ class RetinaVAE:
                 gc_spatial_data_np_orig, bad_data_idx, axis=0
             )
 
+            # Invert data arrays with negative sign for fitting and display.
+            gc_spatial_data_np = self.flip_negative_spatial_rf(gc_spatial_data_np)
+            
             gc_spatial_data_np = np.expand_dims(gc_spatial_data_np, axis=1)
 
             # Collate data
@@ -2260,8 +2264,6 @@ class RetinaVAE:
 
             return kid_mean_epoch, kid_std_epoch
 
-        # self.train_by = [["parasol"], ["on", "off"]]
-        # self._get_and_split_apricot_data()
         dataloader_real = self._augment_and_get_dataloader(
             data_type="train",
             augmentation_dict=None,
@@ -2269,8 +2271,6 @@ class RetinaVAE:
             shuffle=True,
         )
 
-        # self.train_by = [["midget"], ["on", "off"]]
-        # self._get_and_split_apricot_data()
         dataloader_fake = self._augment_and_get_dataloader(
             data_type="train",
             augmentation_dict=self.augmentation_dict,
@@ -2278,8 +2278,6 @@ class RetinaVAE:
             batch_size=self.batch_size,
             shuffle=True,
         )
-
-        # dataloader_fake = dataloader_real
 
         kid_mean, kid_std = kid_compare(dataloader_real, dataloader_fake, n_features=64)
         print(f"KID mean: {kid_mean}, KID std: {kid_std} for 64 features")

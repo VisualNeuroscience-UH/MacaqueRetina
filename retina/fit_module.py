@@ -14,6 +14,7 @@ import pandas as pd
 
 # Viz
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 # Local
 from retina.retina_math_module import RetinaMath
@@ -347,17 +348,15 @@ class Fit(ApricotData, RetinaMath):
                 ),
             )
 
+        # Invert data arrays with negative sign for fitting and display.
+        spat_data_array = self.flip_negative_spatial_rf(spat_data_array)
+        
         # Go through all cells
         print(("Fitting DoG model, surround is {0}".format(surround_status)))
         for cell_idx in tqdm(all_viable_cells, desc="Fitting spatial  filters"):
             this_rf = spat_data_array[cell_idx, :, :]
 
             rot = cen_rot_rad_all[cell_idx]
-
-            # Invert data arrays with negative sign for fitting and display.
-            # Fitting assumes that center peak is above mean.
-            if this_rf.ravel()[np.argmax(np.abs(this_rf))] < 0:
-                this_rf = this_rf * -1
 
             try:
                 if surround_model == 1:

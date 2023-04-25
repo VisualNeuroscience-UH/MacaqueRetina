@@ -150,6 +150,45 @@ class RetinaMath:
         y = p * (t / tau) ** (n) * np.exp(-n * (t / tau - 1))
         return y
 
+    # Fit & RetinaVAE method
+
+    def flip_negative_spatial_rf(self, spatial_rf_unflipped):
+        """
+        Flips negative values of a spatial RF to positive values.
+
+        Parameters
+        ----------
+        spatial_rf_unflipped: numpy.ndarray of shape (N, H, W)
+            Spatial receptive field.
+
+        Returns
+        -------
+        spatial_rf: numpy.ndarray of shape (N, H, W)
+            Spatial receptive field with negative values flipped to positive values.
+        """
+
+        # Number of pixels to define maximum value of RF
+        max_pixels = 5
+
+        # Copy spatial_rf_unflipped to spatial_rf
+        spatial_rf = np.copy(spatial_rf_unflipped)
+
+        # Find max_pixels number of pixels with absolute maximum value 
+        # and their indices
+        for i in range(spatial_rf.shape[0]):
+            # max_pixels_values = np.sort(np.abs(spatial_rf[i].ravel()))[-max_pixels:]
+            max_pixels_indices = np.argsort(np.abs(spatial_rf[i].ravel()))[-max_pixels:]
+
+            # Calculate mean value of the original max_pixels_values
+            mean_max_pixels_values = np.mean(spatial_rf[i].ravel()[max_pixels_indices])
+
+            # If mean value of the original max_pixels_values is negative,
+            # flip the RF
+            if mean_max_pixels_values < 0:
+                spatial_rf[i] = spatial_rf[i] * -1
+
+        return spatial_rf
+
     # Fit & WorkingRetina method
     def DoG2D_fixed_surround(
         self,
