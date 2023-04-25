@@ -830,12 +830,20 @@ class Viz:
             ["dh0", "dh1", "dh2", "dh3", "dh4", "dh5", ".", ".", ".", "."],
             ["dv0", "dv1", "dv2", "dv3", "dv4", "dv5", ".", ".", ".", "."],
             ["im0", "im1", "im2", "im3", "im4", "im5", "im6", "im7", "im8", "im9"],
-            ["re0", "re1", "re2", "re3", "re4", "re5", "re6", "re7", "re8", "re9"],
+            ["re0" + str(i) for i in range(10)],
+            ["re1" + str(i) for i in range(10)],
+            ["re2" + str(i) for i in range(10)],
+            ["re3" + str(i) for i in range(10)],
+            ["re4" + str(i) for i in range(10)],
         ]
         fig, axd = plt.subplot_mosaic(layout, figsize=(nrows, ncols * 5))
 
+        # Fraction of best = 1/4
+        frac_best = 0.25
+        num_best_trials = int(len(df) * frac_best)
+
         self._subplot_dependent_histograms(
-            axd, "dh", result_grid, dep_vars, dep_vars_best
+            axd, "dh", result_grid, dep_vars, dep_vars_best, num_best_trials
         )
 
         self._subplot_dependent_variables(axd, "dv", result_grid, dep_vars, best_trials)
@@ -846,31 +854,48 @@ class Viz:
             mosaic._initialize()
             exp_spat_filt_to_viz = mosaic.exp_spat_filt_to_viz
 
-        # # Choose trial to show
-        # this_dep_var = (
-        #     "ssim"  # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
+        # Get images
+        # img, rec_img, samples = self._get_imgs(
+        #     df, this_dep_var, this_dep_var_best, nsamples, exp_spat_filt_to_viz
         # )
 
-        # Get images
+        num_best_trials = 5
+        best_trials, dep_var_vals = self._get_best_trials(
+            df, dep_var, this_dep_var_best, num_best_trials
+        )
+
         img, rec_img, samples = self._get_imgs(
-            this_dep_var, df, nsamples, exp_spat_filt_to_viz, this_dep_var_best
+            df, nsamples, exp_spat_filt_to_viz, best_trials[0]
         )
 
         title = f"Original images"
-        self._subplot_img_recoimg(axd, "im", img, samples, title)
+        self._subplot_img_recoimg(axd, "im", None, img, samples, title)
 
         title = f"Reconstructed images for best {this_dep_var}"
-        self._subplot_img_recoimg(axd, "re", rec_img, samples, title)
+        self._subplot_img_recoimg(axd, "re", 0, rec_img, samples, title)
+
+        for idx, this_trial in enumerate(best_trials[1:]):
+            img, rec_img, samples = self._get_imgs(
+                df, nsamples, exp_spat_filt_to_viz, this_trial
+            )
+            # self._subplot_img_recoimg(axd, "im", img, samples, title)
+            self._subplot_img_recoimg(axd, "re", idx, rec_img, samples, title)
 
     def _get_imgs(
-        self, this_dep_var, df, nsamples, exp_spat_filt_to_viz, this_dep_var_best
+        self,
+        df,
+        # this_dep_var,
+        # this_dep_var_best,
+        nsamples,
+        exp_spat_filt_to_viz,
+        this_trial_idx,
     ):
-        if this_dep_var_best == "min":
-            this_trial_idx = df[this_dep_var].idxmin()
-        elif this_dep_var_best == "max":
-            this_trial_idx = df[this_dep_var].idxmax()
+        # if this_dep_var_best == "min":
+        #     this_trial_idx = df[this_dep_var].idxmin()
+        # elif this_dep_var_best == "max":
+        #     this_trial_idx = df[this_dep_var].idxmax()
 
-        this_trial_id = df.loc[this_trial_idx, "trial_id"]
+        # this_trial_id = df.loc[this_trial_idx, "trial_id"]
         log_dir = df["logdir"][this_trial_idx]
         # Get folder name starting "checkpoint"
         checkpoint_folder_name = [f for f in os.listdir(log_dir) if "checkpoint" in f][
@@ -918,7 +943,7 @@ class Viz:
         return img, rec_img, samples
 
     def _subplot_dependent_histograms(
-        self, axd, kw, result_grid, dep_vars, dep_vars_best
+        self, axd, kw, result_grid, dep_vars, dep_vars_best, num_best_trials
     ):
         """Plot dependent variables as a function of epochs."""
 
@@ -936,28 +961,51 @@ class Viz:
         # Drop the "config/" part from the column names
         varied_cols = [x.replace("config/", "") for x in varied_cols]
 
-        # Fraction of best = 1/4
-        frac_best = 0.25
-
         # Make one subplot for each dependent variable
         for idx, dep_var in enumerate(dep_vars):
+            best_is = dep_vars_best[idx]
+            best_trials, dep_var_vals = self._get_best_trials(
+                df, dep_var, best_is, num_best_trials
+            )
+
             ax = axd[f"{kw}{idx}"]
-
-            # get array of values for this dependent variable
-            dep_var_vals = df[dep_var].values
-
-            # get the indices of the frac_best trials
-            num_trials = len(dep_var_vals)
-            num_best_trials = int(num_trials * frac_best)
-            if dep_vars_best[idx] == "min":
-                best_trials = np.argsort(dep_var_vals)[:num_best_trials]
-            elif dep_vars_best[idx] == "max":
-                best_trials = np.argsort(dep_var_vals)[-num_best_trials:]
 
             # Make histogram of the frac_best trials
             ax.hist(dep_var_vals[best_trials], bins=20)
 
             ax.set_title(f"{dep_var}")
+
+    def _get_best_trials(self, df, dep_var, best_is, num_best_trials):
+        """
+        Get the indices of the best trials for a dependent variable.
+
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            Dataframe containing the results of the hyperparameter search.
+        dep_var : str
+            Name of the dependent variable.
+        best_is : str
+            Whether the best trials are the ones with the highest or lowest values.
+        num_best_trials : int
+            Number of best trials to return. Overrides frac_best.
+
+        Returns
+        -------
+        best_trials : list
+            List of indices of the best trials.
+        """
+
+        # get array of values for this dependent variable
+        dep_var_vals = df[dep_var].values
+
+        # get the indices of the num_best_trials
+        if best_is == "min":
+            best_trials = np.argsort(dep_var_vals)[:num_best_trials]
+        elif best_is == "max":
+            best_trials = np.argsort(dep_var_vals)[-num_best_trials:]
+
+        return best_trials, dep_var_vals
 
     def _subplot_dependent_variables(self, axd, kw, result_grid, dep_vars, best_trials):
         """Plot dependent variables as a function of epochs."""
@@ -1045,12 +1093,15 @@ class Viz:
             ax.set_ylabel(dep_var)
             ax.grid(True)
 
-    def _subplot_img_recoimg(self, axd, kw, img, samples, title):
+    def _subplot_img_recoimg(self, axd, kw, subidx, img, samples, title):
         """
         Plot sample images
         """
         for pos_idx, sample_idx in enumerate(samples):
-            ax = axd[f"{kw}{pos_idx}"]
+            if subidx is None:
+                ax = axd[f"{kw}{pos_idx}"]
+            else:
+                ax = axd[f"{kw}{subidx}{pos_idx}"]
             ax.imshow(img[sample_idx], cmap="gist_gray")
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
