@@ -103,7 +103,8 @@ class ApricotData:
         """
 
         temporal_filters = self.read_temporal_filter_data(flip_negs=False)
-        inverted_data_indices = np.argwhere(temporal_filters[:, 1] < 0).flatten()
+        # Based on 3 samples
+        inverted_data_indices = np.argwhere(np.mean(temporal_filters[:, 1:3], axis=1) < 0).flatten()
 
         return inverted_data_indices
 
