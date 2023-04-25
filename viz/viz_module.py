@@ -828,6 +828,7 @@ class Viz:
 
         layout = [
             ["dh0", "dh1", "dh2", "dh3", "dh4", "dh5", ".", ".", ".", "."],
+            [".", ".", ".", ".", ".", ".", ".", ".", ".", "."],
             ["dv0", "dv1", "dv2", "dv3", "dv4", "dv5", ".", ".", ".", "."],
             ["im0", "im1", "im2", "im3", "im4", "im5", "im6", "im7", "im8", "im9"],
             ["re0" + str(i) for i in range(10)],
@@ -854,11 +855,6 @@ class Viz:
             mosaic._initialize()
             exp_spat_filt_to_viz = mosaic.exp_spat_filt_to_viz
 
-        # Get images
-        # img, rec_img, samples = self._get_imgs(
-        #     df, this_dep_var, this_dep_var_best, nsamples, exp_spat_filt_to_viz
-        # )
-
         num_best_trials = 5
         best_trials, dep_var_vals = self._get_best_trials(
             df, dep_var, this_dep_var_best, num_best_trials
@@ -868,35 +864,31 @@ class Viz:
             df, nsamples, exp_spat_filt_to_viz, best_trials[0]
         )
 
-        title = f"Original images"
+        title = f"Original \nimages"
         self._subplot_img_recoimg(axd, "im", None, img, samples, title)
 
-        title = f"Reconstructed images for best {this_dep_var}"
+        title = f"Reco for \n{this_dep_var} = \n{dep_var_vals[best_trials[0]]:.3f}, \nidx = {best_trials[0]}"
         self._subplot_img_recoimg(axd, "re", 0, rec_img, samples, title)
 
         for idx, this_trial in enumerate(best_trials[1:]):
             img, rec_img, samples = self._get_imgs(
                 df, nsamples, exp_spat_filt_to_viz, this_trial
             )
-            # self._subplot_img_recoimg(axd, "im", img, samples, title)
-            self._subplot_img_recoimg(axd, "re", idx, rec_img, samples, title)
+
+            title = f"Reco for \n{this_dep_var} = \n{dep_var_vals[this_trial]:.3f}, \nidx = {this_trial}"
+            # enumerate starts at 0, so add 1
+            self._subplot_img_recoimg(axd, "re", idx + 1, rec_img, samples, title)
 
     def _get_imgs(
         self,
         df,
-        # this_dep_var,
-        # this_dep_var_best,
         nsamples,
         exp_spat_filt_to_viz,
         this_trial_idx,
     ):
-        # if this_dep_var_best == "min":
-        #     this_trial_idx = df[this_dep_var].idxmin()
-        # elif this_dep_var_best == "max":
-        #     this_trial_idx = df[this_dep_var].idxmax()
 
-        # this_trial_id = df.loc[this_trial_idx, "trial_id"]
         log_dir = df["logdir"][this_trial_idx]
+
         # Get folder name starting "checkpoint"
         checkpoint_folder_name = [f for f in os.listdir(log_dir) if "checkpoint" in f][
             0
@@ -925,13 +917,15 @@ class Viz:
                 ]
             test_data = torch.from_numpy(test_data).float()
             img_size = model.decoder.unflatten.unflattened_size
-            test_data = TF.resize(test_data, img_size[-2:])
+            test_data = TF.resize(test_data, img_size[-2:], antialias=True)
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         samples = range(0, nsamples)
 
         encoder.eval()
         decoder.eval()
+        encoder.to(self.device)
+        decoder.to(self.device)
 
         img = test_data.to(self.device)
         with torch.no_grad():
@@ -1046,6 +1040,7 @@ class Viz:
                     legend = True
                     first_ax = ax
                 else:
+                    label=None
                     legend = False
 
                 result.metrics_dataframe.plot(
@@ -1089,9 +1084,12 @@ class Viz:
             for line in leg.get_lines():
                 line.set_linewidth(4.0)
 
-            ax.set_title(f"{dep_var}")
-            ax.set_ylabel(dep_var)
             ax.grid(True)
+
+            # set x axis labels off
+            ax.set_xlabel("")
+            # set x ticks off
+            ax.set_xticks([])
 
     def _subplot_img_recoimg(self, axd, kw, subidx, img, samples, title):
         """
@@ -1106,7 +1104,19 @@ class Viz:
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
             if pos_idx == 0:
-                ax.set_title(title)
+                # ax.set_title(title, fontsize=8, fontdict={'verticalalignment': 'baseline', 'horizontalalignment': 'left'})
+                # Print title to the left of the first image. The coordinates are in axes coordinates
+                ax.text(
+                    -1.0,
+                    0.5,
+                    title,
+                    fontsize=8,
+                    fontdict={       
+                        "verticalalignment": "baseline",
+                        "horizontalalignment": "left",
+                    },
+                    transform=ax.transAxes,
+                )
 
     # WorkingRetina visualization
     def show_stimulus_with_gcs(self, retina, frame_number=0, ax=None, example_gc=5):
