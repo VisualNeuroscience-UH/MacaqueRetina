@@ -799,6 +799,9 @@ class Viz:
         ]
         config_vars = [col.removeprefix(config_prefix) for col in config_vars_changed]
 
+        # Remove all rows containing nan values in the dependent variables
+        df = df.dropna(subset=dep_vars)
+
         # Collect basic data from the experiment
         n_trials = len(df)
         n_errors = result_grid.num_errors
@@ -808,16 +811,16 @@ class Viz:
         print(df[exp_info_columns].describe())
 
         # Find the row indeces of the n best trials
-        best_trials = []
+        best_trials_across_dep_vars = []
         for dep_var, dep_var_best in zip(dep_vars, dep_vars_best):
             if dep_var_best == "min":
-                best_trials.append(df[dep_var].idxmin())
+                best_trials_across_dep_vars.append(df[dep_var].idxmin())
             elif dep_var_best == "max":
-                best_trials.append(df[dep_var].idxmax())
+                best_trials_across_dep_vars.append(df[dep_var].idxmax())
             if this_dep_var in dep_var:
                 this_dep_var_best = dep_var_best
 
-        df_filtered = df[exp_info_columns].loc[best_trials]
+        df_filtered = df[exp_info_columns].loc[best_trials_across_dep_vars]
         # Print the exp_info_columns for the best trials
         print(f"Best trials: in order of {dep_vars=}")
         print(df_filtered)
@@ -844,10 +847,10 @@ class Viz:
         num_best_trials = int(len(df) * frac_best)
 
         self._subplot_dependent_histograms(
-            axd, "dh", result_grid, dep_vars, dep_vars_best, num_best_trials
+            axd, "dh", df, dep_vars, dep_vars_best, num_best_trials
         )
 
-        self._subplot_dependent_variables(axd, "dv", result_grid, dep_vars, best_trials)
+        self._subplot_dependent_variables(axd, "dv", result_grid, dep_vars, best_trials_across_dep_vars)
 
         if hasattr(mosaic, "exp_spat_filt_to_viz"):
             exp_spat_filt_to_viz = mosaic.exp_spat_filt_to_viz
@@ -857,7 +860,7 @@ class Viz:
 
         num_best_trials = 5
         best_trials, dep_var_vals = self._get_best_trials(
-            df, dep_var, this_dep_var_best, num_best_trials
+            df, this_dep_var, this_dep_var_best, num_best_trials
         )
 
         img, rec_img, samples = self._get_imgs(
@@ -915,9 +918,9 @@ class Viz:
                 test_data[i, 0, :, :] = exp_spat_filt_to_viz[f"cell_ix_{i}"][
                     "spatial_data_array"
                 ]
-            test_data = torch.from_numpy(test_data).float()
-            img_size = model.decoder.unflatten.unflattened_size
-            test_data = TF.resize(test_data, img_size[-2:], antialias=True)
+        test_data = torch.from_numpy(test_data).float()
+        img_size = model.decoder.unflatten.unflattened_size
+        test_data = TF.resize(test_data, img_size[-2:], antialias=True)
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         samples = range(0, nsamples)
@@ -937,23 +940,9 @@ class Viz:
         return img, rec_img, samples
 
     def _subplot_dependent_histograms(
-        self, axd, kw, result_grid, dep_vars, dep_vars_best, num_best_trials
+        self, axd, kw, df, dep_vars, dep_vars_best, num_best_trials
     ):
         """Plot dependent variables as a function of epochs."""
-
-        df = result_grid.get_dataframe()
-        # Find all columns with string "config/"
-        config_cols = [x for x in df.columns if "config/" in x]
-
-        # From the config_cols, identify columns where there is more than one unique value
-        # These are the columns which were varied in the search space
-        varied_cols = []
-        for col in config_cols:
-            if len(df[col].unique()) > 1:
-                varied_cols.append(col)
-
-        # Drop the "config/" part from the column names
-        varied_cols = [x.replace("config/", "") for x in varied_cols]
 
         # Make one subplot for each dependent variable
         for idx, dep_var in enumerate(dep_vars):
@@ -998,7 +987,7 @@ class Viz:
             best_trials = np.argsort(dep_var_vals)[:num_best_trials]
         elif best_is == "max":
             best_trials = np.argsort(dep_var_vals)[-num_best_trials:]
-
+        
         return best_trials, dep_var_vals
 
     def _subplot_dependent_variables(self, axd, kw, result_grid, dep_vars, best_trials):

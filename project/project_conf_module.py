@@ -341,8 +341,8 @@ if __name__ == "__main__":
     # PM.construct_retina.show_latent_space_and_samples()
 
     # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
-    this_dep_var = "val_loss"
-    exp_name = "TrainableVAE_2023-04-18_09-33-23"  # None for most recent
+    this_dep_var = "train_loss"
+    exp_name = "TrainableVAE_2023-04-20_22-17-35"  # None for most recent
     PM.construct_retina.show_ray_experiment(exp_name, this_dep_var)
 
     #################################
