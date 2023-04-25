@@ -858,7 +858,6 @@ class Viz:
             mosaic._initialize()
             exp_spat_filt_to_viz = mosaic.exp_spat_filt_to_viz
 
-        pdb.set_trace()
         num_best_trials = 5
         best_trials, dep_var_vals = self._get_best_trials(
             df, this_dep_var, this_dep_var_best, num_best_trials

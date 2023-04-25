@@ -845,11 +845,11 @@ class RetinaVAE(RetinaMath):
         self.response_type = response_type
 
         # Fixed values for both single training and ray tune runs
-        self.epochs = 5
-        self.lr_step_size = 10  # Learning rate decay step size (in epochs)
+        self.epochs = 500
+        self.lr_step_size = 15  # Learning rate decay step size (in epochs)
         self.lr_gamma = 0.9  # Learning rate decay (multiplier for learning rate)
         # how many times to get the data, applied only if augmentation_dict is not None
-        self.data_multiplier = 4
+        self.data_multiplier = 8
 
         # For ray tune only
         # If grid_search is True, time_budget is ignored
@@ -862,19 +862,19 @@ class RetinaVAE(RetinaMath):
         # Single run parameters
         #######################
         # Set common VAE model parameters
-        self.latent_dim = 8  # 2**1 - 2**6, use powers of 2 btw 2 and 128
-        self.channels = 8
+        self.latent_dim = 4  # 2**1 - 2**6, use powers of 2 btw 2 and 128
+        self.channels = 16
         # lr will be reduced by scheduler down to lr * gamma ** (epochs/step_size)
         self.lr = 0.001
         # self._show_lr_decay(self.lr, self.lr_gamma, self.lr_step_size, self.epochs)
 
-        self.batch_size = 128  # None will take the batch size from test_split size.
+        self.batch_size = 256  # None will take the batch size from test_split size.
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
-        self.train_by = [["parasol"], ["on", "off"]]  # Train by these factors
+        self.train_by = [["parasol"], ["on"]]  # Train by these factors
         # self.train_by = [["midget"], ["on", "off"]]  # Train by these factors
 
         self.ksp = "k9s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
-        self.conv_layers = 3  # 1 - 5
+        self.conv_layers = 2  # 1 - 5
         self.batch_norm = False
 
         # Augment training and validation data.
@@ -981,11 +981,11 @@ class RetinaVAE(RetinaMath):
                 # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
                 self.search_space = {
                     "lr": [0.001],
-                    "latent_dim": [2, 4, 8, 16, 32],
+                    "latent_dim": [2, 4, 8, 16],
                     # k3s2,k3s1,k5s2,k5s1,k7s1, k9s1 Kernel-stride-padding for conv layers. NOTE you cannot use >3 conv layers with stride 2
                     "ksp": ["k7s1", "k9s1"],
                     "channels": [4, 8, 16],
-                    "batch_size": [128],
+                    "batch_size": [256],
                     "conv_layers": [1, 2, 3],
                     "batch_norm": [False],
                     "rotation": [0],  # Augment: max rotation in degrees
@@ -1094,22 +1094,23 @@ class RetinaVAE(RetinaMath):
         self.test_loader = self._augment_and_get_dataloader(
             data_type="test", shuffle=False
         )
+        
         if 1:
-            # Figure 1
-            self._plot_ae_outputs(
-                self.vae.encoder,
-                self.vae.decoder,
-                ds_name="test_ds",
-                sample_start_stop=[10, 25],
-            )
+            # # Figure 1
+            # self._plot_ae_outputs(
+            #     self.vae.encoder,
+            #     self.vae.decoder,
+            #     ds_name="test_ds",
+            #     sample_start_stop=[1, 15],
+            # )
 
-            if training_mode in ["train_model"]:
-                self._plot_ae_outputs(
-                    self.vae.encoder, self.vae.decoder, ds_name="train_ds"
-                )
-                self._plot_ae_outputs(
-                    self.vae.encoder, self.vae.decoder, ds_name="valid_ds"
-                )
+            # if training_mode in ["train_model"]:
+            #     self._plot_ae_outputs(
+            #         self.vae.encoder, self.vae.decoder, ds_name="train_ds"
+            #     )
+            #     self._plot_ae_outputs(
+            #         self.vae.encoder, self.vae.decoder, ds_name="valid_ds"
+            #     )
 
             self.vae.eval()
 

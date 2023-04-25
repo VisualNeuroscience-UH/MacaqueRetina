@@ -882,7 +882,6 @@ class ConstructRetina(RetinaMath):
         Get original image data as projected through encoder to the latent space
         """
         # Get the latent space data
-        # pdb.set_trace()
         train_df = retina_vae.get_encoded_samples(ds_name="train_ds")
         valid_df = retina_vae.get_encoded_samples(ds_name="val_ds")
         test_df = retina_vae.get_encoded_samples(ds_name="test_ds")
