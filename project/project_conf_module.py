@@ -329,7 +329,7 @@ if __name__ == "__main__":
 
     # options are defined in my_retina_options
 
-    PM.construct_retina.build()
+    # PM.construct_retina.build()
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # This is why they are called via the construct_retina attribute. The instance
@@ -340,10 +340,10 @@ if __name__ == "__main__":
     # PM.construct_retina.show_gen_spat_postprocessing()
     # PM.construct_retina.show_latent_space_and_samples()
 
-    # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
-    # this_dep_var = "val_loss"
-    # exp_name = "TrainableVAE_2023-04-20_22-17-35"  # None for most recent
-    # PM.construct_retina.show_ray_experiment(exp_name, this_dep_var)
+    # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
+    this_dep_var = "kid_mean"
+    exp_name = "TrainableVAE_2023-04-25_21-41-28"  # None for most recent
+    PM.construct_retina.show_ray_experiment(exp_name, this_dep_var)
 
     #################################
     ### Create stimulus ###

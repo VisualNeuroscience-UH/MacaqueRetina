@@ -956,6 +956,22 @@ class Viz:
             # Make histogram of the frac_best trials
             ax.hist(dep_var_vals[best_trials], bins=20)
 
+            # Set x and y axis tick font size 8
+            ax.tick_params(axis="both", which="major", labelsize=8)
+
+            if idx==0:
+                ax.set_ylabel("Frequency")
+                ax.text(
+                    0,
+                    1.6,
+                    f"Histogram of the {num_best_trials} best trials for each metrics",
+                    horizontalalignment="left",
+                    verticalalignment="top",
+                    transform=ax.transAxes,
+                    fontsize=11,
+                )
+
+
             ax.set_title(f"{dep_var}")
 
     def _get_best_trials(self, df, dep_var, best_is, num_best_trials):
@@ -1013,11 +1029,11 @@ class Viz:
         num_colors = len(best_trials)
         colors = plt.cm.get_cmap("tab20", num_colors).colors
 
+        total_n_epochs = 0
         # Make one subplot for each dependent variable
         for idx, dep_var in enumerate(dep_vars):
             # Create a new plot for each label
             color_idx = 0
-            # ax = plt.subplot(start_row + 1, ncols, start_row * ncols + idx + 1)
             ax = axd[f"{kw}{idx}"]
 
             for i, result in enumerate(result_grid):
@@ -1025,9 +1041,10 @@ class Viz:
                     continue
 
                 if idx == 0:
-                    label = ",".join(f"{x}={result.config[x]}" for x in varied_cols)
+                    label = f"{dep_vars[color_idx]}: " + ",".join(f"{x}={result.config[x]}" for x in varied_cols)
                     legend = True
                     first_ax = ax
+
                 else:
                     label=None
                     legend = False
@@ -1040,6 +1057,11 @@ class Viz:
                     color=colors[color_idx],
                     legend=legend,
                 )
+
+                if len(result.metrics_dataframe) > total_n_epochs:
+                    total_n_epochs = len(result.metrics_dataframe)
+
+
 
                 # At the end (+1) of the x-axis, add mean and SD of last 50 epochs as dot and vertical line, respectively
                 last_50 = result.metrics_dataframe.tail(50)
@@ -1061,17 +1083,25 @@ class Viz:
 
                 color_idx += 1
 
+            if idx==0:
+                ax.set_ylabel("Metrics")
+
             # Add legend and bring it to the front
             leg = first_ax.legend(
                 loc="center left", bbox_to_anchor=((idx + 2.0), 0.5, 1.0, 0.2)
             )
             first_ax.set_zorder(1)
 
-            # get the legend object
-
             # change the line width for the legend
             for line in leg.get_lines():
-                line.set_linewidth(4.0)
+                line.set_linewidth(3.0)
+
+            # Set x and y axis tick font size 8
+            ax.tick_params(axis="both", which="major", labelsize=8)
+
+            # Change legend font size to 8
+            for text in leg.get_texts():
+                text.set_fontsize(8)
 
             ax.grid(True)
 
@@ -1079,6 +1109,8 @@ class Viz:
             ax.set_xlabel("")
             # set x ticks off
             ax.set_xticks([])
+
+        first_ax.set_title(f"Evolution for best trials (ad {total_n_epochs} epochs)\nDot and vertical line indicate mean and SD of last 50 epochs", loc="left")
 
     def _subplot_img_recoimg(self, axd, kw, subidx, img, samples, title):
         """
