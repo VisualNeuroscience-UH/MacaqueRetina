@@ -838,7 +838,6 @@ class ConstructRetina(RetinaMath):
 
                 # TÄHÄN JÄIT:
                 # INTEGROI VAE GENEROIDUT RF:T WORKING RETINAAN
-                # OPTIMOI VAE TUOTTAMAAN LUONNOLLISEMPIA RF:IÄ
 
                 img_paths = self.save_generated_rfs(img_flipped, output_path)
 
