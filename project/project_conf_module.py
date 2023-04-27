@@ -340,6 +340,9 @@ if __name__ == "__main__":
     # PM.construct_retina.show_gen_spat_postprocessing()
     # PM.construct_retina.show_latent_space_and_samples()
 
+    # TÄHÄN JÄIT: MAKE A BAR GRAPH OF RF STATISTICS: PARASOL ON OFF, MIDGET ON OFF
+    #
+
     # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
     # this_dep_var = "val_loss"
     # exp_name = "TrainableVAE_2023-04-20_22-17-35"  # None for most recent

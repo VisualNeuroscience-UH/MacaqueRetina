@@ -856,11 +856,11 @@ class RetinaVAE(RetinaMath):
         self.response_type = response_type
 
         # Fixed values for both single training and ray tune runs
-        self.epochs = 500
+        self.epochs = 100
         self.lr_step_size = 15  # Learning rate decay step size (in epochs)
         self.lr_gamma = 0.9  # Learning rate decay (multiplier for learning rate)
         # how many times to get the data, applied only if augmentation_dict is not None
-        self.data_multiplier = 8
+        self.data_multiplier = 4
 
         # For ray tune only
         # If grid_search is True, time_budget is ignored
@@ -872,10 +872,10 @@ class RetinaVAE(RetinaMath):
         # Single run parameters
         #######################
         # Set common VAE model parameters
-        self.latent_dim = 4  # 2**1 - 2**6, use powers of 2 btw 2 and 128
-        self.channels = 16
+        self.latent_dim = 64  # 2**1 - 2**6, use powers of 2 btw 2 and 128
+        self.channels = 32
         # lr will be reduced by scheduler down to lr * gamma ** (epochs/step_size)
-        self.lr = 0.001
+        self.lr = 0.0003
         # self._show_lr_decay(self.lr, self.lr_gamma, self.lr_step_size, self.epochs)
 
         self.batch_size = 256  # None will take the batch size from test_split size.
@@ -883,16 +883,16 @@ class RetinaVAE(RetinaMath):
         self.train_by = [["parasol"], ["on"]]  # Train by these factors
         # self.train_by = [["midget"], ["on", "off"]]  # Train by these factors
 
-        self.kernel_stride = "k5s2"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
-        self.conv_layers = 3  # 1 - 5 for s1, 1 - 3 for k3s2 and 1 - 2 for k5s2
+        self.kernel_stride = "k9s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
+        self.conv_layers = 1  # 1 - 5 for s1, 1 - 3 for k3s2 and 1 - 2 for k5s2
         self.batch_norm = False
 
         # Augment training and validation data.
         augmentation_dict = {
             "rotation": 0,  # rotation in degrees
             "translation": (
-                0.07692307692307693,
-                0.07692307692307693,
+                0.07692307692307693 * 2,
+                0.07692307692307693 * 2,
             ),  # fraction of image, (x, y) -directions
             "noise": 0.005,  # noise float in [0, 1] (noise is added to the image)
             "flip": 0.5,  # flip probability, both horizontal and vertical
