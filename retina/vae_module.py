@@ -384,13 +384,18 @@ class VariationalEncoder(nn.Module):
         self.linear2 = nn.Linear(128, latent_dims)  # mu
         self.linear3 = nn.Linear(128, latent_dims)  # sigma
 
-        self.N = torch.distributions.Normal(0, 1)
-        if device is not None and device.type == "cpu":
-            self.N.loc = self.N.loc.cpu()
-            self.N.scale = self.N.scale.cpu()
-        elif device is not None and device.type == "cuda":
-            self.N.loc = self.N.loc.cuda()  # hack to get sampling on the GPU
-            self.N.scale = self.N.scale.cuda()
+        # self.N = torch.distributions.Normal(0, 5)
+        self.N = torch.distributions.exponential.Exponential(4)
+        # self.N = torch.distributions.uniform.Uniform(-2, 2)
+        # if device is not None and device.type == "cpu":
+        #     self.N.loc = self.N.loc.cpu()
+        #     self.N.scale = self.N.scale.cpu()
+        # elif device is not None and device.type == "cuda":
+        #     self.N.loc = self.N.loc.cuda()  # hack to get sampling on the GPU
+        #     self.N.scale = self.N.scale.cuda()
+        self.N.rate = self.N.rate.cuda()
+        # self.N.low = self.N.low.cuda()
+        # self.N.high = self.N.high.cuda()
         self.kl = 0
 
     def forward(self, x):
@@ -856,8 +861,8 @@ class RetinaVAE(RetinaMath):
         self.response_type = response_type
 
         # Fixed values for both single training and ray tune runs
-        self.epochs = 100
-        self.lr_step_size = 15  # Learning rate decay step size (in epochs)
+        self.epochs = 1000
+        self.lr_step_size = 25  # Learning rate decay step size (in epochs)
         self.lr_gamma = 0.9  # Learning rate decay (multiplier for learning rate)
         # how many times to get the data, applied only if augmentation_dict is not None
         self.data_multiplier = 4
@@ -872,8 +877,8 @@ class RetinaVAE(RetinaMath):
         # Single run parameters
         #######################
         # Set common VAE model parameters
-        self.latent_dim = 64  # 2**1 - 2**6, use powers of 2 btw 2 and 128
-        self.channels = 32
+        self.latent_dim = 32  # 2**1 - 2**6, use powers of 2 btw 2 and 128
+        self.channels = 16
         # lr will be reduced by scheduler down to lr * gamma ** (epochs/step_size)
         self.lr = 0.0003
         # self._show_lr_decay(self.lr, self.lr_gamma, self.lr_step_size, self.epochs)
@@ -883,18 +888,18 @@ class RetinaVAE(RetinaMath):
         self.train_by = [["parasol"], ["on"]]  # Train by these factors
         # self.train_by = [["midget"], ["on", "off"]]  # Train by these factors
 
-        self.kernel_stride = "k9s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
-        self.conv_layers = 1  # 1 - 5 for s1, 1 - 3 for k3s2 and 1 - 2 for k5s2
+        self.kernel_stride = "k7s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
+        self.conv_layers = 3  # 1 - 5 for s1, 1 - 3 for k3s2 and 1 - 2 for k5s2
         self.batch_norm = False
 
         # Augment training and validation data.
         augmentation_dict = {
             "rotation": 0,  # rotation in degrees
             "translation": (
-                0.07692307692307693 * 2,
-                0.07692307692307693 * 2,
+                0,  # 0.07692307692307693,
+                0,  # 0.07692307692307693,
             ),  # fraction of image, (x, y) -directions
-            "noise": 0.005,  # noise float in [0, 1] (noise is added to the image)
+            "noise": 0,  # 0.005,  # noise float in [0, 1] (noise is added to the image)
             "flip": 0.5,  # flip probability, both horizontal and vertical
         }
         self.augmentation_dict = augmentation_dict
