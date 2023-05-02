@@ -133,7 +133,7 @@ class AugmentedDataset(torch.utils.data.Dataset):
                 [
                     transforms.Lambda(self._feature_scaling),
                     transforms.Lambda(self._to_tensor),
-                    transforms.Resize(resolution_hw, antialias=True),
+                    transforms.Resize((resolution_hw, resolution_hw), antialias=True),
                 ]
             )
 
@@ -166,7 +166,7 @@ class AugmentedDataset(torch.utils.data.Dataset):
                 )
 
             self.transform.transforms.append(
-                transforms.Resize(resolution_hw, antialias=True)
+                transforms.Resize((resolution_hw, resolution_hw), antialias=True)
             )
 
     def __len__(self):
@@ -320,7 +320,9 @@ class VariationalEncoder(nn.Module):
     def __init__(
         self,
         latent_dims,
-        ksp=None,
+        final_side_length,
+        kernel_stride=None,
+        padding=0,
         channels=8,
         conv_layers=3,
         batch_norm=True,
@@ -328,14 +330,10 @@ class VariationalEncoder(nn.Module):
     ):
         # super(VariationalEncoder, self).__init__()
         super().__init__()
-        if ksp is None:
-            ksp = {
+        if kernel_stride is None:
+            kernel_stride = {
                 "kernel": 3,
                 "stride": 1,
-                "pad1": 1,
-                "pad2": 1,
-                "pad3": 0,
-                "conv3_sidelen": 3,
             }
 
         self.device = device
@@ -344,9 +342,9 @@ class VariationalEncoder(nn.Module):
             nn.Conv2d(
                 1,
                 channels,
-                kernel_size=ksp["kernel"],
-                stride=ksp["stride"],
-                padding=ksp["pad1"],
+                kernel_size=kernel_stride["kernel"],
+                stride=kernel_stride["stride"],
+                padding=padding,
             ),
             nn.ReLU(True),
         )
@@ -358,9 +356,9 @@ class VariationalEncoder(nn.Module):
             conv_layers_2toN["conv" + str(i + 2)] = nn.Conv2d(
                 n_channels,
                 n_channels * 2,
-                kernel_size=ksp["kernel"],
-                stride=ksp["stride"],
-                padding=ksp[f"pad{i + 2}"],
+                kernel_size=kernel_stride["kernel"],
+                stride=kernel_stride["stride"],
+                padding=padding,
             )
             # Add one batch norm layer after second convolutional layer
             # parametrize 0 if need to put b-layer after other conv layers
@@ -375,8 +373,8 @@ class VariationalEncoder(nn.Module):
         self.flatten = nn.Flatten(start_dim=1)
         self.encoder_lin = nn.Linear(
             int(
-                ksp["conv3_sidelen"]
-                * ksp["conv3_sidelen"]
+                final_side_length
+                * final_side_length
                 * channels
                 * 2 ** (conv_layers - 1)
             ),
@@ -386,13 +384,18 @@ class VariationalEncoder(nn.Module):
         self.linear2 = nn.Linear(128, latent_dims)  # mu
         self.linear3 = nn.Linear(128, latent_dims)  # sigma
 
-        self.N = torch.distributions.Normal(0, 1)
-        if device is not None and device.type == "cpu":
-            self.N.loc = self.N.loc.cpu()
-            self.N.scale = self.N.scale.cpu()
-        elif device is not None and device.type == "cuda":
-            self.N.loc = self.N.loc.cuda()  # hack to get sampling on the GPU
-            self.N.scale = self.N.scale.cuda()
+        # self.N = torch.distributions.Normal(0, 5)
+        self.N = torch.distributions.exponential.Exponential(4)
+        # self.N = torch.distributions.uniform.Uniform(-2, 2)
+        # if device is not None and device.type == "cpu":
+        #     self.N.loc = self.N.loc.cpu()
+        #     self.N.scale = self.N.scale.cpu()
+        # elif device is not None and device.type == "cuda":
+        #     self.N.loc = self.N.loc.cuda()  # hack to get sampling on the GPU
+        #     self.N.scale = self.N.scale.cuda()
+        self.N.rate = self.N.rate.cuda()
+        # self.N.low = self.N.low.cuda()
+        # self.N.high = self.N.high.cuda()
         self.kl = 0
 
     def forward(self, x):
@@ -422,7 +425,10 @@ class Decoder(nn.Module):
     def __init__(
         self,
         latent_dims,
-        ksp=None,
+        final_side_length,
+        kernel_stride=None,
+        padding=0,
+        output_padding=0,
         channels=8,
         conv_layers=3,
         batch_norm=True,
@@ -430,14 +436,10 @@ class Decoder(nn.Module):
     ):
         super().__init__()
 
-        if ksp is None:
-            ksp = {
+        if kernel_stride is None:
+            kernel_stride = {
                 "kernel": 3,
                 "stride": 1,
-                "pad1": 1,
-                "pad2": 1,
-                "pad3": 0,
-                "conv3_sidelen": 3,
             }
 
         self.decoder_lin = nn.Sequential(
@@ -445,8 +447,8 @@ class Decoder(nn.Module):
             nn.ReLU(True),
             nn.Linear(
                 128,
-                ksp["conv3_sidelen"]
-                * ksp["conv3_sidelen"]
+                final_side_length
+                * final_side_length
                 * channels
                 * 2 ** (conv_layers - 1),
             ),
@@ -457,8 +459,8 @@ class Decoder(nn.Module):
             dim=1,
             unflattened_size=(
                 channels * 2 ** (conv_layers - 1),
-                ksp["conv3_sidelen"],
-                ksp["conv3_sidelen"],
+                final_side_length,
+                final_side_length,
             ),
         )
 
@@ -470,10 +472,10 @@ class Decoder(nn.Module):
             deconv_layers_Nto2["deconv" + str(conv_layers - i)] = nn.ConvTranspose2d(
                 n_channels,
                 n_channels // 2,
-                kernel_size=ksp["kernel"],
-                stride=ksp["stride"],
-                padding=ksp[f"pad{conv_layers - i}"],
-                output_padding=ksp[f"opad{conv_layers - i}"],
+                kernel_size=kernel_stride["kernel"],
+                stride=kernel_stride["stride"],
+                padding=padding,
+                output_padding=output_padding[conv_layers - i - 1],
             )
 
             # parametrize the -1 if you want to change b-layer
@@ -486,13 +488,18 @@ class Decoder(nn.Module):
 
         self.decoder_convNto2 = nn.Sequential(deconv_layers_Nto2)
 
+        if kernel_stride["stride"] == 1:
+            opadding = 0
+        elif kernel_stride["stride"] == 2:
+            opadding = output_padding[0]
+
         self.decoder_end = nn.ConvTranspose2d(
             channels,
             1,
-            kernel_size=ksp["kernel"],
-            stride=ksp["stride"],
-            padding=ksp["pad1"],
-            output_padding=ksp["opad1"],
+            kernel_size=kernel_stride["kernel"],
+            stride=kernel_stride["stride"],
+            padding=padding,
+            output_padding=opadding,
         )
 
     def forward(self, x):
@@ -508,6 +515,7 @@ class VariationalAutoencoder(nn.Module):
     def __init__(
         self,
         latent_dims,
+        resolution_hw,
         ksp_key=None,
         channels=8,
         conv_layers=3,
@@ -525,7 +533,7 @@ class VariationalAutoencoder(nn.Module):
         if conv_layers > 3:
             assert (
                 "s2" not in ksp_key
-            ), "stride 2 only supports conv_layers <= 3, check ksp, aborting..."
+            ), "stride 2 only supports conv_layers <= 3, check kernel_stride, aborting..."
 
         # Define the range of valid values for latent_dims
         min_dim = 2
@@ -539,11 +547,20 @@ class VariationalAutoencoder(nn.Module):
         ), "Latent_dims must be a power of 2 between 2 and 128, aborting..."
 
         self._set_ksp_key()
-        ksp = self.ksp_keys[ksp_key]
+        kernel_stride = self.kernel_stride_keys[ksp_key]
+        padding = kernel_stride["kernel"] // 2
+
+        # Get final encoder dimension and output padding for each layer
+        final_side_length, output_padding = self._get_final_side_length(
+            conv_layers, resolution_hw, kernel_stride, padding
+        )
+
         self.device = device
         self.encoder = VariationalEncoder(
             latent_dims=latent_dims,
-            ksp=ksp,
+            final_side_length=final_side_length,
+            kernel_stride=kernel_stride,
+            padding=padding,
             channels=channels,
             conv_layers=conv_layers,
             batch_norm=batch_norm,
@@ -551,12 +568,20 @@ class VariationalAutoencoder(nn.Module):
         )
         self.decoder = Decoder(
             latent_dims,
-            ksp,
+            final_side_length,
+            kernel_stride,
+            padding=padding,
+            output_padding=output_padding,
             channels=channels,
             conv_layers=conv_layers,
             batch_norm=batch_norm,
             device=self.device,
         )
+
+        print("Encoder:")
+        print(self.encoder)
+        print("Decoder:")
+        print(self.decoder)
 
         # Consider moving for not to unnecessarily print the kid model
         self.mse = MeanSquaredError()
@@ -572,6 +597,54 @@ class VariationalAutoencoder(nn.Module):
         )
         self.ssim = StructuralSimilarityIndexMeasure()
 
+    def _get_final_side_length(
+        self, n_conv_layers, resolution_hw, kernel_stride, padding
+    ):
+        """
+        Get the final side length of the image after encoding and decoding.
+
+        Parameters
+        ----------
+        resolution_hw : int
+            height and width of the image
+        kernel_stride : dict
+            kernel and stride values
+        padding : int
+            padding value
+        conv_layers : int
+            number of convolutional layers
+
+        Returns
+        -------
+        final_side_length : int
+            final side length of the image after encoding
+        output_padding : int
+            output padding values for the deconvolutional layers
+        """
+
+        input_size = resolution_hw
+        kernel_size = kernel_stride["kernel"]
+        stride = kernel_stride["stride"]
+        output_padding = np.zeros(n_conv_layers, dtype=int)
+        if kernel_stride["stride"] == 1:
+            final_side_length = resolution_hw
+            # All zeros output_padding is correct when stride is 1
+        elif kernel_stride["stride"] == 2:
+            for this_layer in range(n_conv_layers):
+                this_output = ((input_size - kernel_size + (2 * padding)) // stride) + 1
+                a = int((input_size + 2 * padding - kernel_size) % stride)
+                inverted_size = (
+                    (this_output - 1) * stride + kernel_size - (2 * padding) + a
+                )
+                print(
+                    f"For layer {this_layer}, {input_size=}, {this_output=}, {a=}, {inverted_size=}"
+                )
+                output_padding[this_layer] = a
+                input_size = this_output
+            final_side_length = this_output
+
+        return final_side_length, output_padding
+
     def forward(self, x):
         if self.device is not None:
             x = x.to(self.device)
@@ -585,88 +658,30 @@ class VariationalAutoencoder(nn.Module):
         reduction (28*28 => 3*3) and preservation (28*28 => 28*28) of representation size.
         """
 
-        self.ksp_keys = {
+        self.kernel_stride_keys = {
             "k3s2": {
                 "kernel": 3,
                 "stride": 2,
-                "pad1": 1,
-                "pad2": 1,
-                "pad3": 0,
-                "conv3_sidelen": 3,
-                "opad3": 0,
-                "opad2": 1,
-                "opad1": 1,
             },
             "k5s2": {
                 "kernel": 5,
                 "stride": 2,
-                "pad1": 2,
-                "pad2": 2,
-                "pad3": 1,
-                "conv3_sidelen": 3,
-                "opad3": 0,
-                "opad2": 1,
-                "opad1": 1,
             },
             "k3s1": {
                 "kernel": 3,
                 "stride": 1,
-                "pad1": 1,
-                "pad2": 1,
-                "pad3": 1,
-                "pad4": 1,
-                "pad5": 1,
-                "conv3_sidelen": 28,
-                "opad5": 0,
-                "opad4": 0,
-                "opad3": 0,
-                "opad2": 0,
-                "opad1": 0,
             },
             "k5s1": {
                 "kernel": 5,
                 "stride": 1,
-                "pad1": 2,
-                "pad2": 2,
-                "pad3": 2,
-                "pad4": 2,
-                "pad5": 2,
-                "conv3_sidelen": 28,
-                "opad5": 0,
-                "opad4": 0,
-                "opad3": 0,
-                "opad2": 0,
-                "opad1": 0,
             },
             "k7s1": {
                 "kernel": 7,
                 "stride": 1,
-                "pad1": 3,
-                "pad2": 3,
-                "pad3": 3,
-                "pad4": 3,
-                "pad5": 3,
-                "conv3_sidelen": 28,
-                "opad5": 0,
-                "opad4": 0,
-                "opad3": 0,
-                "opad2": 0,
-                "opad1": 0,
             },
             "k9s1": {
                 "kernel": 9,
                 "stride": 1,
-                "pad1": 4,
-                "pad2": 4,
-                "pad3": 4,
-                "pad4": 4,
-                "pad5": 4,
-                "conv3_sidelen": 28,
-                "opad5": 0,
-                "opad4": 0,
-                "opad3": 0,
-                "opad2": 0,
-                "opad1": 0,
             },
         }
 
@@ -741,7 +756,8 @@ class TrainableVAE(tune.Trainable):
 
         self.model = VariationalAutoencoder(
             latent_dims=config.get("latent_dim"),
-            ksp_key=config.get("ksp"),
+            resolution_hw=config.get("resolution_hw"),
+            ksp_key=config.get("kernel_stride"),
             channels=config.get("channels"),
             conv_layers=config.get("conv_layers"),
             batch_norm=config.get("batch_norm"),
@@ -845,11 +861,11 @@ class RetinaVAE(RetinaMath):
         self.response_type = response_type
 
         # Fixed values for both single training and ray tune runs
-        self.epochs = 500
-        self.lr_step_size = 15  # Learning rate decay step size (in epochs)
+        self.epochs = 1000
+        self.lr_step_size = 25  # Learning rate decay step size (in epochs)
         self.lr_gamma = 0.9  # Learning rate decay (multiplier for learning rate)
         # how many times to get the data, applied only if augmentation_dict is not None
-        self.data_multiplier = 8
+        self.data_multiplier = 4
 
         # For ray tune only
         # If grid_search is True, time_budget is ignored
@@ -857,15 +873,14 @@ class RetinaVAE(RetinaMath):
         self.grid_search = True  # False for tune by Optuna, True for grid search
         self.grace_period = 50  # epochs. ASHA stops earliest at grace period.
 
-
         #######################
         # Single run parameters
         #######################
         # Set common VAE model parameters
-        self.latent_dim = 4  # 2**1 - 2**6, use powers of 2 btw 2 and 128
+        self.latent_dim = 32  # 2**1 - 2**6, use powers of 2 btw 2 and 128
         self.channels = 16
         # lr will be reduced by scheduler down to lr * gamma ** (epochs/step_size)
-        self.lr = 0.001
+        self.lr = 0.0003
         # self._show_lr_decay(self.lr, self.lr_gamma, self.lr_step_size, self.epochs)
 
         self.batch_size = 256  # None will take the batch size from test_split size.
@@ -873,18 +888,18 @@ class RetinaVAE(RetinaMath):
         self.train_by = [["parasol"], ["on"]]  # Train by these factors
         # self.train_by = [["midget"], ["on", "off"]]  # Train by these factors
 
-        self.ksp = "k9s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
-        self.conv_layers = 2  # 1 - 5
+        self.kernel_stride = "k7s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
+        self.conv_layers = 3  # 1 - 5 for s1, 1 - 3 for k3s2 and 1 - 2 for k5s2
         self.batch_norm = False
 
         # Augment training and validation data.
         augmentation_dict = {
             "rotation": 0,  # rotation in degrees
             "translation": (
-                0.07692307692307693,
-                0.07692307692307693,
+                0,  # 0.07692307692307693,
+                0,  # 0.07692307692307693,
             ),  # fraction of image, (x, y) -directions
-            "noise": 0.005,  # noise float in [0, 1] (noise is added to the image)
+            "noise": 0,  # 0.005,  # noise float in [0, 1] (noise is added to the image)
             "flip": 0.5,  # flip probability, both horizontal and vertical
         }
         self.augmentation_dict = augmentation_dict
@@ -902,7 +917,8 @@ class RetinaVAE(RetinaMath):
         self.latent_space_plot_scale = 3.0  # Scale for plotting latent space
 
         # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
-        self.resolution_hw = (28, 28)
+        # self.resolution_hw = (28, 28)
+        self.resolution_hw = 13  # Both x and y
 
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -968,7 +984,7 @@ class RetinaVAE(RetinaMath):
                 model_path = self._save_model()
                 summary(
                     self.vae,
-                    input_size=(1, self.resolution_hw[0], self.resolution_hw[1]),
+                    input_size=(1, self.resolution_hw, self.resolution_hw),
                     batch_size=-1,
                 )
 
@@ -982,8 +998,9 @@ class RetinaVAE(RetinaMath):
                 self.search_space = {
                     "lr": [0.001],
                     "latent_dim": [2, 4, 8, 16],
+                    "resolution_hw": [28],  # Both x and y, 13 or 28
                     # k3s2,k3s1,k5s2,k5s1,k7s1, k9s1 Kernel-stride-padding for conv layers. NOTE you cannot use >3 conv layers with stride 2
-                    "ksp": ["k7s1", "k9s1"],
+                    "kernel_stride": ["k7s1", "k9s1"],
                     "channels": [4, 8, 16],
                     "batch_size": [256],
                     "conv_layers": [1, 2, 3],
@@ -1081,7 +1098,7 @@ class RetinaVAE(RetinaMath):
                 # self._run_tensorboard(tb_dir=tb_dir)
                 summary(
                     self.vae.to(self.device),
-                    input_size=(1, self.resolution_hw[0], self.resolution_hw[1]),
+                    input_size=(1, self.resolution_hw, self.resolution_hw),
                     batch_size=-1,
                 )
 
@@ -1094,7 +1111,7 @@ class RetinaVAE(RetinaMath):
         self.test_loader = self._augment_and_get_dataloader(
             data_type="test", shuffle=False
         )
-        
+
         if 1:
             # # Figure 1
             # self._plot_ae_outputs(
@@ -1150,7 +1167,7 @@ class RetinaVAE(RetinaMath):
         self.lr = best_result.config["lr"]
 
         self.batch_size = best_result.config["batch_size"]
-        self.ksp = best_result.config["ksp"]
+        self.kernel_stride = best_result.config["kernel_stride"]
         self.conv_layers = best_result.config["conv_layers"]
         self.batch_norm = best_result.config["batch_norm"]
 
@@ -1323,7 +1340,8 @@ class RetinaVAE(RetinaMath):
             param_space = {
                 "lr": tune.grid_search(self.search_space["lr"]),
                 "latent_dim": tune.grid_search(self.search_space["latent_dim"]),
-                "ksp": tune.grid_search(self.search_space["ksp"]),
+                "resolution_hw": tune.grid_search(self.search_space["resolution_hw"]),
+                "kernel_stride": tune.grid_search(self.search_space["kernel_stride"]),
                 "channels": tune.grid_search(self.search_space["channels"]),
                 "batch_size": tune.grid_search(self.search_space["batch_size"]),
                 "conv_layers": tune.grid_search(self.search_space["conv_layers"]),
@@ -1355,7 +1373,7 @@ class RetinaVAE(RetinaMath):
                 {
                     "lr": 0.001,
                     "latent_dim": 16,
-                    "ksp": "k7s1",
+                    "kernel_stride": "k7s1",
                     "channels": 16,
                     "batch_size": 128,
                     "conv_layers": 2,
@@ -1374,7 +1392,7 @@ class RetinaVAE(RetinaMath):
                     self.search_space["lr"][0], self.search_space["lr"][-1]
                 ),
                 "latent_dim": tune.choice(self.search_space["latent_dim"]),
-                "ksp": tune.choice(self.search_space["ksp"]),
+                "kernel_stride": tune.choice(self.search_space["kernel_stride"]),
                 "channels": tune.choice(self.search_space["channels"]),
                 "batch_size": tune.choice(self.search_space["batch_size"]),
                 "conv_layers": tune.choice(self.search_space["conv_layers"]),
@@ -1493,7 +1511,7 @@ class RetinaVAE(RetinaMath):
         # Get key VAE structural parameters and save them with the full model
         self.vae.config = {
             "latent_dims": self.latent_dim,
-            "ksp_key": self.ksp,
+            "ksp_key": self.kernel_stride,
             "channels": self.channels,
             "conv_layers": self.conv_layers,
         }
@@ -1822,7 +1840,7 @@ class RetinaVAE(RetinaMath):
 
             # Invert data arrays with negative sign for fitting and display.
             gc_spatial_data_np = self.flip_negative_spatial_rf(gc_spatial_data_np)
-            
+
             gc_spatial_data_np = np.expand_dims(gc_spatial_data_np, axis=1)
 
             # Collate data
@@ -1841,7 +1859,8 @@ class RetinaVAE(RetinaMath):
     def _prep_training(self):
         self.vae = VariationalAutoencoder(
             latent_dims=self.latent_dim,
-            ksp_key=self.ksp,
+            resolution_hw=self.resolution_hw,
+            ksp_key=self.kernel_stride,
             channels=self.channels,
             conv_layers=self.conv_layers,
             batch_norm=self.batch_norm,

@@ -126,7 +126,7 @@ my_retina = {
     "randomize_position": 0.05,
     "stimulus_center": 4.45 + 0j,
     "model_type": "VAE",  # "FIT", "VAE" for variational autoencoder, or GAN for generative adversarial network.
-    "training_mode": "tune_model",  # "train_model" or "tune_model" or "load_model" Applies to VAE or GAN only.
+    "training_mode": "train_model",  # "train_model" or "tune_model" or "load_model" Applies to VAE or GAN only.
 }
 
 
@@ -336,14 +336,17 @@ if __name__ == "__main__":
     # object is attached to the call for viz.
 
     # PM.construct_retina.show_exp_build_process(show_all_spatial_fits=True)
-    # PM.construct_retina.show_gen_and_exp_spatial_rfs(n_samples=15)
+    PM.construct_retina.show_gen_and_exp_spatial_rfs(n_samples=15)
     # PM.construct_retina.show_gen_spat_postprocessing()
     # PM.construct_retina.show_latent_space_and_samples()
 
-    # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
-    this_dep_var = "kid_mean"
-    exp_name = "TrainableVAE_2023-04-25_21-41-28"  # None for most recent
-    PM.construct_retina.show_ray_experiment(exp_name, this_dep_var)
+    # TÄHÄN JÄIT: MAKE A BAR GRAPH OF RF STATISTICS: PARASOL ON OFF, MIDGET ON OFF
+    #
+
+    # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
+    # this_dep_var = "val_loss"
+    # exp_name = "TrainableVAE_2023-04-20_22-17-35"  # None for most recent
+    # PM.construct_retina.show_ray_experiment(exp_name, this_dep_var)
 
     #################################
     ### Create stimulus ###
