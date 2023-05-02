@@ -384,18 +384,18 @@ class VariationalEncoder(nn.Module):
         self.linear2 = nn.Linear(128, latent_dims)  # mu
         self.linear3 = nn.Linear(128, latent_dims)  # sigma
 
-        # self.N = torch.distributions.Normal(0, 5)
-        self.N = torch.distributions.exponential.Exponential(4)
-        # self.N = torch.distributions.uniform.Uniform(-2, 2)
+        # self.D = torch.distributions.Normal(0, 1)
+        self.D = torch.distributions.exponential.Exponential(1)
+        # self.D = torch.distributions.uniform.Uniform(-1, 1)
         # if device is not None and device.type == "cpu":
-        #     self.N.loc = self.N.loc.cpu()
-        #     self.N.scale = self.N.scale.cpu()
+        #     self.D.loc = self.D.loc.cpu()
+        #     self.D.scale = self.D.scale.cpu()
         # elif device is not None and device.type == "cuda":
-        #     self.N.loc = self.N.loc.cuda()  # hack to get sampling on the GPU
-        #     self.N.scale = self.N.scale.cuda()
-        self.N.rate = self.N.rate.cuda()
-        # self.N.low = self.N.low.cuda()
-        # self.N.high = self.N.high.cuda()
+        #     self.D.loc = self.D.loc.cuda()  # hack to get sampling on the GPU
+        #     self.D.scale = self.D.scale.cuda()
+        self.D.rate = self.D.rate.cuda()
+        # self.D.low = self.D.low.cuda()
+        # self.D.high = self.D.high.cuda()
         self.kl = 0
 
     def forward(self, x):
@@ -407,16 +407,31 @@ class VariationalEncoder(nn.Module):
         x = self.flatten(x)
         x = self.encoder_lin(x)
 
-        mu = self.linear2(x)
-        sigma = torch.exp(
-            self.linear3(x)
-        )  # The exp is an auxiliary activation to lin layer to ensure positive sigma
-        z = mu + sigma * self.N.sample(mu.shape)
+        # TÄHÄN JÄIT: EROTTELE GAUSSIAN JA EXPONENTIAL ENCODERIT
+        # kOKEILE IF STATEMENTSILLÄ, HIDASTUUKO LIIKAA?
+        # HARKITSE MUUT JAKAUMAT, KATSO MINKÄLAISIA JAKAUMIA ON OLEMASSA
+
+        # mu = self.linear2(x)
+        # sigma = torch.exp(
+        #     self.linear3(x)
+        # )  # The exp is an auxiliary activation to lin layer to ensure positive sigma
+        log_lambda = self.linear2(x)
+        # log_alpha = self.linear3(x)
+        # z = mu + sigma * self.D.rsample(mu.shape)
+        # z = self.D.rsample(mu.shape)
+        # z = -torch.div(torch.rand_like(log_lambda), log_lambda.exp())
+        z = self.D.rsample(log_lambda.shape)
+        # z = -log_lambda.exp() * torch.log(1 - torch.rand_like(log_lambda.exp()))
         # OLD self.kl = (sigma**2 + mu**2 - torch.log(sigma) - 1 / 2).sum(), from orig ref@medium, see above
         # Ref Kingma_2014_arXiv
-        self.kl = -0.5 * torch.sum(
-            1 + torch.log(sigma.pow(2)) - mu.pow(2) - sigma.pow(2)
-        )
+        # self.kl = -0.5 * torch.sum(
+        #     1 + torch.log(sigma.pow(2)) - mu.pow(2) - sigma.pow(2)
+        # )
+        # Exponential distribution
+        lambda1 = log_lambda.exp()
+        lambda2 = torch.tensor(0.0).exp()
+        # self.kl = torch.sum(torch.tensor(0.0).exp() * (log_lambda - torch.tensor(0.0)) - 1)
+        self.kl = torch.sum(torch.log(lambda2 / lambda1) + (lambda1 / lambda2) - 1)
 
         return z
 
@@ -877,7 +892,7 @@ class RetinaVAE(RetinaMath):
         # Single run parameters
         #######################
         # Set common VAE model parameters
-        self.latent_dim = 32  # 2**1 - 2**6, use powers of 2 btw 2 and 128
+        self.latent_dim = 16# 32  # 2**1 - 2**6, use powers of 2 btw 2 and 128
         self.channels = 16
         # lr will be reduced by scheduler down to lr * gamma ** (epochs/step_size)
         self.lr = 0.0003
@@ -888,7 +903,7 @@ class RetinaVAE(RetinaMath):
         self.train_by = [["parasol"], ["on"]]  # Train by these factors
         # self.train_by = [["midget"], ["on", "off"]]  # Train by these factors
 
-        self.kernel_stride = "k7s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
+        self.kernel_stride = "k5s2"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
         self.conv_layers = 3  # 1 - 5 for s1, 1 - 3 for k3s2 and 1 - 2 for k5s2
         self.batch_norm = False
 
@@ -910,7 +925,8 @@ class RetinaVAE(RetinaMath):
         ####################
 
         # Set the random seed for reproducible results for both torch and numpy
-        self.random_seed = np.random.randint(1, 10000)
+        # self.random_seed = np.random.randint(1, 10000)
+        self.random_seed = 42
         torch.manual_seed(self.random_seed)
         np.random.seed(self.random_seed)
 
@@ -1112,14 +1128,17 @@ class RetinaVAE(RetinaMath):
             data_type="test", shuffle=False
         )
 
-        if 1:
-            # # Figure 1
-            # self._plot_ae_outputs(
-            #     self.vae.encoder,
-            #     self.vae.decoder,
-            #     ds_name="test_ds",
-            #     sample_start_stop=[1, 15],
-            # )
+        if 0:
+            
+            self.vae.eval()
+
+            # Figure 1
+            self._plot_ae_outputs(
+                self.vae.encoder,
+                self.vae.decoder,
+                ds_name="test_ds",
+                sample_start_stop=[1, 15],
+            )
 
             # if training_mode in ["train_model"]:
             #     self._plot_ae_outputs(
@@ -1128,8 +1147,6 @@ class RetinaVAE(RetinaMath):
             #     self._plot_ae_outputs(
             #         self.vae.encoder, self.vae.decoder, ds_name="valid_ds"
             #     )
-
-            self.vae.eval()
 
             # Figure 2
             self._reconstruct_random_images()

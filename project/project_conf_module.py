@@ -120,8 +120,8 @@ my_retina = {
     "response_type": "on",
     # "ecc_limits": [4.8, 5.2],
     # "sector_limits": [-0.4, 0.4],
-    "ecc_limits": [4, 5],
-    "sector_limits": [-1, 1],
+    "ecc_limits": [4, 6],
+    "sector_limits": [-1.5, 1.5],
     "model_density": 1.0,
     "randomize_position": 0.05,
     "stimulus_center": 4.45 + 0j,
@@ -329,18 +329,18 @@ if __name__ == "__main__":
 
     # options are defined in my_retina_options
 
-    # PM.construct_retina.build()
+    PM.construct_retina.build()
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # This is why they are called via the construct_retina attribute. The instance
     # object is attached to the call for viz.
 
     # PM.construct_retina.show_exp_build_process(show_all_spatial_fits=True)
-    PM.construct_retina.show_gen_and_exp_spatial_rfs(n_samples=15)
+    PM.construct_retina.show_gen_and_exp_spatial_rfs(n_samples=10)
     # PM.construct_retina.show_gen_spat_postprocessing()
-    # PM.construct_retina.show_latent_space_and_samples()
+    PM.construct_retina.show_latent_space_and_samples()
 
-    # TÄHÄN JÄIT: MAKE A BAR GRAPH OF RF STATISTICS: PARASOL ON OFF, MIDGET ON OFF
+    # TÄHÄN JÄIT: MAKE A BAR GRAPH OF RF FIT STATISTICS: PARASOL ON OFF, MIDGET ON OFF
     #
 
     # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
