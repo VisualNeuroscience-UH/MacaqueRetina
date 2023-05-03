@@ -326,8 +326,8 @@ class VariationalEncoder(nn.Module):
         channels=8,
         conv_layers=3,
         batch_norm=True,
+        latent_distribution="normal",
         device=None,
-        latent_distribution="uniform",
     ):
         # super(VariationalEncoder, self).__init__()
         super().__init__()
@@ -395,9 +395,6 @@ class VariationalEncoder(nn.Module):
                 elif device is not None and device.type == "cuda":
                     self.D.loc = self.D.loc.cuda()  # hack to get sampling on the GPU
                     self.D.scale = self.D.scale.cuda()
-            case "exponential":
-                self.D = torch.distributions.exponential.Exponential(1)
-                self.D.rate = self.D.rate.cuda()
             case "uniform":
                 self.linear3 = nn.Linear(128, latent_dims)  # sigma
                 self.sigmoid = nn.Sigmoid()  # Provides [0, 1] range
@@ -428,14 +425,6 @@ class VariationalEncoder(nn.Module):
                 # Ref Kingma_2014_arXiv
                 self.kl = -0.5 * torch.sum(
                     1 + torch.log(sigma.pow(2)) - mu.pow(2) - sigma.pow(2)
-                )
-            case "exponential":
-                log_lambda = self.linear2(x)
-                z = self.D.rsample(log_lambda.shape)
-                lambda1 = log_lambda.exp()
-                lambda2 = torch.tensor(0.0).exp()
-                self.kl = torch.sum(
-                    torch.log(lambda2 / lambda1) + (lambda1 / lambda2) - 1
                 )
             case "uniform":
                 midpoints = self.linear2(x)
@@ -552,6 +541,7 @@ class VariationalAutoencoder(nn.Module):
         channels=8,
         conv_layers=3,
         batch_norm=True,
+        latent_distribution="normal",
         device=None,
     ):
         super().__init__()
@@ -596,6 +586,7 @@ class VariationalAutoencoder(nn.Module):
             channels=channels,
             conv_layers=conv_layers,
             batch_norm=batch_norm,
+            latent_distribution=latent_distribution,
             device=self.device,
         )
         self.decoder = Decoder(
@@ -793,6 +784,7 @@ class TrainableVAE(tune.Trainable):
             channels=config.get("channels"),
             conv_layers=config.get("conv_layers"),
             batch_norm=config.get("batch_norm"),
+            latent_distribution=config.get("latent_distribution"),
             device=self.device,
         )
 
@@ -898,6 +890,7 @@ class RetinaVAE(RetinaMath):
         self.lr_gamma = 0.9  # Learning rate decay (multiplier for learning rate)
         # how many times to get the data, applied only if augmentation_dict is not None
         self.data_multiplier = 4
+        self.latent_distribution = "uniform"  # "normal" or "uniform"
 
         # For ray tune only
         # If grid_search is True, time_budget is ignored
@@ -917,21 +910,21 @@ class RetinaVAE(RetinaMath):
 
         self.batch_size = 256  # None will take the batch size from test_split size.
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
-        self.train_by = [["parasol"], ["on"]]  # Train by these factors
-        # self.train_by = [["midget"], ["on", "off"]]  # Train by these factors
+        self.train_by = [["parasol"], ["off"]]  # Train by these factors
+        # self.train_by = [["midget"], ["off"]]  # Train by these factors
 
-        self.kernel_stride = "k9s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
+        self.kernel_stride = "k7s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
         self.conv_layers = 2  # 1 - 5 for s1, 1 - 3 for k3s2 and 1 - 2 for k5s2
         self.batch_norm = True
 
         # Augment training and validation data.
         augmentation_dict = {
-            "rotation": 0,  # rotation in degrees
+            "rotation": 45,  # rotation in degrees
             "translation": (
-                0,  # 0.07692307692307693,
-                0,  # 0.07692307692307693,
+                0.07692307692307693,
+                0.07692307692307693,
             ),  # fraction of image, (x, y) -directions
-            "noise": 0,  # 0.005,  # noise float in [0, 1] (noise is added to the image)
+            "noise": 0.005,  # noise float in [0, 1] (noise is added to the image)
             "flip": 0.5,  # flip probability, both horizontal and vertical
         }
         self.augmentation_dict = augmentation_dict
@@ -1038,6 +1031,7 @@ class RetinaVAE(RetinaMath):
                     "batch_size": [256],
                     "conv_layers": [1, 2, 3],
                     "batch_norm": [False],
+                    "latent_distribution": ["uniform"],
                     "rotation": [0],  # Augment: max rotation in degrees
                     # Augment: fract of im, max in (x, y)/[xy] dir
                     "translation": [0.07692307692307693],  # 1/13 pixels
@@ -1379,6 +1373,9 @@ class RetinaVAE(RetinaMath):
                 "batch_size": tune.grid_search(self.search_space["batch_size"]),
                 "conv_layers": tune.grid_search(self.search_space["conv_layers"]),
                 "batch_norm": tune.grid_search(self.search_space["batch_norm"]),
+                "latent_distribution": tune.grid_search(
+                    self.search_space["latent_distribution"]
+                ),
                 "rotation": tune.grid_search(self.search_space["rotation"]),
                 "translation": tune.grid_search(self.search_space["translation"]),
                 "noise": tune.grid_search(self.search_space["noise"]),
@@ -1430,6 +1427,9 @@ class RetinaVAE(RetinaMath):
                 "batch_size": tune.choice(self.search_space["batch_size"]),
                 "conv_layers": tune.choice(self.search_space["conv_layers"]),
                 "batch_norm": tune.choice(self.search_space["batch_norm"]),
+                "latent_distribution": tune.choice(
+                    self.search_space["latent_distribution"]
+                ),
                 "rotation": tune.uniform(
                     self.search_space["rotation"][0], self.search_space["rotation"][-1]
                 ),
@@ -1897,6 +1897,7 @@ class RetinaVAE(RetinaMath):
             channels=self.channels,
             conv_layers=self.conv_layers,
             batch_norm=self.batch_norm,
+            latent_distribution=self.latent_distribution,
             device=self.device,
         )
 

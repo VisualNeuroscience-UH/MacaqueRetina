@@ -28,7 +28,6 @@ from tqdm import tqdm
 from retina.fit_module import Fit
 from retina.retina_math_module import RetinaMath
 from retina.vae_module import RetinaVAE
-from retina.gan_module import GAN
 
 # Builtin
 from pathlib import Path
@@ -58,7 +57,7 @@ class ConstructRetina(RetinaMath):
     deg_per_mm : float
         Degrees per mm
     model_type : str
-        Type of model, either "FIT", "VAE" or "GAN"
+        Type of model, either "FIT"or  "VAE"
     gc_proportion : float
         Proportion of ganglion cells to be created
     gc_df : pd.DataFrame
@@ -103,7 +102,7 @@ class ConstructRetina(RetinaMath):
             First: sets ConstructRetina instance parameters from conf file my_retina
             Second: creates empty gc_df to hold the final ganglion cell mosaics
             Third: gets gc creation model according to model_type
-                Calls Fit, RetinaVAE or GAN classes
+                Calls Fit or RetinaVAE classes
 
         See class attributes for more details.
 
@@ -126,7 +125,7 @@ class ConstructRetina(RetinaMath):
         self.response_type = response_type
 
         self.model_type = my_retina["model_type"]
-        if self.model_type in ["VAE", "GAN"]:
+        if self.model_type in ["VAE"]:
             self.training_mode = my_retina["training_mode"]
 
         proportion_of_parasol_gc_type = my_retina["proportion_of_parasol_gc_type"]
@@ -857,10 +856,6 @@ class ConstructRetina(RetinaMath):
                     spatial_data=img_flipped,
                     fit_type="generated",
                 ).get_generated_spatial_fits()
-
-            case "GAN":
-                # Use the generative adversarial network model to provide spatial and temporal receptive fields
-                pass
             case other:
                 raise ValueError("Model type not recognized")
 
