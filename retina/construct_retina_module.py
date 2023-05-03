@@ -835,9 +835,6 @@ class ConstructRetina(RetinaMath):
                     "img_raw": img_reshaped,
                 }
 
-                # TÄHÄN JÄIT:
-                # INTEGROI VAE GENEROIDUT RF:T WORKING RETINAAN
-
                 img_paths = self.save_generated_rfs(img_flipped, output_path)
 
                 # Add image paths as a columnd to self.gc_df

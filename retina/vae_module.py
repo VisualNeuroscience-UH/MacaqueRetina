@@ -910,21 +910,21 @@ class RetinaVAE(RetinaMath):
 
         self.batch_size = 256  # None will take the batch size from test_split size.
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
-        self.train_by = [["parasol"], ["off"]]  # Train by these factors
+        self.train_by = [["parasol"], ["on"]]  # Train by these factors
         # self.train_by = [["midget"], ["off"]]  # Train by these factors
 
-        self.kernel_stride = "k7s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
+        self.kernel_stride = "k9s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
         self.conv_layers = 2  # 1 - 5 for s1, 1 - 3 for k3s2 and 1 - 2 for k5s2
         self.batch_norm = True
 
         # Augment training and validation data.
         augmentation_dict = {
-            "rotation": 45,  # rotation in degrees
+            "rotation": 0,  # rotation in degrees
             "translation": (
-                0.07692307692307693,
-                0.07692307692307693,
+                0,  # 0.07692307692307693,
+                0,  # 0.07692307692307693,
             ),  # fraction of image, (x, y) -directions
-            "noise": 0.005,  # noise float in [0, 1] (noise is added to the image)
+            "noise": 0,  # 0.005,  # noise float in [0, 1] (noise is added to the image)
             "flip": 0.5,  # flip probability, both horizontal and vertical
         }
         self.augmentation_dict = augmentation_dict
@@ -935,12 +935,12 @@ class RetinaVAE(RetinaMath):
         ####################
 
         # Set the random seed for reproducible results for both torch and numpy
-        # self.random_seed = np.random.randint(1, 10000)
-        self.random_seed = 42
+        self.random_seed = np.random.randint(1, 10000)
+        # self.random_seed = 42
         torch.manual_seed(self.random_seed)
         np.random.seed(self.random_seed)
 
-        self.latent_space_plot_scale = 3.0  # Scale for plotting latent space
+        self.latent_space_plot_scale = 15.0  # Scale for plotting latent space
 
         # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
         # self.resolution_hw = (28, 28)
@@ -1139,7 +1139,7 @@ class RetinaVAE(RetinaMath):
             data_type="test", shuffle=False
         )
 
-        if 0:
+        if 1:
             self.vae.eval()
 
             # Figure 1

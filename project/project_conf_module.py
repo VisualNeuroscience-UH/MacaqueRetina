@@ -341,7 +341,9 @@ if __name__ == "__main__":
     PM.construct_retina.show_latent_space_and_samples()
 
     # TÄHÄN JÄIT: MAKE A BAR GRAPH OF RF FIT STATISTICS: PARASOL ON OFF, MIDGET ON OFF
-    #
+    # KOKOA KUVAT VAE MODUULISTA TÄHÄN / VIZ MODUULIIN
+    # INTEGROI VAE GENEROIDUT RF:T WORKING RETINAAN
+    # TEE RAY HAKU, ENSIN PARASOL ON YMPÄRISTÖ
 
     # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
     # this_dep_var = "val_loss"
