@@ -327,6 +327,7 @@ class VariationalEncoder(nn.Module):
         conv_layers=3,
         batch_norm=True,
         device=None,
+        latent_distribution="uniform",
     ):
         # super(VariationalEncoder, self).__init__()
         super().__init__()
@@ -337,6 +338,7 @@ class VariationalEncoder(nn.Module):
             }
 
         self.device = device
+        self.latent_distribution = latent_distribution
 
         self.encoder_conv1 = nn.Sequential(
             nn.Conv2d(
@@ -382,20 +384,29 @@ class VariationalEncoder(nn.Module):
         )
 
         self.linear2 = nn.Linear(128, latent_dims)  # mu
-        self.linear3 = nn.Linear(128, latent_dims)  # sigma
 
-        # self.D = torch.distributions.Normal(0, 1)
-        self.D = torch.distributions.exponential.Exponential(1)
-        # self.D = torch.distributions.uniform.Uniform(-1, 1)
-        # if device is not None and device.type == "cpu":
-        #     self.D.loc = self.D.loc.cpu()
-        #     self.D.scale = self.D.scale.cpu()
-        # elif device is not None and device.type == "cuda":
-        #     self.D.loc = self.D.loc.cuda()  # hack to get sampling on the GPU
-        #     self.D.scale = self.D.scale.cuda()
-        self.D.rate = self.D.rate.cuda()
-        # self.D.low = self.D.low.cuda()
-        # self.D.high = self.D.high.cuda()
+        match self.latent_distribution:
+            case "normal":
+                self.linear3 = nn.Linear(128, latent_dims)  # sigma
+                self.D = torch.distributions.Normal(0, 1)
+                if device is not None and device.type == "cpu":
+                    self.D.loc = self.D.loc.cpu()
+                    self.D.scale = self.D.scale.cpu()
+                elif device is not None and device.type == "cuda":
+                    self.D.loc = self.D.loc.cuda()  # hack to get sampling on the GPU
+                    self.D.scale = self.D.scale.cuda()
+            case "exponential":
+                self.D = torch.distributions.exponential.Exponential(1)
+                self.D.rate = self.D.rate.cuda()
+            case "uniform":
+                self.linear3 = nn.Linear(128, latent_dims)  # sigma
+                self.sigmoid = nn.Sigmoid()  # Provides [0, 1] range
+                self.D = torch.distributions.uniform.Uniform(0, 1)
+                # self.D = torch.distributions.Logistic(loc=0, scale=1)
+                self.D.low = self.D.low.cuda()
+                self.D.high = self.D.high.cuda()
+                # self.D.loc = self.D.loc.cuda()
+                # self.D.scale = self.D.scale.cuda()
         self.kl = 0
 
     def forward(self, x):
@@ -407,31 +418,37 @@ class VariationalEncoder(nn.Module):
         x = self.flatten(x)
         x = self.encoder_lin(x)
 
-        # TÄHÄN JÄIT: EROTTELE GAUSSIAN JA EXPONENTIAL ENCODERIT
-        # kOKEILE IF STATEMENTSILLÄ, HIDASTUUKO LIIKAA?
-        # HARKITSE MUUT JAKAUMAT, KATSO MINKÄLAISIA JAKAUMIA ON OLEMASSA
+        match self.latent_distribution:
+            case "normal":
+                mu = self.linear2(x)
+                sigma = torch.exp(
+                    self.linear3(x)
+                )  # Auxiliary activation to ensure positive sigma
+                z = mu + sigma * self.D.rsample(mu.shape)
+                # Ref Kingma_2014_arXiv
+                self.kl = -0.5 * torch.sum(
+                    1 + torch.log(sigma.pow(2)) - mu.pow(2) - sigma.pow(2)
+                )
+            case "exponential":
+                log_lambda = self.linear2(x)
+                z = self.D.rsample(log_lambda.shape)
+                lambda1 = log_lambda.exp()
+                lambda2 = torch.tensor(0.0).exp()
+                self.kl = torch.sum(
+                    torch.log(lambda2 / lambda1) + (lambda1 / lambda2) - 1
+                )
+            case "uniform":
+                midpoints = self.linear2(x)
+                # Apply the sigmoid activation function for [0,1] range
+                params = self.sigmoid(self.linear3(x))
+                z = midpoints + params * self.D.rsample(midpoints.shape)
 
-        # mu = self.linear2(x)
-        # sigma = torch.exp(
-        #     self.linear3(x)
-        # )  # The exp is an auxiliary activation to lin layer to ensure positive sigma
-        log_lambda = self.linear2(x)
-        # log_alpha = self.linear3(x)
-        # z = mu + sigma * self.D.rsample(mu.shape)
-        # z = self.D.rsample(mu.shape)
-        # z = -torch.div(torch.rand_like(log_lambda), log_lambda.exp())
-        z = self.D.rsample(log_lambda.shape)
-        # z = -log_lambda.exp() * torch.log(1 - torch.rand_like(log_lambda.exp()))
-        # OLD self.kl = (sigma**2 + mu**2 - torch.log(sigma) - 1 / 2).sum(), from orig ref@medium, see above
-        # Ref Kingma_2014_arXiv
-        # self.kl = -0.5 * torch.sum(
-        #     1 + torch.log(sigma.pow(2)) - mu.pow(2) - sigma.pow(2)
-        # )
-        # Exponential distribution
-        lambda1 = log_lambda.exp()
-        lambda2 = torch.tensor(0.0).exp()
-        # self.kl = torch.sum(torch.tensor(0.0).exp() * (log_lambda - torch.tensor(0.0)) - 1)
-        self.kl = torch.sum(torch.log(lambda2 / lambda1) + (lambda1 / lambda2) - 1)
+                volume_Q = 1
+                # Volume of P along each dimension
+                volume_P = torch.prod(params, dim=1)
+                kl = torch.log(volume_Q / volume_P)  # Compute the KL divergence
+                # Sum the KL divergence for each sample in the batch
+                self.kl = torch.sum(kl)
 
         return z
 
@@ -876,7 +893,7 @@ class RetinaVAE(RetinaMath):
         self.response_type = response_type
 
         # Fixed values for both single training and ray tune runs
-        self.epochs = 1000
+        self.epochs = 200
         self.lr_step_size = 25  # Learning rate decay step size (in epochs)
         self.lr_gamma = 0.9  # Learning rate decay (multiplier for learning rate)
         # how many times to get the data, applied only if augmentation_dict is not None
@@ -892,7 +909,7 @@ class RetinaVAE(RetinaMath):
         # Single run parameters
         #######################
         # Set common VAE model parameters
-        self.latent_dim = 16# 32  # 2**1 - 2**6, use powers of 2 btw 2 and 128
+        self.latent_dim = 32  # 32  # 2**1 - 2**6, use powers of 2 btw 2 and 128
         self.channels = 16
         # lr will be reduced by scheduler down to lr * gamma ** (epochs/step_size)
         self.lr = 0.0003
@@ -903,9 +920,9 @@ class RetinaVAE(RetinaMath):
         self.train_by = [["parasol"], ["on"]]  # Train by these factors
         # self.train_by = [["midget"], ["on", "off"]]  # Train by these factors
 
-        self.kernel_stride = "k5s2"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
-        self.conv_layers = 3  # 1 - 5 for s1, 1 - 3 for k3s2 and 1 - 2 for k5s2
-        self.batch_norm = False
+        self.kernel_stride = "k9s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
+        self.conv_layers = 2  # 1 - 5 for s1, 1 - 3 for k3s2 and 1 - 2 for k5s2
+        self.batch_norm = True
 
         # Augment training and validation data.
         augmentation_dict = {
@@ -1129,7 +1146,6 @@ class RetinaVAE(RetinaMath):
         )
 
         if 0:
-            
             self.vae.eval()
 
             # Figure 1
