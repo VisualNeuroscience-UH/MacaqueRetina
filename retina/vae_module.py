@@ -417,26 +417,21 @@ class VariationalEncoder(nn.Module):
         match self.latent_distribution:
             case "normal":
                 mu = self.linear2(x)
-                sigma = torch.exp(
-                    self.linear3(x)
-                )  # Auxiliary activation to ensure positive sigma
+                sigma = torch.exp(self.linear3(x))  # Ensure positive sigma
                 z = mu + sigma * self.D.rsample(mu.shape)
-                # Ref Kingma_2014_arXiv
+
                 self.kl = -0.5 * torch.sum(
                     1 + torch.log(sigma.pow(2)) - mu.pow(2) - sigma.pow(2)
                 )
             case "uniform":
                 midpoints = self.linear2(x)
-                # Apply the sigmoid activation function for [0,1] range
-                params = self.sigmoid(self.linear3(x))
-                z = midpoints + params * self.D.rsample(midpoints.shape)
+                range_Q = self.sigmoid(self.linear3(x))  # [0, 1] range
+                z = midpoints + range_Q * self.D.rsample(midpoints.shape)
 
-                volume_Q = 1
-                # Volume of P along each dimension
-                volume_P = torch.prod(params, dim=1)
-                kl = torch.log(volume_Q / volume_P)  # Compute the KL divergence
-                # Sum the KL divergence for each sample in the batch
-                self.kl = torch.sum(kl)
+                volume_P = 1  # Volume of the prior distribution
+                # Compute the KL divergence between Q and P
+                kl = torch.sum(torch.log(volume_P / range_Q), dim=1)
+                self.kl = torch.sum(kl)  # Sum for each sample in the batch
 
         return z
 
@@ -878,7 +873,7 @@ class RetinaVAE(RetinaMath):
         self.response_type = response_type
 
         # Fixed values for both single training and ray tune runs
-        self.epochs = 5
+        self.epochs = 200
         self.lr_step_size = 20  # Learning rate decay step size (in epochs)
         self.lr_gamma = 0.9  # Learning rate decay (multiplier for learning rate)
         # how many times to get the data, applied only if augmentation_dict is not None
