@@ -126,7 +126,7 @@ my_retina = {
     "randomize_position": 0.05,
     "stimulus_center": 4.45 + 0j,
     "model_type": "VAE",  # "FIT" or "VAE" for variational autoencoder.
-    "training_mode": "train_model",  # "train_model" or "tune_model" or "load_model" Applies to VAE only.
+    "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" Applies to VAE only.
 }
 
 

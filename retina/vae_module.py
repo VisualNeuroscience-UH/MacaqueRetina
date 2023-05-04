@@ -1498,12 +1498,9 @@ class RetinaVAE(RetinaMath):
         # Create models folder if it does not exist using pathlib
 
         # Get key VAE structural parameters and save them with the full model
-        # TÄHÄN JÄIT päivitä tai poista
+        # This is only partial config data, but only latent_dims are needed for loading
         self.vae.config = {
             "latent_dims": self.latent_dim,
-            "ksp_key": self.kernel_stride,
-            "channels": self.channels,
-            "conv_layers": self.conv_layers,
         }
         print(f"Saving model to {model_path}")
         # torch.save(self.vae.state_dict(), model_path)
