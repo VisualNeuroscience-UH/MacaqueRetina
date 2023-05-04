@@ -1129,27 +1129,6 @@ class RetinaVAE(RetinaMath):
         if 1:
             self.vae.eval()
 
-            # Figure 1
-            self._plot_ae_outputs(
-                self.vae.encoder,
-                self.vae.decoder,
-                ds_name="test_ds",
-                sample_start_stop=[1, 15],
-            )
-
-            # if training_mode in ["train_model"]:
-            #     self._plot_ae_outputs(
-            #         self.vae.encoder, self.vae.decoder, ds_name="train_ds"
-            #     )
-            #     self._plot_ae_outputs(
-            #         self.vae.encoder, self.vae.decoder, ds_name="valid_ds"
-            #     )
-
-            # Figure 2
-            self._reconstruct_random_images()
-
-            self._reconstruct_grid_images()
-
             encoded_samples = self.get_encoded_samples(ds_name="test_ds")
 
             # Figure 3
@@ -1158,10 +1137,9 @@ class RetinaVAE(RetinaMath):
             # Figure 4
             self._plot_tsne_space(encoded_samples)
 
-            if training_mode == "train_model":
-                encoded_samples = self.get_encoded_samples(ds_name="train_ds")
-                self._plot_latent_space(encoded_samples)
-                self._plot_tsne_space(encoded_samples)
+            encoded_samples = self.get_encoded_samples(ds_name="train_ds")
+            self._plot_latent_space(encoded_samples)
+            self._plot_tsne_space(encoded_samples)
 
     def _show_lr_decay(self, lr, gamma, step_size, epochs):
         lrs = np.zeros(epochs)
@@ -2022,55 +2000,6 @@ class RetinaVAE(RetinaMath):
             kid_std_epoch,
         )
 
-    def _plot_ae_outputs(
-        self, encoder, decoder, ds_name="test_ds", sample_start_stop=[0, 10]
-    ):
-        """
-        Plot the outputs of the autoencoder.
-        """
-
-        if ds_name == "train_ds":
-            ds = self.train_ds
-        elif ds_name == "valid_ds":
-            ds = self.val_ds
-        else:
-            ds = self.test_ds
-
-        plt.figure(figsize=(16, 4.5))
-
-        encoder.eval()
-        decoder.eval()
-        samples = np.arange(sample_start_stop[0], sample_start_stop[1])
-
-        for pos_idx, sample_idx in enumerate(samples):
-            ax = plt.subplot(2, len(samples), pos_idx + 1)
-            img = ds[sample_idx][0].unsqueeze(0).to(self.device)
-            with torch.no_grad():
-                rec_img = decoder(encoder(img))
-            plt.imshow(img.cpu().squeeze().numpy(), cmap="gist_gray")
-            ax.get_xaxis().set_visible(False)
-            ax.get_yaxis().set_visible(False)
-            ax.text(
-                0.05,
-                0.85,
-                self.apricot_data.data_labels2names_dict[ds[sample_idx][1].item()],
-                fontsize=10,
-                color="red",
-                transform=ax.transAxes,
-            )
-            if pos_idx == 0:
-                ax.set_title("Original images")
-
-            ax = plt.subplot(2, len(samples), len(samples) + pos_idx + 1)
-            plt.imshow(rec_img.cpu().squeeze().numpy(), cmap="gist_gray")
-            ax.get_xaxis().set_visible(False)
-            ax.get_yaxis().set_visible(False)
-            if pos_idx == 0:
-                ax.set_title("Reconstructed images")
-
-        # Set the whole figure title as ds_name
-        plt.suptitle(ds_name)
-
     def _train(self):
         """
         Train for training_mode = train_model
@@ -2128,56 +2057,6 @@ class RetinaVAE(RetinaMath):
                 },
                 epoch,
             )
-
-    def _reconstruct_random_images(self):
-        with torch.no_grad():
-            # # sample latent vectors from the normal distribution
-            # latent = torch.randn(128, self.latent_dim, device=self.device)
-
-            scale = self.latent_space_plot_scale
-            # sample latent vectors from the uniform distribution between -scale and scale
-            latent = (
-                torch.rand(128, self.latent_dim, device=self.device) * 2 * scale - scale
-            )
-
-            # reconstruct images from the latent vectors
-            img_recon = self.vae.decoder(latent)
-            img_recon = img_recon.cpu()
-            latent = latent.cpu()
-
-            fig, ax = plt.subplots(figsize=(20, 8.5))
-            # plot 100 images in 10x10 grid with 1 pixel padding in-between.
-            self._show_image(torchvision.utils.make_grid(img_recon.data[:100], 10, 1))
-            ax.set_title("Decoded images from a random sample of latent space")
-
-    def _reconstruct_grid_images(self):
-        if self.latent_dim == 2:
-            with torch.no_grad():
-                scale = self.latent_space_plot_scale
-                # sample grid of vectors between -1.5 and 1.5 in both dimensions
-                grid = torch.linspace(-scale, scale, 10)
-                latent = (
-                    torch.stack(torch.meshgrid(grid, grid, indexing="xy"))
-                    .reshape(2, -1)
-                    .T.to(self.device)
-                )
-
-                # reconstruct images from the latent vectors
-                img_recon = self.vae.decoder(latent)
-                img_recon = img_recon.cpu()
-                latent = latent.cpu()
-
-                fig, ax = plt.subplots(figsize=(20, 8.5))
-                # plot 100 images in 10x10 grid with 1 pixel padding in-between.
-                self._show_image(
-                    torchvision.utils.make_grid(
-                        img_recon.data[:100], nrow=10, padding=1
-                    ),
-                    latent,
-                )
-                ax.set_title("Decoded images from a grid of samples of latent space")
-        else:
-            print("Latent dimension is not 2. Multidim grid plot is not implemented.")
 
     def _show_image(self, img, latent=None):
         npimg = img.numpy()

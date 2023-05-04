@@ -126,7 +126,7 @@ my_retina = {
     "randomize_position": 0.05,
     "stimulus_center": 4.45 + 0j,
     "model_type": "VAE",  # "FIT" or "VAE" for variational autoencoder.
-    "training_mode": "train_model",  # "train_model" or "tune_model" or "load_model" Applies to VAE only.
+    "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" Applies to VAE only.
 }
 
 
@@ -336,9 +336,10 @@ if __name__ == "__main__":
     # object is attached to the call for viz.
 
     # PM.construct_retina.show_exp_build_process(show_all_spatial_fits=True)
-    PM.construct_retina.show_gen_and_exp_spatial_rfs(n_samples=10)
+    # PM.construct_retina.show_gen_exp_spatial_fit(n_samples=10)
+    PM.construct_retina.show_gen_exp_spatial_rf(ds_name="test_ds", n_samples=10)
     # PM.construct_retina.show_gen_spat_postprocessing()
-    PM.construct_retina.show_latent_space_and_samples()
+    # PM.construct_retina.show_latent_space_and_samples()
 
     # TÄHÄN JÄIT: MAKE A BAR GRAPH OF RF FIT STATISTICS: PARASOL ON OFF, MIDGET ON OFF
     # KOKOA KUVAT VAE MODUULISTA TÄHÄN / VIZ MODUULIIN

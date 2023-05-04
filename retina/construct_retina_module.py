@@ -969,6 +969,15 @@ class ConstructRetina(RetinaMath):
         # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
         self.viz.show_gen_exp_spatial_fit(self, n_samples=n_samples)
 
+    def show_gen_exp_spatial_rf(self, ds_name="test_ds", n_samples=10):
+        """
+        Show the experimental (fitted) and generated spatial receptive fields
+        self goes as argument, to be available for viz
+        """
+
+        # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
+        self.viz.show_gen_exp_spatial_rf(self, ds_name=ds_name, n_samples=n_samples)
+
     def show_gen_spat_postprocessing(self):
         """
         Show the original experimental spatial receptive fields and

@@ -592,7 +592,7 @@ class Viz:
         self.show_temp_stat(mosaic)
         self.show_tonic_drives(mosaic)
 
-    def show_gen_and_exp_spatial_rfs(self, mosaic, n_samples=2):
+    def show_gen_exp_spatial_fit(self, mosaic, n_samples=2):
         """
         Show the experimental (fitted) and generated spatial receptive fields
 
@@ -654,7 +654,11 @@ class Viz:
             # Get only two dimensions at a time
             values = latent_data[:, [i, i + 1]].T
             # Evaluate the kde using only the same two dimensions
+            # Both uniform and normal distr during learning is sampled
+            # using gaussian kde estimate. The kde estimate is basically smooth histogram,
+            # so it is not a problem that the data is not normal.
             kernel = stats.gaussian_kde(values)
+
             # Construct X and Y grids using the same two dimensions
             x = np.linspace(latent_data[:, i].min(), latent_data[:, i].max(), 100)
             y = np.linspace(
@@ -667,6 +671,7 @@ class Viz:
             # Plot the estimated kde and samples on top of it
             axes[ax_idx].contour(X, Y, Z, levels=10)
             axes[ax_idx].scatter(latent_samples[:, i], latent_samples[:, i + 1])
+            # axes[ax_idx].scatter(latent_data[:, i], latent_data[:, i + 1])
 
             # Make marginal plots of the contours as contours and samples as histograms.
             # Place the marginal plots on the right and top of the main plot
@@ -761,6 +766,58 @@ class Viz:
         plt.axvline(np.median(img_post), color="r")
         plt.title(f"Generated processed, median: {np.median(img_post):.2f}")
 
+    def show_gen_exp_spatial_rf(self, mosaic, ds_name="test_ds", n_samples=10):
+        """
+        Plot the outputs of the autoencoder.
+        """
+
+        # pdb.set_trace()
+
+        if ds_name == "train_ds":
+            ds = mosaic.retina_vae.train_loader.dataset
+        elif ds_name == "valid_ds":
+            ds = mosaic.retina_vae.val_loader.dataset
+        else:
+            ds = mosaic.retina_vae.test_loader.dataset
+
+        plt.figure(figsize=(16, 4.5))
+
+        vae = mosaic.retina_vae.vae
+        vae.eval()
+        len_ds = len(ds)
+        samples = np.random.choice(len_ds, n_samples, replace=False)
+
+        for pos_idx, sample_idx in enumerate(samples):
+            ax = plt.subplot(2, len(samples), pos_idx + 1)
+            img = ds[sample_idx][0].unsqueeze(0).to(mosaic.retina_vae.device)
+            with torch.no_grad():
+                rec_img = vae(img)
+            plt.imshow(img.cpu().squeeze().numpy(), cmap="gist_gray")
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+            ax.text(
+                0.05,
+                0.85,
+                mosaic.retina_vae.apricot_data.data_labels2names_dict[
+                    ds[sample_idx][1].item()
+                ],
+                fontsize=10,
+                color="red",
+                transform=ax.transAxes,
+            )
+            if pos_idx == 0:
+                ax.set_title("Original images")
+
+            ax = plt.subplot(2, len(samples), len(samples) + pos_idx + 1)
+            plt.imshow(rec_img.cpu().squeeze().numpy(), cmap="gist_gray")
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+            if pos_idx == 0:
+                ax.set_title("Reconstructed images")
+
+        # Set the whole figure title as ds_name
+        plt.suptitle(ds_name)
+
     def show_ray_experiment(self, mosaic, ray_exp, this_dep_var):
         """
         Show the results of a ray experiment. If ray_exp is None, then
@@ -850,7 +907,9 @@ class Viz:
             axd, "dh", df, dep_vars, dep_vars_best, num_best_trials
         )
 
-        self._subplot_dependent_variables(axd, "dv", result_grid, dep_vars, best_trials_across_dep_vars)
+        self._subplot_dependent_variables(
+            axd, "dv", result_grid, dep_vars, best_trials_across_dep_vars
+        )
 
         if hasattr(mosaic, "exp_spat_filt_to_viz"):
             exp_spat_filt_to_viz = mosaic.exp_spat_filt_to_viz
@@ -889,7 +948,6 @@ class Viz:
         exp_spat_filt_to_viz,
         this_trial_idx,
     ):
-
         log_dir = df["logdir"][this_trial_idx]
 
         # Get folder name starting "checkpoint"
@@ -959,7 +1017,7 @@ class Viz:
             # Set x and y axis tick font size 8
             ax.tick_params(axis="both", which="major", labelsize=8)
 
-            if idx==0:
+            if idx == 0:
                 ax.set_ylabel("Frequency")
                 ax.text(
                     0,
@@ -970,7 +1028,6 @@ class Viz:
                     transform=ax.transAxes,
                     fontsize=11,
                 )
-
 
             ax.set_title(f"{dep_var}")
 
@@ -1003,7 +1060,7 @@ class Viz:
             best_trials = np.argsort(dep_var_vals)[:num_best_trials]
         elif best_is == "max":
             best_trials = np.argsort(dep_var_vals)[-num_best_trials:]
-        
+
         return best_trials, dep_var_vals
 
     def _subplot_dependent_variables(self, axd, kw, result_grid, dep_vars, best_trials):
@@ -1041,12 +1098,14 @@ class Viz:
                     continue
 
                 if idx == 0:
-                    label = f"{dep_vars[color_idx]}: " + ",".join(f"{x}={result.config[x]}" for x in varied_cols)
+                    label = f"{dep_vars[color_idx]}: " + ",".join(
+                        f"{x}={result.config[x]}" for x in varied_cols
+                    )
                     legend = True
                     first_ax = ax
 
                 else:
-                    label=None
+                    label = None
                     legend = False
 
                 result.metrics_dataframe.plot(
@@ -1060,8 +1119,6 @@ class Viz:
 
                 if len(result.metrics_dataframe) > total_n_epochs:
                     total_n_epochs = len(result.metrics_dataframe)
-
-
 
                 # At the end (+1) of the x-axis, add mean and SD of last 50 epochs as dot and vertical line, respectively
                 last_50 = result.metrics_dataframe.tail(50)
@@ -1083,7 +1140,7 @@ class Viz:
 
                 color_idx += 1
 
-            if idx==0:
+            if idx == 0:
                 ax.set_ylabel("Metrics")
 
             # Add legend and bring it to the front
@@ -1110,7 +1167,10 @@ class Viz:
             # set x ticks off
             ax.set_xticks([])
 
-        first_ax.set_title(f"Evolution for best trials (ad {total_n_epochs} epochs)\nDot and vertical line indicate mean and SD of last 50 epochs", loc="left")
+        first_ax.set_title(
+            f"Evolution for best trials (ad {total_n_epochs} epochs)\nDot and vertical line indicate mean and SD of last 50 epochs",
+            loc="left",
+        )
 
     def _subplot_img_recoimg(self, axd, kw, subidx, img, samples, title):
         """
@@ -1132,7 +1192,7 @@ class Viz:
                     0.5,
                     title,
                     fontsize=8,
-                    fontdict={       
+                    fontdict={
                         "verticalalignment": "baseline",
                         "horizontalalignment": "left",
                     },
