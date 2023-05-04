@@ -770,6 +770,9 @@ class ConstructRetina(RetinaMath):
                 latent_data = self.get_data_at_latent_space(retina_vae)
 
                 # Make a probability density function of the latent_data
+                # Both uniform and normal distr during learning is sampled
+                # using gaussian kde estimate. The kde estimate is basically smooth histogram,
+                # so it is not a problem that the data is not normal.
                 latent_pdf = stats.gaussian_kde(latent_data.T)
 
                 # --- 2. sample from the pdf
@@ -873,9 +876,11 @@ class ConstructRetina(RetinaMath):
         Get original image data as projected through encoder to the latent space
         """
         # Get the latent space data
-        train_df = retina_vae.get_encoded_samples(ds_name="train_ds")
-        valid_df = retina_vae.get_encoded_samples(ds_name="val_ds")
-        test_df = retina_vae.get_encoded_samples(ds_name="test_ds")
+        train_df = retina_vae.get_encoded_samples(
+            dataset=retina_vae.train_loader.dataset
+        )
+        valid_df = retina_vae.get_encoded_samples(dataset=retina_vae.val_loader.dataset)
+        test_df = retina_vae.get_encoded_samples(dataset=retina_vae.test_loader.dataset)
         latent_df = pd.concat([train_df, valid_df, test_df], axis=0, ignore_index=True)
 
         # Extract data from latent_df into a numpy array from columns whose title include "EncVariable"
@@ -955,14 +960,14 @@ class ConstructRetina(RetinaMath):
             self, show_all_spatial_fits=show_all_spatial_fits
         )
 
-    def show_gen_and_exp_spatial_rfs(self, n_samples=2):
+    def show_gen_exp_spatial_fit(self, n_samples=2):
         """
         Show the experimental (fitted) and generated spatial receptive fields
         self goes as argument, to be available for viz
         """
 
         # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
-        self.viz.show_gen_and_exp_spatial_rfs(self, n_samples=n_samples)
+        self.viz.show_gen_exp_spatial_fit(self, n_samples=n_samples)
 
     def show_gen_spat_postprocessing(self):
         """

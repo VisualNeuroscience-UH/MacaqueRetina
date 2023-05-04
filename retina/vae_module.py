@@ -873,7 +873,7 @@ class RetinaVAE(RetinaMath):
         self.response_type = response_type
 
         # Fixed values for both single training and ray tune runs
-        self.epochs = 200
+        self.epochs = 100
         self.lr_step_size = 20  # Learning rate decay step size (in epochs)
         self.lr_gamma = 0.9  # Learning rate decay (multiplier for learning rate)
         # how many times to get the data, applied only if augmentation_dict is not None
@@ -1079,7 +1079,7 @@ class RetinaVAE(RetinaMath):
                 # Load previously calculated model for vizualization
                 # Load model to self.vae
 
-                if hasattr(self, "trial_name"):
+                if hasattr(self, "trial_name"):  # After tune_model
                     self.vae, result_grid, tb_dir = self._load_model(
                         model_path=None, trial_name=self.trial_name
                     )
@@ -1088,17 +1088,18 @@ class RetinaVAE(RetinaMath):
                         results_grid=result_grid,
                     )
 
-                elif hasattr(self, "models_folder"):
+                elif hasattr(self, "models_folder"):  # After train_model
                     self.vae = self._load_model(
                         model_path=self.models_folder, trial_name=None
                     )
                     # Get datasets for RF generation and vizualization
-                    # Note that only original data is used, no augmentation and no data multiplication
-                    # pdb.set_trace()
+                    # Original augmentation and data multiplication is applied to train and val ds
                     self.train_loader = self._augment_and_get_dataloader(
-                        data_type="train"
+                        data_type="train", augmentation_dict=self.vae.augmentation_dict
                     )
-                    self.val_loader = self._augment_and_get_dataloader(data_type="val")
+                    self.val_loader = self._augment_and_get_dataloader(
+                        data_type="val", augmentation_dict=self.vae.augmentation_dict
+                    )
                     self.test_loader = self._augment_and_get_dataloader(
                         data_type="test"
                     )
@@ -1534,6 +1535,7 @@ class RetinaVAE(RetinaMath):
         # Create models folder if it does not exist using pathlib
 
         # Get key VAE structural parameters and save them with the full model
+        # TÄHÄN JÄIT päivitä tai poista
         self.vae.config = {
             "latent_dims": self.latent_dim,
             "ksp_key": self.kernel_stride,
@@ -2203,7 +2205,7 @@ class RetinaVAE(RetinaMath):
             plt.xlabel("EncVariable 0")
             plt.ylabel("EncVariable 1")
 
-    def get_encoded_samples(self, ds_name="test_ds"):
+    def get_encoded_samples(self, ds_name=None, dataset=None):
         """Get encoded samples from a dataset.
 
         Parameters
@@ -2217,12 +2219,20 @@ class RetinaVAE(RetinaMath):
             Encoded samples
         """
 
+        # Assert that either ds_name or dataset is given
+        assert (
+            ds_name is not None or dataset is not None
+        ), "Either ds_name or dataset must be given, aborting... "
+
+        # After training, train and valid datasets contain augmentation
         if ds_name == "train_ds":
             ds = self.train_ds
         elif ds_name == "valid_ds":
             ds = self.valid_ds
-        else:
+        elif ds_name == "test_ds":
             ds = self.test_ds
+        else:
+            ds = dataset
 
         encoded_samples = []
         for sample in tqdm(ds):
