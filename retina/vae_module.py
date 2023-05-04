@@ -95,12 +95,11 @@ class AugmentedDataset(torch.utils.data.Dataset):
     logged into the ApricotDataset instance object.
     """
 
-    def __init__(
-        self, data, labels, resolution_hw, augmentation_dict=None, data_multiplier=1.0
-    ):
+    def __init__(self, data, labels, resolution_hw, augmentation_dict=None):
         if augmentation_dict is not None:
             # Multiply the amount of images by the data_multiplier. Take random samples from the data
             len_data = data.shape[0]
+            data_multiplier = augmentation_dict["data_multiplier"]
 
             # Get the number of images to be added
             n_images_to_add = int(data_multiplier * len_data) - len_data
@@ -885,12 +884,11 @@ class RetinaVAE(RetinaMath):
         self.response_type = response_type
 
         # Fixed values for both single training and ray tune runs
-        self.epochs = 200
-        self.lr_step_size = 25  # Learning rate decay step size (in epochs)
+        self.epochs = 5
+        self.lr_step_size = 20  # Learning rate decay step size (in epochs)
         self.lr_gamma = 0.9  # Learning rate decay (multiplier for learning rate)
         # how many times to get the data, applied only if augmentation_dict is not None
-        self.data_multiplier = 4
-        self.latent_distribution = "uniform"  # "normal" or "uniform"
+        self.resolution_hw = 13  # Both x and y. Images will be sampled to this space.
 
         # For ray tune only
         # If grid_search is True, time_budget is ignored
@@ -905,7 +903,7 @@ class RetinaVAE(RetinaMath):
         self.latent_dim = 32  # 32  # 2**1 - 2**6, use powers of 2 btw 2 and 128
         self.channels = 16
         # lr will be reduced by scheduler down to lr * gamma ** (epochs/step_size)
-        self.lr = 0.0003
+        self.lr = 0.0005
         # self._show_lr_decay(self.lr, self.lr_gamma, self.lr_step_size, self.epochs)
 
         self.batch_size = 256  # None will take the batch size from test_split size.
@@ -913,9 +911,10 @@ class RetinaVAE(RetinaMath):
         self.train_by = [["parasol"], ["on"]]  # Train by these factors
         # self.train_by = [["midget"], ["off"]]  # Train by these factors
 
-        self.kernel_stride = "k9s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
+        self.kernel_stride = "k7s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
         self.conv_layers = 2  # 1 - 5 for s1, 1 - 3 for k3s2 and 1 - 2 for k5s2
         self.batch_norm = True
+        self.latent_distribution = "uniform"  # "normal" or "uniform"
 
         # Augment training and validation data.
         augmentation_dict = {
@@ -926,6 +925,7 @@ class RetinaVAE(RetinaMath):
             ),  # fraction of image, (x, y) -directions
             "noise": 0,  # 0.005,  # noise float in [0, 1] (noise is added to the image)
             "flip": 0.5,  # flip probability, both horizontal and vertical
+            "data_multiplier": 4,  # how many times to get the data w/ augmentation
         }
         self.augmentation_dict = augmentation_dict
         # self.augmentation_dict = None
@@ -935,16 +935,12 @@ class RetinaVAE(RetinaMath):
         ####################
 
         # Set the random seed for reproducible results for both torch and numpy
-        self.random_seed = np.random.randint(1, 10000)
-        # self.random_seed = 42
+        # self.random_seed = np.random.randint(1, 10000)
+        self.random_seed = 42
         torch.manual_seed(self.random_seed)
         np.random.seed(self.random_seed)
 
         self.latent_space_plot_scale = 15.0  # Scale for plotting latent space
-
-        # Images will be sampled to this space. If you change this you need to change layers, too, for consistent output shape
-        # self.resolution_hw = (28, 28)
-        self.resolution_hw = 13  # Both x and y
 
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -970,7 +966,6 @@ class RetinaVAE(RetinaMath):
         # self._visualize_augmentation()
 
         # # Create model and set optimizer and learning rate scheduler
-        # self._prep_training()
         self._get_and_split_apricot_data()
 
         # # KID comparison btw real and fake images
@@ -992,7 +987,7 @@ class RetinaVAE(RetinaMath):
                     batch_size=self.batch_size,
                     shuffle=True,
                 )
-
+                pdb.set_trace()
                 # Create model and set optimizer and learning rate scheduler
                 self._prep_training()
                 # print(self.vae)
@@ -1022,20 +1017,20 @@ class RetinaVAE(RetinaMath):
                 # Grid search: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#ray.tune.grid_search
                 # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
                 self.search_space = {
-                    "lr": [0.001],
-                    "latent_dim": [2, 4, 8, 16],
-                    "resolution_hw": [28],  # Both x and y, 13 or 28
+                    "lr": [0.0003],
+                    "latent_dim": [32],
+                    "resolution_hw": [13],  # Both x and y, 13 or 28
                     # k3s2,k3s1,k5s2,k5s1,k7s1, k9s1 Kernel-stride-padding for conv layers. NOTE you cannot use >3 conv layers with stride 2
-                    "kernel_stride": ["k7s1", "k9s1"],
-                    "channels": [4, 8, 16],
+                    "kernel_stride": ["k7s1"],
+                    "channels": [16],
                     "batch_size": [256],
-                    "conv_layers": [1, 2, 3],
-                    "batch_norm": [False],
+                    "conv_layers": [2],
+                    "batch_norm": [True],
                     "latent_distribution": ["uniform"],
                     "rotation": [0],  # Augment: max rotation in degrees
                     # Augment: fract of im, max in (x, y)/[xy] dir
-                    "translation": [0.07692307692307693],  # 1/13 pixels
-                    "noise": [0.005],  # Augment: noise added, btw [0., 1.]
+                    "translation": [0],  # 1/13 pixels
+                    "noise": [0],  # Augment: noise added, btw [0., 1.]
                     "flip": [0.5],  # Augment: flip prob, both horiz and vert
                     "num_models": 4,  # repetitions of the same model
                 }
@@ -1048,7 +1043,7 @@ class RetinaVAE(RetinaMath):
 
                 # Fraction of GPU per trial. 0.25 for smaller models is enough. Larger may need 0.33 or 0.5.
                 # Increase if you get CUDA out of memory errors.
-                self.gpu_fraction = 1.0
+                self.gpu_fraction = 0.5
 
                 self.disk_usage_threshold = 90  # %, stops training if exceeded
 
@@ -1093,7 +1088,7 @@ class RetinaVAE(RetinaMath):
 
             case "load_model":
                 # Load previously calculated model for vizualization
-                # Load model to self.vae and return state dict. The numbers are in the state dict.
+                # Load model to self.vae
 
                 if hasattr(self, "trial_name"):
                     self.vae, result_grid, tb_dir = self._load_model(
@@ -1109,6 +1104,8 @@ class RetinaVAE(RetinaMath):
                         model_path=self.models_folder, trial_name=None
                     )
                     # Get datasets for RF generation and vizualization
+                    # Note that only original data is used, no augmentation and no data multiplication
+                    # pdb.set_trace()
                     self.train_loader = self._augment_and_get_dataloader(
                         data_type="train"
                     )
@@ -1786,7 +1783,6 @@ class RetinaVAE(RetinaMath):
             labels,
             self.resolution_hw,
             augmentation_dict=augmentation_dict,
-            data_multiplier=self.data_multiplier,
         )
 
         # set self. attribute "n_train", "n_val" or "n_test"
@@ -1904,6 +1900,7 @@ class RetinaVAE(RetinaMath):
         # Will be saved with model for later eval and viz
         self.vae.test_data = self.test_data
         self.vae.test_labels = self.test_labels
+        self.vae.augmentation_dict = self.augmentation_dict
 
         self.optim = torch.optim.Adam(
             self.vae.parameters(), lr=self.lr, weight_decay=1e-5
@@ -2043,18 +2040,12 @@ class RetinaVAE(RetinaMath):
             ds = self.test_ds
 
         plt.figure(figsize=(16, 4.5))
-        targets = ds.labels.numpy()
-        # t_idx = {i: np.where(targets == i)[0][0] for i in self.train_by_labels}
-        t_idx = {i: np.where(targets == i)[0][:] for i in self.train_by_labels}
+
         encoder.eval()
         decoder.eval()
-
-        n_cell_types = len(self.train_by_labels)
         samples = np.arange(sample_start_stop[0], sample_start_stop[1])
 
         for pos_idx, sample_idx in enumerate(samples):
-            # this_idx = t_idx[self.train_by_labels[i]]
-
             ax = plt.subplot(2, len(samples), pos_idx + 1)
             img = ds[sample_idx][0].unsqueeze(0).to(self.device)
             with torch.no_grad():
