@@ -600,16 +600,9 @@ class VariationalAutoencoder(nn.Module):
             device=self.device,
         )
 
-        print("Encoder:")
-        print(self.encoder)
-        print("Decoder:")
-        print(self.decoder)
-
         # Consider moving for not to unnecessarily print the kid model
         self.mse = MeanSquaredError()
-        # self.fid = FrechetInceptionDistance(
-        #     n_features=64, reset_real_features=False, normalize=True
-        # )
+
         # Allowed n_features: 64, 192, 768, 2048
         self.kid = KernelInceptionDistance(
             n_features=2048,
@@ -754,6 +747,7 @@ class TrainableVAE(tune.Trainable):
             ),
             "noise": config.get("noise"),
             "flip": config.get("flip"),
+            "data_multiplier": config.get("data_multiplier"),
         }
 
         self._augment_and_get_dataloader = methods["_augment_and_get_dataloader"]
@@ -987,7 +981,6 @@ class RetinaVAE(RetinaMath):
                     batch_size=self.batch_size,
                     shuffle=True,
                 )
-                pdb.set_trace()
                 # Create model and set optimizer and learning rate scheduler
                 self._prep_training()
                 # print(self.vae)
@@ -1029,10 +1022,11 @@ class RetinaVAE(RetinaMath):
                     "latent_distribution": ["uniform"],
                     "rotation": [0],  # Augment: max rotation in degrees
                     # Augment: fract of im, max in (x, y)/[xy] dir
-                    "translation": [0],  # 1/13 pixels
+                    "translation": [0, 1 / 13],  # 1/13 pixels
                     "noise": [0],  # Augment: noise added, btw [0., 1.]
                     "flip": [0.5],  # Augment: flip prob, both horiz and vert
-                    "num_models": 4,  # repetitions of the same model
+                    "data_multiplier": [4],  # N times to get the data w/ augmentation
+                    "num_models": 1,  # repetitions of the same model
                 }
 
                 # The first metric is the one that will be used to prioritize the checkpoints and pruning.
@@ -1203,6 +1197,7 @@ class RetinaVAE(RetinaMath):
             ),
             "noise": best_result.config["noise"],
             "flip": best_result.config["flip"],
+            "data_multiplier": best_result.config["data_multiplier"],
         }
 
         self.train_loader = self._augment_and_get_dataloader(
@@ -1377,6 +1372,9 @@ class RetinaVAE(RetinaMath):
                 "translation": tune.grid_search(self.search_space["translation"]),
                 "noise": tune.grid_search(self.search_space["noise"]),
                 "flip": tune.grid_search(self.search_space["flip"]),
+                "data_multiplier": tune.grid_search(
+                    self.search_space["data_multiplier"]
+                ),
                 "model_id": tune.grid_search(
                     [
                         "model_{}".format(i)
@@ -1409,6 +1407,7 @@ class RetinaVAE(RetinaMath):
                     "translation": 0,
                     "noise": 0.0,
                     "flip": 0.5,
+                    "data_multiplier": 4,
                     "model_id": "model_0",
                 }
             ]
@@ -1440,6 +1439,7 @@ class RetinaVAE(RetinaMath):
                 "flip": tune.uniform(
                     self.search_space["flip"][0], self.search_space["flip"][-1]
                 ),
+                "data_multiplier": tune.choice(self.search_space["data_multiplier"]),
                 "model_id": tune.choice(
                     [
                         "model_{}".format(i)
