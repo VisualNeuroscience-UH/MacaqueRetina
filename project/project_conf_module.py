@@ -126,7 +126,7 @@ my_retina = {
     "randomize_position": 0.05,
     "stimulus_center": 4.45 + 0j,
     "model_type": "VAE",  # "FIT" or "VAE" for variational autoencoder.
-    "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" Applies to VAE only.
+    "training_mode": "train_model",  # "train_model" or "tune_model" or "load_model" Applies to VAE only.
 }
 
 
@@ -337,7 +337,8 @@ if __name__ == "__main__":
 
     # PM.construct_retina.show_exp_build_process(show_all_spatial_fits=True)
     # PM.construct_retina.show_gen_exp_spatial_fit(n_samples=10)
-    PM.construct_retina.show_gen_exp_spatial_rf(ds_name="test_ds", n_samples=10)
+    # PM.construct_retina.show_gen_exp_spatial_rf(ds_name="test_ds", n_samples=10)
+    PM.construct_retina.show_latent_tsne_space()
     # PM.construct_retina.show_gen_spat_postprocessing()
     # PM.construct_retina.show_latent_space_and_samples()
 

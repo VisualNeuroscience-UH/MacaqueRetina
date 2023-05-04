@@ -4,6 +4,7 @@ import scipy.optimize as opt
 import scipy.io as sio
 import scipy.stats as stats
 import pandas as pd
+from sklearn.manifold import TSNE
 
 # Machine learning
 import torch
@@ -18,9 +19,9 @@ import brian2.units as b2u
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+import seaborn as sns
 
 # from tqdm import tqdm
-# import seaborn as sns
 
 # Local
 from retina.vae_module import AugmentedDataset
@@ -771,8 +772,6 @@ class Viz:
         Plot the outputs of the autoencoder.
         """
 
-        # pdb.set_trace()
-
         if ds_name == "train_ds":
             ds = mosaic.retina_vae.train_loader.dataset
         elif ds_name == "valid_ds":
@@ -817,6 +816,43 @@ class Viz:
 
         # Set the whole figure title as ds_name
         plt.suptitle(ds_name)
+
+    def show_latent_tsne_space(self, mosaic):
+        train_df = mosaic.retina_vae.get_encoded_samples(
+            dataset=mosaic.retina_vae.train_loader.dataset
+        )
+        valid_df = mosaic.retina_vae.get_encoded_samples(
+            dataset=mosaic.retina_vae.val_loader.dataset
+        )
+        test_df = mosaic.retina_vae.get_encoded_samples(
+            dataset=mosaic.retina_vae.test_loader.dataset
+        )
+
+        # Add a column to each df with the dataset name
+        train_df["dataset"] = "train"
+        valid_df["dataset"] = "valid"
+        test_df["dataset"] = "test"
+
+        # Concatenate the dfs
+        encoded_samples = pd.concat([train_df, valid_df, test_df])
+
+        tsne = TSNE(n_components=2, init="pca", learning_rate="auto", perplexity=30)
+
+        if encoded_samples.shape[0] < tsne.perplexity:
+            tsne.perplexity = encoded_samples.shape[0] - 1
+
+        tsne_results = tsne.fit_transform(
+            encoded_samples.drop(["label", "dataset"], axis=1)
+        )
+
+        ax0 = sns.relplot(
+            # data=tsne_results,
+            x=tsne_results[:, 0],
+            y=tsne_results[:, 1],
+            hue=encoded_samples.dataset.astype(str),
+        )
+        ax0.set(xlabel="tsne-2d-one", ylabel="tsne-2d-two")
+        plt.title("TSNE plot of encoded samples")
 
     def show_ray_experiment(self, mosaic, ray_exp, this_dep_var):
         """

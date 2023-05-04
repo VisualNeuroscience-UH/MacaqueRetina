@@ -1126,21 +1126,6 @@ class RetinaVAE(RetinaMath):
             data_type="test", shuffle=False
         )
 
-        if 1:
-            self.vae.eval()
-
-            encoded_samples = self.get_encoded_samples(ds_name="test_ds")
-
-            # Figure 3
-            self._plot_latent_space(encoded_samples)
-
-            # Figure 4
-            self._plot_tsne_space(encoded_samples)
-
-            encoded_samples = self.get_encoded_samples(ds_name="train_ds")
-            self._plot_latent_space(encoded_samples)
-            self._plot_tsne_space(encoded_samples)
-
     def _show_lr_decay(self, lr, gamma, step_size, epochs):
         lrs = np.zeros(epochs)
         for this_epoch in range(epochs):
@@ -2132,32 +2117,6 @@ class RetinaVAE(RetinaMath):
         encoded_samples = pd.DataFrame(encoded_samples)
 
         return encoded_samples
-
-    def _plot_latent_space(self, encoded_samples):
-        sns.relplot(
-            data=encoded_samples,
-            x="EncVariable 0",
-            y="EncVariable 1",
-            hue=encoded_samples.label.astype(str),
-        )
-        plt.title("Encoded samples")
-
-    def _plot_tsne_space(self, encoded_samples):
-        tsne = TSNE(n_components=2, init="pca", learning_rate="auto", perplexity=30)
-
-        if encoded_samples.shape[0] < tsne.perplexity:
-            tsne.perplexity = encoded_samples.shape[0] - 1
-
-        tsne_results = tsne.fit_transform(encoded_samples.drop(["label"], axis=1))
-
-        ax0 = sns.relplot(
-            # data=tsne_results,
-            x=tsne_results[:, 0],
-            y=tsne_results[:, 1],
-            hue=encoded_samples.label.astype(str),
-        )
-        ax0.set(xlabel="tsne-2d-one", ylabel="tsne-2d-two")
-        plt.title("TSNE plot of encoded samples")
 
     def check_kid_and_exit(self):
         """
