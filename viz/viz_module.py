@@ -861,7 +861,12 @@ class Viz:
 
         Parameters
         ----------
-        ray_exp : RayExperiment object
+        mosaic : ConstructRetina object
+            Retina model
+        ray_exp : str
+            The name of the ray experiment
+        this_dep_var : str
+            The dependent variable to use for selecting the best trials
         """
 
         info_columns = ["trial_id", "iteration"]
@@ -918,7 +923,7 @@ class Viz:
         print(f"Best trials: in order of {dep_vars=}")
         print(df_filtered)
 
-        nrows = 6
+        nrows = 9
         ncols = len(dep_vars)
         nsamples = 10
 
@@ -933,14 +938,18 @@ class Viz:
             ["re3" + str(i) for i in range(10)],
             ["re4" + str(i) for i in range(10)],
         ]
-        fig, axd = plt.subplot_mosaic(layout, figsize=(nrows, ncols * 5))
+        fig, axd = plt.subplot_mosaic(layout, figsize=(ncols * 2, nrows))
 
         # Fraction of best = 1/4
         frac_best = 0.25
         num_best_trials = int(len(df) * frac_best)
 
-        self._subplot_dependent_histograms(
-            axd, "dh", df, dep_vars, dep_vars_best, num_best_trials
+        # self._subplot_dependent_histograms(
+        #     axd, "dh", df, dep_vars, dep_vars_best, num_best_trials
+        # )
+
+        self._subplot_dependent_boxplots(
+            axd, "dh", df, dep_vars, dep_vars_best, config_vars_changed
         )
 
         self._subplot_dependent_variables(
@@ -949,19 +958,22 @@ class Viz:
 
         if hasattr(mosaic, "exp_spat_filt_to_viz"):
             exp_spat_filt_to_viz = mosaic.exp_spat_filt_to_viz
+            print("mosaic had attribute exp_spat_filt_to_viz")
         else:
             mosaic._initialize()
             exp_spat_filt_to_viz = mosaic.exp_spat_filt_to_viz
+            print("mosaic did not have attribute exp_spat_filt_to_viz")
 
         num_best_trials = 5
         best_trials, dep_var_vals = self._get_best_trials(
             df, this_dep_var, this_dep_var_best, num_best_trials
         )
-
+        # pdb.set_trace()
         img, rec_img, samples = self._get_imgs(
             df, nsamples, exp_spat_filt_to_viz, best_trials[0]
         )
 
+        # pdb.set_trace()
         title = f"Original \nimages"
         self._subplot_img_recoimg(axd, "im", None, img, samples, title)
 
@@ -974,7 +986,7 @@ class Viz:
             )
 
             title = f"Reco for \n{this_dep_var} = \n{dep_var_vals[this_trial]:.3f}, \nidx = {this_trial}"
-            # enumerate starts at 0, so add 1
+            # Position idx in layout: enumerate starts at 0, so add 1.
             self._subplot_img_recoimg(axd, "re", idx + 1, rec_img, samples, title)
 
     def _get_imgs(
@@ -985,6 +997,8 @@ class Viz:
         this_trial_idx,
     ):
         log_dir = df["logdir"][this_trial_idx]
+        print(f"{this_trial_idx=}")
+        print(f"{log_dir=}")
 
         # Get folder name starting "checkpoint"
         checkpoint_folder_name = [f for f in os.listdir(log_dir) if "checkpoint" in f][
@@ -994,8 +1008,6 @@ class Viz:
 
         # Load the model
         model = torch.load(checkpoint_path)
-        encoder = model.encoder
-        decoder = model.decoder
 
         if hasattr(model, "test_data"):
             test_data = model.test_data[:nsamples, :, :, :]
@@ -1019,14 +1031,14 @@ class Viz:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         samples = range(0, nsamples)
 
-        encoder.eval()
-        decoder.eval()
-        encoder.to(self.device)
-        decoder.to(self.device)
+        model.eval()
+        model.to(self.device)
 
         img = test_data.to(self.device)
+        # pdb.set_trace()
+
         with torch.no_grad():
-            rec_img = decoder(encoder(img))
+            rec_img = model(img)
 
         img = img.cpu().squeeze().numpy()
         rec_img = rec_img.cpu().squeeze().numpy()
@@ -1066,6 +1078,58 @@ class Viz:
                 )
 
             ax.set_title(f"{dep_var}")
+
+    def _subplot_dependent_boxplots(
+        self, axd, kw, df, dep_vars, dep_vars_best, config_vars_changed
+    ):
+        """Boxplot dependent variables for one ray tune experiment"""
+
+        # config_vars_changed list contain the varied columns in dataframe df
+        # From config_vars_changed, 'config/model_id' contain the replications of the same model
+        # Other config_vars_changed contain the models of interest
+        # Make an seaborn boxplot for each model of interest
+        config_vars_changed.remove("config/model_id")
+
+        # If there are more than one config_vars_changed,
+        # make a new dataframe column with the values of the config_vars_changed as strings
+        if len(config_vars_changed) > 1:
+            df["config_vars"] = (
+                df[config_vars_changed].astype(str).agg(",".join, axis=1)
+            )
+            config_vars_changed = ["config_vars"]
+            config_vars = [col.removeprefix("config/") for col in config_vars_changed]
+            # Combine the string listed in config_vars_changed to one string
+            config_vars = ",".join(config_vars)
+        else:
+            df["config_vars"] = df[config_vars_changed[0]]
+            config_vars = [col.removeprefix("config/") for col in config_vars_changed][
+                0
+            ]
+
+        # Make one subplot for each dependent variable
+        # Plot labels only after the last subplot
+        for idx, dep_var in enumerate(dep_vars):
+            ax = axd[f"{kw}{idx}"]
+
+            # Create the boxplot with seaborn
+            sns.boxplot(
+                x="config_vars",
+                y=dep_var,
+                data=df,
+                ax=ax,
+            )
+
+            # Set the title of the subplot to be the dependent variable name
+            ax.set_title(dep_var)
+
+            # Set y-axis label
+            ax.set_ylabel("")
+
+            # Set x-axis label
+            if idx == 0:  # only the first subplot gets an x-axis label
+                ax.set_xlabel(config_vars)
+            else:
+                ax.set_xlabel("")
 
     def _get_best_trials(self, df, dep_var, best_is, num_best_trials):
         """
