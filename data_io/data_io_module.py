@@ -495,7 +495,50 @@ class DataIO(DataIOBase):
         print(f"Duration of stimulus is {total_duration} seconds")
 
     def load_ray_results_grid(self, most_recent=True, ray_exp=None):
-        ray_dir = self.context.output_folder / "ray_results"
+        """
+        Load Ray Tune results from the `ray_results` folder.
+
+        Parameters
+        ----------
+        most_recent : bool, optional
+            If True, loads the most recent "TrainableVAE_XXX" folder from the `ray_results` folder, by default True.
+        ray_exp : str, optional
+            The name of the Ray Tune experiment folder to load, by default None.
+
+        Returns
+        -------
+        result_grid : ray.tune.result_grid.ResultGrid object
+            The Ray Tune results.
+
+        Raises
+        ------
+        ValueError
+            If the Ray Tune results cannot be found.
+
+        Notes
+        -----
+        The `ray_root_path` attribute of the `context` object is used to find the `ray_results` folder.
+        If `ray_root_path` is None, the `ray_results` folder is expected to be located in the `output_folder` of the `context` object.
+        If `ray_exp` is not provided and `most_recent` is False, a ValueError is raised.
+        """
+
+        if self.context.ray_root_path is None:
+            ray_dir = self.context.output_folder / "ray_results"
+        elif self.context.ray_root_path.exists():
+            # Rebuild the path to ray_results
+            ray_dir = (
+                self.context.ray_root_path
+                / Path(self.context.project)
+                / Path(self.context.experiment)
+                / Path(self.context.output_folder.name)
+                / "ray_results"
+            )
+            if not ray_dir.exists():
+                raise ValueError("Ray tune results cannot be found, aborting...")
+        else:
+            raise ValueError(
+                "Ray tune results cannot be found, missing both ray_root_path and ray_results under output_folder, aborting..."
+            )
 
         if most_recent:
             ray_exp = sorted(os.listdir(ray_dir))[-1]
@@ -509,23 +552,6 @@ class DataIO(DataIOBase):
 
         from retina.vae_module import TrainableVAE
 
-        # # The following line errors at tuner_internal.py in crossplatform use.
-        # # Patched tuner_internal.py patch at lines 322-336 (after correction) when using tune.Tuner.restore crossplatform
-        # # Load trainable and tuner state
-        # # SV Note 230419: The original code was changed to work with Windows
-        # import sys
-        # if sys.platform.startswith('win'):
-        #     import pathlib
-        #     temp = pathlib.PosixPath
-        #     pathlib.PosixPath = pathlib.WindowsPath
-        # with open(experiment_checkpoint_path / _TRAINABLE_PKL, "rb") as fp:
-        #     trainable = pickle.load(fp)
-
-        # with open(experiment_checkpoint_path / _TUNER_PKL, "rb") as fp:
-        #     tuner = pickle.load(fp)
-        #     self.__dict__.update(tuner.__dict__)
-
-        # pathlib.PosixPath = temp
         restored_tuner = tune.Tuner.restore(experiment_path, trainable=TrainableVAE)
         result_grid = restored_tuner.get_results()
 
