@@ -997,8 +997,6 @@ class Viz:
         this_trial_idx,
     ):
         log_dir = df["logdir"][this_trial_idx]
-        print(f"{this_trial_idx=}")
-        print(f"{log_dir=}")
 
         # Get folder name starting "checkpoint"
         checkpoint_folder_name = [f for f in os.listdir(log_dir) if "checkpoint" in f][
@@ -1099,15 +1097,18 @@ class Viz:
             df["config_vars"] = (
                 df[config_vars_changed].astype(str).agg(",".join, axis=1)
             )
-            config_vars_changed = ["config_vars"]
-            config_vars = [col.removeprefix("config/") for col in config_vars_changed]
+            # config_vars_changed = ["config_vars"]
+            config_vars_for_label = [
+                col.removeprefix("config/") for col in config_vars_changed
+            ]
             # Combine the string listed in config_vars_changed to one string
-            config_vars = ",".join(config_vars)
+            config_vars_label = ",".join(config_vars_for_label)
+
         else:
             df["config_vars"] = df[config_vars_changed[0]]
-            config_vars = [col.removeprefix("config/") for col in config_vars_changed][
-                0
-            ]
+            config_vars_label = [
+                col.removeprefix("config/") for col in config_vars_changed
+            ][0]
 
         # Make one subplot for each dependent variable
         # Plot labels only after the last subplot
@@ -1115,12 +1116,12 @@ class Viz:
             ax = axd[f"{kw}{idx}"]
 
             # Create the boxplot with seaborn
-            sns.boxplot(
-                x="config_vars",
-                y=dep_var,
-                data=df,
-                ax=ax,
+            ax_sns = sns.boxplot(
+                x="config_vars", y=dep_var, data=df, ax=ax, whis=[0, 100]
             )
+            # If any of the df["config_vars"] has length > 4, make x-label rotated 90 degrees
+            if any(df["config_vars"].astype(str).str.len() > 4):
+                ax_sns.set_xticklabels(ax.get_xticklabels(), rotation=90)
 
             # Set the title of the subplot to be the dependent variable name
             ax.set_title(dep_var)
@@ -1130,7 +1131,7 @@ class Viz:
 
             # Set x-axis label
             if idx == 0:  # only the first subplot gets an x-axis label
-                ax.set_xlabel(config_vars)
+                ax.set_xlabel(config_vars_label)
             else:
                 ax.set_xlabel("")
 

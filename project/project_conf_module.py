@@ -92,7 +92,7 @@ project = "Retina"
 """
 Current experiment
 """
-experiment = "VAE_nLayers2"  # "test"
+experiment = "test"  # "test"
 
 
 """
@@ -350,7 +350,7 @@ if __name__ == "__main__":
     # INTEGROI VAE GENEROIDUT RF:T WORKING RETINAAN
 
     # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
-    this_dep_var = "val_loss"
+    this_dep_var = "kid_mean"
     ray_exp_name = None  # "TrainableVAE_2023-04-20_22-17-35"  # None for most recent
     PM.construct_retina.show_ray_experiment(ray_exp_name, this_dep_var)
 
