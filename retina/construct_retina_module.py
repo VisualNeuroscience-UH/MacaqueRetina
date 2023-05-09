@@ -782,10 +782,7 @@ class ConstructRetina(RetinaMath):
                 )
                 # Change the dtype to float32
                 latent_samples = latent_samples.type(torch.float32)
-                if self.training_mode == "load_model":
-                    latent_dim = self.retina_vae.vae.config["latent_dims"]
-                else:
-                    latent_dim = self.retina_vae.latent_dim
+                latent_dim = self.retina_vae.latent_dim
 
                 self.gen_latent_space_to_viz = {
                     "samples": latent_samples.to("cpu").numpy(),

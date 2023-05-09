@@ -11,7 +11,8 @@ import psutil
 
 # Machine learning and hyperparameter optimization
 import torch
-import torchvision
+
+# import torchvision
 from torchvision import transforms
 from torch.utils.data import DataLoader, Subset, random_split
 from torch import nn
@@ -722,7 +723,7 @@ class TrainableVAE(tune.Trainable):
         fixed_params=None,
     ):
         # Assert that none of the optional arguments are None
-        assert data_dict is not None, "val_ds is None, aborting..."
+        assert data_dict is not None, "data_dict is None, aborting..."
         assert device is not None, "device is None, aborting..."
         assert methods is not None, "methods is None, aborting..."
 
@@ -779,6 +780,7 @@ class TrainableVAE(tune.Trainable):
         # Will be saved with checkpoint model
         self.model.test_data = self.test_data
         self.model.test_labels = self.test_labels
+        self.model.augmentation_dict = augmentation_dict
 
         self.model.to(self.device)
 
@@ -872,7 +874,7 @@ class RetinaVAE(RetinaMath):
         self.response_type = response_type
 
         # Fixed values for both single training and ray tune runs
-        self.epochs = 100
+        self.epochs = 500
         self.lr_step_size = 20  # Learning rate decay step size (in epochs)
         self.lr_gamma = 0.9  # Learning rate decay (multiplier for learning rate)
         # how many times to get the data, applied only if augmentation_dict is not None
@@ -1023,7 +1025,7 @@ class RetinaVAE(RetinaMath):
                     "noise": [0],  # Augment: noise added, btw [0., 1.]
                     "flip": [0.5],  # Augment: flip prob, both horiz and vert
                     "data_multiplier": [4],  # N times to get the data w/ augmentation
-                    "num_models": 2,  # repetitions of the same model
+                    "num_models": 8,  # repetitions of the same model
                 }
 
                 # The first metric is the one that will be used to prioritize the checkpoints and pruning.
@@ -1072,7 +1074,7 @@ class RetinaVAE(RetinaMath):
                 # Load model state dict from checkpoint to new self.vae and return the state dict.
                 self.vae = self._load_model(best_result=self.best_result)
 
-                self._update_vae_to_match_best_model(self.best_result)
+                self._update_vae_to_match_selected_model(self.best_result)
 
                 # Give one second to write the checkpoint to disk
                 time.sleep(1)
@@ -1080,15 +1082,22 @@ class RetinaVAE(RetinaMath):
             case "load_model":
                 # Load previously calculated model for vizualization
                 # Load model to self.vae
+                self.trial_name = "2199e_00029"
 
                 if hasattr(self, "trial_name"):  # After tune_model
                     self.vae, result_grid, tb_dir = self._load_model(
                         model_path=None, trial_name=self.trial_name
                     )
-                    # Dep vars: train_loss, val_loss, mse, ssim, kid_std, kid_mean,
-                    self._plot_dependent_variables(
-                        results_grid=result_grid,
-                    )
+                    # # Dep vars: train_loss, val_loss, mse, ssim, kid_std, kid_mean,
+                    # self._plot_dependent_variables(
+                    #     results_grid=result_grid,
+                    # )
+                    [this_result] = [
+                        result
+                        for result in result_grid
+                        if self.trial_name in result.metrics["trial_id"]
+                    ]
+                    self._update_vae_to_match_selected_model(this_result)
 
                 elif hasattr(self, "models_folder"):  # After train_model
                     self.vae = self._load_model(
@@ -1136,7 +1145,7 @@ class RetinaVAE(RetinaMath):
         plt.show()
         exit()
 
-    def _update_vae_to_match_best_model(self, best_result):
+    def _update_vae_to_match_selected_model(self, best_result):
         """
         Update the VAE to match the best model found by the tuner.
         """
@@ -1492,7 +1501,7 @@ class RetinaVAE(RetinaMath):
         return models_folder
 
     def _set_ray_folder(self, context):
-        """Set the folder where models are saved"""
+        """Set the folder where ray tune results are saved"""
 
         if context.ray_root_path is not None:
             # Rebuild the path to ray_results
@@ -2099,7 +2108,7 @@ class RetinaVAE(RetinaMath):
         Parameters
         ----------
         ds_name : str, optional
-            Dataset name, by default "test_ds"
+            Dataset name
 
         Returns
         -------

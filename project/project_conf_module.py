@@ -74,7 +74,7 @@ Main paths in different operating systems
 if sys.platform == "linux":
     model_root_path = "/opt3/Laskenta/Models"  # pikkuveli
     git_repo_root = Path(r"/opt2/Git_Repos/MacaqueRetina")
-    ray_root_path = None
+    ray_root_path = None  # if None, ray_results are saved to model_root_path/project/experiment/output_folder/ray_results
     # git_repo_root = r"/opt2/Git_Repos/MacaqueRetina"
     # model_root_path = "/opt2/Models"  # isosisko
 elif sys.platform == "win32":
@@ -92,7 +92,7 @@ project = "Retina"
 """
 Current experiment
 """
-experiment = "VAE_nLayers"  # "test"
+experiment = "VAE_nLayers2"  # "test"
 
 
 """
@@ -340,7 +340,7 @@ if __name__ == "__main__":
 
     # PM.construct_retina.show_exp_build_process(show_all_spatial_fits=True)
     # PM.construct_retina.show_gen_exp_spatial_fit(n_samples=10)
-    # PM.construct_retina.show_gen_exp_spatial_rf(ds_name="test_ds", n_samples=10)
+    PM.construct_retina.show_gen_exp_spatial_rf(ds_name="test_ds", n_samples=10)
     # PM.construct_retina.show_latent_tsne_space()
     # PM.construct_retina.show_gen_spat_postprocessing()
     # PM.construct_retina.show_latent_space_and_samples()
@@ -351,7 +351,7 @@ if __name__ == "__main__":
 
     # # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
     # this_dep_var = "val_loss"
-    # ray_exp_name = "TrainableVAE_2023-05-04_14-56-10"  # "TrainableVAE_2023-04-20_22-17-35"  # None for most recent
+    # ray_exp_name = None  # "TrainableVAE_2023-04-20_22-17-35"  # None for most recent
     # PM.construct_retina.show_ray_experiment(ray_exp_name, this_dep_var)
 
     #################################
