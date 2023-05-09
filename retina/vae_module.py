@@ -862,13 +862,12 @@ class RetinaVAE(RetinaMath):
         gc_type,
         response_type,
         training_mode,
-        apricot_data_folder,
-        output_folder=None,
+        context,
         save_tuned_models=False,
     ):
         super().__init__()
 
-        self.apricot_data_folder = apricot_data_folder
+        self.apricot_data_folder = context.apricot_data_folder
         self.gc_type = gc_type
         self.response_type = response_type
 
@@ -934,8 +933,11 @@ class RetinaVAE(RetinaMath):
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         self.this_folder = self._get_this_folder()
-        self.models_folder = self._set_models_folder(output_folder=output_folder)
-        self.ray_dir = self.models_folder / "ray_results"
+        self.models_folder = self._set_models_folder(
+            output_folder=context.output_folder
+        )
+        self.ray_dir = self._set_ray_folder(context)
+        # self.ray_dir = self.models_folder / "ray_results"
         self.tb_log_folder = self.models_folder / "tb_logs"
 
         self.dependent_variables = [
@@ -1005,23 +1007,23 @@ class RetinaVAE(RetinaMath):
                 # Grid search: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#ray.tune.grid_search
                 # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
                 self.search_space = {
-                    "lr": [0.0003],
+                    "lr": [0.0005],
                     "latent_dim": [32],
                     "resolution_hw": [13],  # Both x and y, 13 or 28
                     # k3s2,k3s1,k5s2,k5s1,k7s1, k9s1 Kernel-stride-padding for conv layers. NOTE you cannot use >3 conv layers with stride 2
                     "kernel_stride": ["k7s1"],
                     "channels": [16],
                     "batch_size": [256],
-                    "conv_layers": [2],
+                    "conv_layers": [1, 2, 3, 4],
                     "batch_norm": [True],
                     "latent_distribution": ["uniform"],
                     "rotation": [0],  # Augment: max rotation in degrees
                     # Augment: fract of im, max in (x, y)/[xy] dir
-                    "translation": [0, 1 / 13],  # 1/13 pixels
+                    "translation": [0],  # 1/13 pixels
                     "noise": [0],  # Augment: noise added, btw [0., 1.]
                     "flip": [0.5],  # Augment: flip prob, both horiz and vert
                     "data_multiplier": [4],  # N times to get the data w/ augmentation
-                    "num_models": 1,  # repetitions of the same model
+                    "num_models": 2,  # repetitions of the same model
                 }
 
                 # The first metric is the one that will be used to prioritize the checkpoints and pruning.
@@ -1488,6 +1490,31 @@ class RetinaVAE(RetinaMath):
         Path(models_folder).mkdir(parents=True, exist_ok=True)
 
         return models_folder
+
+    def _set_ray_folder(self, context):
+        """Set the folder where models are saved"""
+
+        if context.ray_root_path is not None:
+            # Rebuild the path to ray_results
+            ray_dir = (
+                context.ray_root_path
+                / Path(context.project)
+                / Path(context.experiment)
+                / Path(context.output_folder.name)
+                / "ray_results"
+            )
+
+        else:
+            # If output_folder is Path instance or string, use it as models_folder
+            if isinstance(context.output_folder, Path) or isinstance(
+                context.output_folder, str
+            ):
+                ray_dir = context.output_folder / "ray_results"
+            else:
+                ray_dir = self.this_folder / "ray_results"
+        Path(ray_dir).mkdir(parents=True, exist_ok=True)
+
+        return ray_dir
 
     def _save_model(self):
         """

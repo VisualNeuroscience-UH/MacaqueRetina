@@ -758,8 +758,7 @@ class ConstructRetina(RetinaMath):
                     self.gc_type,
                     self.response_type,
                     self.training_mode,
-                    self.context.apricot_data_folder,
-                    self.context.output_folder,
+                    self.context,
                     save_tuned_models=True,
                 )
 
@@ -1006,11 +1005,11 @@ class ConstructRetina(RetinaMath):
         # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
         self.viz.show_latent_space_and_samples(self)
 
-    def show_ray_experiment(self, exp_name, this_dep_var):
+    def show_ray_experiment(self, ray_exp_name, this_dep_var):
         """
         Show the ray experiment
         self goes as argument, to be available for viz
         """
 
         # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
-        self.viz.show_ray_experiment(self, exp_name, this_dep_var)
+        self.viz.show_ray_experiment(self, ray_exp_name, this_dep_var)

@@ -58,8 +58,8 @@ NOTE: If eccentricity stays under 20 deg, dendritic diameter data fitted up to 2
 """
 
 """
-Use keyword substring "file" in filenames, and "folder" in folder names to assert that they are turned into pathlib objects. 
-Path structure is assumed to be root_path/project/experiment/output_folder
+Use keyword substring "file" in filenames, and "folder" or "path" in folder names to assert that they are turned into pathlib objects. 
+Path structure is assumed to be model_root_path/project/experiment/output_folder
 
 Abbreviations:
 ana : analysis
@@ -72,13 +72,15 @@ param : parameter
 Main paths in different operating systems
 """
 if sys.platform == "linux":
-    root_path = "/opt3/Laskenta/Models"  # pikkuveli
+    model_root_path = "/opt3/Laskenta/Models"  # pikkuveli
     git_repo_root = Path(r"/opt2/Git_Repos/MacaqueRetina")
+    ray_root_path = None
     # git_repo_root = r"/opt2/Git_Repos/MacaqueRetina"
-    # root_path = "/opt2/Models"  # isosisko
+    # model_root_path = "/opt2/Models"  # isosisko
 elif sys.platform == "win32":
-    root_path = r"C:\Users\simov\Laskenta\Models"
+    model_root_path = r"C:\Users\simov\Laskenta\Models"
     git_repo_root = Path(r"C:\Users\simov\Laskenta\GitRepos\MacaqueRetina")
+    ray_root_path = r"C:\Data"
 
 
 """
@@ -90,7 +92,7 @@ project = "Retina"
 """
 Current experiment
 """
-experiment = "test"  # "test"
+experiment = "VAE_nLayers"  # "test"
 
 
 """
@@ -109,8 +111,8 @@ output_folder = "out"
 """
 ### Housekeeping ###. Do not comment out.
 """
-root_path = Path(root_path)
-path = Path.joinpath(root_path, Path(project), experiment)
+model_root_path = Path(model_root_path)
+path = Path.joinpath(model_root_path, Path(project), experiment)
 
 # When training or tuning generative models, multiple hyperparameters are set at the RetinaVAE class.
 # For training, see __init__ method. For tuning, the __init__ contains search space and
@@ -294,6 +296,7 @@ if __name__ == "__main__":
         output_folder=output_folder,
         project=project,
         experiment=experiment,
+        ray_root_path=ray_root_path,
         my_retina=my_retina,
         my_stimulus_metadata=my_stimulus_metadata,
         my_stimulus_options=my_stimulus_options,
@@ -338,19 +341,18 @@ if __name__ == "__main__":
     # PM.construct_retina.show_exp_build_process(show_all_spatial_fits=True)
     # PM.construct_retina.show_gen_exp_spatial_fit(n_samples=10)
     # PM.construct_retina.show_gen_exp_spatial_rf(ds_name="test_ds", n_samples=10)
-    PM.construct_retina.show_latent_tsne_space()
+    # PM.construct_retina.show_latent_tsne_space()
     # PM.construct_retina.show_gen_spat_postprocessing()
     # PM.construct_retina.show_latent_space_and_samples()
 
-    # TÄHÄN JÄIT: MAKE A BAR GRAPH OF RF FIT STATISTICS: PARASOL ON OFF, MIDGET ON OFF
-    # KOKOA KUVAT VAE MODUULISTA TÄHÄN / VIZ MODUULIIN
+    # TÄHÄN JÄIT:
+    # MAKE A BAR GRAPH OF RF FIT STATISTICS: PARASOL ON OFF, MIDGET ON OFF
     # INTEGROI VAE GENEROIDUT RF:T WORKING RETINAAN
-    # TEE RAY HAKU, ENSIN PARASOL ON YMPÄRISTÖ
 
-    # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
+    # # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
     # this_dep_var = "val_loss"
-    # exp_name = "TrainableVAE_2023-04-20_22-17-35"  # None for most recent
-    # PM.construct_retina.show_ray_experiment(exp_name, this_dep_var)
+    # ray_exp_name = "TrainableVAE_2023-05-04_14-56-10"  # "TrainableVAE_2023-04-20_22-17-35"  # None for most recent
+    # PM.construct_retina.show_ray_experiment(ray_exp_name, this_dep_var)
 
     #################################
     ### Create stimulus ###
