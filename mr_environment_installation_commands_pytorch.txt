@@ -25,3 +25,4 @@ pip install "ray[tune]"
 conda install -y torch-fidelity torchmetrics
 pip install optuna
 pip install torchsummary
+pip install pyshortcuts
