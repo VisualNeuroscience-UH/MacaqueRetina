@@ -778,8 +778,6 @@ class TrainableVAE(tune.Trainable):
         )
 
         # Will be saved with checkpoint model
-        self.model.test_data = self.test_data
-        self.model.test_labels = self.test_labels
         self.model.augmentation_dict = augmentation_dict
 
         self.model.to(self.device)
@@ -1145,29 +1143,29 @@ class RetinaVAE(RetinaMath):
         plt.show()
         exit()
 
-    def _update_vae_to_match_selected_model(self, best_result):
+    def _update_vae_to_match_selected_model(self, this_result):
         """
         Update the VAE to match the best model found by the tuner.
         """
 
-        self.latent_dim = best_result.config["latent_dim"]
-        self.channels = best_result.config["channels"]
-        self.lr = best_result.config["lr"]
+        self.latent_dim = this_result.config["latent_dim"]
+        self.channels = this_result.config["channels"]
+        self.lr = this_result.config["lr"]
 
-        self.batch_size = best_result.config["batch_size"]
-        self.kernel_stride = best_result.config["kernel_stride"]
-        self.conv_layers = best_result.config["conv_layers"]
-        self.batch_norm = best_result.config["batch_norm"]
+        self.batch_size = this_result.config["batch_size"]
+        self.kernel_stride = this_result.config["kernel_stride"]
+        self.conv_layers = this_result.config["conv_layers"]
+        self.batch_norm = this_result.config["batch_norm"]
 
         self.augmentation_dict = {
-            "rotation": best_result.config["rotation"],
+            "rotation": this_result.config["rotation"],
             "translation": (
-                best_result.config["translation"],
-                best_result.config["translation"],
+                this_result.config["translation"],
+                this_result.config["translation"],
             ),
-            "noise": best_result.config["noise"],
-            "flip": best_result.config["flip"],
-            "data_multiplier": best_result.config["data_multiplier"],
+            "noise": this_result.config["noise"],
+            "flip": this_result.config["flip"],
+            "data_multiplier": this_result.config["data_multiplier"],
         }
 
         self.train_loader = self._augment_and_get_dataloader(

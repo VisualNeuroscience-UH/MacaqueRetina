@@ -332,7 +332,7 @@ if __name__ == "__main__":
 
     # options are defined in my_retina_options
 
-    PM.construct_retina.build()
+    # PM.construct_retina.build()
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # This is why they are called via the construct_retina attribute. The instance
@@ -340,7 +340,7 @@ if __name__ == "__main__":
 
     # PM.construct_retina.show_exp_build_process(show_all_spatial_fits=True)
     # PM.construct_retina.show_gen_exp_spatial_fit(n_samples=10)
-    PM.construct_retina.show_gen_exp_spatial_rf(ds_name="test_ds", n_samples=10)
+    # PM.construct_retina.show_gen_exp_spatial_rf(ds_name="test_ds", n_samples=10)
     # PM.construct_retina.show_latent_tsne_space()
     # PM.construct_retina.show_gen_spat_postprocessing()
     # PM.construct_retina.show_latent_space_and_samples()
@@ -349,10 +349,10 @@ if __name__ == "__main__":
     # MAKE A BAR GRAPH OF RF FIT STATISTICS: PARASOL ON OFF, MIDGET ON OFF
     # INTEGROI VAE GENEROIDUT RF:T WORKING RETINAAN
 
-    # # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
-    # this_dep_var = "val_loss"
-    # ray_exp_name = None  # "TrainableVAE_2023-04-20_22-17-35"  # None for most recent
-    # PM.construct_retina.show_ray_experiment(ray_exp_name, this_dep_var)
+    # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
+    this_dep_var = "val_loss"
+    ray_exp_name = None  # "TrainableVAE_2023-04-20_22-17-35"  # None for most recent
+    PM.construct_retina.show_ray_experiment(ray_exp_name, this_dep_var)
 
     #################################
     ### Create stimulus ###

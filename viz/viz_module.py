@@ -9,6 +9,7 @@ from sklearn.manifold import TSNE
 # Machine learning
 import torch
 import torchvision.transforms.functional as TF
+from torchsummary import summary
 
 # import cv2
 
@@ -789,8 +790,6 @@ class Viz:
         for pos_idx, sample_idx in enumerate(samples):
             ax = plt.subplot(2, len(samples), pos_idx + 1)
             img = ds[sample_idx][0].unsqueeze(0).to(mosaic.retina_vae.device)
-            with torch.no_grad():
-                rec_img = vae(img)
             plt.imshow(img.cpu().squeeze().numpy(), cmap="gist_gray")
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
@@ -808,6 +807,8 @@ class Viz:
                 ax.set_title("Original images")
 
             ax = plt.subplot(2, len(samples), len(samples) + pos_idx + 1)
+            with torch.no_grad():
+                rec_img = vae(img)
             plt.imshow(rec_img.cpu().squeeze().numpy(), cmap="gist_gray")
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
@@ -968,12 +969,11 @@ class Viz:
         best_trials, dep_var_vals = self._get_best_trials(
             df, this_dep_var, this_dep_var_best, num_best_trials
         )
-        # pdb.set_trace()
+
         img, rec_img, samples = self._get_imgs(
             df, nsamples, exp_spat_filt_to_viz, best_trials[0]
         )
 
-        # pdb.set_trace()
         title = f"Original \nimages"
         self._subplot_img_recoimg(axd, "im", None, img, samples, title)
 
@@ -1024,6 +1024,10 @@ class Viz:
                 test_data[i, 0, :, :] = exp_spat_filt_to_viz[f"cell_ix_{i}"][
                     "spatial_data_array"
                 ]
+
+        # Hack to reuse the AugmentedDataset._feature_scaling method. Scales to [0,1]
+        test_data = AugmentedDataset._feature_scaling("", test_data)
+
         test_data = torch.from_numpy(test_data).float()
         img_size = model.decoder.unflatten.unflattened_size
         test_data = TF.resize(test_data, img_size[-2:], antialias=True)
@@ -1035,7 +1039,6 @@ class Viz:
         model.to(self.device)
 
         img = test_data.to(self.device)
-        # pdb.set_trace()
 
         with torch.no_grad():
             rec_img = model(img)
