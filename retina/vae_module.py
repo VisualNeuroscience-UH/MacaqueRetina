@@ -1099,15 +1099,8 @@ class RetinaVAE(RetinaMath):
                     self.val_loader = self._augment_and_get_dataloader(
                         data_type="val", augmentation_dict=self.vae.augmentation_dict
                     )
-                    self.test_loader = self._augment_and_get_dataloader(
-                        data_type="test"
-                    )
 
-                    # df = self._get_tb_timeseries(
-                    #     path_to_tb_logs=self.train_log_folder,
-                    #     list_of_metrics=self.dependent_variables,
-                    # )
-                    pdb.set_trace()
+                    self._load_logging()
                 else:
                     raise ValueError(
                         "No output path (models_folder) or trial name given, cannot load model, aborting..."
@@ -1912,6 +1905,21 @@ class RetinaVAE(RetinaMath):
 
         # Save log_df as pickle
         self.log_df.to_pickle(self.train_log_folder / f"train_log_{self.timestamp}.pkl")
+
+    def _load_logging(self):
+        """
+        Load logging from train_log_folder
+        """
+
+        # Get the most recent log file
+        try:
+            log_path = max(Path(self.train_log_folder).glob("*.csv"))
+            print(f"Most recent log file is {log_path}.")
+        except ValueError:
+            raise FileNotFoundError("No log files found. Aborting...")
+
+        # Load the log file
+        self.log_df = pd.read_csv(log_path)
 
     def _prep_logging(self):
         """
