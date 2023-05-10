@@ -727,7 +727,7 @@ class Viz:
         # plt.tight_layout()
         fig.suptitle(fig_suptitle_text)
 
-    def show_gen_spat_postprocessing(self, mosaic):
+    def show_gen_spat_post_hist(self, mosaic):
         """
         Show the original experimental spatial receptive fields and
         the generated spatial receptive fields before and after postprocessing

@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 import pdb
 import time
+import warnings
 
 # sys.path.append(Path(__file__).resolve().parent.parent)
 # Start measuring time
@@ -13,6 +14,9 @@ start_time = time.time()
 
 # Local
 from project.project_manager_module import ProjectManager
+
+warnings.simplefilter("ignore")
+
 
 """
 This is code for building macaque retinal filters corresponding to midget and parasol cell responses
@@ -92,7 +96,7 @@ project = "Retina"
 """
 Current experiment
 """
-experiment = "test"  # "test"
+experiment = "test_train"  # "test"
 
 
 """
@@ -128,7 +132,7 @@ my_retina = {
     "randomize_position": 0.05,
     "stimulus_center": 4.45 + 0j,
     "model_type": "VAE",  # "FIT" or "VAE" for variational autoencoder.
-    "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" Applies to VAE only.
+    "training_mode": "train_model",  # "train_model" or "tune_model" or "load_model" Applies to VAE only.
 }
 
 
@@ -332,27 +336,27 @@ if __name__ == "__main__":
 
     # options are defined in my_retina_options
 
-    # PM.construct_retina.build()
+    PM.construct_retina.build()
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # This is why they are called via the construct_retina attribute. The instance
     # object is attached to the call for viz.
 
-    # PM.construct_retina.show_exp_build_process(show_all_spatial_fits=True)
+    # PM.construct_retina.show_exp_build_process(show_all_spatial_fits=False)
     # PM.construct_retina.show_gen_exp_spatial_fit(n_samples=10)
     # PM.construct_retina.show_gen_exp_spatial_rf(ds_name="test_ds", n_samples=10)
     # PM.construct_retina.show_latent_tsne_space()
-    # PM.construct_retina.show_gen_spat_postprocessing()
+    # PM.construct_retina.show_gen_spat_post_hist()
     # PM.construct_retina.show_latent_space_and_samples()
 
     # TÄHÄN JÄIT:
     # MAKE A BAR GRAPH OF RF FIT STATISTICS: PARASOL ON OFF, MIDGET ON OFF
     # INTEGROI VAE GENEROIDUT RF:T WORKING RETINAAN
 
-    # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
-    this_dep_var = "kid_mean"
-    ray_exp_name = None  # "TrainableVAE_2023-04-20_22-17-35"  # None for most recent
-    PM.construct_retina.show_ray_experiment(ray_exp_name, this_dep_var)
+    # # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
+    # this_dep_var = "ssim"
+    # ray_exp_name = None  # "TrainableVAE_2023-04-20_22-17-35"  # None for most recent
+    # PM.construct_retina.show_ray_experiment(ray_exp_name, this_dep_var)
 
     #################################
     ### Create stimulus ###

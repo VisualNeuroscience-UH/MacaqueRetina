@@ -983,14 +983,14 @@ class ConstructRetina(RetinaMath):
         # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
         self.viz.show_latent_tsne_space(self)
 
-    def show_gen_spat_postprocessing(self):
+    def show_gen_spat_post_hist(self):
         """
         Show the original experimental spatial receptive fields and
         the generated spatial receptive fields before and after postprocessing
         """
 
         # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
-        self.viz.show_gen_spat_postprocessing(self)
+        self.viz.show_gen_spat_post_hist(self)
 
     def show_latent_space_and_samples(self):
         """

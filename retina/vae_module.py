@@ -18,9 +18,7 @@ from torch.utils.data import DataLoader, Subset, random_split
 from torch import nn
 import torch.optim.lr_scheduler as lr_scheduler
 
-# import torch.nn.functional as F
-
-from torch.utils.tensorboard import SummaryWriter
+# Metrics
 from torchmetrics.image.kid import KernelInceptionDistance
 from torchmetrics import StructuralSimilarityIndexMeasure
 from torchmetrics import MeanSquaredError
@@ -56,14 +54,6 @@ import time
 import subprocess
 from collections import OrderedDict
 from sys import exit
-
-import warnings
-
-warnings.filterwarnings(
-    "ignore",
-    message="Metric `Kernel Inception Distance`",
-)
-warnings.filterwarnings("ignore", message="FutureWarning:")
 
 
 class HardDiskWatchDog(Callback):
@@ -799,8 +789,8 @@ class TrainableVAE(tune.Trainable):
 
         (
             val_loss_epoch,
-            mse_loss_epoch,
-            ssim_loss_epoch,
+            mse_epoch,
+            ssim_epoch,
             kid_mean_epoch,
             kid_std_epoch,
         ) = self._validate_epoch(self.model, self.device, self.val_loader)
@@ -808,16 +798,16 @@ class TrainableVAE(tune.Trainable):
         # Convert to float, del & empty cache to free GPU memory
         train_loss_out = float(train_loss)
         val_loss_out = float(val_loss_epoch)
-        mse_loss_out = float(mse_loss_epoch)
-        ssim_loss_out = float(ssim_loss_epoch)
+        mse_out = float(mse_epoch)
+        ssim_out = float(ssim_epoch)
         kid_mean_out = float(kid_mean_epoch)
         kid_std_out = float(kid_std_epoch)
 
         del (
             train_loss,
             val_loss_epoch,
-            mse_loss_epoch,
-            ssim_loss_epoch,
+            mse_epoch,
+            ssim_epoch,
             kid_mean_epoch,
             kid_std_epoch,
         )
@@ -828,8 +818,8 @@ class TrainableVAE(tune.Trainable):
             + 1,  # Do not remove, plus one for 0=>1 indexing
             "train_loss": train_loss_out,
             "val_loss": val_loss_out,
-            "mse": mse_loss_out,
-            "ssim": ssim_loss_out,
+            "mse": mse_out,
+            "ssim": ssim_out,
             "kid_mean": kid_mean_out,
             "kid_std": kid_std_out,
         }
@@ -872,7 +862,7 @@ class RetinaVAE(RetinaMath):
         self.response_type = response_type
 
         # Fixed values for both single training and ray tune runs
-        self.epochs = 500
+        self.epochs = 100
         self.lr_step_size = 20  # Learning rate decay step size (in epochs)
         self.lr_gamma = 0.9  # Learning rate decay (multiplier for learning rate)
         # how many times to get the data, applied only if augmentation_dict is not None
@@ -900,7 +890,7 @@ class RetinaVAE(RetinaMath):
         # self.train_by = [["midget"], ["off"]]  # Train by these factors
 
         self.kernel_stride = "k7s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
-        self.conv_layers = 2  # 1 - 5 for s1, 1 - 3 for k3s2 and 1 - 2 for k5s2
+        self.conv_layers = 2  # 1 - 5 for s1, 1 - 3 for k3s2 and k5s2
         self.batch_norm = True
         self.latent_distribution = "uniform"  # "normal" or "uniform"
 
@@ -938,7 +928,7 @@ class RetinaVAE(RetinaMath):
         )
         self.ray_dir = self._set_ray_folder(context)
         # self.ray_dir = self.models_folder / "ray_results"
-        self.tb_log_folder = self.models_folder / "tb_logs"
+        self.train_log_folder = self.models_folder / "train_logs"
 
         self.dependent_variables = [
             "train_loss",
@@ -980,16 +970,16 @@ class RetinaVAE(RetinaMath):
                 )
                 # Create model and set optimizer and learning rate scheduler
                 self._prep_training()
-                # print(self.vae)
 
-                # Init tensorboard
-                self.tb_log_folder = "tb_logs"
-                self._prep_tensorboard_logging()
+                # # Init tensorboard. This cleans up the folder.
+                # self._prep_tensorboard_logging()
+                # Init logging.
+                self._prep_logging()
 
                 # Train
                 self._train()
-                self.writer.flush()
-                self.writer.close()
+
+                self._save_logging()
 
                 # Save model
                 model_path = self._save_model()
@@ -1072,7 +1062,7 @@ class RetinaVAE(RetinaMath):
                 # Load model state dict from checkpoint to new self.vae and return the state dict.
                 self.vae = self._load_model(best_result=self.best_result)
 
-                self._update_vae_to_match_selected_model(self.best_result)
+                self._update_retinavae_to_ray_result(self.best_result)
 
                 # Give one second to write the checkpoint to disk
                 time.sleep(1)
@@ -1080,13 +1070,13 @@ class RetinaVAE(RetinaMath):
             case "load_model":
                 # Load previously calculated model for vizualization
                 # Load model to self.vae
-                self.trial_name = "2199e_00029"
+                # self.trial_name = "2199e_00029"
 
                 if hasattr(self, "trial_name"):  # After tune_model
                     self.vae, result_grid, tb_dir = self._load_model(
                         model_path=None, trial_name=self.trial_name
                     )
-                    # # Dep vars: train_loss, val_loss, mse, ssim, kid_std, kid_mean,
+                    # # Dep vars: train_loss, val_loss, mse, ssim, kid_mean, kid_std,
                     # self._plot_dependent_variables(
                     #     results_grid=result_grid,
                     # )
@@ -1095,7 +1085,7 @@ class RetinaVAE(RetinaMath):
                         for result in result_grid
                         if self.trial_name in result.metrics["trial_id"]
                     ]
-                    self._update_vae_to_match_selected_model(this_result)
+                    self._update_retinavae_to_ray_result(this_result)
 
                 elif hasattr(self, "models_folder"):  # After train_model
                     self.vae = self._load_model(
@@ -1112,6 +1102,12 @@ class RetinaVAE(RetinaMath):
                     self.test_loader = self._augment_and_get_dataloader(
                         data_type="test"
                     )
+
+                    # df = self._get_tb_timeseries(
+                    #     path_to_tb_logs=self.train_log_folder,
+                    #     list_of_metrics=self.dependent_variables,
+                    # )
+                    pdb.set_trace()
                 else:
                     raise ValueError(
                         "No output path (models_folder) or trial name given, cannot load model, aborting..."
@@ -1143,9 +1139,9 @@ class RetinaVAE(RetinaMath):
         plt.show()
         exit()
 
-    def _update_vae_to_match_selected_model(self, this_result):
+    def _update_retinavae_to_ray_result(self, this_result):
         """
-        Update the VAE to match the best model found by the tuner.
+        Update the VAE to match the one model found by ray tune.
         """
 
         self.latent_dim = this_result.config["latent_dim"]
@@ -1905,28 +1901,38 @@ class RetinaVAE(RetinaMath):
         print(f"Selected device: {self.device}")
         self.vae.to(self.device)
 
-    def _prep_tensorboard_logging(self):
+    def _save_logging(self):
         """
-        Prepare local folder environment for tensorboard logging and model building
+        Save logging to train_log_folder
+        """
+        # Save log_df as csv
+        self.log_df.to_csv(
+            self.train_log_folder / f"train_log_{self.timestamp}.csv", index=False
+        )
 
-        Note that the tensoboard reset takes place only when quitting the terminal call
-        to tensorboard. You will see old graph, old scalars, if they are not overwritten
-        by new ones.
+        # Save log_df as pickle
+        self.log_df.to_pickle(self.train_log_folder / f"train_log_{self.timestamp}.pkl")
+
+    def _prep_logging(self):
         """
-        self.tb_log_folder = Path(self.tb_log_folder)
+        Prepare logging
+        """
+        self.train_log_folder = Path(self.train_log_folder)
 
         # Create a folder for the experiment tensorboard logs
-        Path.mkdir(self.tb_log_folder, parents=True, exist_ok=True)
+        Path.mkdir(self.train_log_folder, parents=True, exist_ok=True)
 
         # Clear files and folders under exp_folder
-        for f in self.tb_log_folder.iterdir():
+        for f in self.train_log_folder.iterdir():
             if f.is_dir():
                 shutil.rmtree(f)
             else:
                 f.unlink()
 
-        # This creates new scalar/time series line in tensorboard
-        self.writer = SummaryWriter(str(self.tb_log_folder), max_queue=100)
+        # Make an empty dataframe for logging
+        self.log_df = pd.DataFrame(
+            columns=self.dependent_variables, index=range(self.epochs)
+        )
 
     ### Training function
     def _train_epoch(self, vae, device, dataloader, optimizer, scheduler):
@@ -1992,17 +1998,17 @@ class RetinaVAE(RetinaMath):
 
         n_samples = len(dataloader.dataset)
         val_loss_epoch = val_loss / n_samples
-        mse_loss_epoch = vae.mse.compute()
-        ssim_loss_epoch = vae.ssim.compute()
+        mse_epoch = vae.mse.compute()
+        ssim_epoch = vae.ssim.compute()
         kid_mean_epoch, kid_std_epoch = vae.kid.compute()
 
         # Test all output variables for type, and covert to value if needed
         if isinstance(val_loss_epoch, torch.Tensor):
             val_loss_epoch = val_loss_epoch.item()
-        if isinstance(mse_loss_epoch, torch.Tensor):
-            mse_loss_epoch = mse_loss_epoch.item()
-        if isinstance(ssim_loss_epoch, torch.Tensor):
-            ssim_loss_epoch = ssim_loss_epoch.item()
+        if isinstance(mse_epoch, torch.Tensor):
+            mse_epoch = mse_epoch.item()
+        if isinstance(ssim_epoch, torch.Tensor):
+            ssim_epoch = ssim_epoch.item()
         if isinstance(kid_mean_epoch, torch.Tensor):
             kid_mean_epoch = kid_mean_epoch.item()
         if isinstance(kid_std_epoch, torch.Tensor):
@@ -2010,8 +2016,8 @@ class RetinaVAE(RetinaMath):
 
         return (
             val_loss_epoch,
-            mse_loss_epoch,
-            ssim_loss_epoch,
+            mse_epoch,
+            ssim_epoch,
             kid_mean_epoch,
             kid_std_epoch,
         )
@@ -2026,8 +2032,8 @@ class RetinaVAE(RetinaMath):
             )
             (
                 val_loss_epoch,
-                mse_loss_epoch,
-                ssim_loss_epoch,
+                mse_epoch,
+                ssim_epoch,
                 kid_mean_epoch,
                 kid_std_epoch,
             ) = self._validate_epoch(self.vae, self.device, self.val_loader)
@@ -2037,7 +2043,7 @@ class RetinaVAE(RetinaMath):
             print(
                 f""" 
                 EPOCH {epoch + 1}/{self.epochs} \t train_loss {train_loss:.3f} \t val loss {val_loss_epoch:.3f}
-                mse {mse_loss_epoch:.3f} \t ssim {ssim_loss_epoch:.3f} \t kid mean {kid_mean_epoch:.3f} \t kid std {kid_std_epoch:.3f}
+                mse {mse_epoch:.3f} \t ssim {ssim_epoch:.3f} \t kid mean {kid_mean_epoch:.3f} \t kid std {kid_std_epoch:.3f}
                 Learning rate: {self.optim.param_groups[0]['lr']:.3e}
                 """
             )
@@ -2045,34 +2051,28 @@ class RetinaVAE(RetinaMath):
             # Convert to float, del & empty cache to free GPU memory
             train_loss_out = float(train_loss)
             val_loss_out = float(val_loss_epoch)
-            mse_loss_out = float(mse_loss_epoch)
-            ssim_loss_out = float(ssim_loss_epoch)
+            mse_out = float(mse_epoch)
+            ssim_out = float(ssim_epoch)
             kid_mean_out = float(kid_mean_epoch)
             kid_std_out = float(kid_std_epoch)
 
             del (
                 train_loss,
                 val_loss_epoch,
-                mse_loss_epoch,
-                ssim_loss_epoch,
+                mse_epoch,
+                ssim_epoch,
                 kid_mean_epoch,
                 kid_std_epoch,
             )
             torch.cuda.empty_cache()
 
-            # Add train loss and val loss to tensorboard SummaryWriter
-            self.writer.add_scalars(
-                f"Training_{self.timestamp}",
-                {
-                    "loss/train": train_loss_out,
-                    "loss/val": val_loss_out,
-                    "mse/val": mse_loss_out,
-                    "ssim/val": ssim_loss_out,
-                    "kid_mean/val": kid_mean_out,
-                    "kid_std/val": kid_std_out,
-                },
-                epoch,
-            )
+            # Add each metric to df separately
+            self.log_df.loc[epoch, "train_loss"] = train_loss_out
+            self.log_df.loc[epoch, "val_loss"] = val_loss_out
+            self.log_df.loc[epoch, "mse"] = mse_out
+            self.log_df.loc[epoch, "ssim"] = ssim_out
+            self.log_df.loc[epoch, "kid_mean"] = kid_mean_out
+            self.log_df.loc[epoch, "kid_std"] = kid_std_out
 
     def _show_image(self, img, latent=None):
         npimg = img.numpy()
