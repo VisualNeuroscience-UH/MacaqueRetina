@@ -96,7 +96,7 @@ project = "Retina"
 """
 Current experiment
 """
-experiment = "VAE_channels"  # "test"
+experiment = "test_train"  # "test"
 
 
 """
@@ -207,9 +207,10 @@ my_stimulus_options = {
 # Each gc response file contain n_trials
 n_files = 1
 
+# Either n_trials or n_cells must be 1, and the other > 1
 my_run_options = {
-    "cell_index": 2,  # int or None for all cells
-    "n_trials": 10,  # For each of the response files
+    "cell_index": None,  # int or None for all cells
+    "n_trials": 1,  # For each of the response files
     "spike_generator_model": "poisson",  # poisson or refractory
     "save_data": True,
     "gc_response_filenames": [f"gc_response_{x:02}" for x in range(n_files)],
@@ -340,7 +341,7 @@ if __name__ == "__main__":
     # INTEGROI VAE GENEROIDUT RF:T WORKING RETINAAN
     # GENEROI RF:T TRIAL ID:STÄ. JUOKSUTA TRIAL_ID TÄÄLTÄ MALLIVALINTAAN JA RF GENEROINTIIN
 
-    # PM.construct_retina.build()
+    PM.construct_retina.build()
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # This is why they are called via the construct_retina attribute. The instance
@@ -353,10 +354,10 @@ if __name__ == "__main__":
     # PM.construct_retina.show_gen_spat_post_hist()
     # PM.construct_retina.show_latent_space_and_samples()
 
-    # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
-    this_dep_var = "val_loss"
-    ray_exp_name = None  # "TrainableVAE_2023-04-20_22-17-35"  # None for most recent
-    PM.construct_retina.show_ray_experiment(ray_exp_name, this_dep_var)
+    # # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
+    # this_dep_var = "val_loss"
+    # ray_exp_name = None  # "TrainableVAE_2023-04-20_22-17-35"  # None for most recent
+    # PM.construct_retina.show_ray_experiment(ray_exp_name, this_dep_var)
 
     #################################
     ### Create stimulus ###
@@ -364,7 +365,7 @@ if __name__ == "__main__":
 
     # options are defined in my_stimulus_options
     # stimulus video will be saved on output_folder in mp4 format (viewing and hdf5 format (for reloading)
-    # PM.stimulate.make_stimulus_video()
+    PM.stimulate.make_stimulus_video()
 
     ##############################
     ### Create analog stimulus ###
@@ -404,7 +405,7 @@ if __name__ == "__main__":
 
     # # # If you want to load with object, it is possible by:
     # PM.working_retina.load_stimulus(PM.stimulate)
-    # PM.working_retina.load_stimulus()
+    PM.working_retina.load_stimulus()
 
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
     # ret.load_stimulus(movie)# => METADATA
@@ -423,9 +424,9 @@ if __name__ == "__main__":
     ### Run multiple trials for single cell ###
     #################################
 
-    # PM.working_retina.run_with_my_run_options()
+    PM.working_retina.run_with_my_run_options()
 
-    # PM.viz.show_gc_responses(PM.working_retina)
+    PM.viz.show_gc_responses(PM.working_retina)
 
     # PM.viz.show_stimulus_with_gcs(
     #     PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51

@@ -5,12 +5,10 @@ import pandas as pd
 from scipy.signal import convolve
 from scipy.interpolate import interp1d
 import scipy.optimize as opt
-
+import skimage.transform
 
 # Data IO
 import cv2
-from PIL import Image
-
 
 # Viz
 from tqdm import tqdm
@@ -21,20 +19,12 @@ import brian2.units as b2u
 
 b2.prefs["logging.display_brian_error_message"] = False
 
-
 # Local
 from cxsystem2.core.tools import write_to_file, load_from_file
-
-# from retina.fit_module import Fit
 from retina.retina_math_module import RetinaMath
 
-# from retina.vae_module import ApricotVAE
-
 # Builtin
-# import sys
 from pathlib import Path
-
-# import os
 from copy import deepcopy
 import pdb
 
@@ -50,7 +40,6 @@ class WorkingRetina(RetinaMath):
     ]
 
     def __init__(self, context, data_io, viz) -> None:
-
         self._context = context.set_context(self._properties_list)
         self._data_io = data_io
         # viz.client_object = self  # injecting client object pointer into viz object
@@ -165,6 +154,12 @@ class WorkingRetina(RetinaMath):
 
         self._initialize_digital_sampling()
 
+        self.model_type = self.context.my_retina["model_type"]
+
+        if self.model_type is "VAE":
+            # Load generated spatial RF:s as numpy arrays, shape (n_cells, s, s)
+            self.spat_rf = self.data_io.load_generated_rfs(self.context.output_folder)
+
         self.initialized = True
 
     def _vspace_to_pixspace(self, x, y):
@@ -247,6 +242,7 @@ class WorkingRetina(RetinaMath):
         )
 
         orientation_center = gc.orientation_center * (np.pi / 180)
+        # spatial_kernel is here 1-dim vector
         spatial_kernel = self.DoG2D_fixed_surround(
             (x_grid, y_grid),
             gc.amplitudec,
@@ -260,6 +256,63 @@ class WorkingRetina(RetinaMath):
             offset,
         )
         spatial_kernel = np.reshape(spatial_kernel, (s, s))
+        # pdb.set_trace()
+
+        # Scale the spatial filter so that its maximal gain is something reasonable
+        # TODO - how should you scale the kernel??
+        max_gain = np.max(np.abs(np.fft.fft2(spatial_kernel)))
+        # 5.3 here just to give exp(5.3) = 200 Hz max firing rate to sinusoids
+        spatial_kernel = (5.3 / max_gain) * spatial_kernel
+
+        return spatial_kernel
+
+    def _create_spatial_filter_VAE(self, cell_index):
+        """
+        Creates the spatial component of the spatiotemporal filter
+
+        Parameters
+        ----------
+        cell_index : int
+            Index of the cell in the gc_df
+
+        Returns
+        -------
+        spatial_filter : np.ndarray
+            Spatial filter for the given cell
+        """
+        offset = 0.0
+        s = self.spatial_filter_sidelen
+
+        gc = self.gc_df_pixspace.iloc[cell_index]
+        qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
+
+        x_grid, y_grid = np.meshgrid(
+            np.arange(qmin, qmax + 1, 1), np.arange(rmin, rmax + 1, 1)
+        )
+
+        orientation_center = gc.orientation_center * (np.pi / 180)
+
+        spatial_kernel = skimage.transform.resize(
+            self.spat_rf[cell_index, :, :], (s, s), anti_aliasing=True
+        )
+        # TÄHÄN JÄIT: OLET INTEGROIMASSA VAE RF WORKING RETINAAN
+        # KUVAN LAATU ON HUONO, ILMEISESTI JO TALLENNUSVAIHEESSA => TALLENNUSFORMAATTI?, VIRHE TALLENNUKSESSA?
+        # JATKA ORIENTAATIO, AMPLITUDISKAALAUS, 1. TESTI (TOIMII TEKNISESTI, VASTEET KOHINAA)
+        # pdb.set_trace()
+
+        # spatial_kernel = self.DoG2D_fixed_surround(
+        #     (x_grid, y_grid),
+        #     gc.amplitudec,
+        #     gc.q_pix,
+        #     gc.r_pix,
+        #     gc.semi_xc,
+        #     gc.semi_yc,
+        #     orientation_center,
+        #     gc.amplitudes,
+        #     gc.sur_ratio,
+        #     offset,
+        # )
+        # spatial_kernel = np.reshape(spatial_kernel, (s, s))
 
         # Scale the spatial filter so that its maximal gain is something reasonable
         # TODO - how should you scale the kernel??
@@ -300,13 +353,11 @@ class WorkingRetina(RetinaMath):
         return temporal_filter
 
     def _generator_to_firing_rate(self, generator_potential):
-
         firing_rate = np.power(generator_potential, 2)
 
         return firing_rate
 
     def _save_for_cxsystem(self, spike_mons, filename=None, analog_signal=None):
-
         self.w_coord, self.z_coord = self.get_w_z_coords()
 
         # Copied from CxSystem2\cxsystem2\core\stimuli.py The Stimuli class does not support reuse
@@ -493,8 +544,14 @@ class WorkingRetina(RetinaMath):
         Returns
         -------
         None.
+
+        Attributes
+        ----------
+        stimulus_video : VideoBaseClass
+            Visual stimulus to project to the ganglion cell mosaic
         """
 
+        # Set basic working_retina attributes
         if self.initialized is False:
             self._initialize()
 
@@ -514,7 +571,6 @@ class WorkingRetina(RetinaMath):
         ), "Check that stimulus resolution matches that of the mosaic"
 
         # Get parameters from the stimulus object
-        # self.stimulus_video = deepcopy(stimulus_video)  # Not sure if copying the best way here...
         self.stimulus_video = stimulus_video
         assert (
             np.min(stimulus_video.frames) >= 0 and np.max(stimulus_video.frames) <= 255
@@ -550,7 +606,12 @@ class WorkingRetina(RetinaMath):
             The column-dimension is the number of frames in the stimulus
         """
 
-        spatial_filter = self._create_spatial_filter_FIT(cell_index)
+        if self.model_type is "FIT":
+            spatial_filter = self._create_spatial_filter_FIT(cell_index)
+        elif self.model_type is "VAE":
+            spatial_filter = self._create_spatial_filter_VAE(cell_index)
+        else:
+            raise ValueError("Unknown model type, aborting...")
 
         s = self.spatial_filter_sidelen
         spatial_filter_1d = np.array([np.reshape(spatial_filter, s**2)]).T
@@ -803,7 +864,6 @@ class WorkingRetina(RetinaMath):
         spike_generator_model = self.context.my_run_options["spike_generator_model"]
 
         for filename in filenames:
-
             self.run_cells(
                 cell_index=cell_index,
                 n_trials=n_trials,
@@ -818,7 +878,6 @@ class WorkingRetina(RetinaMath):
         spike_generator_model="refractory",
         save_data=False,
     ):
-
         """
         Runs the LNP pipeline for all ganglion cells (legacy function)
 
@@ -889,40 +948,6 @@ class WorkingRetina(RetinaMath):
 
         rgc_coords.to_csv(filename_full, header=False, index=False)
 
-    def load_generated_rfs(self, input_path):
-        """
-        Loads a series of 2D image files into a 3D image stack using Pillow.
-
-        Parameters
-        ----------
-            input_path (str or Path): The path to the folder containing the image files.
-
-        Returns
-        -------
-            img_stack (numpy.ndarray): The 3D image stack, with shape (M, N, N).
-        """
-        # Convert input_path to a Path object if it's a string
-        if isinstance(input_path, str):
-            input_path = Path(input_path)
-
-        # Get the list of image file paths in the input directory
-        img_paths = sorted(input_path.glob("*.png"))
-
-        # Load each image file as a slice in the image stack
-        img_stack = []
-        for img_path in img_paths:
-            img = Image.open(img_path)
-            img_array = np.array(img, dtype=np.float32)
-            img_stack.append(img_array)
-
-        # Convert the list of image slices to a 3D image stack
-        img_stack = np.stack(img_stack, axis=0)
-
-        # Rescale the pixel values back to the range of 0 to 1
-        img_stack = img_stack.astype(np.float32) / 65535.0
-
-        return img_stack
-
 
 class PhotoReceptor:
     """
@@ -945,7 +970,6 @@ class PhotoReceptor:
     ]
 
     def __init__(self, context, data_io) -> None:
-
         self._context = context.set_context(self._properties_list)
         self._data_io = data_io
 
@@ -964,7 +988,6 @@ class PhotoReceptor:
         return self._data_io
 
     def image2cone_response(self):
-
         image_file_name = self.context.my_stimulus_metadata["stimulus_file"]
         self.pix_per_deg = self.context.my_stimulus_metadata["pix_per_deg"]
         self.fps = self.context.my_stimulus_options["fps"]

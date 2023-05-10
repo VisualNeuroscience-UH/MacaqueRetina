@@ -20,6 +20,8 @@ import scipy.sparse as scprs
 import pandas as pd
 import h5py
 import cv2
+from PIL import Image
+
 
 # from cv2 import VideoWriter, VideoWriter_fourcc
 
@@ -556,3 +558,37 @@ class DataIO(DataIOBase):
         result_grid = restored_tuner.get_results()
 
         return result_grid
+
+    def load_generated_rfs(self, input_path):
+        """
+        Loads a series of 2D image files into a 3D image stack using Pillow.
+
+        Parameters
+        ----------
+            input_path (str or Path): The path to the folder containing the image files.
+
+        Returns
+        -------
+            img_stack (numpy.ndarray): The 3D image stack, with shape (M, N, N).
+        """
+        # Convert input_path to a Path object if it's a string
+        if isinstance(input_path, str):
+            input_path = Path(input_path)
+
+        # Get the list of image file paths in the input directory
+        img_paths = sorted(input_path.glob("*.png"))
+
+        # Load each image file as a slice in the image stack
+        img_stack = []
+        for img_path in img_paths:
+            img = Image.open(img_path)
+            img_array = np.array(img, dtype=np.float32)
+            img_stack.append(img_array)
+
+        # Convert the list of image slices to a 3D image stack
+        img_stack = np.stack(img_stack, axis=0)
+
+        # Rescale the pixel values back to the range of 0 to 1
+        img_stack = img_stack.astype(np.float32) / 65535.0
+
+        return img_stack
