@@ -96,7 +96,7 @@ project = "Retina"
 """
 Current experiment
 """
-experiment = "test_train"  # "test"
+experiment = "VAE_nLayers2"  # "test"
 
 
 """

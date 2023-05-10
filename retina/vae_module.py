@@ -1070,16 +1070,20 @@ class RetinaVAE(RetinaMath):
             case "load_model":
                 # Load previously calculated model for vizualization
                 # Load model to self.vae
-                # self.trial_name = "2199e_00029"
+                self.trial_name = "2199e_00029"
 
                 if hasattr(self, "trial_name"):  # After tune_model
-                    self.vae, result_grid, tb_dir = self._load_model(
+                    self.vae, result_grid, trial_folder = self._load_model(
                         model_path=None, trial_name=self.trial_name
                     )
-                    # # Dep vars: train_loss, val_loss, mse, ssim, kid_mean, kid_std,
-                    # self._plot_dependent_variables(
-                    #     results_grid=result_grid,
-                    # )
+                    # Dep vars: train_loss, val_loss, mse, ssim, kid_mean, kid_std,
+                    self._show_tune_depvar_evolution(
+                        result_grid,
+                        self.dependent_variables,
+                        highlight_trial=self.trial_name,
+                    )
+                    plt.show()
+                    pdb.set_trace()
                     [this_result] = [
                         result
                         for result in result_grid
@@ -1113,11 +1117,6 @@ class RetinaVAE(RetinaMath):
                     input_size=(1, self.resolution_hw, self.resolution_hw),
                     batch_size=-1,
                 )
-
-                # # Dep vars: train_loss, val_loss, mse, ssim, kid_std, kid_mean,
-                # self._plot_dependent_variable_mean_std(
-                #     results_grid=result_grid,
-                # )
 
         # This attaches test data to the model.
         self.test_loader = self._augment_and_get_dataloader(
@@ -1170,10 +1169,10 @@ class RetinaVAE(RetinaMath):
             shuffle=True,
         )
 
-    def _plot_dependent_variables(self, results_grid):
+    def _show_tune_depvar_evolution(self, result_grid, dep_vars, highlight_trial=None):
         """Plot results from ray tune"""
 
-        df = results_grid.get_dataframe()
+        df = result_grid.get_dataframe()
         # Find all columns with string "config/"
         config_cols = [x for x in df.columns if "config/" in x]
 
@@ -1190,13 +1189,22 @@ class RetinaVAE(RetinaMath):
         # # remove "model_id" from the varied columns
         # varied_cols.remove("model_id")
 
-        num_colors = len(results_grid.get_dataframe())
-        colors = plt.cm.get_cmap("tab20", num_colors).colors
+        num_colors = len(result_grid.get_dataframe())
+        if highlight_trial is None:
+            colors = plt.cm.get_cmap("tab20", num_colors).colors
+            highlight_idx = None
+        else:
+            [highlight_idx] = [
+                idx
+                for idx, r in enumerate(result_grid)
+                if highlight_trial in r.metrics["trial_id"]
+            ]
+            # set all other colors low contrast gray, and the highlight color to red
+            colors = np.array(
+                ["gray" if idx != highlight_idx else "red" for idx in range(num_colors)]
+            )
 
         # Make one subplot for each dependent variable
-        # List of dependent variables
-        dep_vars = self.dependent_variables
-
         nrows = 2
         ncols = len(dep_vars) // 2
         plt.figure(figsize=(ncols * 5, nrows * 5))
@@ -1206,16 +1214,13 @@ class RetinaVAE(RetinaMath):
             color_idx = 0
             ax = plt.subplot(nrows, ncols, idx + 1)
 
-            for result in results_grid:
+            for result in result_grid:
                 if idx == 0:
-                    try:
-                        label = ",".join(f"{x}={result.config[x]}" for x in varied_cols)
-                    except:
-                        raise NotImplementedError("Not implemented yet, aborting...")
+                    label = ",".join(f"{x}={result.config[x]}" for x in varied_cols)
                     legend = True
                 else:
                     legend = False
-
+                # pdb.set_trace()
                 result.metrics_dataframe.plot(
                     "training_iteration",
                     dep_var,
