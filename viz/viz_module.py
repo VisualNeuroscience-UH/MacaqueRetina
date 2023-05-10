@@ -945,13 +945,7 @@ class Viz:
         frac_best = 0.25
         num_best_trials = int(len(df) * frac_best)
 
-        # self._subplot_dependent_histograms(
-        #     axd, "dh", df, dep_vars, dep_vars_best, num_best_trials
-        # )
-
-        self._subplot_dependent_boxplots(
-            axd, "dh", df, dep_vars, dep_vars_best, config_vars_changed
-        )
+        self._subplot_dependent_boxplots(axd, "dh", df, dep_vars, config_vars_changed)
 
         self._subplot_dependent_variables(
             axd, "dv", result_grid, dep_vars, best_trials_across_dep_vars
@@ -965,7 +959,7 @@ class Viz:
             exp_spat_filt_to_viz = mosaic.exp_spat_filt_to_viz
             print("mosaic did not have attribute exp_spat_filt_to_viz")
 
-        num_best_trials = 5
+        num_best_trials = 5  # Also N reco img to show
         best_trials, dep_var_vals = self._get_best_trials(
             df, this_dep_var, this_dep_var_best, num_best_trials
         )
@@ -1046,43 +1040,7 @@ class Viz:
 
         return img, rec_img, samples
 
-    def _subplot_dependent_histograms(
-        self, axd, kw, df, dep_vars, dep_vars_best, num_best_trials
-    ):
-        """Plot dependent variables as a function of epochs."""
-
-        # Make one subplot for each dependent variable
-        for idx, dep_var in enumerate(dep_vars):
-            best_is = dep_vars_best[idx]
-            best_trials, dep_var_vals = self._get_best_trials(
-                df, dep_var, best_is, num_best_trials
-            )
-
-            ax = axd[f"{kw}{idx}"]
-
-            # Make histogram of the frac_best trials
-            ax.hist(dep_var_vals[best_trials], bins=20)
-
-            # Set x and y axis tick font size 8
-            ax.tick_params(axis="both", which="major", labelsize=8)
-
-            if idx == 0:
-                ax.set_ylabel("Frequency")
-                ax.text(
-                    0,
-                    1.6,
-                    f"Histogram of the {num_best_trials} best trials for each metrics",
-                    horizontalalignment="left",
-                    verticalalignment="top",
-                    transform=ax.transAxes,
-                    fontsize=11,
-                )
-
-            ax.set_title(f"{dep_var}")
-
-    def _subplot_dependent_boxplots(
-        self, axd, kw, df, dep_vars, dep_vars_best, config_vars_changed
-    ):
+    def _subplot_dependent_boxplots(self, axd, kw, df, dep_vars, config_vars_changed):
         """Boxplot dependent variables for one ray tune experiment"""
 
         # config_vars_changed list contain the varied columns in dataframe df

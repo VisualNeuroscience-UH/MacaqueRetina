@@ -1186,9 +1186,6 @@ class RetinaVAE(RetinaMath):
         # Drop the "config/" part from the column names
         varied_cols = [x.replace("config/", "") for x in varied_cols]
 
-        # # remove "model_id" from the varied columns
-        # varied_cols.remove("model_id")
-
         num_colors = len(result_grid.get_dataframe())
         if highlight_trial is None:
             colors = plt.cm.get_cmap("tab20", num_colors).colors
@@ -1213,14 +1210,15 @@ class RetinaVAE(RetinaMath):
             # Create a new plot for each label
             color_idx = 0
             ax = plt.subplot(nrows, ncols, idx + 1)
+            label = None
 
             for result in result_grid:
-                if idx == 0:
+                if idx == 0 and highlight_idx is None:
                     label = ",".join(f"{x}={result.config[x]}" for x in varied_cols)
                     legend = True
                 else:
                     legend = False
-                # pdb.set_trace()
+
                 result.metrics_dataframe.plot(
                     "training_iteration",
                     dep_var,
