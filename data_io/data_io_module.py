@@ -559,36 +559,62 @@ class DataIO(DataIOBase):
 
         return result_grid
 
-    def load_generated_rfs(self, input_path):
+    def save_generated_rfs(self, img_stack, output_path):
         """
-        Loads a series of 2D image files into a 3D image stack using Pillow.
+        Save a 3D image stack as a series of 2D image files using Pillow and save the original stack in a numpy format.
 
         Parameters
         ----------
-            input_path (str or Path): The path to the folder containing the image files.
+        img_stack : numpy.ndarray
+            The 3D image stack to be saved, with shape (M, N, N).
+        output_path : str or Path
+            The path to the output folder where the image files and the stack will be saved.
+        """
+
+        if isinstance(output_path, str):
+            output_path = Path(output_path)
+
+        output_path.mkdir(parents=True, exist_ok=True)
+        img_paths_s = pd.Series(index=range(img_stack.shape[0]))
+
+        # Save the original img_stack as numpy or pickle format
+        stack_filename = (
+            output_path / "rf_values.npy"
+        )  # or "rf_values.pkl" for pickle format
+        np.save(
+            stack_filename, img_stack
+        )  # or pickle.dump(img_stack, open(stack_filename, "wb"))
+
+        for i in range(img_stack.shape[0]):
+            # Rescale the pixel values to the range of 0 to 65535 for saving as PNG
+            img_array = (img_stack[i, :, :] * 65535.0).astype(np.uint16)
+
+            img = Image.fromarray(img_array)
+            filename_full = output_path / f"slice_{i+1}.png"
+            img.save(filename_full)
+            img_paths_s[i] = filename_full
+
+        return img_paths_s
+
+    def load_generated_rfs(self, input_path):
+        """
+        Loads receptive field file into a 3D image stack.
+
+        Parameters
+        ----------
+        input_path : str or Path
+            The path to the folder containing the image files.
 
         Returns
         -------
-            img_stack (numpy.ndarray): The 3D image stack, with shape (M, N, N).
+        img_stack : numpy.ndarray
+            The 3D image stack, with shape (M, N, N).
         """
-        # Convert input_path to a Path object if it's a string
         if isinstance(input_path, str):
             input_path = Path(input_path)
 
-        # Get the list of image file paths in the input directory
-        img_paths = sorted(input_path.glob("*.png"))
-
-        # Load each image file as a slice in the image stack
-        img_stack = []
-        for img_path in img_paths:
-            img = Image.open(img_path)
-            img_array = np.array(img, dtype=np.float32)
-            img_stack.append(img_array)
-
-        # Convert the list of image slices to a 3D image stack
-        img_stack = np.stack(img_stack, axis=0)
-
-        # Rescale the pixel values back to the range of 0 to 1
-        img_stack = img_stack.astype(np.float32) / 65535.0
+        # Load the numpy stack
+        stack_path = input_path / "rf_values.npy"
+        img_stack = np.load(stack_path)
 
         return img_stack

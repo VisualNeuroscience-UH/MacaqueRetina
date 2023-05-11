@@ -12,12 +12,11 @@ import cv2
 
 # Viz
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 # Comput Neurosci
 import brian2 as b2
 import brian2.units as b2u
-
-b2.prefs["logging.display_brian_error_message"] = False
 
 # Local
 from cxsystem2.core.tools import write_to_file, load_from_file
@@ -27,6 +26,8 @@ from retina.retina_math_module import RetinaMath
 from pathlib import Path
 from copy import deepcopy
 import pdb
+
+b2.prefs["logging.display_brian_error_message"] = False
 
 
 class WorkingRetina(RetinaMath):
@@ -256,7 +257,6 @@ class WorkingRetina(RetinaMath):
             offset,
         )
         spatial_kernel = np.reshape(spatial_kernel, (s, s))
-        # pdb.set_trace()
 
         # Scale the spatial filter so that its maximal gain is something reasonable
         # TODO - how should you scale the kernel??
@@ -295,30 +295,12 @@ class WorkingRetina(RetinaMath):
         spatial_kernel = skimage.transform.resize(
             self.spat_rf[cell_index, :, :], (s, s), anti_aliasing=True
         )
-        # TÄHÄN JÄIT: OLET INTEGROIMASSA VAE RF WORKING RETINAAN
-        # KUVAN LAATU ON HUONO, ILMEISESTI JO TALLENNUSVAIHEESSA => TALLENNUSFORMAATTI?, VIRHE TALLENNUKSESSA?
-        # JATKA ORIENTAATIO, AMPLITUDISKAALAUS, 1. TESTI (TOIMII TEKNISESTI, VASTEET KOHINAA)
-        # pdb.set_trace()
-
-        # spatial_kernel = self.DoG2D_fixed_surround(
-        #     (x_grid, y_grid),
-        #     gc.amplitudec,
-        #     gc.q_pix,
-        #     gc.r_pix,
-        #     gc.semi_xc,
-        #     gc.semi_yc,
-        #     orientation_center,
-        #     gc.amplitudes,
-        #     gc.sur_ratio,
-        #     offset,
-        # )
-        # spatial_kernel = np.reshape(spatial_kernel, (s, s))
 
         # Scale the spatial filter so that its maximal gain is something reasonable
-        # TODO - how should you scale the kernel??
         max_gain = np.max(np.abs(np.fft.fft2(spatial_kernel)))
-        # 5.3 here just to give exp(5.3) = 200 Hz max firing rate to sinusoids
-        spatial_kernel = (5.3 / max_gain) * spatial_kernel
+        # print(f"{np.max(spatial_kernel.flatten())=}")
+        # print(f"{max_gain=}")
+        spatial_kernel = (18 / max_gain) * spatial_kernel
 
         return spatial_kernel
 

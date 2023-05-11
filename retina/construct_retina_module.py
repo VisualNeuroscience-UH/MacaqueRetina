@@ -791,23 +791,12 @@ class ConstructRetina(RetinaMath):
                 }
 
                 # --- 3. decode the samples
-                img_stack = self.retina_vae.vae.decoder(latent_samples)
-
-                # Images were upsampled for VAE training.
-                # Downsample generated images back to the Apricot size
-                img_stack_downsampled = F.interpolate(
-                    img_stack,
-                    size=self.apricot_data_resolution_hw,
-                    mode="bilinear",
-                    align_corners=True,
-                )
-
-                img_stack_np = img_stack_downsampled.detach().cpu().numpy()
+                img_stack_np = self.retina_vae.vae.decoder(latent_samples)
 
                 # The shape of img_stack_np is (n_samples, 1, img_size, img_size)
                 # Reshape to (n_samples, img_size, img_size)
                 img_reshaped = np.reshape(
-                    img_stack_np,
+                    img_stack_np.detach().cpu().numpy(),
                     (n_samples, img_stack_np.shape[2], img_stack_np.shape[3]),
                 )
 
@@ -834,7 +823,7 @@ class ConstructRetina(RetinaMath):
                     "img_raw": img_reshaped,
                 }
 
-                img_paths = self.save_generated_rfs(img_flipped, output_path)
+                img_paths = self.data_io.save_generated_rfs(img_flipped, output_path)
 
                 # Add image paths as a columnd to self.gc_df
                 self.gc_df["img_path"] = img_paths
@@ -909,42 +898,6 @@ class ConstructRetina(RetinaMath):
         print("Saving model mosaic to %s" % filepath)
         self.gc_df.to_csv(filepath)
 
-    def save_generated_rfs(self, img_stack, output_path):
-        """
-        Saves a 3D image stack as a series of 2D image files using Pillow.
-
-        Parameters
-        ----------
-            img_stack (numpy.ndarray): The 3D image stack to be saved, with shape (M, N, N).
-            output_path (str or Path): The path to the output folder where the image files will be saved.
-        """
-        # Convert output_path to a Path object if it's a string
-        if isinstance(output_path, str):
-            output_path = Path(output_path)
-
-        # Create the output directory if it doesn't exist
-        output_path.mkdir(parents=True, exist_ok=True)
-
-        # Create pandas series object, which will hold the full paths to the generated images
-        img_paths_s = pd.Series(index=range(img_stack.shape[0]))
-
-        # Loop through each slice in the image stack
-        for i in range(img_stack.shape[0]):
-            # Rescale the pixel values to the range of 0 to 65535
-            img_array = (img_stack[i, :, :] * 65535.0).astype(np.uint16)
-
-            # Create a PIL Image object from the current slice
-            img = Image.fromarray(img_array)
-
-            # Save the image file with a unique name based on the slice index
-            filename_full = output_path / f"slice_{i+1}.png"
-            img.save(filename_full)
-
-            # Add the full path to the image file to the pandas series object
-            img_paths_s[i] = filename_full
-
-        return img_paths_s
-
     def show_exp_build_process(self, show_all_spatial_fits=False):
         """
         Show the process of building the mosaic
@@ -1009,4 +962,6 @@ class ConstructRetina(RetinaMath):
         """
 
         # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
-        self.viz.show_ray_experiment(self, ray_exp_name, this_dep_var, highlight_trial=highlight_trial)
+        self.viz.show_ray_experiment(
+            self, ray_exp_name, this_dep_var, highlight_trial=highlight_trial
+        )

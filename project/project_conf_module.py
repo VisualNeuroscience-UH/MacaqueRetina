@@ -129,7 +129,7 @@ my_retina = {
     "model_density": 1.0,
     "randomize_position": 0.05,
     "stimulus_center": 4.45 + 0j,
-    "model_type": "VAE",  # "FIT" or "VAE" for variational autoencoder.
+    "model_type": "FIT",  # "FIT" or "VAE" for variational autoencoder.
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" Applies to VAE only.
 }
 
@@ -339,7 +339,7 @@ if __name__ == "__main__":
     # INTEGROI VAE GENEROIDUT RF:T WORKING RETINAAN
     # GENEROI RF:T TRIAL ID:STÄ. JUOKSUTA TRIAL_ID TÄÄLTÄ MALLIVALINTAAN JA RF GENEROINTIIN
 
-    # PM.construct_retina.build()
+    PM.construct_retina.build()
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # This is why they are called via the construct_retina attribute. The instance
@@ -352,13 +352,13 @@ if __name__ == "__main__":
     # PM.construct_retina.show_gen_spat_post_hist()
     # PM.construct_retina.show_latent_space_and_samples()
 
-    # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
-    this_dep_var = "val_loss"
-    ray_exp_name = None  # "TrainableVAE_2023-04-20_22-17-35"  # None for most recent
-    highlight_trial = "fc63f_00003"  # "fc63f_00003"  # or None
-    PM.construct_retina.show_ray_experiment(
-        ray_exp_name, this_dep_var, highlight_trial=highlight_trial
-    )
+    # # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
+    # this_dep_var = "val_loss"
+    # ray_exp_name = None  # "TrainableVAE_2023-04-20_22-17-35"  # None for most recent
+    # highlight_trial = "fc63f_00003"  # "fc63f_00003"  # or None
+    # PM.construct_retina.show_ray_experiment(
+    #     ray_exp_name, this_dep_var, highlight_trial=highlight_trial
+    # )
 
     #################################
     ### Create stimulus ###
@@ -404,9 +404,7 @@ if __name__ == "__main__":
     ### Load stimulus to get working retina ###
     #################################
 
-    # # # If you want to load with object, it is possible by:
-    # PM.working_retina.load_stimulus(PM.stimulate)
-    # PM.working_retina.load_stimulus()
+    PM.working_retina.load_stimulus()
 
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
     # ret.load_stimulus(movie)# => METADATA
@@ -415,7 +413,7 @@ if __name__ == "__main__":
     ### Show single ganglion cell response ###
     #################################
 
-    # example_gc = 2  # int or 'None'
+    example_gc = 2  # int or 'None'
     # PM.working_retina.convolve_stimulus(example_gc)
 
     # PM.viz.show_spatiotemporal_filter(PM.working_retina)
@@ -425,13 +423,13 @@ if __name__ == "__main__":
     ### Run multiple trials for single cell ###
     #################################
 
-    # PM.working_retina.run_with_my_run_options()
+    PM.working_retina.run_with_my_run_options()
 
     # PM.viz.show_gc_responses(PM.working_retina)
 
-    # PM.viz.show_stimulus_with_gcs(
-    #     PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51
-    # )
+    PM.viz.show_stimulus_with_gcs(
+        PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51
+    )
 
     # PM.viz.show_single_gc_view(PM.working_retina, cell_index=example_gc, frame_number=21)
 
