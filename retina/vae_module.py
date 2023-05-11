@@ -862,7 +862,7 @@ class RetinaVAE(RetinaMath):
         self.response_type = response_type
 
         # Fixed values for both single training and ray tune runs
-        self.epochs = 100
+        self.epochs = 500
         self.lr_step_size = 20  # Learning rate decay step size (in epochs)
         self.lr_gamma = 0.9  # Learning rate decay (multiplier for learning rate)
         # how many times to get the data, applied only if augmentation_dict is not None
@@ -913,8 +913,8 @@ class RetinaVAE(RetinaMath):
         ####################
 
         # Set the random seed for reproducible results for both torch and numpy
-        # self.random_seed = np.random.randint(1, 10000)
-        self.random_seed = 42
+        self.random_seed = np.random.randint(1, 10000)
+        # self.random_seed = 42
         torch.manual_seed(self.random_seed)
         np.random.seed(self.random_seed)
 
@@ -1004,9 +1004,12 @@ class RetinaVAE(RetinaMath):
                     "kernel_stride": ["k7s1"],
                     "channels": [16],
                     "batch_size": [256],
-                    "conv_layers": [1, 2, 3, 4],
-                    "batch_norm": [True],
-                    "latent_distribution": ["uniform"],
+                    "conv_layers": [2],
+                    "batch_norm": [False, True],
+                    "latent_distribution": [
+                        "normal",
+                        "uniform",
+                    ],  # "normal" or "uniform"
                     "rotation": [0],  # Augment: max rotation in degrees
                     # Augment: fract of im, max in (x, y)/[xy] dir
                     "translation": [0],  # 1/13 pixels
@@ -1070,17 +1073,11 @@ class RetinaVAE(RetinaMath):
             case "load_model":
                 # Load previously calculated model for vizualization
                 # Load model to self.vae
-                # self.trial_name = "2199e_00029"
+                self.trial_name = "fc63f_00003"
 
                 if hasattr(self, "trial_name"):  # After tune_model
                     self.vae, result_grid, trial_folder = self._load_model(
                         model_path=None, trial_name=self.trial_name
-                    )
-                    # Dep vars: train_loss, val_loss, mse, ssim, kid_mean, kid_std,
-                    self._show_tune_depvar_evolution(
-                        result_grid,
-                        self.dependent_variables,
-                        highlight_trial=self.trial_name,
                     )
 
                     [this_result] = [
@@ -1167,88 +1164,6 @@ class RetinaVAE(RetinaMath):
             batch_size=self.batch_size,
             shuffle=True,
         )
-
-    def _show_tune_depvar_evolution(self, result_grid, dep_vars, highlight_trial=None):
-        """Plot results from ray tune"""
-
-        df = result_grid.get_dataframe()
-        # Find all columns with string "config/"
-        config_cols = [x for x in df.columns if "config/" in x]
-
-        # From the config_cols, identify columns where there is more than one unique value
-        # These are the columns which were varied in the search space
-        varied_cols = []
-        for col in config_cols:
-            if len(df[col].unique()) > 1:
-                varied_cols.append(col)
-
-        # Drop the "config/" part from the column names
-        varied_cols = [x.replace("config/", "") for x in varied_cols]
-
-        num_colors = len(result_grid.get_dataframe())
-        if highlight_trial is None:
-            colors = plt.cm.get_cmap("tab20", num_colors).colors
-            highlight_idx = None
-        else:
-            [highlight_idx] = [
-                idx
-                for idx, r in enumerate(result_grid)
-                if highlight_trial in r.metrics["trial_id"]
-            ]
-            # set all other colors low contrast gray, and the highlight color to red
-            colors = np.array(
-                ["gray" if idx != highlight_idx else "red" for idx in range(num_colors)]
-            )
-
-        # Make one subplot for each dependent variable
-        nrows = 2
-        ncols = len(dep_vars) // 2
-        plt.figure(figsize=(ncols * 5, nrows * 5))
-
-        for idx, dep_var in enumerate(dep_vars):
-            # Create a new plot for each label
-            color_idx = 0
-            ax = plt.subplot(nrows, ncols, idx + 1)
-            label = None
-
-            for result in result_grid:
-                if idx == 0 and highlight_idx is None:
-                    label = ",".join(f"{x}={result.config[x]}" for x in varied_cols)
-                    legend = True
-                else:
-                    legend = False
-
-                result.metrics_dataframe.plot(
-                    "training_iteration",
-                    dep_var,
-                    ax=ax,
-                    label=label,
-                    color=colors[color_idx],
-                    legend=legend,
-                )
-
-                # At the end (+1) of the x-axis, add mean and SD of last 50 epochs as dot and vertical line, respectively
-                last_50 = result.metrics_dataframe.tail(50)
-                mean = last_50[dep_var].mean()
-                std = last_50[dep_var].std()
-                n_epochs = result.metrics_dataframe.tail(1)["training_iteration"]
-                ax.plot(
-                    n_epochs + n_epochs // 5,
-                    mean,
-                    "o",
-                    color=colors[color_idx],
-                )
-                ax.plot(
-                    [n_epochs + n_epochs // 5] * 2,
-                    [mean - std, mean + std],
-                    "-",
-                    color=colors[color_idx],
-                )
-
-                color_idx += 1
-            ax.set_title(f"{dep_var}")
-            ax.set_ylabel(dep_var)
-            ax.grid(True)
 
     def _run_tensorboard(self, tb_dir):
         """Run tensorboard in a new subprocess"""

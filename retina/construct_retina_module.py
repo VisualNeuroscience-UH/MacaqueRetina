@@ -1002,11 +1002,11 @@ class ConstructRetina(RetinaMath):
         # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
         self.viz.show_latent_space_and_samples(self)
 
-    def show_ray_experiment(self, ray_exp_name, this_dep_var):
+    def show_ray_experiment(self, ray_exp_name, this_dep_var, highlight_trial=None):
         """
         Show the ray experiment
         self goes as argument, to be available for viz
         """
 
         # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
-        self.viz.show_ray_experiment(self, ray_exp_name, this_dep_var)
+        self.viz.show_ray_experiment(self, ray_exp_name, this_dep_var, highlight_trial=highlight_trial)

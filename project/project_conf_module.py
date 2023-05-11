@@ -79,8 +79,6 @@ if sys.platform == "linux":
     model_root_path = "/opt3/Laskenta/Models"  # pikkuveli
     git_repo_root = Path(r"/opt2/Git_Repos/MacaqueRetina")
     ray_root_path = None  # if None, ray_results are saved to model_root_path/project/experiment/output_folder/ray_results
-    # git_repo_root = r"/opt2/Git_Repos/MacaqueRetina"
-    # model_root_path = "/opt2/Models"  # isosisko
 elif sys.platform == "win32":
     model_root_path = r"C:\Users\simov\Laskenta\Models"
     git_repo_root = Path(r"C:\Users\simov\Laskenta\GitRepos\MacaqueRetina")
@@ -96,7 +94,7 @@ project = "Retina"
 """
 Current experiment
 """
-experiment = "test_train"  # "test"
+experiment = "VAE_distrBatch"  # "test"
 
 
 """
@@ -341,7 +339,7 @@ if __name__ == "__main__":
     # INTEGROI VAE GENEROIDUT RF:T WORKING RETINAAN
     # GENEROI RF:T TRIAL ID:STÄ. JUOKSUTA TRIAL_ID TÄÄLTÄ MALLIVALINTAAN JA RF GENEROINTIIN
 
-    PM.construct_retina.build()
+    # PM.construct_retina.build()
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # This is why they are called via the construct_retina attribute. The instance
@@ -354,10 +352,13 @@ if __name__ == "__main__":
     # PM.construct_retina.show_gen_spat_post_hist()
     # PM.construct_retina.show_latent_space_and_samples()
 
-    # # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
-    # this_dep_var = "val_loss"
-    # ray_exp_name = None  # "TrainableVAE_2023-04-20_22-17-35"  # None for most recent
-    # PM.construct_retina.show_ray_experiment(ray_exp_name, this_dep_var)
+    # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
+    this_dep_var = "val_loss"
+    ray_exp_name = None  # "TrainableVAE_2023-04-20_22-17-35"  # None for most recent
+    highlight_trial = "fc63f_00003"  # "fc63f_00003"  # or None
+    PM.construct_retina.show_ray_experiment(
+        ray_exp_name, this_dep_var, highlight_trial=highlight_trial
+    )
 
     #################################
     ### Create stimulus ###
@@ -365,7 +366,7 @@ if __name__ == "__main__":
 
     # options are defined in my_stimulus_options
     # stimulus video will be saved on output_folder in mp4 format (viewing and hdf5 format (for reloading)
-    PM.stimulate.make_stimulus_video()
+    # PM.stimulate.make_stimulus_video()
 
     ##############################
     ### Create analog stimulus ###
@@ -405,7 +406,7 @@ if __name__ == "__main__":
 
     # # # If you want to load with object, it is possible by:
     # PM.working_retina.load_stimulus(PM.stimulate)
-    PM.working_retina.load_stimulus()
+    # PM.working_retina.load_stimulus()
 
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
     # ret.load_stimulus(movie)# => METADATA
@@ -424,9 +425,9 @@ if __name__ == "__main__":
     ### Run multiple trials for single cell ###
     #################################
 
-    PM.working_retina.run_with_my_run_options()
+    # PM.working_retina.run_with_my_run_options()
 
-    PM.viz.show_gc_responses(PM.working_retina)
+    # PM.viz.show_gc_responses(PM.working_retina)
 
     # PM.viz.show_stimulus_with_gcs(
     #     PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51

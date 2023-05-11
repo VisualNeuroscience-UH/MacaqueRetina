@@ -855,7 +855,7 @@ class Viz:
         ax0.set(xlabel="tsne-2d-one", ylabel="tsne-2d-two")
         plt.title("TSNE plot of encoded samples")
 
-    def show_ray_experiment(self, mosaic, ray_exp, this_dep_var):
+    def show_ray_experiment(self, mosaic, ray_exp, this_dep_var, highlight_trial=None):
         """
         Show the results of a ray experiment. If ray_exp is None, then
         the most recent experiment is shown.
@@ -924,6 +924,10 @@ class Viz:
         print(f"Best trials: in order of {dep_vars=}")
         print(df_filtered)
 
+        self._show_tune_depvar_evolution(
+            result_grid, dep_vars, highlight_trial=highlight_trial
+        )
+
         nrows = 9
         ncols = len(dep_vars)
         nsamples = 10
@@ -931,7 +935,8 @@ class Viz:
         layout = [
             ["dh0", "dh1", "dh2", "dh3", "dh4", "dh5", ".", ".", ".", "."],
             [".", ".", ".", ".", ".", ".", ".", ".", ".", "."],
-            ["dv0", "dv1", "dv2", "dv3", "dv4", "dv5", ".", ".", ".", "."],
+            [".", ".", ".", ".", ".", ".", ".", ".", ".", "."],
+            # ["dv0", "dv1", "dv2", "dv3", "dv4", "dv5", ".", ".", ".", "."],
             ["im0", "im1", "im2", "im3", "im4", "im5", "im6", "im7", "im8", "im9"],
             ["re0" + str(i) for i in range(10)],
             ["re1" + str(i) for i in range(10)],
@@ -947,9 +952,9 @@ class Viz:
 
         self._subplot_dependent_boxplots(axd, "dh", df, dep_vars, config_vars_changed)
 
-        self._subplot_dependent_variables(
-            axd, "dv", result_grid, dep_vars, best_trials_across_dep_vars
-        )
+        # self._subplot_dependent_variables(
+        #     axd, "dv", result_grid, dep_vars, best_trials_across_dep_vars
+        # )
 
         if hasattr(mosaic, "exp_spat_filt_to_viz"):
             exp_spat_filt_to_viz = mosaic.exp_spat_filt_to_viz
@@ -1260,6 +1265,89 @@ class Viz:
                     },
                     transform=ax.transAxes,
                 )
+
+    def _show_tune_depvar_evolution(self, result_grid, dep_vars, highlight_trial=None):
+        """Plot results from ray tune"""
+
+        df = result_grid.get_dataframe()
+        # Find all columns with string "config/"
+        config_cols = [x for x in df.columns if "config/" in x]
+
+        # From the config_cols, identify columns where there is more than one unique value
+        # These are the columns which were varied in the search space
+        varied_cols = []
+        for col in config_cols:
+            if len(df[col].unique()) > 1:
+                varied_cols.append(col)
+
+        # Drop the "config/" part from the column names
+        varied_cols = [x.replace("config/", "") for x in varied_cols]
+
+        num_colors = len(result_grid.get_dataframe())
+        if highlight_trial is None:
+            colors = plt.cm.get_cmap("tab20", num_colors).colors
+            highlight_idx = None
+        else:
+            [highlight_idx] = [
+                idx
+                for idx, r in enumerate(result_grid)
+                if highlight_trial in r.metrics["trial_id"]
+            ]
+            # set all other colors low contrast gray, and the highlight color to red
+            colors = np.array(
+                ["gray" if idx != highlight_idx else "red" for idx in range(num_colors)]
+            )
+
+        # Make one subplot for each dependent variable
+        nrows = 2
+        ncols = len(dep_vars) // 2
+        plt.figure(figsize=(ncols * 5, nrows * 5))
+
+        for idx, dep_var in enumerate(dep_vars):
+            # Create a new plot for each label
+            color_idx = 0
+            ax = plt.subplot(nrows, ncols, idx + 1)
+            label = None
+
+            for result in result_grid:
+                # Too cluttered for a legend
+                # if idx == 0 and highlight_idx is None:
+                #     label = ",".join(f"{x}={result.config[x]}" for x in varied_cols)
+                #     legend = True
+                # else:
+                #     legend = False
+
+                ax_plot = result.metrics_dataframe.plot(
+                    "training_iteration",
+                    dep_var,
+                    ax=ax,
+                    label=label,
+                    color=colors[color_idx],
+                    legend=False,
+                )
+
+                # At the end (+1) of the x-axis, add mean and SD of last 50 epochs as dot and vertical line, respectively
+                last_50 = result.metrics_dataframe.tail(50)
+                mean = last_50[dep_var].mean()
+                std = last_50[dep_var].std()
+                n_epochs = result.metrics_dataframe.tail(1)["training_iteration"]
+                ax.plot(
+                    n_epochs + n_epochs // 5,
+                    mean,
+                    "o",
+                    color=colors[color_idx],
+                )
+                ax.plot(
+                    [n_epochs + n_epochs // 5] * 2,
+                    [mean - std, mean + std],
+                    "-",
+                    color=colors[color_idx],
+                )
+
+                color_idx += 1
+            ax.set_title(f"{dep_var}")
+            ax.set_ylabel(dep_var)
+            ax.grid(True)
 
     # WorkingRetina visualization
     def show_stimulus_with_gcs(self, retina, frame_number=0, ax=None, example_gc=5):
