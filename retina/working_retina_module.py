@@ -298,8 +298,7 @@ class WorkingRetina(RetinaMath):
 
         # Scale the spatial filter so that its maximal gain is something reasonable
         max_gain = np.max(np.abs(np.fft.fft2(spatial_kernel)))
-        # print(f"{np.max(spatial_kernel.flatten())=}")
-        # print(f"{max_gain=}")
+        # The 18 is arbitrary, to give reasonable firing rates
         spatial_kernel = (18 / max_gain) * spatial_kernel
 
         return spatial_kernel
@@ -859,13 +858,17 @@ class WorkingRetina(RetinaMath):
         self,
         spike_generator_model="refractory",
         save_data=False,
-    ):
+        ):
         """
         Runs the LNP pipeline for all ganglion cells (legacy function)
 
-        :param spike_generator_model: str, 'refractory' or 'poisson'
-        :param save_data: bool
-        :return:
+        Parameters
+        ----------
+        spike_generator_model : str
+            'refractory' or 'poisson'
+        save_data : bool
+            Whether to save the data
+
         """
 
         self.run_cells(
