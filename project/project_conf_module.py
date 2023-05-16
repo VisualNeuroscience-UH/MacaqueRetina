@@ -94,7 +94,7 @@ project = "Retina"
 """
 Current experiment
 """
-experiment = "VAE_nLayers"  # "test"
+experiment = "VAE_nLayers2"  # "test"
 
 
 """
@@ -124,10 +124,10 @@ my_retina = {
     "response_type": "on",
     # "ecc_limits": [4.8, 5.2],
     # "sector_limits": [-0.4, 0.4],
-    "ecc_limits": [4, 6],
-    "sector_limits": [-1.5, 1.5],
+    "ecc_limits": [4.5, 5.5],
+    "sector_limits": [-45.0, 45.0],
     "model_density": 1.0,
-    "randomize_position": 0.05,
+    "randomize_position": 0.0,
     "stimulus_center": 5.0 + 0j,
     "model_type": "VAE",  # "FIT" or "VAE" for variational autoencoder.
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" Applies to VAE only.
@@ -339,7 +339,7 @@ if __name__ == "__main__":
     # INTEGROI VAE GENEROIDUT RF:T WORKING RETINAAN
     # GENEROI RF:T TRIAL ID:STÄ. JUOKSUTA TRIAL_ID TÄÄLTÄ MALLIVALINTAAN JA RF GENEROINTIIN
 
-    # PM.construct_retina.build()
+    PM.construct_retina.build()
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # This is why they are called via the construct_retina attribute. The instance
@@ -352,13 +352,13 @@ if __name__ == "__main__":
     # PM.construct_retina.show_gen_spat_post_hist()
     # PM.construct_retina.show_latent_space_and_samples()
 
-    # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
-    this_dep_var = "val_loss"
-    ray_exp_name = None  # "TrainableVAE_2023-04-20_22-17-35"  # None for most recent
-    highlight_trial = None  # "fc63f_00003"  # or None
-    PM.construct_retina.show_ray_experiment(
-        ray_exp_name, this_dep_var, highlight_trial=highlight_trial
-    )
+    # # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
+    # this_dep_var = "val_loss"
+    # ray_exp_name = None  # "TrainableVAE_2023-04-20_22-17-35"  # None for most recent
+    # highlight_trial = None  # "fc63f_00003"  # or None
+    # PM.construct_retina.show_ray_experiment(
+    #     ray_exp_name, this_dep_var, highlight_trial=highlight_trial
+    # )
 
     #################################
     ### Create stimulus ###
@@ -404,7 +404,7 @@ if __name__ == "__main__":
     ### Load stimulus to get working retina ###
     #################################
 
-    # PM.working_retina.load_stimulus()
+    PM.working_retina.load_stimulus()
 
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
     # ret.load_stimulus(movie)# => METADATA
