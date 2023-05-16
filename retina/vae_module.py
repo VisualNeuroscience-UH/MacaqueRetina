@@ -1073,7 +1073,7 @@ class RetinaVAE(RetinaMath):
             case "load_model":
                 # Load previously calculated model for vizualization
                 # Load model to self.vae
-                self.trial_name = "fc63f_00003"
+                self.trial_name = "2199e_00029"
 
                 if hasattr(self, "trial_name"):  # After tune_model
                     self.vae, result_grid, trial_folder = self._load_model(
