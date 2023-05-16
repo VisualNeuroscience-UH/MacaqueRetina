@@ -155,6 +155,15 @@ class WorkingRetina(RetinaMath):
 
         self._initialize_digital_sampling()
 
+        if 1:
+            import matplotlib.pyplot as plt
+
+            # plt.plot(self.gc_df_pixspace.q_pix, self.gc_df_pixspace.r_pix, "r.")
+            print(f"{self.gc_df.x_deg=}")
+            print(f"{self.gc_df.y_deg=}")
+            plt.plot(self.gc_df.x_deg, self.gc_df.y_deg, "b.")
+            plt.show()
+            pdb.set_trace()
         self.model_type = self.context.my_retina["model_type"]
 
         if self.model_type is "VAE":
@@ -858,7 +867,7 @@ class WorkingRetina(RetinaMath):
         self,
         spike_generator_model="refractory",
         save_data=False,
-        ):
+    ):
         """
         Runs the LNP pipeline for all ganglion cells (legacy function)
 
