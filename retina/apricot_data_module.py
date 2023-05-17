@@ -22,7 +22,6 @@ class ApricotData:
     """
 
     def __init__(self, apricot_data_folder, gc_type, response_type):
-
         self.apricot_data_folder = apricot_data_folder
         gc_type = gc_type.lower()
         response_type = response_type.lower()
@@ -104,12 +103,13 @@ class ApricotData:
 
         temporal_filters = self.read_temporal_filter_data(flip_negs=False)
         # Based on 3 samples
-        inverted_data_indices = np.argwhere(np.mean(temporal_filters[:, 1:3], axis=1) < 0).flatten()
+        inverted_data_indices = np.argwhere(
+            np.mean(temporal_filters[:, 1:3], axis=1) < 0
+        ).flatten()
 
         return inverted_data_indices
 
     def _read_postspike_filter(self):
-
         postspike_filter = np.array(
             [
                 self.data[cellnum][0][0][0][0][0][2][0][0][0]
@@ -131,7 +131,6 @@ class ApricotData:
 
     # Called from Fit
     def read_spatial_filter_data(self):
-
         filepath = self.apricot_data_folder / self.spatial_filename
         gc_spatial_data = sio.loadmat(filepath, variable_names=["c", "stafit"])
         spat_data_array = gc_spatial_data["c"]
@@ -158,7 +157,6 @@ class ApricotData:
         return spat_data_array, cen_rot_rad_all
 
     def read_tonicdrive(self, remove_bad_data_idx=True):
-
         tonicdrive = np.array(
             [
                 self.data[cellnum][0][0][0][0][0][1][0][0][0][0][0]
@@ -171,7 +169,6 @@ class ApricotData:
         return tonicdrive
 
     def read_temporal_filter_data(self, flip_negs=False, normalize=False):
-
         time_rk1 = np.array(
             [
                 self.data[cellnum][0][0][0][0][0][3][0][0][3]
@@ -238,7 +235,6 @@ class ApricotData:
         )
 
     def compute_temporal_filter_sums(self, remove_bad_data_idx=True):
-
         temporal_filters = self.read_temporal_filter_data(
             flip_negs=True
         )  # 1st deflection positive, 2nd negative
