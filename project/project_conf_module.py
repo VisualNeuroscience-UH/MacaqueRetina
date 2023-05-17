@@ -124,8 +124,8 @@ my_retina = {
     "response_type": "on",
     # "ecc_limits": [4.8, 5.2],
     # "sector_limits": [-0.4, 0.4],
-    "ecc_limits": [4.5, 5.5],
-    "sector_limits": [-45.0, 45.0],
+    "ecc_limits": [4.5, 5.0],
+    "sector_limits": [-1.5, 1.5],
     "model_density": 1.0,
     "randomize_position": 0.0,
     "stimulus_center": 5.0 + 0j,
@@ -404,7 +404,7 @@ if __name__ == "__main__":
     ### Load stimulus to get working retina ###
     #################################
 
-    PM.working_retina.load_stimulus()
+    # PM.working_retina.load_stimulus()
 
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
     # ret.load_stimulus(movie)# => METADATA

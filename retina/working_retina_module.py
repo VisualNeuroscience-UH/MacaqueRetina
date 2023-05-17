@@ -162,6 +162,7 @@ class WorkingRetina(RetinaMath):
             print(f"{self.gc_df.x_deg=}")
             print(f"{self.gc_df.y_deg=}")
             plt.plot(self.gc_df.x_deg, self.gc_df.y_deg, "b.")
+            plt.axis("equal")
             plt.show()
             pdb.set_trace()
         self.model_type = self.context.my_retina["model_type"]
