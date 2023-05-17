@@ -38,6 +38,7 @@ class WorkingRetina(RetinaMath):
         "my_stimulus_metadata",
         "my_stimulus_options",
         "my_run_options",
+        "apricot_metadata",
     ]
 
     def __init__(self, context, data_io, viz) -> None:
@@ -105,27 +106,25 @@ class WorkingRetina(RetinaMath):
 
         self.model_type = self.context.my_retina["model_type"]
 
-        # Metadata for Apricot dataset. TODO move to project_conf module
-        self.data_microm_per_pixel = 60
-        self.data_filter_fps = 30  # Uncertain - "30 or 120 Hz"
-        self.data_filter_timesteps = 15
+        # Metadata for Apricot dataset.
+        self.data_microm_per_pixel = self.context.apricot_metadata[
+            "data_microm_per_pix"
+        ]
+        self.data_filter_fps = self.context.apricot_metadata["data_fps"]
+        self.data_filter_timesteps = self.context.apricot_metadata[
+            "data_temporalfilter_samples"
+        ]
         self.data_filter_duration = self.data_filter_timesteps * (
             1000 / self.data_filter_fps
         )  # in milliseconds
 
         # Convert retinal positions (ecc, pol angle) to visual space positions in deg (x, y)
-        vspace_pos = np.array(
-            [
-                self.pol2cart(gc.positions_eccentricity, gc.positions_polar_angle)
-                for index, gc in gc_dataframe.iterrows()
-            ]
-        )
-        vspace_pos = vspace_pos * self.deg_per_mm
-        vspace_coords = pd.DataFrame(
+        rspace_pos_mm = self.pol2cart_df(gc_dataframe)
+        vspace_pos = rspace_pos_mm * self.deg_per_mm
+        vspace_coords_deg = pd.DataFrame(
             {"x_deg": vspace_pos[:, 0], "y_deg": vspace_pos[:, 1]}
         )
-
-        self.gc_df = pd.concat([gc_dataframe, vspace_coords], axis=1)
+        self.gc_df = pd.concat([gc_dataframe, vspace_coords_deg], axis=1)
 
         # Convert RF center radii to degrees as well
         self.gc_df.semi_xc = self.gc_df.semi_xc * self.deg_per_mm
