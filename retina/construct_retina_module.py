@@ -720,6 +720,60 @@ class ConstructRetina(RetinaMath):
                 shape, loc, scale, len(self.gc_df), distribution
             )
 
+    def _get_generated_spatial_data(self, retina_vae, nsamples=10):
+        # --- 1. make a probability density function of the latent space
+        retina_vae = self.retina_vae
+
+        latent_data = self.get_data_at_latent_space(retina_vae)
+
+        # Make a probability density function of the latent_data
+        # Both uniform and normal distr during learning is sampled
+        # using gaussian kde estimate. The kde estimate is basically smooth histogram,
+        # so it is not a problem that the data is not normal.
+        latent_pdf = stats.gaussian_kde(latent_data.T)
+
+        # --- 2. sample from the pdf
+        n_samples = len(self.gc_df)
+        # n_samples = 1000
+        latent_samples = torch.tensor(latent_pdf.resample(n_samples).T).to(
+            retina_vae.device
+        )
+        # Change the dtype to float32
+        latent_samples = latent_samples.type(torch.float32)
+        latent_dim = self.retina_vae.latent_dim
+
+        self.gen_latent_space_to_viz = {
+            "samples": latent_samples.to("cpu").numpy(),
+            "dim": latent_dim,
+            "data": latent_data,
+        }
+
+        # --- 3. decode the samples
+        img_stack_np = self.retina_vae.vae.decoder(latent_samples)
+
+        # The shape of img_stack_np is (n_samples, 1, img_size, img_size)
+        # Reshape to (n_samples, img_size, img_size)
+        img_reshaped = np.reshape(
+            img_stack_np.detach().cpu().numpy(),
+            (n_samples, img_stack_np.shape[2], img_stack_np.shape[3]),
+        )
+
+        # The images are in img_reshaped of shape (n_samples, img_size, img_size)
+        # For each image, get the median value across 2D image
+        medians = np.median(img_reshaped, axis=(1, 2))
+
+        # Then, subtract the median value from the image. This sets the median value to 0.
+        img_median_removed = img_reshaped - medians[:, None, None]
+
+        # For each image,
+        #   if the abs(min) > abs(max), then the image is flipped so that the strongest deviation becomes positive.
+        img_flipped = img_median_removed
+        for i in range(img_flipped.shape[0]):
+            if abs(np.min(img_flipped[i])) > abs(np.max(img_flipped[i])):
+                img_flipped[i] = -img_flipped[i]
+
+        return img_flipped, img_reshaped
+
     def build(self):
         """
         Builds the receptive field mosaic. This is the main method to call.
@@ -810,60 +864,6 @@ class ConstructRetina(RetinaMath):
 
         # Save the receptive field mosaic
         self.save_gc_csv()
-
-    def _get_generated_spatial_data(self, retina_vae, nsamples=10):
-        # --- 1. make a probability density function of the latent space
-        retina_vae = self.retina_vae
-
-        latent_data = self.get_data_at_latent_space(retina_vae)
-
-        # Make a probability density function of the latent_data
-        # Both uniform and normal distr during learning is sampled
-        # using gaussian kde estimate. The kde estimate is basically smooth histogram,
-        # so it is not a problem that the data is not normal.
-        latent_pdf = stats.gaussian_kde(latent_data.T)
-
-        # --- 2. sample from the pdf
-        n_samples = len(self.gc_df)
-        # n_samples = 1000
-        latent_samples = torch.tensor(latent_pdf.resample(n_samples).T).to(
-            retina_vae.device
-        )
-        # Change the dtype to float32
-        latent_samples = latent_samples.type(torch.float32)
-        latent_dim = self.retina_vae.latent_dim
-
-        self.gen_latent_space_to_viz = {
-            "samples": latent_samples.to("cpu").numpy(),
-            "dim": latent_dim,
-            "data": latent_data,
-        }
-
-        # --- 3. decode the samples
-        img_stack_np = self.retina_vae.vae.decoder(latent_samples)
-
-        # The shape of img_stack_np is (n_samples, 1, img_size, img_size)
-        # Reshape to (n_samples, img_size, img_size)
-        img_reshaped = np.reshape(
-            img_stack_np.detach().cpu().numpy(),
-            (n_samples, img_stack_np.shape[2], img_stack_np.shape[3]),
-        )
-
-        # The images are in img_reshaped of shape (n_samples, img_size, img_size)
-        # For each image, get the median value across 2D image
-        medians = np.median(img_reshaped, axis=(1, 2))
-
-        # Then, subtract the median value from the image. This sets the median value to 0.
-        img_median_removed = img_reshaped - medians[:, None, None]
-
-        # For each image,
-        #   if the abs(min) > abs(max), then the image is flipped so that the strongest deviation becomes positive.
-        img_flipped = img_median_removed
-        for i in range(img_flipped.shape[0]):
-            if abs(np.min(img_flipped[i])) > abs(np.max(img_flipped[i])):
-                img_flipped[i] = -img_flipped[i]
-
-        return img_flipped, img_reshaped
 
     def get_data_at_latent_space(self, retina_vae):
         """
