@@ -18,7 +18,7 @@ class RetinaMath:
     def __init__(self) -> None:
         pass
 
-    # MosaicConstruction methods
+    # RetinaConstruction methods
     def gauss_plus_baseline(self, x, a, x0, sigma, baseline):  # To fit GC density
         """
         Function for Gaussian distribution with a baseline value. For optimization.
@@ -45,15 +45,51 @@ class RetinaMath:
 
         return area_of_ellipse
 
+    # RetinaConstruction & WorkingRetina methods
+    def pol2cart_df(self, df):
+        """
+        Convert retinal positions (eccentricity, polar angle) to visual space positions in degrees (x, y).
+
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            DataFrame containing retinal positions with columns 'positions_eccentricity' and 'positions_polar_angle'.
+
+        Returns
+        -------
+        numpy.ndarray
+            Numpy array of visual space positions in degrees, with shape (n, 2), where n is the number of rows in the DataFrame.
+            Each row represents the Cartesian coordinates (x, y) in visual space.
+        """
+        rspace_pos_mm = np.array(
+            [
+                self.pol2cart(gc.positions_eccentricity, gc.positions_polar_angle)
+                for index, gc in df.iterrows()
+            ]
+        )
+
+        return rspace_pos_mm
+
     # WorkingRetina methods
     def pol2cart(self, radius, phi, deg=True):
         """
         Converts polar coordinates to Cartesian coordinates
 
-        :param radius: float
-        :param phi: float, polar angle
-        :param deg: True/False, whether polar angle given in degrees or radians (default True)
-        :return: (x,y) tuple
+        Parameters
+        ----------
+        radius : float
+            The radius value in polar coordinates.
+        phi : float
+            The polar angle value.
+        deg : bool, optional
+            Whether the polar angle is given in degrees or radians.
+            If True, the angle is given in degrees; if False, the angle is given in radians.
+            Default is True.
+
+        Returns
+        -------
+        tuple
+            A tuple containing the Cartesian coordinates (x, y).
         """
 
         if deg is True:
@@ -146,7 +182,7 @@ class RetinaMath:
         -------
         - y (numpy.ndarray): Lowpass filter kernel evaluated at each time point in `t`.
         """
-        
+
         y = p * (t / tau) ** (n) * np.exp(-n * (t / tau - 1))
         return y
 
@@ -173,7 +209,7 @@ class RetinaMath:
         # Copy spatial_rf_unflipped to spatial_rf
         spatial_rf = np.copy(spatial_rf_unflipped)
 
-        # Find max_pixels number of pixels with absolute maximum value 
+        # Find max_pixels number of pixels with absolute maximum value
         # and their indices
         for i in range(spatial_rf.shape[0]):
             # max_pixels_values = np.sort(np.abs(spatial_rf[i].ravel()))[-max_pixels:]
