@@ -218,6 +218,14 @@ my_run_options = {
 """
 Semi-constant variables
 """
+# TODO: Refactor apricot_data_module.py to use these. Requires new composition of the module.
+apricot_metadata = {
+    "data_microm_per_pix": 60,
+    "data_spatialfilter_height": 13,
+    "data_spatialfilter_width": 13,
+    "data_fps": 30,  # Uncertain - "30 or 120 Hz"
+    "data_temporalfilter_samples": 15,
+}
 
 # Proportion from all ganglion cells. Density of all ganglion cells is given later as a function of ecc from literature.
 proportion_of_parasol_gc_type = 0.08
@@ -309,6 +317,7 @@ if __name__ == "__main__":
         dendr_diam1_file=dendr_diam1_file,
         dendr_diam2_file=dendr_diam2_file,
         gc_density_file=gc_density_file,
+        apricot_metadata=apricot_metadata,
     )
 
     #################################
@@ -404,7 +413,7 @@ if __name__ == "__main__":
     ### Load stimulus to get working retina ###
     #################################
 
-    # PM.working_retina.load_stimulus()
+    PM.working_retina.load_stimulus()
 
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
     # ret.load_stimulus(movie)# => METADATA
