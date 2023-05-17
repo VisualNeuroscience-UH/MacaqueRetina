@@ -5,8 +5,7 @@ import pandas as pd
 from scipy.signal import convolve
 from scipy.interpolate import interp1d
 import scipy.optimize as opt
-import skimage.transform
-
+from skimage.transform import resize
 # Data IO
 import cv2
 
@@ -301,7 +300,7 @@ class WorkingRetina(RetinaMath):
 
         orientation_center = gc.orientation_center * (np.pi / 180)
 
-        spatial_kernel = skimage.transform.resize(
+        spatial_kernel = resize(
             self.spat_rf[cell_index, :, :], (s, s), anti_aliasing=True
         )
 

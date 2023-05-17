@@ -4,6 +4,7 @@ import scipy.optimize as opt
 import scipy.io as sio
 import scipy.stats as stats
 import pandas as pd
+from scipy import ndimage
 
 import torch
 import torch.nn.functional as F
@@ -13,8 +14,12 @@ import torch.nn.functional as F
 # from scipy.signal import convolve
 # from scipy.interpolate import interp1d
 
+# Image analysis
+from skimage import measure
+from skimage.transform import resize
+
 # Data IO
-# import cv2
+import cv2
 from PIL import Image
 
 # Viz
@@ -74,6 +79,7 @@ class ConstructRetina(RetinaMath):
         "dendr_diam1_file",
         "dendr_diam2_file",
         "gc_density_file",
+        "apricot_metadata",
     ]
 
     def __init__(self, context, data_io, viz) -> None:
@@ -338,6 +344,8 @@ class ConstructRetina(RetinaMath):
         data_all_y = np.concatenate((data_set_1_y, data_set_2_y))
 
         # Limit eccentricities for central visual field studies to get better approximation at about 5 deg ecc (1mm)
+        # x is eccentricity in mm
+        # y is dendritic field diameter in micrometers
         data_all_x_index = data_all_x <= self.visual_field_fit_limit
         data_all_x = data_all_x[data_all_x_index]
         data_all_y = data_all_y[
@@ -499,7 +507,7 @@ class ConstructRetina(RetinaMath):
         Place ganglion cell center positions to retina
 
         Creates self.gc_df: pandas.DataFrame with columns:
-            positions_eccentricity, positions_polar_angle, eccentricity_group_index
+            positions_eccentricity (mm), positions_polar_angle (deg), eccentricity_group_index
 
         Parameters
         ----------
@@ -774,6 +782,103 @@ class ConstructRetina(RetinaMath):
 
         return img_flipped, img_reshaped
 
+    def _get_rf_contours(self, img_stack):
+        """
+        Extracts the contours around the maximum of each receptive field in an image stack. The contour for a field is
+        defined as the set of pixels with a value of at least 10% of the maximum pixel value in the field. Only the
+        connected region of the contour that contains the maximum value is included.
+
+        Parameters
+        ----------
+        img_stack : numpy.ndarray
+            3D numpy array representing a stack of images. The shape of the array should be (N, H, W), where N is the
+            number of images (or receptive fields), H is the height of each image, and W is the width of each image.
+
+        Returns
+        -------
+        numpy.ndarray
+            3D numpy array of boolean masks (N, H, W). In each mask, True indicates
+            a pixel is part of the contour, and False indicates it is not.
+        """
+        masks = []
+        for img in img_stack:
+            max_val = np.max(img)
+            mask = img >= max_val * 0.1
+
+            # Label the distinct regions in the mask
+            labeled_mask, num_labels = ndimage.label(mask)
+
+            # Find the label of the region that contains the maximum value
+            max_label = labeled_mask[np.unravel_index(np.argmax(img), img.shape)]
+
+            # Keep only the region in the mask that contains the maximum value
+            mask = labeled_mask == max_label
+
+            masks.append(mask)
+
+        return np.array(masks)
+
+    def _get_retina_with_rf_contours(
+        self,
+        rf_contours,
+        rspace_pos_mm,
+        data_microm_per_pix,
+        rspace_pos_ecc_mm,
+        dendr_diam_vs_ecc_param_dict,
+        dendritic_diameter_data_mm,
+    ):
+        # Determine the receptive field diameter based on eccentricity
+        parameters = dendr_diam_vs_ecc_param_dict["parasol_quadratic"]
+        dendr_diam_um = np.polyval(
+            [
+                parameters.get("cube", 0),
+                parameters.get("square", 0),
+                parameters.get("slope", 0),
+                parameters.get("intercept", 0),
+            ],
+            rspace_pos_ecc_mm,
+        )
+
+        # Adjust the micrometers per pixel conversion factor
+        # TÄHÄN JÄIT: NÄYTTÄÄ ETTÄ SKAALAUS EI TOIMI. dendr_diam_um JA dendritic_diameter_data_mm ANTAVAT SAMANKALTAISIA ARVOJA
+        # VAIKKA DATA PITÄISI OLLA PALJON PERIFEERISEMPÄÄ.
+        scaling_factor = dendr_diam_um / (dendritic_diameter_data_mm * 1000)
+        new_data_microm_per_pix = scaling_factor * data_microm_per_pix
+
+        # Conversion from micrometers to pixels
+        dendr_diam_pix = dendr_diam_um / new_data_microm_per_pix
+
+        # Determine the bounds of the retinal space
+        rspace_pos_pix = rspace_pos_mm * 1000 / new_data_microm_per_pix[:, np.newaxis]
+        x_min, y_min = np.min(rspace_pos_pix, axis=0)
+        x_max, y_max = np.max(rspace_pos_pix, axis=0)
+        pdb.set_trace()
+        # Create an empty retinal image
+        retina_img = np.zeros(
+            (int(y_max - y_min) + 1, int(x_max - x_min) + 1), dtype=bool
+        )
+
+        # Place each receptive field contour in the retinal image
+        for rf_contour, pos, diam in zip(rf_contours, rspace_pos_pix, dendr_diam_pix):
+            # Rescale the receptive field contour based on eccentricity
+            rf_contour_rescaled = resize(
+                rf_contour, (int(diam), int(diam)), mode="constant", preserve_range=True
+            )
+            rf_contour_rescaled = rf_contour_rescaled > 0.5  # Convert back to boolean
+
+            # Determine the position of the receptive field contour in the retinal image
+            x, y = pos
+            x_start = int(x - rf_contour_rescaled.shape[1] // 2)
+            y_start = int(y - rf_contour_rescaled.shape[0] // 2)
+
+            # Add the receptive field contour to the retinal image
+            retina_img[
+                y_start : y_start + rf_contour_rescaled.shape[0],
+                x_start : x_start + rf_contour_rescaled.shape[1],
+            ] |= rf_contour_rescaled
+
+        return retina_img
+
     def build(self):
         """
         Builds the receptive field mosaic. This is the main method to call.
@@ -823,6 +928,45 @@ class ConstructRetina(RetinaMath):
                 img_flipped, img_reshaped = self._get_generated_spatial_data(
                     self.retina_vae, nsamples=nsamples
                 )
+
+                # Extract receptive field contours from the generated spatial data
+                rf_contours = self._get_rf_contours(img_flipped)
+
+                # Convert retinal positions (ecc, pol angle) to visual space positions in deg (x, y)
+                rspace_pos_ecc_mm = np.array(self.gc_df.positions_eccentricity.values)
+                rspace_pos_mm = self.pol2cart_df(self.gc_df)
+                data_microm_per_pix = self.context.apricot_metadata[
+                    "data_microm_per_pix"
+                ]
+
+                # Calculate dendritic diameter for each cell from ellipse semi_xc and semi_yc parameters
+                dendritic_diameter_data = self.ellipse2diam(
+                    self.gc_df["semi_xc"].values, self.gc_df["semi_yc"].values
+                )
+
+                retina_img = self._get_retina_with_rf_contours(
+                    rf_contours,
+                    rspace_pos_mm,
+                    data_microm_per_pix,
+                    rspace_pos_ecc_mm,
+                    dendr_diam_vs_ecc_param_dict,
+                    dendritic_diameter_data,
+                )
+                pdb.set_trace()
+
+                import matplotlib.pyplot as plt
+
+                yy = 1
+                plt.subplot(1, 2, 1)
+                plt.imshow(rf_contours[yy, :, :])
+                plt.colorbar()
+                plt.subplot(1, 2, 2)
+                plt.imshow(img_flipped[yy, :, :])
+                plt.colorbar()
+                plt.show()
+                pdb.set_trace()
+                # TÄHÄN JÄIT: TILING JA SEN KORJAUS
+
                 # Set self attribute for later visualization of image histograms
                 self.gen_spat_img_to_viz = {
                     "img_processed": img_flipped,
@@ -831,12 +975,12 @@ class ConstructRetina(RetinaMath):
 
                 # Save the generated receptive fields
                 output_path = self.context.output_folder
-
                 img_paths = self.data_io.save_generated_rfs(img_flipped, output_path)
 
                 # Add image paths as a columnd to self.gc_df
                 self.gc_df["img_path"] = img_paths
 
+                # Fit elliptical gaussians to the generated receptive fields
                 (
                     self.gen_stat_df,
                     self.gen_spat_cen_sd,

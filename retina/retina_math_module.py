@@ -45,6 +45,34 @@ class RetinaMath:
 
         return area_of_ellipse
 
+    def ellipse2diam(self, semi_xc, semi_yc):
+        """
+        Compute the spherical diameter of an ellipse given its semi-major and semi-minor axes.
+
+        Parameters
+        ----------
+        semi_xc : array-like
+            The lengths of the semi-major axes of the ellipses.
+        semi_yc : array-like
+            The lengths of the semi-minor axes of the ellipses.
+
+        Returns
+        -------
+        diameters : numpy array
+            The spherical diameters of the ellipses.
+
+        Notes
+        -----
+        The spherical diameter is calculated as the diameter of a circle with the same area as the ellipse.
+        """
+        # Calculate the area of each ellipse
+        areas = np.pi * semi_xc * semi_yc
+
+        # Calculate the diameter of a circle with the same area
+        diameters = 2 * np.sqrt(areas / np.pi)
+
+        return diameters
+
     # RetinaConstruction & WorkingRetina methods
     def pol2cart_df(self, df):
         """
