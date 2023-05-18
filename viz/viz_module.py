@@ -454,7 +454,12 @@ class Viz:
 
     def show_dendrite_diam_vs_ecc(self, mosaic):
         """
-        ConstructRetina call.
+        Plot dendritic diameter as a function of retinal eccentricity with linear, quadratic, or cubic fitting.
+
+        Parameters
+        ----------
+        mosaic : ContructRetina object
+            An instance of the ContructRetina class containing the data to be plotted.
         """
         data_all_x = mosaic.dendrite_diam_vs_ecc_to_show["data_all_x"]
         data_all_y = mosaic.dendrite_diam_vs_ecc_to_show["data_all_y"]
@@ -464,6 +469,9 @@ class Viz:
 
         fig, ax = plt.subplots(nrows=1, ncols=1)
         ax.plot(data_all_x, data_all_y, ".")
+
+        ax.set_xlabel("Retinal eccentricity (mm)")
+        ax.set_ylabel("Dendritic diameter (um)")
 
         if dataset_name:
             if (
@@ -536,7 +544,7 @@ class Viz:
         distrib_params = mosaic.exp_temp_stat_to_viz["distrib_params"]
         suptitle = mosaic.exp_temp_stat_to_viz["suptitle"]
         all_data_fits_df = mosaic.exp_temp_stat_to_viz["all_data_fits_df"]
-        good_data_idx = mosaic.exp_temp_stat_to_viz["good_data_idx"]
+        good_idx = mosaic.exp_temp_stat_to_viz["good_idx"]
 
         plt.subplots(2, 3)
         plt.suptitle(suptitle)
@@ -544,7 +552,7 @@ class Viz:
             plt.subplot(2, 3, i + 1)
             ax = plt.gca()
             shape, loc, scale = distrib_params[i, :]
-            param_array = np.array(all_data_fits_df.iloc[good_data_idx][param_name])
+            param_array = np.array(all_data_fits_df.iloc[good_idx][param_name])
 
             x_min, x_max = stats.gamma.ppf(
                 [0.001, 0.999], a=shape, loc=loc, scale=scale
@@ -571,7 +579,7 @@ class Viz:
 
     def show_exp_build_process(self, mosaic, show_all_spatial_fits=False):
         """
-        Visualize retina mosaic build process.
+        Visualize the stages of retina mosaic building process.
         """
 
         # If show_all_spatial_fits is true, show the spatial fits
