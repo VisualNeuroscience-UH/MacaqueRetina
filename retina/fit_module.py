@@ -39,7 +39,6 @@ class Fit(ApricotData, RetinaMath):
         spatial_data=None,
         fit_type="experimental",
     ):
-
         # Assigns to self the following attributes, which are necessary in this module:
         # gc_type, response_type, DATA_PIXEL_LEN, manually_picked_bad_data_idx, n_cells, metadata
         super().__init__(apricot_data_folder, gc_type, response_type)
@@ -350,7 +349,7 @@ class Fit(ApricotData, RetinaMath):
 
         # Invert data arrays with negative sign for fitting and display.
         spat_data_array = self.flip_negative_spatial_rf(spat_data_array)
-        
+
         # Go through all cells
         print(("Fitting DoG model, surround is {0}".format(surround_status)))
         for cell_idx in tqdm(all_viable_cells, desc="Fitting spatial  filters"):
