@@ -6,6 +6,7 @@ from scipy.signal import convolve
 from scipy.interpolate import interp1d
 import scipy.optimize as opt
 from skimage.transform import resize
+
 # Data IO
 import cv2
 
@@ -153,7 +154,7 @@ class WorkingRetina(RetinaMath):
 
         self._initialize_digital_sampling()
 
-        if 1:
+        if 0:
             import matplotlib.pyplot as plt
 
             # plt.plot(self.gc_df_pixspace.q_pix, self.gc_df_pixspace.r_pix, "r.")

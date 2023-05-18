@@ -124,8 +124,8 @@ my_retina = {
     "response_type": "on",
     # "ecc_limits": [4.8, 5.2],
     # "sector_limits": [-0.4, 0.4],
-    "ecc_limits": [4.5, 5.0],
-    "sector_limits": [-1.5, 1.5],
+    "ecc_limits": [3, 7.0],
+    "sector_limits": [-2, 2],
     "model_density": 1.0,
     "randomize_position": 0.0,
     "stimulus_center": 5.0 + 0j,
@@ -354,7 +354,11 @@ if __name__ == "__main__":
     # This is why they are called via the construct_retina attribute. The instance
     # object is attached to the call for viz.
 
-    # PM.construct_retina.show_exp_build_process(show_all_spatial_fits=False)
+    # This function visualizes the spatial and temporal filter responses, ganglion cell positions and density,
+    # mosaic layout, spatial and temporal statistics, dendrite diameter versus eccentricity, and tonic drives
+    # in the retina mosaic building process.
+    PM.construct_retina.show_exp_build_process(show_all_spatial_fits=False)
+
     # PM.construct_retina.show_gen_exp_spatial_fit(n_samples=10)
     # PM.construct_retina.show_gen_exp_spatial_rf(ds_name="test_ds", n_samples=10)
     # PM.construct_retina.show_latent_tsne_space()

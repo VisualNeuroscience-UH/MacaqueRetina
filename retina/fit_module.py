@@ -870,9 +870,9 @@ class Fit(ApricotData, RetinaMath):
             List of good data indices after spatial fit
         bad_data_fit_idx : list
             List of bad data indices after spatial fit
-        exp_spat_cen_sd : float
+        exp_spat_cen_sd_mm : float
             Mean center standard deviation in millimeters
-        exp_spat_sur_sd : float
+        exp_spat_sur_sd_mm : float
             Mean surround standard deviation in millimeters
         exp_temp_filt_to_viz : dict
             Dictionary with temporal filter parameters and distributions
@@ -912,7 +912,7 @@ class Fit(ApricotData, RetinaMath):
         )
 
         # get center and surround sd
-        exp_spat_cen_sd, exp_spat_sur_sd = self._get_center_surround_sd(
+        exp_spat_cen_sd_mm, exp_spat_sur_sd_mm = self._get_center_surround_sd(
             good_data_fit_idx
         )
 
@@ -925,8 +925,8 @@ class Fit(ApricotData, RetinaMath):
             exp_stat_df,
             good_data_fit_idx,
             bad_data_fit_idx,
-            exp_spat_cen_sd,
-            exp_spat_sur_sd,
+            exp_spat_cen_sd_mm,
+            exp_spat_sur_sd_mm,
             self.exp_temp_filt_to_viz,
             self.exp_spat_filt_to_viz,
             exp_spat_stat_to_viz,
