@@ -26,9 +26,9 @@ import pdb
 
 class Fit(ApricotData, RetinaMath):
     """
-    Methods for deriving spatial and temporal receptive field parameters from the apricot dataset (Field_2010)
-    Call get_experimental_fits or get_generated_spatial_fits method to return the fits from the instance object
-    self.all_data_fits_df and other data to visualize the fits.
+    This class contains methods for deriving spatial and temporal receptive field parameters from the
+    apricot dataset (Field_2010). Use the get_experimental_fits or get_generated_spatial_fits method to
+    return the fits from the instance object, self.all_data_fits_df and other data for visualization.
     """
 
     def __init__(
@@ -36,16 +36,47 @@ class Fit(ApricotData, RetinaMath):
         apricot_data_folder,
         gc_type,
         response_type,
+        fit_type="experimental",  # "experimental" or "generated"
         spatial_data=None,
-        fit_type="experimental",
+        new_um_per_pix=None,
     ):
-        # Assigns to self the following attributes, which are necessary in this module:
-        # gc_type, response_type, DATA_PIXEL_LEN, manually_picked_bad_data_idx, n_cells, metadata
+        """
+        Initialize the Fit class.
+
+        Parameters
+        ----------
+        apricot_data_folder : str
+            The path to the apricot data folder.
+        gc_type : str
+            The type of ganglion cell.
+        response_type : str
+            The type of response.
+        fit_type : str, optional
+            The fit type, can be either 'experimental' or 'generated'. Default is 'experimental'.
+        spatial_data : array_like, optional
+            The spatial data. Default is None.
+        new_um_per_pix : float, optional
+            The new micrometers per pixel value, required when fit_type is 'generated'.
+            Default is None.
+
+        Raises
+        ------
+        AssertionError
+            If fit_type is 'generated' and new_um_per_pix is not provided.
+        AssertionError
+            If fit_type is 'generated' and spatial_data is not provided.
+        """
         super().__init__(apricot_data_folder, gc_type, response_type)
+
+        assert (
+            fit_type == "experimental" or new_um_per_pix is not None
+        ), "If fit_type is 'generated', new_um_per_pix must be provided"
+        assert (
+            fit_type == "experimental" or spatial_data is not None
+        ), "If fit_type is 'generated', spatial_data must be provided"
 
         match fit_type:
             case "experimental":
-                # Fit spatial and temporal filters and tonic drive values to experimental data.
                 (
                     self.all_data_fits_df,
                     self.exp_spat_filt_to_viz,
@@ -54,8 +85,6 @@ class Fit(ApricotData, RetinaMath):
                     self.good_idx,
                 ) = self._fit_experimental_data()
             case "generated":
-                # Fit only spatial filters to generated data.
-                # All filters are accepted, so no need to return good_idx.
                 (
                     self.all_data_fits_df,
                     self.gen_spat_filt_to_viz,

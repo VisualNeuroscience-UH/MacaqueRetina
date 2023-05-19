@@ -894,78 +894,8 @@ class ConstructRetina(RetinaMath):
         self,
         rf_masks,
         rspace_pos_mm,
-        data_microm_per_pix,
-        rspace_pos_ecc_mm,
-        dd_ecc_params,
-        data_dendritic_diameter_um,
     ):
-        # Determine the receptive field diameter based on eccentricity
-        parameters = dd_ecc_params["parasol_quadratic"]
-        dendr_diam_um = np.polyval(
-            [
-                parameters.get("cube", 0),
-                parameters.get("square", 0),
-                parameters.get("slope", 0),
-                parameters.get("intercept", 0),
-            ],
-            rspace_pos_ecc_mm,
-        )
-
-        # Adjust the micrometers per pixel conversion factor
-        scaling_factor = np.mean(dendr_diam_um) / data_dendritic_diameter_um
-        new_data_microm_per_pix = scaling_factor * data_microm_per_pix
-
-        # Conversion from micrometers to pixels
-        max_dendr_diam_pix = np.max(dendr_diam_um) / new_data_microm_per_pix
-
-        # Determine the bounds of the retinal space
-        rspace_pos_pix = rspace_pos_mm * 1000 / new_data_microm_per_pix
-        x_min, y_min = np.min(rspace_pos_pix, axis=0) - 6 * max_dendr_diam_pix
-        x_max, y_max = np.max(rspace_pos_pix, axis=0) + 6 * max_dendr_diam_pix
-        rspace_pos_pix -= [x_min, y_min]  # Shift to start from (0,0)
-
-        # Create an empty retinal image
-        retina_img = np.zeros((int(y_max) + 1, int(x_max) + 1), dtype=bool)
-
-        # dendr_diam_pix = dendr_diam_um / new_data_microm_per_pix
-        dendr_diam_pix = (
-            dendr_diam_um * data_microm_per_pix / data_dendritic_diameter_um
-        )
-
-        # Place each receptive field contour in the retinal image
-        for rf_contour, pos, diam in zip(rf_masks, rspace_pos_pix, dendr_diam_pix):
-            # Shift the receptive field position
-            pos_shifted = pos - np.array([x_min, y_min])
-
-            # Rescale the receptive field contour based on eccentricity
-            rf_contour_rescaled = resize(
-                rf_contour, (int(diam), int(diam)), mode="constant", preserve_range=True
-            )
-            plt.subplot(1, 2, 1)
-            plt.imshow(rf_contour)
-            plt.subplot(1, 2, 2)
-            plt.imshow(rf_contour_rescaled)
-            plt.show()
-            pdb.set_trace()
-            rf_contour_rescaled = rf_contour_rescaled > 0.5  # Convert back to boolean
-
-            # Determine the position of the receptive field contour in the retinal image
-            # x, y = pos
-            x, y = pos_shifted
-            x_start = int(x - rf_contour_rescaled.shape[1] // 2)
-            y_start = int(y - rf_contour_rescaled.shape[0] // 2)
-            print(f"y_start: {y_start}")
-            print(f"x_start: {x_start}")
-            print(f"rf_contour_rescaled.shape: {rf_contour_rescaled.shape}")
-            print(f"retina_img.shape: {retina_img.shape}")
-            # Add the receptive field contour to the retinal image
-            retina_img[
-                y_start : y_start + rf_contour_rescaled.shape[0],
-                x_start : x_start + rf_contour_rescaled.shape[1],
-            ] |= rf_contour_rescaled
-
-        return retina_img
-        # TÄHÄN JÄIT, VIELÄKIN KOORDINAATISTON ULKOPUOLELLA. KS CHAT GPT
+        pass
 
     def _get_upsampled_scaled_rfs(
         self,
@@ -1138,6 +1068,8 @@ class ConstructRetina(RetinaMath):
                 # -RAKENNA RETINA_IMG
                 # -IMPLEMENTOI ROTAATIO JA OVERLAP ANALYYSI
 
+                pdb.set_trace()
+
                 yy = [1, -2]
                 plt.subplot(2, 2, 1)
                 plt.imshow(rf_masks[yy[0], :, :])
@@ -1153,7 +1085,6 @@ class ConstructRetina(RetinaMath):
                 plt.colorbar()
                 plt.show()
                 pdb.set_trace()
-                # pdb.set_trace()
 
                 # data_microm_per_pix = self.context.apricot_metadata[
                 #     "data_microm_per_pix"
@@ -1161,16 +1092,7 @@ class ConstructRetina(RetinaMath):
 
                 # retina_img = self._get_retina_with_rf_masks(
                 #     rf_masks,
-                #     rspace_pos_mm,
-                #     data_microm_per_pix,
-                #     rspace_pos_ecc_mm,
-                #     dd_ecc_params,
-                #     data_dend_diam_um,
-                # )
-
-                # import matplotlib.pyplot as plt
-
-                # # TÄHÄN JÄIT: TILING JA SEN KORJAUS
+                #     rspace_pos_mm)
 
                 # Save the generated receptive fields
                 output_path = self.context.output_folder
@@ -1190,8 +1112,9 @@ class ConstructRetina(RetinaMath):
                     self.context.apricot_data_folder,
                     self.gc_type,
                     self.response_type,
-                    spatial_data=img_flipped,
+                    spatial_data=img_upsampled_scaled,
                     fit_type="generated",
+                    new_um_per_pix=new_um_per_pix,
                 ).get_generated_spatial_fits()
             case other:
                 raise ValueError("Model type not recognized")
