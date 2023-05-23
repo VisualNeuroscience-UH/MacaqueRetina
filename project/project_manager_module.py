@@ -10,6 +10,9 @@ from retina.working_retina_module import WorkingRetina, PhotoReceptor
 from retina.retina_math_module import RetinaMath
 from stimuli.visual_stimulus_module import ConstructStimulus, AnalogInput
 
+# Numerical
+import numpy as np
+
 # Builtin
 import pdb
 
@@ -18,10 +21,6 @@ import pdb
 # import subprocess
 # from types import ModuleType
 # from copy import deepcopy
-
-
-# Analysis
-# import pandas as pd
 
 
 """
@@ -105,6 +104,9 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         )
 
         self.analog_input = analog_input
+
+        # Set numpy random seed
+        np.random.seed(self.context.numpy_seed)
 
     @property
     def context(self):

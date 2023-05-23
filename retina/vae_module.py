@@ -913,8 +913,7 @@ class RetinaVAE(RetinaMath):
         ####################
 
         # Set the random seed for reproducible results for both torch and numpy
-        self.random_seed = np.random.randint(1, 10000)
-        # self.random_seed = 42
+        self.random_seed = context.numpy_seed
         torch.manual_seed(self.random_seed)
         np.random.seed(self.random_seed)
 

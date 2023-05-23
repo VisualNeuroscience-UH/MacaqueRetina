@@ -94,7 +94,7 @@ project = "Retina"
 """
 Current experiment
 """
-experiment = "VAE_nLayers2"  # "test"
+experiment = "VAE_nLayers"  # "test"
 
 
 """
@@ -110,6 +110,12 @@ Data context for output.
 
 output_folder = "out"
 
+
+"""
+Remove random variations by setting the numpy random seed
+"""
+numpy_seed = 42  # 42  # or None for random values
+
 """
 ### Housekeeping ###. Do not comment out.
 """
@@ -124,8 +130,8 @@ my_retina = {
     "response_type": "on",
     # "ecc_limits": [4.8, 5.2],
     # "sector_limits": [-0.4, 0.4],
-    "ecc_limits": [3, 7.0],
-    "sector_limits": [-2, 2],
+    "ecc_limits": [3, 7.0],  # degrees
+    "sector_limits": [-2, 2],  # polar angle in degrees
     "model_density": 1.0,
     "randomize_position": 0.0,
     "stimulus_center": 5.0 + 0j,
@@ -318,6 +324,7 @@ if __name__ == "__main__":
         dendr_diam2_file=dendr_diam2_file,
         gc_density_file=gc_density_file,
         apricot_metadata=apricot_metadata,
+        numpy_seed=numpy_seed,
     )
 
     #################################
@@ -368,7 +375,7 @@ if __name__ == "__main__":
     # # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
     # this_dep_var = "val_loss"
     # ray_exp_name = None  # "TrainableVAE_2023-04-20_22-17-35"  # None for most recent
-    # highlight_trial = None  # "fc63f_00003"  # or None
+    # highlight_trial = "a9202_00017"  # "fc63f_00003"  # or None
     # PM.construct_retina.show_ray_experiment(
     #     ray_exp_name, this_dep_var, highlight_trial=highlight_trial
     # )
@@ -417,7 +424,7 @@ if __name__ == "__main__":
     ### Load stimulus to get working retina ###
     #################################
 
-    PM.working_retina.load_stimulus()
+    # PM.working_retina.load_stimulus()
 
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
     # ret.load_stimulus(movie)# => METADATA
