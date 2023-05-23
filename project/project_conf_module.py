@@ -128,15 +128,13 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 my_retina = {
     "gc_type": "parasol",
     "response_type": "on",
-    # "ecc_limits": [4.8, 5.2],
-    # "sector_limits": [-0.4, 0.4],
-    "ecc_limits": [10, 11],  # degrees
-    "sector_limits": [-30, 30],  # polar angle in degrees
+    "ecc_limits": [4, 6],  # degrees
+    "sector_limits": [-5, 5],  # polar angle in degrees
     "model_density": 1.0,
-    "compute_dendr_diameter": "from_literature",  # "from_coverage_1" or "from_literature"
+    "compute_dendr_diameter": "from_coverage_1",  # "from_coverage_1" or "from_literature"
     "dd_regr_model": "cubic",  # linear, quadratic, cubic. Only used if compute_dendr_diameter is "from_literalure"
     "randomize_position": 0.0,
-    "stimulus_center": 10.5 + 0j,  # degrees, this is stimulus_position (0, 0)
+    "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "model_type": "VAE",  # "FIT" or "VAE" for variational autoencoder.
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" Applies to VAE only.
 }
@@ -366,6 +364,9 @@ if __name__ == "__main__":
     # This function visualizes the spatial and temporal filter responses, ganglion cell positions and density,
     # mosaic layout, spatial and temporal statistics, dendrite diameter versus eccentricity, and tonic drives
     # in the retina mosaic building process.
+
+    # TÄHÄN JÄIT: FIT JA VAE DD JA ECC OVAT SAMOJA. KUITENKIN VAE PITÄISI OLLA FITATTUNA GENEROITUUN DATAAN JA FIT MALLINNETTUIHIN ELLIPSEIHIN.
+
     PM.construct_retina.show_exp_build_process(show_all_spatial_fits=False)
 
     # PM.construct_retina.show_gen_exp_spatial_fit(n_samples=10)

@@ -259,7 +259,7 @@ class ConstructRetina(RetinaMath):
         n_cells : int
             The number of cells to generate samples for.
         distribution : str
-            The distribution to sample from. Supported distributions: "gamma", "beta", "skewnorm".
+            The distribution to sample from. Supported distributions: "gamma", "vonmises", "skewnorm".
 
         Returns
         -------
@@ -273,7 +273,7 @@ class ConstructRetina(RetinaMath):
         """
         assert distribution in [
             "gamma",
-            "beta",
+            "vonmises",
             "skewnorm",
         ], "Distribution not supported"
 
@@ -281,15 +281,10 @@ class ConstructRetina(RetinaMath):
             distribution_parameters = stats.gamma.rvs(
                 a=shape, loc=loc, scale=scale, size=n_cells, random_state=None
             )  # random_state is the seed
-        elif distribution == "beta":
-            distribution_parameters = stats.beta.rvs(
-                a=shape[0],
-                b=shape[1],
-                loc=loc,
-                scale=scale,
-                size=n_cells,
-                random_state=None,
-            )  # random_state is the seed
+        elif distribution == "vonmises":
+            distribution_parameters = stats.vonmises.rvs(
+                kappa=shape, loc=loc, scale=scale, size=n_cells, random_state=None
+            )
         elif distribution == "skewnorm":
             distribution_parameters = stats.skewnorm.rvs(
                 a=shape, loc=loc, scale=scale, size=n_cells, random_state=None
@@ -415,6 +410,7 @@ class ConstructRetina(RetinaMath):
             }
 
         dataset_name = f"All data {dd_regr_model} fit"
+
         self.dendrite_diam_vs_ecc_to_show = {
             "data_all_x": data_all_x,
             "data_all_y": data_all_y,
@@ -602,9 +598,9 @@ class ConstructRetina(RetinaMath):
         # Apply scaling factors to semi_xc and semi_yc. Units are micrometers.
         scale_rand_distr = 0.001
         rnd_x = 1 + np.random.normal(scale=scale_rand_distr, size=n_cells)
-        semi_xc = self.gc_df["semi_xc"] * rnd_x
+        self.gc_df["semi_xc"] = self.gc_df["semi_xc"] * rnd_x
         rnd_y = 1 + np.random.normal(scale=scale_rand_distr, size=n_cells)
-        semi_yc = self.gc_df["semi_yc"] * rnd_y
+        self.gc_df["semi_yc"] = self.gc_df["semi_yc"] * rnd_y
 
     def _densfunc(self, r, d0, beta):
         return d0 * (1 + beta * r) ** (-2)
@@ -798,7 +794,7 @@ class ConstructRetina(RetinaMath):
                 shape, loc, scale, n_cells, distribution
             )
 
-    def _scale_both_amplitudes(self):
+    def _scale_both_amplitudes(self, gc_df):
         """
         Scale center and surround amplitudes so that the spatial RF volume is comparable to that of data.
         Second step of scaling is done before convolving with the stimulus.
@@ -808,21 +804,21 @@ class ConstructRetina(RetinaMath):
         # For each model cell, scale surround amplitude by data_sur_mean**2 / sur_sigma_x * sur_sigma_y
         # (Volume of 2D Gaussian = 2 * pi * sigma_x*sigma_y)
 
-        n_rgc = len(self.gc_df)
+        n_rgc = len(gc_df)
         amplitudec = np.zeros(n_rgc)
         # amplitudes = np.zeros(n_rgc)
 
         for i in range(n_rgc):
             amplitudec[i] = self.exp_spat_cen_sd_mm**2 / (
-                self.gc_df.iloc[i].semi_xc * self.gc_df.iloc[i].semi_yc
+                gc_df.iloc[i].semi_xc * gc_df.iloc[i].semi_yc
             )
 
-        data_rel_sur_amplitude = self.gc_df["amplitudes"]
-        self.gc_df["amplitudec"] = amplitudec
-        self.gc_df["amplitudes"] = amplitudec * data_rel_sur_amplitude
-        self.gc_df["relative_sur_amplitude"] = (
-            self.gc_df["amplitudes"] / self.gc_df["amplitudec"]
-        )
+        data_rel_sur_amplitude = gc_df["amplitudes"]
+        gc_df["amplitudec"] = amplitudec
+        gc_df["amplitudes"] = amplitudec * data_rel_sur_amplitude
+        gc_df["relative_sur_amplitude"] = gc_df["amplitudes"] / gc_df["amplitudec"]
+
+        return gc_df
 
     def _create_tonic_drive(self):
         """
@@ -1022,6 +1018,56 @@ class ConstructRetina(RetinaMath):
 
         return img_upsampled, min_um_per_pix
 
+    def _get_dd_fit_for_viz(self, gc_df):
+        # # Add diameters to dataframe
+        # self.gc_df["diameters_um"] = self.ellipse2diam(
+        #     self.gc_df["semi_xc"].values * 1000, self.gc_df["semi_yc"].values * 1000
+        # )
+        # self.dendrite_diam_vs_ecc_to_show["dd_fit_x"] = self.gc_df[
+        #     "positions_eccentricity"
+        # ].values
+        # self.dendrite_diam_vs_ecc_to_show["dd_fit_y"] = self.gc_df[
+        #     "diameters_um"
+        # ].values
+        # Add diameters to dataframe
+        gc_df["diameters_um"] = self.ellipse2diam(
+            gc_df["semi_xc"].values * 1000, gc_df["semi_yc"].values * 1000
+        )
+        dd_fit_x = gc_df["positions_eccentricity"].values
+        dd_fit_y = gc_df["diameters_um"].values
+
+        return gc_df, dd_fit_x, dd_fit_y
+
+    def _update_gc_vae_df(self, gc_vae_df_in, new_microm_per_pix):
+        """
+        Update gc_vae_df to have the same columns as gc_df with corresponding values.
+        """
+
+        gc_vae_df = gc_vae_df_in.reindex(columns=self.gc_df.columns)
+        gc_vae_df["positions_eccentricity"] = self.gc_df["positions_eccentricity"]
+        gc_vae_df["positions_polar_angle"] = self.gc_df["positions_polar_angle"]
+        gc_vae_df["eccentricity_group_index"] = self.gc_df["eccentricity_group_index"]
+
+        # Scale factor for semi_x and semi_y from pix to micrometers and divide by 1000 to get mm
+        gc_vae_df["semi_xc"] = gc_vae_df_in["semi_xc"] * new_microm_per_pix / 1000
+        gc_vae_df["semi_yc"] = gc_vae_df_in["semi_yc"] * new_microm_per_pix / 1000
+
+        gc_vae_df["diameters_um"] = self.ellipse2diam(
+            gc_vae_df["semi_xc"].values * 1000, gc_vae_df["semi_yc"].values * 1000
+        )
+
+        gc_vae_df["orientation_center"] = gc_vae_df_in["orientation_center"]
+        gc_vae_df["img_path"] = self.gc_df["img_path"]
+
+        gc_vae_df["xy_aspect_ratio"] = gc_vae_df_in["semi_yc"] / gc_vae_df_in["semi_xc"]
+
+        gc_vae_df["amplitudec"] = gc_vae_df_in["amplitudec"]
+        gc_vae_df["amplitudes"] = gc_vae_df_in["amplitudes"]
+
+        gc_vae_df = self._scale_both_amplitudes(gc_vae_df)
+
+        return gc_vae_df
+
     def build(self):
         """
         Builds the receptive field mosaic. This is the main method to call.
@@ -1050,14 +1096,22 @@ class ConstructRetina(RetinaMath):
         # data_ecc_deg = data_ecc_mm * self.deg_per_mm  # 38.4 deg
 
         # -- Second, endow cells with spatial receptive fields (units mm)
-        if self.compute_dendr_diameter is "from_coverage_1":
+        if self.compute_dendr_diameter == "from_coverage_1":
             # Assumes that the dendritic field diameter is proportional to the coverage
             self._create_spatial_rfs_coverage()
-        elif self.compute_dendr_diameter is "from_literature":
+        elif self.compute_dendr_diameter == "from_literature":
             self._create_spatial_rfs_ecc(dd_ecc_params, dd_regr_model)
+        # Add FIT:ed dendritic diameter for visualization
+        (
+            self.gc_df,
+            self.dendrite_diam_vs_ecc_to_show["dd_fit_x"],
+            self.dendrite_diam_vs_ecc_to_show["dd_fit_y"],
+        ) = self._get_dd_fit_for_viz(self.gc_df)
 
         # Scale center and surround amplitude so that Gaussian volume is preserved
-        self._scale_both_amplitudes()  # TODO - what was the purpose of this? Working retina uses amplitudec
+        self.gc_df = self._scale_both_amplitudes(
+            self.gc_df
+        )  # TODO - what was the purpose of this? Working retina uses amplitudec
 
         # At this point the spatial receptive fields are ready.
         # The positions are in gc_eccentricity, gc_polar_angle, and the rf parameters in gc_rf_models
@@ -1098,7 +1152,7 @@ class ConstructRetina(RetinaMath):
                 data_dd_um = self.exp_spat_cen_sd_mm * 2 * 1000  # in micrometers
                 data_um_per_pix = self.context.apricot_metadata["data_microm_per_pix"]
 
-                # Place separate rf images to one retina
+                # Upsample according to smallest rf diameter
                 img_upsampled_scaled, new_um_per_pix = self._get_upsampled_scaled_rfs(
                     img_processed,
                     dd_ecc_params,
@@ -1109,35 +1163,6 @@ class ConstructRetina(RetinaMath):
 
                 # Extract receptive field contours from the generated spatial data
                 rf_masks = self._get_rf_masks(img_upsampled_scaled)
-
-                # TÄHÄN JÄIT:
-                # -TARKISTA SKAALAUS
-                # -RAKENNA RETINA_IMG
-                # -IMPLEMENTOI ROTAATIO JA OVERLAP ANALYYSI
-
-                # yy = [1, -2]
-                # plt.subplot(2, 2, 1)
-                # plt.imshow(rf_masks[yy[0], :, :])
-                # plt.colorbar()
-                # plt.subplot(2, 2, 2)
-                # plt.imshow(img_upsampled_scaled[yy[0], :, :])
-                # plt.colorbar()
-                # plt.subplot(2, 2, 3)
-                # plt.imshow(rf_masks[yy[1], :, :])
-                # plt.colorbar()
-                # plt.subplot(2, 2, 4)
-                # plt.imshow(img_upsampled_scaled[yy[1], :, :])
-                # plt.colorbar()
-                # plt.show()
-                # pdb.set_trace()
-
-                # data_microm_per_pix = self.context.apricot_metadata[
-                #     "data_microm_per_pix"
-                # ]
-
-                # retina_img = self._get_retina_with_rf_masks(
-                #     rf_masks,
-                #     rspace_pos_mm)
 
                 # Save the generated receptive fields
                 output_path = self.context.output_folder
@@ -1155,6 +1180,7 @@ class ConstructRetina(RetinaMath):
                     self.gen_spat_sur_sd,
                     self.gen_spat_filt_to_viz,
                     self.gen_spat_stat_to_viz,
+                    self.gc_vae_df,
                 ) = Fit(
                     self.context.apricot_data_folder,
                     self.gc_type,
@@ -1163,10 +1189,31 @@ class ConstructRetina(RetinaMath):
                     fit_type="generated",
                     new_um_per_pix=new_um_per_pix,
                 ).get_generated_spatial_fits()
+
+                # Update gc_vae_df to have the same columns as gc_df
+                self.gc_vae_df = self._update_gc_vae_df(self.gc_vae_df, new_um_per_pix)
+
+                # Add FIT:ed dendritic diameter for visualization
+                (
+                    self.gc_vae_df,
+                    self.dendrite_diam_vs_ecc_to_show["dd_vae_x"],
+                    self.dendrite_diam_vs_ecc_to_show["dd_vae_y"],
+                ) = self._get_dd_fit_for_viz(self.gc_df)
+
+                # Place separate rf images to one retina
+
+                # TÄHÄN JÄIT:
+                # -TARKISTA SKAALAUS
+                # -RAKENNA RETINA_IMG
+                # -IMPLEMENTOI ROTAATIO JA OVERLAP ANALYYSI
+
+                # retina_img = self._get_retina_with_rf_masks(
+                #     rf_masks,
+                #     rspace_pos_mm)
+
             case other:
                 raise ValueError("Model type not recognized")
 
-        # pdb.set_trace()
         # -- Third, endow cells with temporal receptive fields
         self._create_temporal_receptive_fields()
 

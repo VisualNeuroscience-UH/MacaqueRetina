@@ -8,7 +8,7 @@ The derived parameters are used to create artificial RGC mosaics and receptive f
 # Numerical
 import numpy as np
 import scipy.optimize as opt
-from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit, minimize
 import scipy.stats as stats
 import pandas as pd
 
@@ -487,6 +487,7 @@ class Fit(ApricotData, RetinaMath):
                 "suptitle": f"celltype={self.gc_type}, responsetype={self.response_type}, cell_ix={cell_idx}",
             }
 
+        # Fitted parameters are assigned to both a dictionary and a dataframe
         spat_filt_to_viz["data_all_viable_cells"] = data_all_viable_cells
 
         # Finally build a dataframe of the fitted parameters
@@ -633,7 +634,7 @@ class Fit(ApricotData, RetinaMath):
     def _fit_spatial_statistics(self, good_idx):
         """
         Fits gamma distribution parameters for the 'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes',
-        and 'sur_ratio' RF parameters, and fits beta distribution parameters for the 'orientation_center' RF parameter.
+        and 'sur_ratio' RF parameters, and fits vonmisees distribution parameters for the 'orientation_center' RF parameter.
 
         Parameters:
         -----------
@@ -644,7 +645,7 @@ class Fit(ApricotData, RetinaMath):
         --------
         spatial_stat_df : pandas DataFrame
             A DataFrame containing gamma distribution parameters for the RF parameters 'semi_xc', 'semi_yc',
-            'xy_aspect_ratio', 'amplitudes', and 'sur_ratio', and beta distribution parameters for the 'orientation_center'.
+            'xy_aspect_ratio', 'amplitudes', and 'sur_ratio', and vonmises   distribution parameters for the 'orientation_center'.
         spat_stat_to_viz : dict
             A dictionary containing data that can be used to visualize the RF parameters' spatial statistics.
             Includes 'ydata', 'spatial_statistics_dict', and 'model_fit_data'.
@@ -675,7 +676,7 @@ class Fit(ApricotData, RetinaMath):
         n_distributions = len(rf_parameter_names)
         shape = np.zeros(
             [n_distributions - 1]
-        )  # orientation_center has two shape parameters, below alpha and beta
+        )  # Orientation is modeled with a vonmises distribution below
         loc = np.zeros([n_distributions])
         scale = np.zeros([n_distributions])
         ydata = np.zeros([len(all_viable_cells), n_distributions])
@@ -716,33 +717,42 @@ class Fit(ApricotData, RetinaMath):
                 "distribution": "gamma",
             }
 
-        # Model orientation distribution with beta function.
+        # Model orientation distribution with vonmises function.
         index += 1
         ydata[:, index] = spatial_data_df[rf_parameter_names[-1]]
-        a_parameter, b_parameter, loc[index], scale[index] = stats.beta.fit(
-            ydata[:, index], 0.6, 0.6, loc=0
-        )  # initial guess for a_parameter and b_parameter is 0.6
+
+        # The function to minimize. With the help of GPT4.
+        def neg_log_likelihood(params, data):
+            kappa, loc = params
+            return -np.sum(stats.vonmises.logpdf(data, kappa, loc=loc, scale=np.pi))
+
+        # Initial guess
+        guess = [1.0, 0.0]  # kappa, loc
+
+        # Perform the optimization
+        result = minimize(neg_log_likelihood, guess, args=(ydata[:, index],))
+
+        kappa, loc[index] = result.x
+        scale[index] = np.pi  # fixed
+
+        print("Fitted kappa and loc: ", kappa, loc[index])
+
         x_model_fit[:, index] = np.linspace(
-            stats.beta.ppf(
-                0.001, a_parameter, b_parameter, loc=loc[index], scale=scale[index]
-            ),
-            stats.beta.ppf(
-                0.999, a_parameter, b_parameter, loc=loc[index], scale=scale[index]
-            ),
+            stats.vonmises.ppf(0.001, kappa, loc=loc[index], scale=scale[index]),
+            stats.vonmises.ppf(0.999, kappa, loc=loc[index], scale=scale[index]),
             100,
         )
-        y_model_fit[:, index] = stats.beta.pdf(
+        y_model_fit[:, index] = stats.vonmises.pdf(
             x=x_model_fit[:, index],
-            a=a_parameter,
-            b=b_parameter,
+            kappa=kappa,
             loc=loc[index],
             scale=scale[index],
         )
         spatial_statistics_dict[rf_parameter_names[-1]] = {
-            "shape": (a_parameter, b_parameter),
+            "shape": kappa,
             "loc": loc[index],
             "scale": scale[index],
-            "distribution": "beta",
+            "distribution": "vonmises",
         }
 
         spat_stat_to_viz = {
@@ -894,7 +904,7 @@ class Fit(ApricotData, RetinaMath):
         exp_stat_df : pd.DataFrame
             DataFrame containing statistical model parameters for spatial, temporal, and tonic filters
             Indices are the parameter names
-            Columns are shape, loc, scale, distribution ('gamma', 'beta'), domain ('spatial', 'temporal', 'tonic')
+            Columns are shape, loc, scale, distribution ('gamma', 'vonmises'), domain ('spatial', 'temporal', 'tonic')
         good_data_fit_idx : list
             List of good data indices after spatial fit
         bad_data_fit_idx : list
@@ -973,7 +983,7 @@ class Fit(ApricotData, RetinaMath):
         gen_stat_df : pd.DataFrame
             Statistical model parameters for spatial, temporal, and tonic filters
             Indices are the parameter names
-            Columns are shape, loc, scale, distribution ('gamma', 'beta'), domain ('spatial', 'temporal', 'tonic')
+            Columns are shape, loc, scale, distribution ('gamma', 'vonmises'), domain ('spatial', 'temporal', 'tonic')
         gen_mean_cen_sd : float
             Mean center standard deviation in millimeters
         gen_mean_sur_sd : float
@@ -1005,6 +1015,7 @@ class Fit(ApricotData, RetinaMath):
             gen_mean_sur_sd,
             self.gen_spat_filt_to_viz,
             gen_spat_stat_to_viz,
+            self.all_data_fits_df,
         )
 
 

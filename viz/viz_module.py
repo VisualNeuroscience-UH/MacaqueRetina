@@ -141,6 +141,7 @@ class Viz:
             ellipse_edgecolor = "black"
 
             this_cell_ix_numerical = int(this_cell_ix.split("_")[-1])
+            # Get DoG model fit parameters to popt
             popt = data_all_viable_cells[this_cell_ix_numerical, :]
             spatial_data_array = spat_filt_to_viz[this_cell_ix]["spatial_data_array"]
             suptitle = spat_filt_to_viz[this_cell_ix]["suptitle"]
@@ -396,29 +397,17 @@ class Viz:
                     "distribution"
                 ]
 
-                if model_function == "gamma":
-                    ax.annotate(
-                        "shape = {0:.2f}\nloc = {1:.2f}\nscale = {2:.2f}".format(
-                            shape, loc, scale
-                        ),
-                        xy=(0.6, 0.4),
-                        xycoords="axes fraction",
-                    )
-                    ax.set_title(
-                        "{0} fit for {1}".format(model_function, distributions[index])
-                    )
-                elif model_function == "beta":
-                    a_parameter, b_parameter = shape[0], shape[1]
-                    ax.annotate(
-                        "a = {0:.2f}\nb = {1:.2f}\nloc = {2:.2f}\nscale = {3:.2f}".format(
-                            a_parameter, b_parameter, loc, scale
-                        ),
-                        xy=(0.6, 0.4),
-                        xycoords="axes fraction",
-                    )
-                    ax.set_title(
-                        "{0} fit for {1}".format(model_function, distributions[index])
-                    )
+                ax.annotate(
+                    "shape = {0:.2f}\nloc = {1:.2f}\nscale = {2:.2f}".format(
+                        shape, loc, scale
+                    ),
+                    xy=(0.6, 0.4),
+                    xycoords="axes fraction",
+                )
+                ax.set_title(
+                    "{0} fit for {1}".format(model_function, distributions[index])
+                )
+
 
                 # Rescale y axis if model fit goes high. Shows histogram better
                 if y_model_fit[:, index].max() > 1.5 * bin_values.max():
@@ -463,15 +452,22 @@ class Viz:
         """
         data_all_x = mosaic.dendrite_diam_vs_ecc_to_show["data_all_x"]
         data_all_y = mosaic.dendrite_diam_vs_ecc_to_show["data_all_y"]
+        dd_fit_x = mosaic.dendrite_diam_vs_ecc_to_show["dd_fit_x"]
+        dd_fit_y = mosaic.dendrite_diam_vs_ecc_to_show["dd_fit_y"]
+        dd_vae_x = mosaic.dendrite_diam_vs_ecc_to_show["dd_vae_x"]
+        dd_vae_y = mosaic.dendrite_diam_vs_ecc_to_show["dd_vae_y"]
         polynomials = mosaic.dendrite_diam_vs_ecc_to_show["polynomials"]
         dataset_name = mosaic.dendrite_diam_vs_ecc_to_show["dataset_name"]
         title = mosaic.dendrite_diam_vs_ecc_to_show["title"]
 
         fig, ax = plt.subplots(nrows=1, ncols=1)
-        ax.plot(data_all_x, data_all_y, ".")
+        ax.plot(data_all_x, data_all_y, "b.", label="Data")
+        ax.plot(dd_fit_x, dd_fit_y, "r.", label="Fit")
+        ax.plot(dd_vae_x, dd_vae_y, "k.", label="Vae")
 
         ax.set_xlabel("Retinal eccentricity (mm)")
         ax.set_ylabel("Dendritic diameter (um)")
+        ax.legend()
 
         if dataset_name:
             if (
