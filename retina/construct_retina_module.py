@@ -1198,7 +1198,7 @@ class ConstructRetina(RetinaMath):
                     self.gc_vae_df,
                     self.dendrite_diam_vs_ecc_to_show["dd_vae_x"],
                     self.dendrite_diam_vs_ecc_to_show["dd_vae_y"],
-                ) = self._get_dd_fit_for_viz(self.gc_df)
+                ) = self._get_dd_fit_for_viz(self.gc_vae_df)
 
                 # Place separate rf images to one retina
 
