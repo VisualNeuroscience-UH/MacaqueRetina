@@ -42,7 +42,8 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         In init we construct other classes and inject necessary dependencies.
         This class is allowed to house project-dependent data and methods.
         """
-
+        # TODO Check how _properties_list is implemented in context. Maybe needs to be reset between classes, or deepdopied.
+        # Now there seems to be all properties in all classes, which is not the purpose of the _properties_list.
         context = Context(all_properties)
 
         # Get correct context attributes. Empty properties return all existing project

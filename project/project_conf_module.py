@@ -130,11 +130,13 @@ my_retina = {
     "response_type": "on",
     # "ecc_limits": [4.8, 5.2],
     # "sector_limits": [-0.4, 0.4],
-    "ecc_limits": [3, 7.0],  # degrees
-    "sector_limits": [-2, 2],  # polar angle in degrees
+    "ecc_limits": [10, 11],  # degrees
+    "sector_limits": [-30, 30],  # polar angle in degrees
     "model_density": 1.0,
+    "compute_dendr_diameter": "from_literature",  # "from_coverage_1" or "from_literature"
+    "dd_regr_model": "cubic",  # linear, quadratic, cubic. Only used if compute_dendr_diameter is "from_literalure"
     "randomize_position": 0.0,
-    "stimulus_center": 5.0 + 0j,
+    "stimulus_center": 10.5 + 0j,  # degrees, this is stimulus_position (0, 0)
     "model_type": "VAE",  # "FIT" or "VAE" for variational autoencoder.
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" Applies to VAE only.
 }
@@ -197,7 +199,7 @@ my_stimulus_options = {
     "stimulus_form": "rectangular",
     "temporal_frequency": 2,
     "spatial_frequency": 2.0,
-    "stimulus_position": (0, 0),  # center_deg
+    "stimulus_position": (0, 0),
     "duration_seconds": 4.0,
     "stimulus_size": 1.4,
     "contrast": 0.99,
@@ -424,7 +426,7 @@ if __name__ == "__main__":
     ### Load stimulus to get working retina ###
     #################################
 
-    # PM.working_retina.load_stimulus()
+    PM.working_retina.load_stimulus()
 
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
     # ret.load_stimulus(movie)# => METADATA
@@ -447,9 +449,9 @@ if __name__ == "__main__":
 
     # PM.viz.show_gc_responses(PM.working_retina)
 
-    # PM.viz.show_stimulus_with_gcs(
-    #     PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51
-    # )
+    PM.viz.show_stimulus_with_gcs(
+        PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51
+    )
 
     # PM.viz.show_single_gc_view(PM.working_retina, cell_index=example_gc, frame_number=21)
 

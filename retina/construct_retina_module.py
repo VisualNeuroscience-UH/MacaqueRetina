@@ -126,6 +126,8 @@ class ConstructRetina(RetinaMath):
         ecc_limits = my_retina["ecc_limits"]
         sector_limits = my_retina["sector_limits"]
         model_density = my_retina["model_density"]
+        self.compute_dendr_diameter = my_retina["compute_dendr_diameter"]
+        self.dd_regr_model = my_retina["dd_regr_model"]
         randomize_position = my_retina["randomize_position"]
         self.deg_per_mm = my_retina["deg_per_mm"]
 
@@ -209,7 +211,6 @@ class ConstructRetina(RetinaMath):
             "orientation_center",
         ]
         self.gc_df = pd.DataFrame(columns=columns)
-        self.dendr_diam_model = "quadratic"  # 'linear' # 'quadratic' # cubic
 
         # Current version needs Fit for all 'model_type's (FIT, VAE, etc.)
         # If surround is fixed, the surround position, semi_x, semi_y (aspect_ratio) and orientation are the same as center params. This appears to give better results.
@@ -332,7 +333,7 @@ class ConstructRetina(RetinaMath):
 
         return popt  # = gc_density_func_params
 
-    def _fit_dd_vs_ecc(self, visual_field_fit_limit, dendr_diam_model):
+    def _fit_dd_vs_ecc(self, visual_field_fit_limit, dd_regr_model):
         """
         Fit dendritic field diameter with respect to eccentricity. Linear, quadratic and cubic fit.
 
@@ -385,17 +386,17 @@ class ConstructRetina(RetinaMath):
         data_all_y = data_all_y[data_all_x_index]
 
         # Get rf diameter vs eccentricity
-        # dendr_diam_model is 'linear'  'quadratic' or cubic
-        dict_key = "{0}_{1}".format(self.gc_type, dendr_diam_model)
+        # dd_regr_model is 'linear'  'quadratic' or cubic
+        dict_key = "{0}_{1}".format(self.gc_type, dd_regr_model)
 
-        if dendr_diam_model == "linear":
+        if dd_regr_model == "linear":
             polynomial_order = 1
             polynomials = np.polyfit(data_all_x, data_all_y, polynomial_order)
             dendr_diam_parameters[dict_key] = {
                 "intercept": polynomials[1],
                 "slope": polynomials[0],
             }
-        elif dendr_diam_model == "quadratic":
+        elif dd_regr_model == "quadratic":
             polynomial_order = 2
             polynomials = np.polyfit(data_all_x, data_all_y, polynomial_order)
             dendr_diam_parameters[dict_key] = {
@@ -403,7 +404,7 @@ class ConstructRetina(RetinaMath):
                 "slope": polynomials[1],
                 "square": polynomials[0],
             }
-        elif dendr_diam_model == "cubic":
+        elif dd_regr_model == "cubic":
             polynomial_order = 3
             polynomials = np.polyfit(data_all_x, data_all_y, polynomial_order)
             dendr_diam_parameters[dict_key] = {
@@ -413,7 +414,7 @@ class ConstructRetina(RetinaMath):
                 "cube": polynomials[0],
             }
 
-        dataset_name = f"All data {dendr_diam_model} fit"
+        dataset_name = f"All data {dd_regr_model} fit"
         self.dendrite_diam_vs_ecc_to_show = {
             "data_all_x": data_all_x,
             "data_all_y": data_all_y,
@@ -424,7 +425,7 @@ class ConstructRetina(RetinaMath):
 
         return dendr_diam_parameters
 
-    def _get_ecc_from_dd(self, dendr_diam_parameters, dendr_diam_model, dd):
+    def _get_ecc_from_dd(self, dendr_diam_parameters, dd_regr_model, dd):
         """
         Given the parameters of a polynomial and a dendritic diameter (dd), find the corresponding eccentricity.
 
@@ -432,20 +433,20 @@ class ConstructRetina(RetinaMath):
         ----------
         dendr_diam_parameters : dict
             a dictionary containing the parameters of a polynomial that fits the dendritic diameter as a function of eccentricity
-        dendr_diam_model : str
+        dd_regr_model : str
             a string representing the type of polynomial ('linear', 'quadratic', or 'cubic')
         dd : float
-            the dendritic diameter for which to find the corresponding eccentricity
+            the dendritic diameter (micrometers) for which to find the corresponding eccentricity
 
         Returns
         -------
         float
-            the eccentricity corresponding to the given dendritic diameter
+            the eccentricity (millimeters from fovea, temporal equivalent) corresponding to the given dendritic diameter
         """
         # Get the parameters of the polynomial
-        params = dendr_diam_parameters[f"{self.gc_type}_{dendr_diam_model}"]
+        params = dendr_diam_parameters[f"{self.gc_type}_{dd_regr_model}"]
 
-        if dendr_diam_model == "linear":
+        if dd_regr_model == "linear":
             # For a linear equation, we can solve directly
             # y = mx + c => x = (y - c) / m
             return (dd - params["intercept"]) / params["slope"]
@@ -453,14 +454,14 @@ class ConstructRetina(RetinaMath):
             # For quadratic and cubic equations, we need to solve numerically
             # Set up the polynomial equation
             def equation(x):
-                if dendr_diam_model == "quadratic":
+                if dd_regr_model == "quadratic":
                     return (
                         params["square"] * x**2
                         + params["slope"] * x
                         + params["intercept"]
                         - dd
                     )
-                elif dendr_diam_model == "cubic":
+                elif dd_regr_model == "cubic":
                     return (
                         params["cube"] * x**3
                         + params["square"] * x**2
@@ -473,43 +474,14 @@ class ConstructRetina(RetinaMath):
             # We use 1 as the initial guess
             return root(equation, 1).x[0]
 
-    def _create_spatial_rfs(self, dd_ecc_params, dendr_diam_model):
+    def _create_spatial_rfs_coverage(self):
         """
-        Create spatial receptive fields to model cells.
+        Create spatial receptive fields to model cells using coverage = 1.
         Starting from 2D difference-of-gaussian parameters:
         'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio', 'orientation_center'
 
         Places all ganglion cell spatial parameters to ganglion cell object dataframe self.gc_df
         """
-
-        # Get eccentricity data for all model cells
-        gc_eccentricity = self.gc_df["positions_eccentricity"].values
-
-        # Get rf diameter vs eccentricity
-        dict_key = "{0}_{1}".format(self.gc_type, dendr_diam_model)
-        diam_fit_params = dd_ecc_params[dict_key]
-
-        if dendr_diam_model == "linear":
-            gc_diameters = (
-                diam_fit_params["intercept"]
-                + diam_fit_params["slope"] * gc_eccentricity
-            )  # Units are micrometers
-            polynomial_order = 1
-        elif dendr_diam_model == "quadratic":
-            gc_diameters = (
-                diam_fit_params["intercept"]
-                + diam_fit_params["slope"] * gc_eccentricity
-                + diam_fit_params["square"] * gc_eccentricity**2
-            )
-            polynomial_order = 2
-        elif dendr_diam_model == "cubic":
-            gc_diameters = (
-                diam_fit_params["intercept"]
-                + diam_fit_params["slope"] * gc_eccentricity
-                + diam_fit_params["square"] * gc_eccentricity**2
-                + diam_fit_params["cube"] * gc_eccentricity**3
-            )
-            polynomial_order = 3
 
         # Set parameters for all cells
         n_cells = len(self.gc_df)
@@ -567,9 +539,72 @@ class ConstructRetina(RetinaMath):
         self.gc_df["semi_xc"] = semi_xc / 1000
         self.gc_df["semi_yc"] = semi_yc / 1000
 
-        self.gc_df["orientation_center"] = self.gc_df[
-            "positions_polar_angle"
-        ]  # plus some noise here TODO. See Watanabe 1989 JCompNeurol section Dendritic field orietation
+        # self.gc_df["orientation_center"] = self.gc_df[
+        #     "positions_polar_angle"
+        # ]  # plus some noise here TODO. See Watanabe 1989 JCompNeurol section Dendritic field orietation
+
+    def _create_spatial_rfs_ecc(self, dd_ecc_params, dd_regr_model):
+        """
+        Create spatial receptive fields to model cells according to eccentricity.
+        Starting from 2D difference-of-gaussian parameters:
+        'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio', 'orientation_center'
+
+        Places all ganglion cell spatial parameters to ganglion cell object dataframe self.gc_df
+        """
+
+        # Get eccentricity data for all model cells
+        gc_eccentricity = self.gc_df["positions_eccentricity"].values
+
+        # Get rf diameter vs eccentricity
+        dict_key = "{0}_{1}".format(self.gc_type, dd_regr_model)
+        diam_fit_params = dd_ecc_params[dict_key]
+
+        if dd_regr_model == "linear":
+            gc_diameters_um = (
+                diam_fit_params["intercept"]
+                + diam_fit_params["slope"] * gc_eccentricity
+            )  # Units are micrometers
+        elif dd_regr_model == "quadratic":
+            gc_diameters_um = (
+                diam_fit_params["intercept"]
+                + diam_fit_params["slope"] * gc_eccentricity
+                + diam_fit_params["square"] * gc_eccentricity**2
+            )
+        elif dd_regr_model == "cubic":
+            gc_diameters_um = (
+                diam_fit_params["intercept"]
+                + diam_fit_params["slope"] * gc_eccentricity
+                + diam_fit_params["square"] * gc_eccentricity**2
+                + diam_fit_params["cube"] * gc_eccentricity**3
+            )
+
+        # Set parameters for all cells
+        n_cells = len(self.gc_df)
+        spatial_df = self.exp_stat_df[self.exp_stat_df["domain"] == "spatial"]
+        for param_name, row in spatial_df.iterrows():
+            shape, loc, scale, distribution, _ = row
+            self.gc_df[param_name] = self._get_random_samples(
+                shape, loc, scale, n_cells, distribution
+            )
+
+        # Scale factor for semi_x and semi_y from pix at data eccentricity to micrometers at the actual eccentricity
+        # Units are pixels for the Chichilnisky data and they are at large eccentricity
+        scaling_factor = self.context.apricot_metadata["data_microm_per_pix"] * (
+            (gc_diameters_um / 2) / (self.exp_spat_cen_sd_mm * 1000)
+        )
+
+        # Scale semi_x to micrometers at its actual eccentricity and divide by 1000 to get mm
+        self.gc_df["semi_xc"] = self.gc_df["semi_xc"] * scaling_factor / 1000
+
+        # Scale semi_y to micrometers at its actual eccentricity
+        self.gc_df["semi_yc"] = self.gc_df["semi_yc"] * scaling_factor / 1000
+
+        # Apply scaling factors to semi_xc and semi_yc. Units are micrometers.
+        scale_rand_distr = 0.001
+        rnd_x = 1 + np.random.normal(scale=scale_rand_distr, size=n_cells)
+        semi_xc = self.gc_df["semi_xc"] * rnd_x
+        rnd_y = 1 + np.random.normal(scale=scale_rand_distr, size=n_cells)
+        semi_yc = self.gc_df["semi_yc"] * rnd_y
 
     def _densfunc(self, r, d0, beta):
         return d0 * (1 + beta * r) ** (-2)
@@ -939,7 +974,7 @@ class ConstructRetina(RetinaMath):
         # and sidelen =  ceil(max(um_per_pix) / min(um_per_pix)) * original sidelen)
         new_pix_size = min_um_per_pix
         old_sidelen = rfs.shape[-1]
-        new_sidelen = int(np.ceil((max_um_per_pix / min_um_per_pix) * old_sidelen))
+        new_sidelen = int((max_um_per_pix / min_um_per_pix) * old_sidelen)
 
         # Resample all images to new img stack. Use scipy.ndimage.zoom,
         # where zoom factor = um_per_pix for this image / min(um_per_pix)
@@ -948,7 +983,15 @@ class ConstructRetina(RetinaMath):
             zoom_factor = um_per_pix / min_um_per_pix
 
             # Pad the image with zeros to achieve the new dimensions
-            padding = int((new_sidelen - img.shape[0]) / 2)
+            # If new_sidelen - img.shape[0] is even:
+            if (new_sidelen - img.shape[0]) % 2 == 0:
+                padding = int((new_sidelen - img.shape[0]) / 2)
+            elif (new_sidelen - img.shape[0]) % 2 == 1:
+                padding = (
+                    int((new_sidelen - img.shape[0]) / 2),
+                    int((new_sidelen - img.shape[0]) / 2) + 1,
+                )  # (before, after)
+
             img_padded = np.pad(
                 img, pad_width=padding, mode="constant", constant_values=0
             )
@@ -967,13 +1010,15 @@ class ConstructRetina(RetinaMath):
                 ),
             ]
 
-            img_upsampled[i] = img_cropped
+            if 0:
+                print(f"Original size: {img.shape}")
+                print(f"Padded size: {img_padded.shape}")
+                print(f"Size after zoom: {img_temp.shape}")
+                print(f"Size after crop: {img_cropped.shape}")
+                print(f"zoom_factor: {zoom_factor}\n")
+                print(f"img_upsampled size: {img_upsampled.shape}")
 
-            print(f"Original size: {img.shape}")
-            print(f"Padded size: {img_padded.shape}")
-            print(f"Size after zoom: {img_temp.shape}")
-            print(f"Size after crop: {img_cropped.shape}")
-            print(f"zoom_factor: {zoom_factor}\n")
+            img_upsampled[i] = img_cropped
 
         return img_upsampled, min_um_per_pix
 
@@ -994,20 +1039,22 @@ class ConstructRetina(RetinaMath):
 
         # Get fit parameters for dendritic field diameter (um) with respect to eccentricity (mm).
         # Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
-        dendr_diam_model = self.dendr_diam_model  # "linear", "quadratic", "cubic"
-        dd_ecc_params = self._fit_dd_vs_ecc(
-            self.visual_field_fit_limit, dendr_diam_model
-        )
+        dd_regr_model = self.dd_regr_model  # "linear", "quadratic", "cubic"
+        dd_ecc_params = self._fit_dd_vs_ecc(self.visual_field_fit_limit, dd_regr_model)
 
         # # Quality control: check that the fitted dendritic diameter is close to the original data
         # # Frechette_2005_JNeurophysiol datasets: 9.7 mm (45°); 9.0 mm (41°); 8.4 mm (38°)
         # # Estimate the orginal data eccentricity from the fit to full eccentricity range
-        # dd_ecc_params_full = self._fit_dd_vs_ecc(np.inf, dendr_diam_model)
-        # data_ecc_mm = self._get_ecc_from_dd(dd_ecc_params_full, dendr_diam_model, dd)
+        # dd_ecc_params_full = self._fit_dd_vs_ecc(np.inf, dd_regr_model)
+        # data_ecc_mm = self._get_ecc_from_dd(dd_ecc_params_full, dd_regr_model, dd)
         # data_ecc_deg = data_ecc_mm * self.deg_per_mm  # 38.4 deg
 
         # -- Second, endow cells with spatial receptive fields (units mm)
-        self._create_spatial_rfs(dd_ecc_params, dendr_diam_model)
+        if self.compute_dendr_diameter is "from_coverage_1":
+            # Assumes that the dendritic field diameter is proportional to the coverage
+            self._create_spatial_rfs_coverage()
+        elif self.compute_dendr_diameter is "from_literature":
+            self._create_spatial_rfs_ecc(dd_ecc_params, dd_regr_model)
 
         # Scale center and surround amplitude so that Gaussian volume is preserved
         self._scale_both_amplitudes()  # TODO - what was the purpose of this? Working retina uses amplitudec
@@ -1068,23 +1115,21 @@ class ConstructRetina(RetinaMath):
                 # -RAKENNA RETINA_IMG
                 # -IMPLEMENTOI ROTAATIO JA OVERLAP ANALYYSI
 
-                pdb.set_trace()
-
-                yy = [1, -2]
-                plt.subplot(2, 2, 1)
-                plt.imshow(rf_masks[yy[0], :, :])
-                plt.colorbar()
-                plt.subplot(2, 2, 2)
-                plt.imshow(img_upsampled_scaled[yy[0], :, :])
-                plt.colorbar()
-                plt.subplot(2, 2, 3)
-                plt.imshow(rf_masks[yy[1], :, :])
-                plt.colorbar()
-                plt.subplot(2, 2, 4)
-                plt.imshow(img_upsampled_scaled[yy[1], :, :])
-                plt.colorbar()
-                plt.show()
-                pdb.set_trace()
+                # yy = [1, -2]
+                # plt.subplot(2, 2, 1)
+                # plt.imshow(rf_masks[yy[0], :, :])
+                # plt.colorbar()
+                # plt.subplot(2, 2, 2)
+                # plt.imshow(img_upsampled_scaled[yy[0], :, :])
+                # plt.colorbar()
+                # plt.subplot(2, 2, 3)
+                # plt.imshow(rf_masks[yy[1], :, :])
+                # plt.colorbar()
+                # plt.subplot(2, 2, 4)
+                # plt.imshow(img_upsampled_scaled[yy[1], :, :])
+                # plt.colorbar()
+                # plt.show()
+                # pdb.set_trace()
 
                 # data_microm_per_pix = self.context.apricot_metadata[
                 #     "data_microm_per_pix"
@@ -1096,7 +1141,9 @@ class ConstructRetina(RetinaMath):
 
                 # Save the generated receptive fields
                 output_path = self.context.output_folder
-                img_paths = self.data_io.save_generated_rfs(img_flipped, output_path)
+                img_paths = self.data_io.save_generated_rfs(
+                    img_upsampled_scaled, output_path
+                )
 
                 # Add image paths as a columnd to self.gc_df
                 self.gc_df["img_path"] = img_paths
@@ -1119,6 +1166,7 @@ class ConstructRetina(RetinaMath):
             case other:
                 raise ValueError("Model type not recognized")
 
+        # pdb.set_trace()
         # -- Third, endow cells with temporal receptive fields
         self._create_temporal_receptive_fields()
 
