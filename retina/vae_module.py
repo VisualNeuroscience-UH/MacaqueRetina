@@ -1073,7 +1073,7 @@ class RetinaVAE(RetinaMath):
             case "load_model":
                 # Load previously calculated model for vizualization
                 # Load model to self.vae
-                self.trial_name = "2199e_00029"
+                self.trial_name = "a9202_00017"
 
                 if hasattr(self, "trial_name"):  # After tune_model
                     self.vae, result_grid, trial_folder = self._load_model(
@@ -1132,25 +1132,38 @@ class RetinaVAE(RetinaMath):
         Update the VAE to match the one model found by ray tune.
         """
 
-        self.latent_dim = this_result.config["latent_dim"]
-        self.channels = this_result.config["channels"]
-        self.lr = this_result.config["lr"]
-
-        self.batch_size = this_result.config["batch_size"]
-        self.kernel_stride = this_result.config["kernel_stride"]
-        self.conv_layers = this_result.config["conv_layers"]
-        self.batch_norm = this_result.config["batch_norm"]
-
-        self.augmentation_dict = {
-            "rotation": this_result.config["rotation"],
-            "translation": (
-                this_result.config["translation"],
-                this_result.config["translation"],
-            ),
-            "noise": this_result.config["noise"],
-            "flip": this_result.config["flip"],
-            "data_multiplier": this_result.config["data_multiplier"],
+        attributes_to_update = {
+            "latent_dim": "latent_dim",
+            "channels": "channels",
+            "lr": "lr",
+            "latent_distribution": "latent_distribution",
+            "batch_size": "batch_size",
+            "kernel_stride": "kernel_stride",
+            "conv_layers": "conv_layers",
+            "batch_norm": "batch_norm",
         }
+
+        augmentation_keys = [
+            "rotation",
+            "translation",
+            "noise",
+            "flip",
+            "data_multiplier",
+        ]
+
+        for key in augmentation_keys:
+            try:
+                self.augmentation_dict[key] = this_result.config[key]
+            except KeyError:
+                print(
+                    f"WARNING: Key '{key}' is missing in augmentation_dict and will not be updated"
+                )
+
+        for attr_name, config_key in attributes_to_update.items():
+            try:
+                setattr(self, attr_name, this_result.config[config_key])
+            except KeyError:
+                print(f"WARNING: Key '{config_key}' is missing and will not be updated")
 
         self.train_loader = self._augment_and_get_dataloader(
             data_type="train",
