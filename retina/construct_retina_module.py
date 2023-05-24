@@ -186,14 +186,14 @@ class ConstructRetina(RetinaMath):
         self.response_type = response_type
 
         self.eccentricity = ecc_limits
-        self.eccentricity_in_mm = np.asarray(
+        self.ecc_lim_mm = np.asarray(
             [r / self.deg_per_mm for r in ecc_limits]
         )  # Turn list to numpy array
-        self.theta = np.asarray(sector_limits)  # Turn list to numpy array
+        self.polar_lim_deg = np.asarray(sector_limits)  # Turn list to numpy array
         self.randomize_position = randomize_position
 
         # If study concerns visual field within 4 mm (20 deg) of retinal eccentricity, the cubic fit for dendritic diameters fails close to fovea. Better limit it to more central part of the data
-        if np.max(self.eccentricity_in_mm) <= 4:
+        if np.max(self.ecc_lim_mm) <= 4:
             self.visual_field_fit_limit = 4
         else:
             self.visual_field_fit_limit = np.inf
@@ -619,8 +619,8 @@ class ConstructRetina(RetinaMath):
         """
 
         # Place cells inside one polar sector with density according to mid-ecc
-        eccentricity_in_mm_total = self.eccentricity_in_mm
-        theta = self.theta
+        eccentricity_in_mm_total = self.ecc_lim_mm
+        theta = self.polar_lim_deg
         randomize_position = self.randomize_position
 
         # Loop for reasonable delta ecc to get correct density in one hand and good cell distribution from the algo on the other
@@ -1067,6 +1067,129 @@ class ConstructRetina(RetinaMath):
 
         return gc_vae_df
 
+    def _get_full_retina_with_rf_images(
+        self, ecc_lim_mm, polar_lim_deg, rf_img, df, um_per_pix
+    ):
+        """
+        Build one retina image with all receptive fields. The retina sector is first rotated to
+        be symmetric around the horizontal meridian. Then the image is cropped to the smallest
+        rectangle that contains all receptive fields. The image is then rotated back to the original
+        orientation.
+
+        Parameters
+        ----------
+        ecc_lim_mm : numpy.ndarray
+            1D numpy array with the eccentricity limits in mm.
+        polar_lim_deg : numpy.ndarray
+            1D numpy array with the polar angle limits in degrees.
+        rf_img : numpy.ndarray
+            3D numpy array of receptive field images. The shape of the array should be (N, H, W).
+        df : pandas.DataFrame
+            DataFrame with gc parameters.
+        um_per_pix : float
+            The number of micrometers per pixel in the rf_img.
+        """
+
+        # First we need to get rotation angle off the horizontal meridian in degrees.
+        rot_angle_deg = np.mean(polar_lim_deg)
+
+        # Find corner coordinates of the retina image as [left upper, right_upper, left_lower, right lower]
+        # Sector is now symmetrically around the horizontal meridian
+        sector_limits_mm = np.zeros((4, 2))
+        sector_limits_mm[0, :] = self.pol2cart(
+            ecc_lim_mm[0], polar_lim_deg[1] - rot_angle_deg, deg=True
+        )
+        sector_limits_mm[1, :] = self.pol2cart(
+            ecc_lim_mm[1], polar_lim_deg[1] - rot_angle_deg, deg=True
+        )
+        sector_limits_mm[2, :] = self.pol2cart(
+            ecc_lim_mm[0], polar_lim_deg[0] - rot_angle_deg, deg=True
+        )
+        sector_limits_mm[3, :] = self.pol2cart(
+            ecc_lim_mm[1], polar_lim_deg[0] - rot_angle_deg, deg=True
+        )
+
+        # Get the max extent for rectangular image
+        min_x = np.min(sector_limits_mm[:, 0])
+        max_x = np.max(sector_limits_mm[:, 0])
+        min_y = np.min(sector_limits_mm[:, 1])
+        max_y = np.max(sector_limits_mm[:, 1])
+
+        # Check for max hor extent
+        if np.max(ecc_lim_mm) > max_x:
+            max_x = np.max(ecc_lim_mm)
+
+        # Assuming `theta` is the rotation angle in degrees
+
+        # Convert the rotation angle from degrees to radians
+        theta_rad = np.radians(rot_angle_deg)
+
+        # Find the max and min extents in rotated coordinates
+        max_x_rot = np.max(
+            np.repeat(np.max(ecc_lim_mm), sector_limits_mm.shape[0]) * np.cos(theta_rad)
+            - sector_limits_mm[:, 1] * np.sin(theta_rad)
+        )
+        min_x_rot = np.min(
+            np.repeat(np.min(ecc_lim_mm), sector_limits_mm.shape[0]) * np.cos(theta_rad)
+            - sector_limits_mm[:, 1] * np.sin(theta_rad)
+        )
+        max_y_rot = np.max(
+            np.repeat(np.max(ecc_lim_mm), sector_limits_mm.shape[0]) * np.sin(theta_rad)
+            + sector_limits_mm[:, 1] * np.cos(theta_rad)
+        )
+        min_y_rot = np.min(
+            np.repeat(np.min(ecc_lim_mm), sector_limits_mm.shape[0]) * np.sin(theta_rad)
+            + sector_limits_mm[:, 1] * np.cos(theta_rad)
+        )
+
+        # Rotate back to original coordinates to get max and min extents
+        max_x = max_x_rot * np.cos(theta_rad) + max_y_rot * np.sin(theta_rad)
+        min_x = min_x_rot * np.cos(theta_rad) + min_y_rot * np.sin(theta_rad)
+        max_y = max_y_rot * np.cos(theta_rad) - max_x_rot * np.sin(theta_rad)
+        min_y = min_y_rot * np.cos(theta_rad) - min_x_rot * np.sin(theta_rad)
+
+        # Get retina image size in pixels
+        img_size_x = int(np.ceil((max_x - min_x) * 1000 / um_per_pix))
+        img_size_y = int(np.ceil((max_y - min_y) * 1000 / um_per_pix))
+        ret_img = np.zeros((img_size_y, img_size_x))
+
+        # Locate left upper corner of each rf img an lay images onto retina image
+        for i, row in df.iterrows():
+            # Get the position of the rf image in mm
+            x_mm, y_mm = self.pol2cart(
+                row.pos_ecc_mm, row.pos_polar_deg - rot_angle_deg, deg=True
+            )
+            # Get the position of the rf center in pixels
+            x_pix_c = int(np.round((x_mm - min_x) * 1000 / um_per_pix))
+            y_pix_c = int(np.round((y_mm - min_y) * 1000 / um_per_pix))
+
+            # Get the position of the rf upper left corner in pixels
+            x_pix = x_pix_c - int(row.xoc_pix)
+            y_pix = y_pix_c - int(row.yoc_pix)
+
+            # Get the rf image
+            this_rf_img = rf_img[i, :, :]
+
+            # this_rf_img may exceed the edges of the retina image. If so, crop it.
+            if x_pix < 0:
+                this_rf_img = this_rf_img[:, -x_pix:]
+                x_pix = 0
+            if y_pix < 0:
+                this_rf_img = this_rf_img[-y_pix:, :]
+                y_pix = 0
+            if x_pix + this_rf_img.shape[1] > ret_img.shape[1]:
+                this_rf_img = this_rf_img[:, : ret_img.shape[1] - x_pix]
+            if y_pix + this_rf_img.shape[0] > ret_img.shape[0]:
+                this_rf_img = this_rf_img[: ret_img.shape[0] - y_pix, :]
+
+            # Lay the rf image onto the retina image
+            ret_img[
+                y_pix : y_pix + this_rf_img.shape[0],
+                x_pix : x_pix + this_rf_img.shape[1],
+            ] += this_rf_img
+
+        return ret_img
+
     def build(self):
         """
         Builds the receptive field mosaic. This is the main method to call.
@@ -1115,105 +1238,113 @@ class ConstructRetina(RetinaMath):
         # At this point the spatial receptive fields are ready.
         # The positions are in gc_eccentricity, gc_polar_angle, and the rf parameters in gc_rf_models
 
-        match self.model_type:
-            case "FIT":
-                pass
-                # Everything at the moment is done above
-                # This is just to check for model type
+        if self.model_type == "VAE":
+            # Fit or load variational autoencoder to generate receptive fields
+            self.retina_vae = RetinaVAE(
+                self.gc_type,
+                self.response_type,
+                self.training_mode,
+                self.context,
+                save_tuned_models=True,
+            )
 
-            case "VAE":
-                # Fit or load variational autoencoder to generate receptive fields
-                self.retina_vae = RetinaVAE(
-                    self.gc_type,
-                    self.response_type,
-                    self.training_mode,
-                    self.context,
-                    save_tuned_models=True,
-                )
+            # -- Second, endow cells with spatial receptive fields using the generative variational autoencoder model
+            nsamples = len(self.gc_df)
+            img_processed, img_raw = self._get_generated_spatial_data(
+                self.retina_vae, nsamples=nsamples
+            )
 
-                # -- Second, endow cells with spatial receptive fields using the generative variational autoencoder model
-                nsamples = len(self.gc_df)
-                img_processed, img_raw = self._get_generated_spatial_data(
-                    self.retina_vae, nsamples=nsamples
-                )
+            # Set self attribute for later visualization of image histograms
+            self.gen_spat_img_to_viz = {
+                "img_processed": img_processed,
+                "img_raw": img_raw,
+            }
 
-                # Set self attribute for later visualization of image histograms
-                self.gen_spat_img_to_viz = {
-                    "img_processed": img_processed,
-                    "img_raw": img_raw,
-                }
+            # Convert retinal positions (ecc, pol angle) to visual space positions in mm (x, y)
+            ret_pos_ecc_mm = np.array(self.gc_df.pos_ecc_mm.values)
+            # ret_pos_mm = self.pol2cart_df(self.gc_df)
 
-                # Convert retinal positions (ecc, pol angle) to visual space positions in mm (x, y)
-                ret_pos_ecc_mm = np.array(self.gc_df.pos_ecc_mm.values)
-                ret_pos_mm = self.pol2cart_df(self.gc_df)
+            # Mean fitted dendritic diameter for the original experimental data
+            data_dd_um = self.exp_spat_cen_sd_mm * 2 * 1000  # in micrometers
+            data_um_per_pix = self.context.apricot_metadata["data_microm_per_pix"]
 
-                # Mean fitted dendritic diameter for the original experimental data
-                data_dd_um = self.exp_spat_cen_sd_mm * 2 * 1000  # in micrometers
-                data_um_per_pix = self.context.apricot_metadata["data_microm_per_pix"]
+            # Upsample according to smallest rf diameter
+            img_upsampled_scaled, new_um_per_pix = self._get_upsampled_scaled_rfs(
+                img_processed,
+                dd_ecc_params,
+                ret_pos_ecc_mm,
+                data_um_per_pix,
+                data_dd_um,
+            )
 
-                # Upsample according to smallest rf diameter
-                img_upsampled_scaled, new_um_per_pix = self._get_upsampled_scaled_rfs(
-                    img_processed,
-                    dd_ecc_params,
-                    ret_pos_ecc_mm,
-                    data_um_per_pix,
-                    data_dd_um,
-                )
+            # Extract receptive field contours from the generated spatial data
+            img_rf_masks = self._get_rf_masks(img_upsampled_scaled)
 
-                # Extract receptive field contours from the generated spatial data
-                rf_masks = self._get_rf_masks(img_upsampled_scaled)
+            # Save the generated receptive fields
+            output_path = self.context.output_folder
+            img_paths = self.data_io.save_generated_rfs(
+                img_upsampled_scaled, output_path
+            )
 
-                # Save the generated receptive fields
-                output_path = self.context.output_folder
-                img_paths = self.data_io.save_generated_rfs(
-                    img_upsampled_scaled, output_path
-                )
+            # Add image paths as a columnd to self.gc_df
+            self.gc_df["img_path"] = img_paths
 
-                # Add image paths as a columnd to self.gc_df
-                self.gc_df["img_path"] = img_paths
+            # Fit elliptical gaussians to the generated receptive fields
+            (
+                self.gen_stat_df,
+                self.gen_spat_cen_sd,
+                self.gen_spat_sur_sd,
+                self.gen_spat_filt_to_viz,
+                self.gen_spat_stat_to_viz,
+                self.gc_vae_df,
+            ) = Fit(
+                self.context.apricot_data_folder,
+                self.gc_type,
+                self.response_type,
+                spatial_data=img_upsampled_scaled,
+                fit_type="generated",
+                new_um_per_pix=new_um_per_pix,
+            ).get_generated_spatial_fits()
 
-                # Fit elliptical gaussians to the generated receptive fields
-                (
-                    self.gen_stat_df,
-                    self.gen_spat_cen_sd,
-                    self.gen_spat_sur_sd,
-                    self.gen_spat_filt_to_viz,
-                    self.gen_spat_stat_to_viz,
-                    self.gc_vae_df,
-                ) = Fit(
-                    self.context.apricot_data_folder,
-                    self.gc_type,
-                    self.response_type,
-                    spatial_data=img_upsampled_scaled,
-                    fit_type="generated",
-                    new_um_per_pix=new_um_per_pix,
-                ).get_generated_spatial_fits()
+            # Update gc_vae_df to have the same columns as gc_df
+            self.gc_vae_df = self._update_gc_vae_df(self.gc_vae_df, new_um_per_pix)
 
-                # Update gc_vae_df to have the same columns as gc_df
-                self.gc_vae_df = self._update_gc_vae_df(self.gc_vae_df, new_um_per_pix)
+            # Add fitted VAE dendritic diameter for visualization
+            (
+                self.gc_vae_df,
+                self.dd_vs_ecc_to_show["dd_vae_x"],
+                self.dd_vs_ecc_to_show["dd_vae_y"],
+            ) = self._get_dd_fit_for_viz(self.gc_vae_df)
 
-                # Add fitted VAE dendritic diameter for visualization
-                (
-                    self.gc_vae_df,
-                    self.dd_vs_ecc_to_show["dd_vae_x"],
-                    self.dd_vs_ecc_to_show["dd_vae_y"],
-                ) = self._get_dd_fit_for_viz(self.gc_vae_df)
+            # Place separate rf images to one retina
 
-                # Place separate rf images to one retina
+            # Key variables: new_um_per_pix, img_upsampled_scaled, self.gc_vae_df
+            img_ret = self._get_full_retina_with_rf_images(
+                self.ecc_lim_mm,
+                self.polar_lim_deg,
+                img_upsampled_scaled,
+                self.gc_vae_df,
+                new_um_per_pix,
+            )
 
-                # Key variables: new_um_per_pix, ret_pos_mm, img_upsampled_scaled, self.gc_vae_df
-                pdb.set_trace()
+            # Key variables: new_um_per_pix, img_upsampled_scaled, self.gc_vae_df
+            img_ret_masked = self._get_full_retina_with_rf_images(
+                self.ecc_lim_mm,
+                self.polar_lim_deg,
+                img_rf_masks,
+                self.gc_vae_df,
+                new_um_per_pix,
+            )
 
-                # TÄHÄN JÄIT:
-                # -RAKENNA RETINA_IMG
-                # -IMPLEMENTOI ROTAATIO JA OVERLAP ANALYYSI
+            plt.imshow(img_ret_masked)
+            plt.colorbar()
+            plt.show()
 
-                # retina_img = self._get_retina_with_rf_masks(
-                #     rf_masks,
-                #     rspace_pos_mm)
+            pdb.set_trace()
 
-            case other:
-                raise ValueError("Model type not recognized")
+            # TÄHÄN JÄIT:
+            # -RAKENNA RETINA_IMG
+            # -IMPLEMENTOI ROTAATIO JA OVERLAP ANALYYSI
 
         # -- Third, endow cells with temporal receptive fields
         self._create_temporal_receptive_fields()
