@@ -200,15 +200,15 @@ class ConstructRetina(RetinaMath):
 
         # Initialize pandas dataframe to hold the ganglion cells (one per row) and all their parameters in one place
         columns = [
-            "positions_eccentricity",
-            "positions_polar_angle",
-            "eccentricity_group_index",
+            "pos_ecc_mm",
+            "pos_polar_deg",
+            "ecc_group_idx",
             "semi_xc",
             "semi_yc",
             "xy_aspect_ratio",
-            "amplitudes",
+            "ampl_s",
             "sur_ratio",
-            "orientation_center",
+            "orient_cen",
         ]
         self.gc_df = pd.DataFrame(columns=columns)
 
@@ -411,7 +411,7 @@ class ConstructRetina(RetinaMath):
 
         dataset_name = f"All data {dd_regr_model} fit"
 
-        self.dendrite_diam_vs_ecc_to_show = {
+        self.dd_vs_ecc_to_show = {
             "data_all_x": data_all_x,
             "data_all_y": data_all_y,
             "polynomials": polynomials,
@@ -474,7 +474,7 @@ class ConstructRetina(RetinaMath):
         """
         Create spatial receptive fields to model cells using coverage = 1.
         Starting from 2D difference-of-gaussian parameters:
-        'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio', 'orientation_center'
+        'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','sur_ratio', 'orient_cen'
 
         Places all ganglion cell spatial parameters to ganglion cell object dataframe self.gc_df
         """
@@ -501,11 +501,11 @@ class ConstructRetina(RetinaMath):
         area_scaling_factors_coverage1 = np.zeros(area_of_ellipse.shape)
         for index, surface_area in enumerate(self.sector_surface_area_all):
             scaling_for_coverage_1 = (surface_area * 1e6) / np.sum(
-                area_of_ellipse[self.gc_df["eccentricity_group_index"] == index]
+                area_of_ellipse[self.gc_df["ecc_group_idx"] == index]
             )  # in micrometers2
 
             area_scaling_factors_coverage1[
-                self.gc_df["eccentricity_group_index"] == index
+                self.gc_df["ecc_group_idx"] == index
             ] = scaling_for_coverage_1
 
         # Apply scaling factors to semi_xc and semi_yc. Units are micrometers.
@@ -535,21 +535,21 @@ class ConstructRetina(RetinaMath):
         self.gc_df["semi_xc"] = semi_xc / 1000
         self.gc_df["semi_yc"] = semi_yc / 1000
 
-        # self.gc_df["orientation_center"] = self.gc_df[
-        #     "positions_polar_angle"
+        # self.gc_df["orient_cen"] = self.gc_df[
+        #     "pos_polar_deg"
         # ]  # plus some noise here TODO. See Watanabe 1989 JCompNeurol section Dendritic field orietation
 
     def _create_spatial_rfs_ecc(self, dd_ecc_params, dd_regr_model):
         """
         Create spatial receptive fields to model cells according to eccentricity.
         Starting from 2D difference-of-gaussian parameters:
-        'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio', 'orientation_center'
+        'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','sur_ratio', 'orient_cen'
 
         Places all ganglion cell spatial parameters to ganglion cell object dataframe self.gc_df
         """
 
         # Get eccentricity data for all model cells
-        gc_eccentricity = self.gc_df["positions_eccentricity"].values
+        gc_eccentricity = self.gc_df["pos_ecc_mm"].values
 
         # Get rf diameter vs eccentricity
         dict_key = "{0}_{1}".format(self.gc_type, dd_regr_model)
@@ -610,7 +610,7 @@ class ConstructRetina(RetinaMath):
         Place ganglion cell center positions to retina
 
         Creates self.gc_df: pandas.DataFrame with columns:
-            positions_eccentricity (mm), positions_polar_angle (deg), eccentricity_group_index
+            pos_ecc_mm (mm), pos_polar_deg (deg), ecc_group_idx
 
         Parameters
         ----------
@@ -638,9 +638,7 @@ class ConstructRetina(RetinaMath):
 
         true_eccentricity_end = []
         sector_surface_area_all = []
-        for eccentricity_group_index, current_step in enumerate(
-            np.arange(int(n_steps))
-        ):
+        for ecc_group_idx, current_step in enumerate(np.arange(int(n_steps))):
             if (
                 true_eccentricity_end
             ):  # If the eccentricity has been adjusted below inside the loop
@@ -771,15 +769,13 @@ class ConstructRetina(RetinaMath):
             ), "N cells don't match, check the code"
             gc_eccentricity_group_index = np.append(
                 gc_eccentricity_group_index,
-                np.ones(true_n_cells) * eccentricity_group_index,
+                np.ones(true_n_cells) * ecc_group_idx,
             )
 
         # Save cell position data to current ganglion cell object
-        self.gc_df["positions_eccentricity"] = matrix_eccentricity_randomized_all
-        self.gc_df["positions_polar_angle"] = matrix_polar_angle_randomized_all
-        self.gc_df["eccentricity_group_index"] = gc_eccentricity_group_index.astype(
-            np.uint32
-        )
+        self.gc_df["pos_ecc_mm"] = matrix_eccentricity_randomized_all
+        self.gc_df["pos_polar_deg"] = matrix_polar_angle_randomized_all
+        self.gc_df["ecc_group_idx"] = gc_eccentricity_group_index.astype(np.uint32)
         self.sector_surface_area_all = np.asarray(sector_surface_area_all)
 
         # Pass the GC object to self, because the Viz class is not inherited
@@ -796,7 +792,7 @@ class ConstructRetina(RetinaMath):
 
     def _scale_both_amplitudes(self, gc_df):
         """
-        Scale center and surround amplitudes so that the spatial RF volume is comparable to that of data.
+        Scale center and surround ampl_s so that the spatial RF volume is comparable to that of data.
         Second step of scaling is done before convolving with the stimulus.
         """
 
@@ -805,18 +801,18 @@ class ConstructRetina(RetinaMath):
         # (Volume of 2D Gaussian = 2 * pi * sigma_x*sigma_y)
 
         n_rgc = len(gc_df)
-        amplitudec = np.zeros(n_rgc)
-        # amplitudes = np.zeros(n_rgc)
+        ampl_c = np.zeros(n_rgc)
+        # ampl_s = np.zeros(n_rgc)
 
         for i in range(n_rgc):
-            amplitudec[i] = self.exp_spat_cen_sd_mm**2 / (
+            ampl_c[i] = self.exp_spat_cen_sd_mm**2 / (
                 gc_df.iloc[i].semi_xc * gc_df.iloc[i].semi_yc
             )
 
-        data_rel_sur_amplitude = gc_df["amplitudes"]
-        gc_df["amplitudec"] = amplitudec
-        gc_df["amplitudes"] = amplitudec * data_rel_sur_amplitude
-        gc_df["relative_sur_amplitude"] = gc_df["amplitudes"] / gc_df["amplitudec"]
+        data_rel_sur_amplitude = gc_df["ampl_s"]
+        gc_df["ampl_c"] = ampl_c
+        gc_df["ampl_s"] = ampl_c * data_rel_sur_amplitude
+        gc_df["relat_sur_ampl"] = gc_df["ampl_s"] / gc_df["ampl_c"]
 
         return gc_df
 
@@ -1020,21 +1016,21 @@ class ConstructRetina(RetinaMath):
 
     def _get_dd_fit_for_viz(self, gc_df):
         # # Add diameters to dataframe
-        # self.gc_df["diameters_um"] = self.ellipse2diam(
+        # self.gc_df["den_diam_um"] = self.ellipse2diam(
         #     self.gc_df["semi_xc"].values * 1000, self.gc_df["semi_yc"].values * 1000
         # )
-        # self.dendrite_diam_vs_ecc_to_show["dd_fit_x"] = self.gc_df[
-        #     "positions_eccentricity"
+        # self.dd_vs_ecc_to_show["dd_fit_x"] = self.gc_df[
+        #     "pos_ecc_mm"
         # ].values
-        # self.dendrite_diam_vs_ecc_to_show["dd_fit_y"] = self.gc_df[
-        #     "diameters_um"
+        # self.dd_vs_ecc_to_show["dd_fit_y"] = self.gc_df[
+        #     "den_diam_um"
         # ].values
         # Add diameters to dataframe
-        gc_df["diameters_um"] = self.ellipse2diam(
+        gc_df["den_diam_um"] = self.ellipse2diam(
             gc_df["semi_xc"].values * 1000, gc_df["semi_yc"].values * 1000
         )
-        dd_fit_x = gc_df["positions_eccentricity"].values
-        dd_fit_y = gc_df["diameters_um"].values
+        dd_fit_x = gc_df["pos_ecc_mm"].values
+        dd_fit_y = gc_df["den_diam_um"].values
 
         return gc_df, dd_fit_x, dd_fit_y
 
@@ -1044,27 +1040,30 @@ class ConstructRetina(RetinaMath):
         """
 
         gc_vae_df = gc_vae_df_in.reindex(columns=self.gc_df.columns)
-        gc_vae_df["positions_eccentricity"] = self.gc_df["positions_eccentricity"]
-        gc_vae_df["positions_polar_angle"] = self.gc_df["positions_polar_angle"]
-        gc_vae_df["eccentricity_group_index"] = self.gc_df["eccentricity_group_index"]
+        gc_vae_df["pos_ecc_mm"] = self.gc_df["pos_ecc_mm"]
+        gc_vae_df["pos_polar_deg"] = self.gc_df["pos_polar_deg"]
+        gc_vae_df["ecc_group_idx"] = self.gc_df["ecc_group_idx"]
 
         # Scale factor for semi_x and semi_y from pix to micrometers and divide by 1000 to get mm
         gc_vae_df["semi_xc"] = gc_vae_df_in["semi_xc"] * new_microm_per_pix / 1000
         gc_vae_df["semi_yc"] = gc_vae_df_in["semi_yc"] * new_microm_per_pix / 1000
 
-        gc_vae_df["diameters_um"] = self.ellipse2diam(
+        gc_vae_df["den_diam_um"] = self.ellipse2diam(
             gc_vae_df["semi_xc"].values * 1000, gc_vae_df["semi_yc"].values * 1000
         )
 
-        gc_vae_df["orientation_center"] = gc_vae_df_in["orientation_center"]
+        gc_vae_df["orient_cen"] = gc_vae_df_in["orient_cen"]
         gc_vae_df["img_path"] = self.gc_df["img_path"]
 
         gc_vae_df["xy_aspect_ratio"] = gc_vae_df_in["semi_yc"] / gc_vae_df_in["semi_xc"]
 
-        gc_vae_df["amplitudec"] = gc_vae_df_in["amplitudec"]
-        gc_vae_df["amplitudes"] = gc_vae_df_in["amplitudes"]
+        gc_vae_df["ampl_c"] = gc_vae_df_in["ampl_c"]
+        gc_vae_df["ampl_s"] = gc_vae_df_in["ampl_s"]
 
         gc_vae_df = self._scale_both_amplitudes(gc_vae_df)
+
+        gc_vae_df["xoc_pix"] = gc_vae_df_in["xoc"]
+        gc_vae_df["yoc_pix"] = gc_vae_df_in["yoc"]
 
         return gc_vae_df
 
@@ -1104,14 +1103,14 @@ class ConstructRetina(RetinaMath):
         # Add FIT:ed dendritic diameter for visualization
         (
             self.gc_df,
-            self.dendrite_diam_vs_ecc_to_show["dd_fit_x"],
-            self.dendrite_diam_vs_ecc_to_show["dd_fit_y"],
+            self.dd_vs_ecc_to_show["dd_fit_x"],
+            self.dd_vs_ecc_to_show["dd_fit_y"],
         ) = self._get_dd_fit_for_viz(self.gc_df)
 
         # Scale center and surround amplitude so that Gaussian volume is preserved
         self.gc_df = self._scale_both_amplitudes(
             self.gc_df
-        )  # TODO - what was the purpose of this? Working retina uses amplitudec
+        )  # TODO - what was the purpose of this? Working retina uses ampl_c
 
         # At this point the spatial receptive fields are ready.
         # The positions are in gc_eccentricity, gc_polar_angle, and the rf parameters in gc_rf_models
@@ -1145,7 +1144,7 @@ class ConstructRetina(RetinaMath):
                 }
 
                 # Convert retinal positions (ecc, pol angle) to visual space positions in mm (x, y)
-                ret_pos_ecc_mm = np.array(self.gc_df.positions_eccentricity.values)
+                ret_pos_ecc_mm = np.array(self.gc_df.pos_ecc_mm.values)
                 ret_pos_mm = self.pol2cart_df(self.gc_df)
 
                 # Mean fitted dendritic diameter for the original experimental data
@@ -1193,17 +1192,19 @@ class ConstructRetina(RetinaMath):
                 # Update gc_vae_df to have the same columns as gc_df
                 self.gc_vae_df = self._update_gc_vae_df(self.gc_vae_df, new_um_per_pix)
 
-                # Add FIT:ed dendritic diameter for visualization
+                # Add fitted VAE dendritic diameter for visualization
                 (
                     self.gc_vae_df,
-                    self.dendrite_diam_vs_ecc_to_show["dd_vae_x"],
-                    self.dendrite_diam_vs_ecc_to_show["dd_vae_y"],
+                    self.dd_vs_ecc_to_show["dd_vae_x"],
+                    self.dd_vs_ecc_to_show["dd_vae_y"],
                 ) = self._get_dd_fit_for_viz(self.gc_vae_df)
 
                 # Place separate rf images to one retina
 
+                # Key variables: new_um_per_pix, ret_pos_mm, img_upsampled_scaled, self.gc_vae_df
+                pdb.set_trace()
+
                 # TÄHÄN JÄIT:
-                # -TARKISTA SKAALAUS
                 # -RAKENNA RETINA_IMG
                 # -IMPLEMENTOI ROTAATIO JA OVERLAP ANALYYSI
 

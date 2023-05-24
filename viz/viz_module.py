@@ -166,7 +166,7 @@ class Viz:
             # # Ellipses for DoG2D_fixed_surround
 
             if surround_model == 1:
-                # xy_tuple, amplitudec, xoc, yoc, semi_xc, semi_yc, orientation_center, amplitudes, sur_ratio, offset
+                # xy_tuple, ampl_c, xoc, yoc, semi_xc, semi_yc, orient_cen, ampl_s, sur_ratio, offset
                 data_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
 
                 e1 = Ellipse(
@@ -259,8 +259,8 @@ class Viz:
         ConstructRetina call.
         """
 
-        rho = mosaic.gc_df["positions_eccentricity"].to_numpy()
-        phi = mosaic.gc_df["positions_polar_angle"].to_numpy()
+        rho = mosaic.gc_df["pos_ecc_mm"].to_numpy()
+        phi = mosaic.gc_df["pos_polar_deg"].to_numpy()
         gc_density_func_params = mosaic.gc_density_func_params
 
         # to cartesian
@@ -312,16 +312,16 @@ class Viz:
         :return:
         """
 
-        rho = mosaic.gc_df["positions_eccentricity"].to_numpy()
-        phi = mosaic.gc_df["positions_polar_angle"].to_numpy()
+        rho = mosaic.gc_df["pos_ecc_mm"].to_numpy()
+        phi = mosaic.gc_df["pos_polar_deg"].to_numpy()
 
         gc_rf_models = np.zeros((len(mosaic.gc_df), 6))
         gc_rf_models[:, 0] = mosaic.gc_df["semi_xc"]
         gc_rf_models[:, 1] = mosaic.gc_df["semi_yc"]
         gc_rf_models[:, 2] = mosaic.gc_df["xy_aspect_ratio"]
-        gc_rf_models[:, 3] = mosaic.gc_df["amplitudes"]
+        gc_rf_models[:, 3] = mosaic.gc_df["ampl_s"]
         gc_rf_models[:, 4] = mosaic.gc_df["sur_ratio"]
-        gc_rf_models[:, 5] = mosaic.gc_df["orientation_center"]
+        gc_rf_models[:, 5] = mosaic.gc_df["orient_cen"]
 
         # to cartesian
         xcoord, ycoord = self.pol2cart(rho, phi)
@@ -330,7 +330,7 @@ class Viz:
         ax.plot(xcoord.flatten(), ycoord.flatten(), "b.", label=mosaic.gc_type)
 
         if mosaic.surround_fixed:
-            # gc_rf_models parameters:'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio', 'orientation_center'
+            # gc_rf_models parameters:'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','sur_ratio', 'orient_cen'
             # Ellipse parameters: Ellipse(xy, width, height, angle=0, **kwargs). Only possible one at the time, unfortunately.
             for index in np.arange(len(xcoord)):
                 ellipse_center_x = xcoord[index]
@@ -408,13 +408,12 @@ class Viz:
                     "{0} fit for {1}".format(model_function, distributions[index])
                 )
 
-
                 # Rescale y axis if model fit goes high. Shows histogram better
                 if y_model_fit[:, index].max() > 1.5 * bin_values.max():
                     ax.set_ylim([ax.get_ylim()[0], 1.1 * bin_values.max()])
 
         # Check correlations
-        # distributions = ['semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio', 'orientation_center']
+        # distributions = ['semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','sur_ratio', 'orient_cen']
         fig2, axes2 = plt.subplots(2, 3, figsize=(13, 4))
         axes2 = axes2.flatten()
         ref_index = 1
@@ -450,15 +449,15 @@ class Viz:
         mosaic : ContructRetina object
             An instance of the ContructRetina class containing the data to be plotted.
         """
-        data_all_x = mosaic.dendrite_diam_vs_ecc_to_show["data_all_x"]
-        data_all_y = mosaic.dendrite_diam_vs_ecc_to_show["data_all_y"]
-        dd_fit_x = mosaic.dendrite_diam_vs_ecc_to_show["dd_fit_x"]
-        dd_fit_y = mosaic.dendrite_diam_vs_ecc_to_show["dd_fit_y"]
-        dd_vae_x = mosaic.dendrite_diam_vs_ecc_to_show["dd_vae_x"]
-        dd_vae_y = mosaic.dendrite_diam_vs_ecc_to_show["dd_vae_y"]
-        polynomials = mosaic.dendrite_diam_vs_ecc_to_show["polynomials"]
-        dataset_name = mosaic.dendrite_diam_vs_ecc_to_show["dataset_name"]
-        title = mosaic.dendrite_diam_vs_ecc_to_show["title"]
+        data_all_x = mosaic.dd_vs_ecc_to_show["data_all_x"]
+        data_all_y = mosaic.dd_vs_ecc_to_show["data_all_y"]
+        dd_fit_x = mosaic.dd_vs_ecc_to_show["dd_fit_x"]
+        dd_fit_y = mosaic.dd_vs_ecc_to_show["dd_fit_y"]
+        dd_vae_x = mosaic.dd_vs_ecc_to_show["dd_vae_x"]
+        dd_vae_y = mosaic.dd_vs_ecc_to_show["dd_vae_y"]
+        polynomials = mosaic.dd_vs_ecc_to_show["polynomials"]
+        dataset_name = mosaic.dd_vs_ecc_to_show["dataset_name"]
+        title = mosaic.dd_vs_ecc_to_show["title"]
 
         fig, ax = plt.subplots(nrows=1, ncols=1)
         ax.plot(data_all_x, data_all_y, "b.", label="Data")
@@ -1390,7 +1389,7 @@ class Viz:
                 (gc.q_pix, gc.r_pix),
                 width=2 * gc.semi_xc,
                 height=2 * gc.semi_yc,
-                angle=gc.orientation_center * (-1),
+                angle=gc.orient_cen * (-1),
                 edgecolor="blue",
                 facecolor=facecolor,
             )
@@ -1465,7 +1464,7 @@ class Viz:
             (gc.q_pix, gc.r_pix),
             width=2 * gc.semi_xc,
             height=2 * gc.semi_yc,
-            angle=gc.orientation_center * (-1),
+            angle=gc.orient_cen * (-1),
             edgecolor="white",
             facecolor="yellow",
         )
@@ -1485,13 +1484,13 @@ class Viz:
         ft_tf = np.fft.fft(tf)
         timestep = data_filter_duration / len(tf) / 1000  # in seconds
         freqs = np.fft.fftfreq(tf.size, d=timestep)
-        amplitudes = np.abs(ft_tf)
+        ampl_s = np.abs(ft_tf)
 
         ax.set_xscale("log")
         ax.set_xlim([0.1, 100])
         plt.xlabel("Frequency (Hz)")
         plt.ylabel("Gain")
-        ax.plot(freqs, amplitudes, ".")
+        ax.plot(freqs, ampl_s, ".")
 
     def plot_midpoint_contrast(self, retina, cell_index, ax=None):
         """

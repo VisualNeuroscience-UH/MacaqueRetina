@@ -349,12 +349,7 @@ if __name__ == "__main__":
     Build and test your retina here, one gc type at a time. Temporal hemiretina of macaques.
     """
 
-    # options are defined in my_retina_options
-
-    # TÄHÄN JÄIT:
-    # INTEGROI VAE GENEROIDUT RF:T WORKING RETINAAN
-    # GENEROI RF:T TRIAL ID:STÄ. JUOKSUTA TRIAL_ID TÄÄLTÄ MALLIVALINTAAN JA RF GENEROINTIIN
-
+    # Main retina construction method. This method calls all other methods in the retina construction process.
     PM.construct_retina.build()
 
     # The following visualizations are dependent on the ConstructRetina instance.
@@ -364,9 +359,6 @@ if __name__ == "__main__":
     # This function visualizes the spatial and temporal filter responses, ganglion cell positions and density,
     # mosaic layout, spatial and temporal statistics, dendrite diameter versus eccentricity, and tonic drives
     # in the retina mosaic building process.
-
-    # TÄHÄN JÄIT: FIT JA VAE DD JA ECC OVAT SAMOJA. KUITENKIN VAE PITÄISI OLLA FITATTUNA GENEROITUUN DATAAN JA FIT MALLINNETTUIHIN ELLIPSEIHIN.
-
     PM.construct_retina.show_exp_build_process(show_all_spatial_fits=False)
 
     # PM.construct_retina.show_gen_exp_spatial_fit(n_samples=10)

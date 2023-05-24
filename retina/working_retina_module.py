@@ -66,8 +66,8 @@ class WorkingRetina(RetinaMath):
         Initialize the retina object.
         The variable gc_dataframe contains the ganglion cell parameters;
             positions are retinal coordinates
-            positions_eccentricity in mm
-            positions_polar_angle in degrees
+            pos_ecc_mm in mm
+            pos_polar_deg in degrees
 
         Attributes:
             gc_type (str): Ganglion cell type
@@ -131,9 +131,7 @@ class WorkingRetina(RetinaMath):
         self.gc_df.semi_yc = self.gc_df.semi_yc * self.deg_per_mm
 
         # Drop retinal positions from the df (so that they are not used by accident)
-        self.gc_df = self.gc_df.drop(
-            ["positions_eccentricity", "positions_polar_angle"], axis=1
-        )
+        self.gc_df = self.gc_df.drop(["pos_ecc_mm", "pos_polar_deg"], axis=1)
 
         # Simulated data
         self.simulated_spiketrains = []
@@ -251,17 +249,17 @@ class WorkingRetina(RetinaMath):
             np.arange(qmin, qmax + 1, 1), np.arange(rmin, rmax + 1, 1)
         )
 
-        orientation_center = gc.orientation_center * (np.pi / 180)
+        orient_cen = gc.orient_cen * (np.pi / 180)
         # spatial_kernel is here 1-dim vector
         spatial_kernel = self.DoG2D_fixed_surround(
             (x_grid, y_grid),
-            gc.amplitudec,
+            gc.ampl_c,
             gc.q_pix,
             gc.r_pix,
             gc.semi_xc,
             gc.semi_yc,
-            orientation_center,
-            gc.amplitudes,
+            orient_cen,
+            gc.ampl_s,
             gc.sur_ratio,
             offset,
         )
@@ -299,7 +297,7 @@ class WorkingRetina(RetinaMath):
             np.arange(qmin, qmax + 1, 1), np.arange(rmin, rmax + 1, 1)
         )
 
-        orientation_center = gc.orientation_center * (np.pi / 180)
+        orient_cen = gc.orient_cen * (np.pi / 180)
 
         spatial_kernel = resize(
             self.spat_rf[cell_index, :, :], (s, s), anti_aliasing=True

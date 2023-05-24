@@ -219,9 +219,9 @@ class Fit(ApricotData, RetinaMath):
         -------
         tuple
             A dataframe with spatial parameters and errors for each cell, and a dictionary of spatial filters to show with visualization.
-            The dataframe has shape `(n_cells, 8)` and columns: ['amplitudec', 'xoc', 'yoc', 'semi_xc', 'semi_yc', 'orientation_center',
-            'amplitudes', 'sur_ratio', 'offset'] if surround_model=1, or shape `(n_cells, 13)` and columns:
-            ['amplitudec', 'xoc', 'yoc', 'semi_xc', 'semi_yc', 'orientation_center', 'amplitudes', 'xos', 'yos', 'semi_xs',
+            The dataframe has shape `(n_cells, 8)` and columns: ['ampl_c', 'xoc', 'yoc', 'semi_xc', 'semi_yc', 'orient_cen',
+            'ampl_s', 'sur_ratio', 'offset'] if surround_model=1, or shape `(n_cells, 13)` and columns:
+            ['ampl_c', 'xoc', 'yoc', 'semi_xc', 'semi_yc', 'orient_cen', 'ampl_s', 'xos', 'yos', 'semi_xs',
             'semi_ys', 'orientation_surround', 'offset'] if surround_model=0.
             The dictionary spat_filt_to_viz has keys:
                 'x_grid': numpy.ndarray of shape `(num_pix_y, num_pix_x)`, X-coordinates of the grid points
@@ -252,13 +252,13 @@ class Fit(ApricotData, RetinaMath):
 
         if surround_model == 1:
             parameter_names = [
-                "amplitudec",
+                "ampl_c",
                 "xoc",
                 "yoc",
                 "semi_xc",
                 "semi_yc",
-                "orientation_center",
-                "amplitudes",
+                "orient_cen",
+                "ampl_s",
                 "sur_ratio",
                 "offset",
             ]
@@ -267,13 +267,13 @@ class Fit(ApricotData, RetinaMath):
 
         else:
             parameter_names = [
-                "amplitudec",
+                "ampl_c",
                 "xoc",
                 "yoc",
                 "semi_xc",
                 "semi_yc",
-                "orientation_center",
-                "amplitudes",
+                "orient_cen",
+                "ampl_s",
                 "xos",
                 "yos",
                 "semi_xs",
@@ -300,7 +300,7 @@ class Fit(ApricotData, RetinaMath):
         # Set initial guess for fitting
         rot = 0.0
         if surround_model == 1:
-            # Build initial guess for (amplitudec, xoc, yoc, semi_xc, semi_yc, orientation_center, amplitudes, sur_ratio, offset)
+            # Build initial guess for (ampl_c, xoc, yoc, semi_xc, semi_yc, orient_cen, ampl_s, sur_ratio, offset)
             p0 = np.array(
                 [
                     1,
@@ -321,7 +321,7 @@ class Fit(ApricotData, RetinaMath):
                 ),
             )
         else:
-            # Build initial guess for (amplitudec, xoc, yoc, semi_xc, semi_yc, orientation_center, amplitudes, xos, yos, semi_xs, semi_ys, orientation_surround, offset)
+            # Build initial guess for (ampl_c, xoc, yoc, semi_xc, semi_yc, orient_cen, ampl_s, xos, yos, semi_xs, semi_ys, orientation_surround, offset)
             p0 = np.array(
                 [
                     1,
@@ -633,8 +633,8 @@ class Fit(ApricotData, RetinaMath):
 
     def _fit_spatial_statistics(self, good_idx):
         """
-        Fits gamma distribution parameters for the 'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes',
-        and 'sur_ratio' RF parameters, and fits vonmisees distribution parameters for the 'orientation_center' RF parameter.
+        Fits gamma distribution parameters for the 'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s',
+        and 'sur_ratio' RF parameters, and fits vonmisees distribution parameters for the 'orient_cen' RF parameter.
 
         Parameters:
         -----------
@@ -645,7 +645,7 @@ class Fit(ApricotData, RetinaMath):
         --------
         spatial_stat_df : pandas DataFrame
             A DataFrame containing gamma distribution parameters for the RF parameters 'semi_xc', 'semi_yc',
-            'xy_aspect_ratio', 'amplitudes', and 'sur_ratio', and vonmises   distribution parameters for the 'orientation_center'.
+            'xy_aspect_ratio', 'ampl_s', and 'sur_ratio', and vonmises   distribution parameters for the 'orient_cen'.
         spat_stat_to_viz : dict
             A dictionary containing data that can be used to visualize the RF parameters' spatial statistics.
             Includes 'ydata', 'spatial_statistics_dict', and 'model_fit_data'.
@@ -668,9 +668,9 @@ class Fit(ApricotData, RetinaMath):
             "semi_xc",
             "semi_yc",
             "xy_aspect_ratio",
-            "amplitudes",
+            "ampl_s",
             "sur_ratio",
-            "orientation_center",
+            "orient_cen",
         ]
 
         n_distributions = len(rf_parameter_names)
@@ -686,7 +686,7 @@ class Fit(ApricotData, RetinaMath):
         # Create dict for statistical parameters
         spatial_statistics_dict = {}
 
-        # Model 'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'amplitudes','sur_ratio' rf_parameter_names with a gamma function.
+        # Model 'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','sur_ratio' rf_parameter_names with a gamma function.
         for index, distribution in enumerate(rf_parameter_names[:-1]):
             # fit the rf_parameter_names, get the PDF distribution using the parameters
             ydata[:, index] = spatial_data_df[distribution]

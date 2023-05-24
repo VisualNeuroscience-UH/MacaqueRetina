@@ -81,7 +81,7 @@ class RetinaMath:
         Parameters
         ----------
         df : pandas.DataFrame
-            DataFrame containing retinal positions with columns 'positions_eccentricity' and 'positions_polar_angle'.
+            DataFrame containing retinal positions with columns 'pos_ecc_mm' and 'pos_polar_deg'.
 
         Returns
         -------
@@ -91,7 +91,7 @@ class RetinaMath:
         """
         rspace_pos_mm = np.array(
             [
-                self.pol2cart(gc.positions_eccentricity, gc.positions_polar_angle)
+                self.pol2cart(gc.pos_ecc_mm, gc.pos_polar_deg)
                 for index, gc in df.iterrows()
             ]
         )
@@ -133,13 +133,13 @@ class RetinaMath:
     def DoG2D_independent_surround(
         self,
         xy_tuple,
-        amplitudec,
+        ampl_c,
         xoc,
         yoc,
         semi_xc,
         semi_yc,
-        orientation_center,
-        amplitudes,
+        orient_cen,
+        ampl_s,
         xos,
         yos,
         semi_xs,
@@ -152,14 +152,14 @@ class RetinaMath:
         """
 
         (x_fit, y_fit) = xy_tuple
-        acen = (np.cos(orientation_center) ** 2) / (2 * semi_xc**2) + (
-            np.sin(orientation_center) ** 2
+        acen = (np.cos(orient_cen) ** 2) / (2 * semi_xc**2) + (
+            np.sin(orient_cen) ** 2
         ) / (2 * semi_yc**2)
-        bcen = -(np.sin(2 * orientation_center)) / (4 * semi_xc**2) + (
-            np.sin(2 * orientation_center)
+        bcen = -(np.sin(2 * orient_cen)) / (4 * semi_xc**2) + (
+            np.sin(2 * orient_cen)
         ) / (4 * semi_yc**2)
-        ccen = (np.sin(orientation_center) ** 2) / (2 * semi_xc**2) + (
-            np.cos(orientation_center) ** 2
+        ccen = (np.sin(orient_cen) ** 2) / (2 * semi_xc**2) + (
+            np.cos(orient_cen) ** 2
         ) / (2 * semi_yc**2)
 
         asur = (np.cos(orientation_surround) ** 2) / (2 * semi_xs**2) + (
@@ -175,7 +175,7 @@ class RetinaMath:
         ## Difference of gaussians
         model_fit = (
             offset
-            + amplitudec
+            + ampl_c
             * np.exp(
                 -(
                     acen * ((x_fit - xoc) ** 2)
@@ -183,7 +183,7 @@ class RetinaMath:
                     + ccen * ((y_fit - yoc) ** 2)
                 )
             )
-            - amplitudes
+            - ampl_s
             * np.exp(
                 -(
                     asur * ((x_fit - xos) ** 2)
@@ -257,13 +257,13 @@ class RetinaMath:
     def DoG2D_fixed_surround(
         self,
         xy_tuple,
-        amplitudec,
+        ampl_c,
         xoc,
         yoc,
         semi_xc,
         semi_yc,
-        orientation_center,
-        amplitudes,
+        orient_cen,
+        ampl_s,
         sur_ratio,
         offset,
     ):
@@ -273,30 +273,30 @@ class RetinaMath:
         """
 
         (x_fit, y_fit) = xy_tuple
-        acen = (np.cos(orientation_center) ** 2) / (2 * semi_xc**2) + (
-            np.sin(orientation_center) ** 2
+        acen = (np.cos(orient_cen) ** 2) / (2 * semi_xc**2) + (
+            np.sin(orient_cen) ** 2
         ) / (2 * semi_yc**2)
-        bcen = -(np.sin(2 * orientation_center)) / (4 * semi_xc**2) + (
-            np.sin(2 * orientation_center)
+        bcen = -(np.sin(2 * orient_cen)) / (4 * semi_xc**2) + (
+            np.sin(2 * orient_cen)
         ) / (4 * semi_yc**2)
-        ccen = (np.sin(orientation_center) ** 2) / (2 * semi_xc**2) + (
-            np.cos(orientation_center) ** 2
+        ccen = (np.sin(orient_cen) ** 2) / (2 * semi_xc**2) + (
+            np.cos(orient_cen) ** 2
         ) / (2 * semi_yc**2)
 
-        asur = (np.cos(orientation_center) ** 2) / (2 * (sur_ratio * semi_xc) ** 2) + (
-            np.sin(orientation_center) ** 2
+        asur = (np.cos(orient_cen) ** 2) / (2 * (sur_ratio * semi_xc) ** 2) + (
+            np.sin(orient_cen) ** 2
         ) / (2 * (sur_ratio * semi_yc) ** 2)
-        bsur = -(np.sin(2 * orientation_center)) / (4 * (sur_ratio * semi_xc) ** 2) + (
-            np.sin(2 * orientation_center)
+        bsur = -(np.sin(2 * orient_cen)) / (4 * (sur_ratio * semi_xc) ** 2) + (
+            np.sin(2 * orient_cen)
         ) / (4 * (sur_ratio * semi_yc) ** 2)
-        csur = (np.sin(orientation_center) ** 2) / (2 * (sur_ratio * semi_xc) ** 2) + (
-            np.cos(orientation_center) ** 2
+        csur = (np.sin(orient_cen) ** 2) / (2 * (sur_ratio * semi_xc) ** 2) + (
+            np.cos(orient_cen) ** 2
         ) / (2 * (sur_ratio * semi_yc) ** 2)
 
         ## Difference of gaussians
         model_fit = (
             offset
-            + amplitudec
+            + ampl_c
             * np.exp(
                 -(
                     acen * ((x_fit - xoc) ** 2)
@@ -304,7 +304,7 @@ class RetinaMath:
                     + ccen * ((y_fit - yoc) ** 2)
                 )
             )
-            - amplitudes
+            - ampl_s
             * np.exp(
                 -(
                     asur * ((x_fit - xoc) ** 2)
