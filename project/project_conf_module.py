@@ -131,7 +131,7 @@ my_retina = {
     "ecc_limits": [4, 6],  # degrees
     "sector_limits": [-5, 5],  # polar angle in degrees
     "model_density": 1.0,
-    "compute_dendr_diameter": "from_coverage_1",  # "from_coverage_1" or "from_literature"
+    "compute_dendr_diameter": "from_literature",  # "from_coverage_1" or "from_literature"
     "dd_regr_model": "cubic",  # linear, quadratic, cubic. Only used if compute_dendr_diameter is "from_literalure"
     "randomize_position": 0.0,
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
@@ -359,13 +359,14 @@ if __name__ == "__main__":
     # This function visualizes the spatial and temporal filter responses, ganglion cell positions and density,
     # mosaic layout, spatial and temporal statistics, dendrite diameter versus eccentricity, and tonic drives
     # in the retina mosaic building process.
-    PM.construct_retina.show_exp_build_process(show_all_spatial_fits=False)
+    # PM.construct_retina.show_exp_build_process(show_all_spatial_fits=False)
 
     # PM.construct_retina.show_gen_exp_spatial_fit(n_samples=10)
     # PM.construct_retina.show_gen_exp_spatial_rf(ds_name="test_ds", n_samples=10)
     # PM.construct_retina.show_latent_tsne_space()
     # PM.construct_retina.show_gen_spat_post_hist()
     # PM.construct_retina.show_latent_space_and_samples()
+    PM.construct_retina.show_retina_img()
 
     # # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
     # this_dep_var = "val_loss"
@@ -381,7 +382,7 @@ if __name__ == "__main__":
 
     # options are defined in my_stimulus_options
     # stimulus video will be saved on output_folder in mp4 format (viewing and hdf5 format (for reloading)
-    # PM.stimulate.make_stimulus_video()
+    PM.stimulate.make_stimulus_video()
 
     ##############################
     ### Create analog stimulus ###

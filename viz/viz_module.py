@@ -18,6 +18,7 @@ import brian2.units as b2u
 
 # Viz
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 from matplotlib.patches import Ellipse
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import seaborn as sns
@@ -449,15 +450,15 @@ class Viz:
         mosaic : ContructRetina object
             An instance of the ContructRetina class containing the data to be plotted.
         """
-        data_all_x = mosaic.dd_vs_ecc_to_show["data_all_x"]
-        data_all_y = mosaic.dd_vs_ecc_to_show["data_all_y"]
-        dd_fit_x = mosaic.dd_vs_ecc_to_show["dd_fit_x"]
-        dd_fit_y = mosaic.dd_vs_ecc_to_show["dd_fit_y"]
-        dd_vae_x = mosaic.dd_vs_ecc_to_show["dd_vae_x"]
-        dd_vae_y = mosaic.dd_vs_ecc_to_show["dd_vae_y"]
-        polynomials = mosaic.dd_vs_ecc_to_show["polynomials"]
-        dataset_name = mosaic.dd_vs_ecc_to_show["dataset_name"]
-        title = mosaic.dd_vs_ecc_to_show["title"]
+        data_all_x = mosaic.dd_vs_ecc_to_viz["data_all_x"]
+        data_all_y = mosaic.dd_vs_ecc_to_viz["data_all_y"]
+        dd_fit_x = mosaic.dd_vs_ecc_to_viz["dd_fit_x"]
+        dd_fit_y = mosaic.dd_vs_ecc_to_viz["dd_fit_y"]
+        dd_vae_x = mosaic.dd_vs_ecc_to_viz["dd_vae_x"]
+        dd_vae_y = mosaic.dd_vs_ecc_to_viz["dd_vae_y"]
+        polynomials = mosaic.dd_vs_ecc_to_viz["polynomials"]
+        dataset_name = mosaic.dd_vs_ecc_to_viz["dataset_name"]
+        title = mosaic.dd_vs_ecc_to_viz["title"]
 
         fig, ax = plt.subplots(nrows=1, ncols=1)
         ax.plot(data_all_x, data_all_y, "b.", label="Data")
@@ -1716,3 +1717,27 @@ class Viz:
 
         plt.figure()
         plt.plot(data.T)
+
+    def show_retina_img(self, retina):
+        """ """
+
+        # self.gen_ret_to_viz = {
+        #     "img_ret": img_ret,
+        #     "img_ret_masked": img_ret_masked,
+        # }
+
+        img_ret = retina.gen_ret_to_viz["img_ret"]
+        img_ret_masked = retina.gen_ret_to_viz["img_ret_masked"]
+
+        plt.figure()
+        plt.subplot(121)
+        plt.imshow(img_ret, cmap="gray")
+        plt.colorbar()
+        plt.subplot(122)
+
+        cmap = plt.cm.get_cmap("viridis")
+        custom_cmap = mcolors.ListedColormap(
+            cmap(np.linspace(0, 1, int(np.max(img_ret_masked)) + 1))
+        )
+        plt.imshow(img_ret_masked, cmap=custom_cmap)
+        plt.colorbar()

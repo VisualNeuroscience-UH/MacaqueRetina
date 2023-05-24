@@ -411,7 +411,7 @@ class ConstructRetina(RetinaMath):
 
         dataset_name = f"All data {dd_regr_model} fit"
 
-        self.dd_vs_ecc_to_show = {
+        self.dd_vs_ecc_to_viz = {
             "data_all_x": data_all_x,
             "data_all_y": data_all_y,
             "polynomials": polynomials,
@@ -881,7 +881,7 @@ class ConstructRetina(RetinaMath):
 
         return img_flipped, img_reshaped
 
-    def _get_rf_masks(self, img_stack):
+    def _get_rf_masks(self, img_stack, mask_threshold=0.1):
         """
         Extracts the contours around the maximum of each receptive field in an image stack. The contour for a field is
         defined as the set of pixels with a value of at least 10% of the maximum pixel value in the field. Only the
@@ -890,8 +890,9 @@ class ConstructRetina(RetinaMath):
         Parameters
         ----------
         img_stack : numpy.ndarray
-            3D numpy array representing a stack of images. The shape of the array should be (N, H, W), where N is the
-            number of images (or receptive fields), H is the height of each image, and W is the width of each image.
+            3D numpy array representing a stack of images. The shape of the array should be (N, H, W).
+        mask_threshold : float between 0 and 1
+            The threshold for the contour mask.
 
         Returns
         -------
@@ -899,10 +900,14 @@ class ConstructRetina(RetinaMath):
             3D numpy array of boolean masks (N, H, W). In each mask, True indicates
             a pixel is part of the contour, and False indicates it is not.
         """
+        assert (
+            mask_threshold >= 0 and mask_threshold <= 1
+        ), "mask_threshold must be between 0 and 1, aborting..."
+
         masks = []
         for img in img_stack:
             max_val = np.max(img)
-            mask = img >= max_val * 0.1
+            mask = img >= max_val * mask_threshold
 
             # Label the distinct regions in the mask
             labeled_mask, num_labels = ndimage.label(mask)
@@ -1019,10 +1024,10 @@ class ConstructRetina(RetinaMath):
         # self.gc_df["den_diam_um"] = self.ellipse2diam(
         #     self.gc_df["semi_xc"].values * 1000, self.gc_df["semi_yc"].values * 1000
         # )
-        # self.dd_vs_ecc_to_show["dd_fit_x"] = self.gc_df[
+        # self.dd_vs_ecc_to_viz["dd_fit_x"] = self.gc_df[
         #     "pos_ecc_mm"
         # ].values
-        # self.dd_vs_ecc_to_show["dd_fit_y"] = self.gc_df[
+        # self.dd_vs_ecc_to_viz["dd_fit_y"] = self.gc_df[
         #     "den_diam_um"
         # ].values
         # Add diameters to dataframe
@@ -1226,8 +1231,8 @@ class ConstructRetina(RetinaMath):
         # Add FIT:ed dendritic diameter for visualization
         (
             self.gc_df,
-            self.dd_vs_ecc_to_show["dd_fit_x"],
-            self.dd_vs_ecc_to_show["dd_fit_y"],
+            self.dd_vs_ecc_to_viz["dd_fit_x"],
+            self.dd_vs_ecc_to_viz["dd_fit_y"],
         ) = self._get_dd_fit_for_viz(self.gc_df)
 
         # Scale center and surround amplitude so that Gaussian volume is preserved
@@ -1278,7 +1283,7 @@ class ConstructRetina(RetinaMath):
             )
 
             # Extract receptive field contours from the generated spatial data
-            img_rf_masks = self._get_rf_masks(img_upsampled_scaled)
+            img_rf_masks = self._get_rf_masks(img_upsampled_scaled, mask_threshold=0.2)
 
             # Save the generated receptive fields
             output_path = self.context.output_folder
@@ -1312,13 +1317,11 @@ class ConstructRetina(RetinaMath):
             # Add fitted VAE dendritic diameter for visualization
             (
                 self.gc_vae_df,
-                self.dd_vs_ecc_to_show["dd_vae_x"],
-                self.dd_vs_ecc_to_show["dd_vae_y"],
+                self.dd_vs_ecc_to_viz["dd_vae_x"],
+                self.dd_vs_ecc_to_viz["dd_vae_y"],
             ) = self._get_dd_fit_for_viz(self.gc_vae_df)
 
             # Place separate rf images to one retina
-
-            # Key variables: new_um_per_pix, img_upsampled_scaled, self.gc_vae_df
             img_ret = self._get_full_retina_with_rf_images(
                 self.ecc_lim_mm,
                 self.polar_lim_deg,
@@ -1327,7 +1330,6 @@ class ConstructRetina(RetinaMath):
                 new_um_per_pix,
             )
 
-            # Key variables: new_um_per_pix, img_upsampled_scaled, self.gc_vae_df
             img_ret_masked = self._get_full_retina_with_rf_images(
                 self.ecc_lim_mm,
                 self.polar_lim_deg,
@@ -1335,15 +1337,12 @@ class ConstructRetina(RetinaMath):
                 self.gc_vae_df,
                 new_um_per_pix,
             )
-
-            plt.imshow(img_ret_masked)
-            plt.colorbar()
-            plt.show()
-
-            pdb.set_trace()
+            self.gen_ret_to_viz = {
+                "img_ret": img_ret,
+                "img_ret_masked": img_ret_masked,
+            }
 
             # TÄHÄN JÄIT:
-            # -RAKENNA RETINA_IMG
             # -IMPLEMENTOI ROTAATIO JA OVERLAP ANALYYSI
 
         # -- Third, endow cells with temporal receptive fields
@@ -1467,3 +1466,11 @@ class ConstructRetina(RetinaMath):
         self.viz.show_ray_experiment(
             self, ray_exp_name, this_dep_var, highlight_trial=highlight_trial
         )
+
+    def show_retina_img(self):
+        """
+        Show the generated retina image
+        """
+
+        # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
+        self.viz.show_retina_img(self)
