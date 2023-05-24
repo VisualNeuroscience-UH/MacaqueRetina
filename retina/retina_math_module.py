@@ -91,7 +91,7 @@ class RetinaMath:
         """
         rspace_pos_mm = np.array(
             [
-                self.pol2cart(gc.pos_ecc_mm, gc.pos_polar_deg)
+                self.pol2cart(gc.pos_ecc_mm, gc.pos_polar_deg, deg=True)
                 for index, gc in df.iterrows()
             ]
         )
