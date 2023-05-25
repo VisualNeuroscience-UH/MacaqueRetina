@@ -1344,6 +1344,32 @@ class ConstructRetina(RetinaMath):
 
             # TÄHÄN JÄIT:
             # -IMPLEMENTOI ROTAATIO JA OVERLAP ANALYYSI
+            """
+            PSEUDOKOODI BY CHAT GPT 
+            initialize RFs with positions
+            initialize retina image
+
+            # Place all RFs
+            for each RF in RFs:
+                place RF on retina image
+
+            # Calculate initial coverage factor
+            for each pixel in retina image:
+                calculate total coverage under pixel
+
+            while not converged:
+                # Adjust each RF's pixels according to the dendrite growth model
+                for each RF in RFs:
+                    for each pixel in RF:
+                        calculate desired_delta_sensitivity based on pixel's current value in retina image
+                        adjust pixel's sensitivity by desired_delta_sensitivity
+
+                # Recalculate the coverage
+                for each pixel in retina image:
+                    calculate total coverage under pixel
+
+            
+            """
 
         # -- Third, endow cells with temporal receptive fields
         self._create_temporal_receptive_fields()
