@@ -367,7 +367,7 @@ if __name__ == "__main__":
     # PM.construct_retina.show_gen_spat_post_hist()
     # PM.construct_retina.show_latent_space_and_samples()
     PM.construct_retina.show_retina_img()
-    # PM.construct_retina.show_rf_imgs(n_samples=10)
+    PM.construct_retina.show_rf_imgs(n_samples=10)
 
     # # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
     # this_dep_var = "val_loss"

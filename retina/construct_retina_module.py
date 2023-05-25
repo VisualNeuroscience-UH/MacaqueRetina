@@ -1202,55 +1202,6 @@ class ConstructRetina(RetinaMath):
 
         return ret_img, rf_lu_pix
 
-    def _prune_dendrites(self, rfs, masks, img_ret, rf_lu_pix):
-        """
-        Prune dendritic arbors of the RFs.
-
-        Parameters
-        ----------
-        rfs : numpy.ndarray
-            Receptive fields of shape (n_rfs, n_pixels, n_pixels)
-        masks : numpy.ndarray
-            Masks of shape (n_rfs, n_pixels, n_pixels)
-        img_ret : numpy.ndarray
-            Compiled retina image of shape (h_pixels, w_pixels)
-        rf_lu_pix : numpy.ndarray
-            Left upper corner pixel coordinates of each rf image of shape (n_rfs, 2)
-        """
-
-        height = rfs.shape[1]
-        width = rfs.shape[2]
-
-        # For each RF, get the global coverage factor and the local gain mask
-        rfs_adjusted = rfs.copy()
-        local_gain_masks = np.zeros(rfs.shape)
-        for i, rf in enumerate(rfs):
-            # Get the left upper corner pixel coordinates of the rf
-            x_pix, y_pix = rf_lu_pix[i, :]
-
-            # Get the coverage factor of the rf
-            this_gcf = img_ret[y_pix : y_pix + height, x_pix : x_pix + width]
-
-            max_pruning = -0.1
-            max_growth = 0.1
-            converge_to = 1.0
-            this_global_delta = _pruning_model(
-                this_gcf, np.max(this_gcf), max_pruning, max_growth, converge_to
-            )
-
-            local_gain_masks[i] = _get_local_gain_mask(rf, masks[i])
-
-            rfs_adjusted[i] += this_global_delta * local_gain_masks[i]
-
-        # Re calculate the coverage factor of each pixel, and check if it has converged
-        img_ret_adjusted = np.zeros(img_ret.shape)
-        for i, rf in enumerate(rfs_adjusted):
-            # Get the left upper corner pixel coordinates of the rf
-            x_pix, y_pix = rf_lu_pix[i, :]
-
-            # Get the coverage factor of the rf
-            img_ret_adjusted[y_pix : y_pix + height, x_pix : x_pix + width] += rf
-
     def _prune_dendrites(
         self,
         rfs,
@@ -1266,7 +1217,7 @@ class ConstructRetina(RetinaMath):
 
         This method adjusts the receptive fields (RFs) iteratively to improve their
         coverage of the compiled retina image. The process is done in a way to converge
-        the global coverage factor (GCF) in the region of each RF towards a set target 
+        the global coverage factor (GCF) in the region of each RF towards a set target
         (here 1.0), while tolerating a certain error.
 
         In each iteration, for each RF, a pruning model is applied that calculates
@@ -1528,11 +1479,6 @@ class ConstructRetina(RetinaMath):
                 self.dd_vs_ecc_to_viz["dd_vae_y"],
             ) = self._get_dd_fit_for_viz(self.gc_vae_df)
 
-            self.gen_rfs_to_viz = {
-                "img_rf": img_upsampled_scaled,
-                "img_mask": img_rf_masks,
-            }
-
             # Place separate rf images to one retina
             img_ret, rf_lu_pix = self._get_full_retina_with_rf_images(
                 self.ecc_lim_mm,
@@ -1549,14 +1495,22 @@ class ConstructRetina(RetinaMath):
                 self.gc_vae_df,
                 new_um_per_pix,
             )
+
+            img_pruned, img_ret_pruned = self._prune_dendrites(
+                img_upsampled_scaled, img_rf_masks, img_ret, img_ret_masked, rf_lu_pix
+            )
+
+            self.gen_rfs_to_viz = {
+                "img_rf": img_upsampled_scaled,
+                "img_mask": img_rf_masks,
+                "img_pruned": img_pruned,
+            }
+
             self.gen_ret_to_viz = {
                 "img_ret": img_ret,
                 "img_ret_masked": img_ret_masked,
+                "img_ret_pruned": img_ret_pruned,
             }
-
-            img_ret_pruned = self._prune_dendrites(
-                img_upsampled_scaled, img_rf_masks, img_ret, img_ret_masked, rf_lu_pix
-            )
 
             # TÄHÄN JÄIT:
             # -IMPLEMENTOI ROTAATIO JA OVERLAP ANALYYSI

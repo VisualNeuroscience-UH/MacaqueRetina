@@ -1721,19 +1721,15 @@ class Viz:
     def show_retina_img(self, retina):
         """ """
 
-        # self.gen_ret_to_viz = {
-        #     "img_ret": img_ret,
-        #     "img_ret_masked": img_ret_masked,
-        # }
-
         img_ret = retina.gen_ret_to_viz["img_ret"]
         img_ret_masked = retina.gen_ret_to_viz["img_ret_masked"]
+        img_ret_pruned = retina.gen_ret_to_viz["img_ret_pruned"]
 
         plt.figure()
-        plt.subplot(121)
+        plt.subplot(221)
         plt.imshow(img_ret, cmap="gray")
         plt.colorbar()
-        plt.subplot(122)
+        plt.subplot(222)
 
         cmap = plt.cm.get_cmap("viridis")
         custom_cmap = mcolors.ListedColormap(
@@ -1742,18 +1738,24 @@ class Viz:
         plt.imshow(img_ret_masked, cmap=custom_cmap)
         plt.colorbar()
 
+        plt.subplot(223)
+        plt.imshow(img_ret_pruned, cmap="gray")
+        plt.colorbar()
+
     def show_rf_imgs(self, retina, n_samples=10):
         """
         Show the individual RFs of the VAE retina
 
         img_rf: (n_cells, n_pix, n_pix)
         img_mask: (n_cells, n_pix, n_pix)
+        img_pruned: (n_cells, n_pix, n_pix)
         """
 
         img_rf = retina.gen_rfs_to_viz["img_rf"]
         img_mask = retina.gen_rfs_to_viz["img_mask"]
+        img_pruned = retina.gen_rfs_to_viz["img_pruned"]
 
-        fig, axs = plt.subplots(2, n_samples, figsize=(n_samples, 2))
+        fig, axs = plt.subplots(3, n_samples, figsize=(n_samples, 3))
         samples = np.random.choice(img_rf.shape[0], n_samples, replace=False)
         for i, sample in enumerate(samples):
             axs[0, i].imshow(img_rf[sample], cmap="gray")
@@ -1761,6 +1763,7 @@ class Viz:
             axs[0, i].set_title("Cell " + str(sample))
 
             axs[1, i].imshow(img_mask[sample], cmap="gray")
+            axs[1, i].axis("off")
 
-            # Add colorbar to each subplot in row 0
-            fig.colorbar(axs[0, i].imshow(img_rf[sample], cmap="gray"), ax=axs[0, i])
+            axs[2, i].imshow(img_pruned[sample], cmap="gray")
+            axs[2, i].axis("off")
