@@ -1,5 +1,6 @@
 # Numerical
 import numpy as np
+import numpy.ma as ma
 import scipy.optimize as opt
 import scipy.io as sio
 import scipy.stats as stats
@@ -1153,10 +1154,24 @@ class ConstructRetina(RetinaMath):
         max_y = max_y_rot * np.cos(theta_rad) - max_x_rot * np.sin(theta_rad)
         min_y = min_y_rot * np.cos(theta_rad) - min_x_rot * np.sin(theta_rad)
 
+        # Pad with one full rf in each side. This prevents need to cutting the
+        # rf imgs at the borders later on
+        pad_size_x_mm = rf_img.shape[2] * um_per_pix / 1000
+        pad_size_y_mm = rf_img.shape[1] * um_per_pix / 1000
+
+        min_x = min_x - pad_size_x_mm
+        max_x = max_x + pad_size_x_mm
+        min_y = min_y - pad_size_y_mm
+        max_y = max_y + pad_size_y_mm
+
         # Get retina image size in pixels
         img_size_x = int(np.ceil((max_x - min_x) * 1000 / um_per_pix))
         img_size_y = int(np.ceil((max_y - min_y) * 1000 / um_per_pix))
+
         ret_img = np.zeros((img_size_y, img_size_x))
+
+        # Prepare numpy nd array to hold pixel coordinates for each rf image
+        rf_lu_pix = np.zeros((df.shape[0], 2), dtype=int)
 
         # Locate left upper corner of each rf img an lay images onto retina image
         for i, row in df.iterrows():
@@ -1175,25 +1190,217 @@ class ConstructRetina(RetinaMath):
             # Get the rf image
             this_rf_img = rf_img[i, :, :]
 
-            # this_rf_img may exceed the edges of the retina image. If so, crop it.
-            if x_pix < 0:
-                this_rf_img = this_rf_img[:, -x_pix:]
-                x_pix = 0
-            if y_pix < 0:
-                this_rf_img = this_rf_img[-y_pix:, :]
-                y_pix = 0
-            if x_pix + this_rf_img.shape[1] > ret_img.shape[1]:
-                this_rf_img = this_rf_img[:, : ret_img.shape[1] - x_pix]
-            if y_pix + this_rf_img.shape[0] > ret_img.shape[0]:
-                this_rf_img = this_rf_img[: ret_img.shape[0] - y_pix, :]
-
             # Lay the rf image onto the retina image
             ret_img[
                 y_pix : y_pix + this_rf_img.shape[0],
                 x_pix : x_pix + this_rf_img.shape[1],
             ] += this_rf_img
 
-        return ret_img
+            # Store the left upper corner pixel coordinates and width and height of each rf image.
+            # The width and height are necessary because some are cut off at the edges of the retina image.
+            rf_lu_pix[i, :] = [x_pix, y_pix]
+
+        return ret_img, rf_lu_pix
+
+    def _prune_dendrites(self, rfs, masks, img_ret, rf_lu_pix):
+        """
+        Prune dendritic arbors of the RFs.
+
+        Parameters
+        ----------
+        rfs : numpy.ndarray
+            Receptive fields of shape (n_rfs, n_pixels, n_pixels)
+        masks : numpy.ndarray
+            Masks of shape (n_rfs, n_pixels, n_pixels)
+        img_ret : numpy.ndarray
+            Compiled retina image of shape (h_pixels, w_pixels)
+        rf_lu_pix : numpy.ndarray
+            Left upper corner pixel coordinates of each rf image of shape (n_rfs, 2)
+        """
+
+        height = rfs.shape[1]
+        width = rfs.shape[2]
+
+        # For each RF, get the global coverage factor and the local gain mask
+        rfs_adjusted = rfs.copy()
+        local_gain_masks = np.zeros(rfs.shape)
+        for i, rf in enumerate(rfs):
+            # Get the left upper corner pixel coordinates of the rf
+            x_pix, y_pix = rf_lu_pix[i, :]
+
+            # Get the coverage factor of the rf
+            this_gcf = img_ret[y_pix : y_pix + height, x_pix : x_pix + width]
+
+            max_pruning = -0.1
+            max_growth = 0.1
+            converge_to = 1.0
+            this_global_delta = _pruning_model(
+                this_gcf, np.max(this_gcf), max_pruning, max_growth, converge_to
+            )
+
+            local_gain_masks[i] = _get_local_gain_mask(rf, masks[i])
+
+            rfs_adjusted[i] += this_global_delta * local_gain_masks[i]
+
+        # Re calculate the coverage factor of each pixel, and check if it has converged
+        img_ret_adjusted = np.zeros(img_ret.shape)
+        for i, rf in enumerate(rfs_adjusted):
+            # Get the left upper corner pixel coordinates of the rf
+            x_pix, y_pix = rf_lu_pix[i, :]
+
+            # Get the coverage factor of the rf
+            img_ret_adjusted[y_pix : y_pix + height, x_pix : x_pix + width] += rf
+
+    def _prune_dendrites(
+        self,
+        rfs,
+        masks,
+        img_ret,
+        img_ret_mask,
+        rf_lu_pix,
+        tolerate_error=0.2,
+        max_iters=100,
+    ):
+        """
+        Prune dendritic arbors of the RFs.
+
+        This method adjusts the receptive fields (RFs) iteratively to improve their
+        coverage of the compiled retina image. The process is done in a way to converge
+        the global coverage factor (GCF) in the region of each RF towards a set target 
+        (here 1.0), while tolerating a certain error.
+
+        In each iteration, for each RF, a pruning model is applied that calculates
+        a global delta (change). This global delta is based on the current GCF, the
+        maximum GCF across the retina image, a set maximum growth and pruning rate,
+        and the converge target.
+
+        The global delta is then scaled by a local gain mask, which is derived from
+        the RF and its corresponding mask, ensuring that changes are applied only to
+        the masked (valued above a positive threshold) pixels.
+
+        The adjusted RFs are then used to recalculate the GCF of each pixel in the
+        compiled retina image. The process is repeated until the maximum absolute
+        difference from the converge_to value within the non-zero (masked) areas of
+        the adjusted image is less than a set tolerated error, or until the maximum
+        number of iterations is reached.
+
+        Parameters
+        ----------
+        rfs : numpy.ndarray
+            Receptive fields of shape (n_rfs, n_pixels, n_pixels)
+        masks : numpy.ndarray
+            Masks of shape (n_rfs, n_pixels, n_pixels)
+        img_ret : numpy.ndarray
+            Compiled retina image of shape (h_pixels, w_pixels)
+        rf_lu_pix : numpy.ndarray
+            Left upper corner pixel coordinates of each rf image of shape (n_rfs, 2)
+        tolerate_error: float, optional
+            The tolerated error from the converge_to value, default is 0.2
+        max_iters: int, optional
+            Maximum number of iterations to prevent infinite loop, default is 100
+        """
+
+        def _get_local_gain_mask(img, mask):
+            """
+            Returns the local gain mask of an RF.
+            """
+            min_val = np.min(img)
+            max_val = np.max(img)
+
+            # Perform the reverse linear transformation. Set the
+            # min values to 1 and max values to 0. Thus the max values
+            # will never change. If they are arbirarily low, they will stay low.
+            img_reversed = 1 - ((img - min_val) / (max_val - min_val))
+
+            # Apply mask
+            img_reversed_masked = img_reversed * mask
+
+            return img_reversed_masked
+
+        def _pruning_model(x, x_max, y_min, y_max, x_zero):
+            # Compute the slope and intercept of the line
+            slope = y_min / (x_max - x_zero)  # negative slope from x_zero to x_max
+            intercept = slope * x_zero
+
+            # Compute the function values
+            y = slope * x - intercept
+
+            # Clip x values outside the range [y_min, y_max]
+            y = np.clip(y, y_min, y_max)
+
+            return y
+
+        max_pruning = -0.1
+        max_growth = 0.1
+        converge_to = 1.0
+
+        height = rfs.shape[1]
+        width = rfs.shape[2]
+
+        # For area to calculate the error later
+        img_ret_mask = img_ret_mask.astype(bool)
+
+        # Adjust rfs iteratively
+        rfs_adjusted = rfs.copy()
+        local_gain_masks = np.zeros(rfs.shape)
+        error = np.inf
+        iteration = 0
+        max_gcv = np.max(img_ret[img_ret_mask])
+        img_ret_adjusted = img_ret
+
+        while error > tolerate_error and iteration < max_iters:
+            iteration += 1
+
+            # For each RF, get the global coverage factor and the local gain mask
+            for i, rf in enumerate(rfs_adjusted):
+                x_pix, y_pix = rf_lu_pix[i, :]
+
+                # Get the coverage factor of the rf
+                this_gcf = img_ret_adjusted[
+                    y_pix : y_pix + height, x_pix : x_pix + width
+                ]
+
+                this_global_delta = _pruning_model(
+                    this_gcf, max_gcv, max_pruning, max_growth, converge_to
+                )
+
+                # Note that local gain mask does not cover all pixels,
+                # thus the negative surround of the RF is not affected
+                local_gain_masks[i] = _get_local_gain_mask(rf, masks[i])
+
+                this_local_delta = this_global_delta * local_gain_masks[i]
+                rfs_adjusted[i] += this_local_delta
+
+            # Re calculate the coverage factor of each pixel, and check if it has converged
+            img_ret_adjusted = np.zeros(img_ret.shape)
+            for i, rf in enumerate(rfs_adjusted):
+                x_pix, y_pix = rf_lu_pix[i, :]
+
+                # Get the coverage factor of the rf
+                img_ret_adjusted[y_pix : y_pix + height, x_pix : x_pix + width] += rf
+
+            # print(f"Maximum adjusted coverage: {img_ret_adjusted.max()}")
+            # print(f"Minimum adjusted coverage: {img_ret_adjusted.min()}")
+
+            # Calculate error as the maximum absolute difference from the converge_to value within the masked areas
+            # error = np.max(np.abs(img_ret_adjusted * img_ret_mask - converge_to))
+
+            # This creates a masked array where the "ignore" mask is True wherever img_ret_adjusted * img_ret_mask equals 0.
+            # Thus we're effectively ignoring the zero values and considering only the non-zero values for calculations.
+            masked_error = ma.masked_where(
+                img_ret_adjusted * img_ret_mask == 0,
+                img_ret_adjusted * img_ret_mask - converge_to,
+            )
+
+            # Calculate error as the difference between max img value and converge_to value within the non-masked (non-zero) areas
+            # This does not guard against the lower bound of the img values. This should not be a problem, because we are working
+            # with masked RF, and the mask is defined as above some positive value.
+            error = ma.max(masked_error)
+
+            # print(f"Iteration: {iteration}")
+            # print(f"Error: {error}")
+
+        return rfs_adjusted, img_ret_adjusted
 
     def build(self):
         """
@@ -1283,7 +1490,7 @@ class ConstructRetina(RetinaMath):
             )
 
             # Extract receptive field contours from the generated spatial data
-            img_rf_masks = self._get_rf_masks(img_upsampled_scaled, mask_threshold=0.2)
+            img_rf_masks = self._get_rf_masks(img_upsampled_scaled, mask_threshold=0.1)
 
             # Save the generated receptive fields
             output_path = self.context.output_folder
@@ -1321,8 +1528,13 @@ class ConstructRetina(RetinaMath):
                 self.dd_vs_ecc_to_viz["dd_vae_y"],
             ) = self._get_dd_fit_for_viz(self.gc_vae_df)
 
+            self.gen_rfs_to_viz = {
+                "img_rf": img_upsampled_scaled,
+                "img_mask": img_rf_masks,
+            }
+
             # Place separate rf images to one retina
-            img_ret = self._get_full_retina_with_rf_images(
+            img_ret, rf_lu_pix = self._get_full_retina_with_rf_images(
                 self.ecc_lim_mm,
                 self.polar_lim_deg,
                 img_upsampled_scaled,
@@ -1330,7 +1542,7 @@ class ConstructRetina(RetinaMath):
                 new_um_per_pix,
             )
 
-            img_ret_masked = self._get_full_retina_with_rf_images(
+            img_ret_masked, _ = self._get_full_retina_with_rf_images(
                 self.ecc_lim_mm,
                 self.polar_lim_deg,
                 img_rf_masks,
@@ -1342,34 +1554,12 @@ class ConstructRetina(RetinaMath):
                 "img_ret_masked": img_ret_masked,
             }
 
+            img_ret_pruned = self._prune_dendrites(
+                img_upsampled_scaled, img_rf_masks, img_ret, img_ret_masked, rf_lu_pix
+            )
+
             # TÄHÄN JÄIT:
             # -IMPLEMENTOI ROTAATIO JA OVERLAP ANALYYSI
-            """
-            PSEUDOKOODI BY CHAT GPT 
-            initialize RFs with positions
-            initialize retina image
-
-            # Place all RFs
-            for each RF in RFs:
-                place RF on retina image
-
-            # Calculate initial coverage factor
-            for each pixel in retina image:
-                calculate total coverage under pixel
-
-            while not converged:
-                # Adjust each RF's pixels according to the dendrite growth model
-                for each RF in RFs:
-                    for each pixel in RF:
-                        calculate desired_delta_sensitivity based on pixel's current value in retina image
-                        adjust pixel's sensitivity by desired_delta_sensitivity
-
-                # Recalculate the coverage
-                for each pixel in retina image:
-                    calculate total coverage under pixel
-
-            
-            """
 
         # -- Third, endow cells with temporal receptive fields
         self._create_temporal_receptive_fields()
@@ -1495,8 +1685,16 @@ class ConstructRetina(RetinaMath):
 
     def show_retina_img(self):
         """
-        Show the generated retina image
+        Show the VAE retina image
         """
 
         # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
         self.viz.show_retina_img(self)
+
+    def show_rf_imgs(self, n_samples=10):
+        """
+        Show the individual RFs of the VAE retina
+        """
+
+        # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
+        self.viz.show_rf_imgs(self, n_samples=n_samples)

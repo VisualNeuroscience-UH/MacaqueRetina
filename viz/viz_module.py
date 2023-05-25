@@ -1741,3 +1741,26 @@ class Viz:
         )
         plt.imshow(img_ret_masked, cmap=custom_cmap)
         plt.colorbar()
+
+    def show_rf_imgs(self, retina, n_samples=10):
+        """
+        Show the individual RFs of the VAE retina
+
+        img_rf: (n_cells, n_pix, n_pix)
+        img_mask: (n_cells, n_pix, n_pix)
+        """
+
+        img_rf = retina.gen_rfs_to_viz["img_rf"]
+        img_mask = retina.gen_rfs_to_viz["img_mask"]
+
+        fig, axs = plt.subplots(2, n_samples, figsize=(n_samples, 2))
+        samples = np.random.choice(img_rf.shape[0], n_samples, replace=False)
+        for i, sample in enumerate(samples):
+            axs[0, i].imshow(img_rf[sample], cmap="gray")
+            axs[0, i].axis("off")
+            axs[0, i].set_title("Cell " + str(sample))
+
+            axs[1, i].imshow(img_mask[sample], cmap="gray")
+
+            # Add colorbar to each subplot in row 0
+            fig.colorbar(axs[0, i].imshow(img_rf[sample], cmap="gray"), ax=axs[0, i])

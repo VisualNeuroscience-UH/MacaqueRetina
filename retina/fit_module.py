@@ -735,7 +735,7 @@ class Fit(ApricotData, RetinaMath):
         kappa, loc[index] = result.x
         scale[index] = np.pi  # fixed
 
-        print("Fitted kappa and loc: ", kappa, loc[index])
+        # print("Fitted kappa and loc: ", kappa, loc[index])
 
         x_model_fit[:, index] = np.linspace(
             stats.vonmises.ppf(0.001, kappa, loc=loc[index], scale=scale[index]),
