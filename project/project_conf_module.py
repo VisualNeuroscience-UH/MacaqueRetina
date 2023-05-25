@@ -348,6 +348,7 @@ if __name__ == "__main__":
     """
     Build and test your retina here, one gc type at a time. Temporal hemiretina of macaques.
     """
+    # TÄHÄN JÄIT: DEND PRUNING MODEL TOIMII. VIIMEISTELE KUVAT (AJAT TÄMÄ).
 
     # Main retina construction method. This method calls all other methods in the retina construction process.
     PM.construct_retina.build()
