@@ -1767,3 +1767,34 @@ class Viz:
 
             axs[2, i].imshow(img_pruned[sample], cmap="gray")
             axs[2, i].axis("off")
+
+    def show_rf_boxplot(self, retina):
+        """
+        Show the individual RFs of the VAE retina
+
+        img_rf: (n_cells, n_pix, n_pix)
+        img_pruned: (n_cells, n_pix, n_pix)
+        """
+
+        img_rf = retina.gen_rfs_to_viz["img_rf"]
+        img_pruned = retina.gen_rfs_to_viz["img_pruned"]
+
+        fig, axs = plt.subplots(
+            2, 1, figsize=(10, 10)
+        )  # I assume you want a bigger figure size.
+
+        # reshape and transpose arrays so that we have one row per cell
+        df_rf = pd.DataFrame(img_rf.reshape(img_rf.shape[0], -1).T)
+        df_pruned = pd.DataFrame(img_pruned.reshape(img_pruned.shape[0], -1).T)
+
+        # Show seaborn boxplot with RF values, one box for each cell
+        sns.violinplot(data=df_rf, ax=axs[0])
+        axs[0].set_title("RF values")
+        # Put grid on
+        axs[0].grid(True)
+        # ...and RF_adjusted values
+        sns.violinplot(data=df_pruned, ax=axs[1])
+        axs[1].set_title("RF adjusted values")
+        axs[1].grid(True)
+
+        plt.show()

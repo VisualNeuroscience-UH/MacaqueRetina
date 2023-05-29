@@ -369,6 +369,7 @@ if __name__ == "__main__":
     # PM.construct_retina.show_latent_space_and_samples()
     PM.construct_retina.show_retina_img()
     PM.construct_retina.show_rf_imgs(n_samples=10)
+    PM.construct_retina.show_rf_boxplot()
 
     # # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
     # this_dep_var = "val_loss"
@@ -422,7 +423,7 @@ if __name__ == "__main__":
     ### Load stimulus to get working retina ###
     #################################
 
-    PM.working_retina.load_stimulus()
+    # PM.working_retina.load_stimulus()
 
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
     # ret.load_stimulus(movie)# => METADATA
@@ -431,7 +432,7 @@ if __name__ == "__main__":
     ### Show single ganglion cell response ###
     #################################
 
-    example_gc = 2  # int or 'None'
+    # example_gc = 2  # int or 'None'
     # PM.working_retina.convolve_stimulus(example_gc)
 
     # PM.viz.show_spatiotemporal_filter(PM.working_retina)
@@ -445,9 +446,9 @@ if __name__ == "__main__":
 
     # PM.viz.show_gc_responses(PM.working_retina)
 
-    PM.viz.show_stimulus_with_gcs(
-        PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51
-    )
+    # PM.viz.show_stimulus_with_gcs(
+    #     PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51
+    # )
 
     # PM.viz.show_single_gc_view(PM.working_retina, cell_index=example_gc, frame_number=21)
 

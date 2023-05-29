@@ -1213,62 +1213,98 @@ class ConstructRetina(RetinaMath):
         max_iters=100,
     ):
         """
-        Prune dendritic arbors of the RFs.
+        Iteratively adjust the receptive fields (RFs) to optimize their coverage of a given retina image.
 
-        This method adjusts the receptive fields (RFs) iteratively to improve their
-        coverage of the compiled retina image. The process is done in a way to converge
-        the global coverage factor (GCF) in the region of each RF towards a set target
-        (here 1.0), while tolerating a certain error.
-
-        In each iteration, for each RF, a pruning model is applied that calculates
-        a global delta (change). This global delta is based on the current GCF, the
-        maximum GCF across the retina image, a set maximum growth and pruning rate,
-        and the converge target.
-
-        The global delta is then scaled by a local gain mask, which is derived from
-        the RF and its corresponding mask, ensuring that changes are applied only to
-        the masked (valued above a positive threshold) pixels.
-
-        The adjusted RFs are then used to recalculate the GCF of each pixel in the
-        compiled retina image. The process is repeated until the maximum absolute
-        difference from the converge_to value within the non-zero (masked) areas of
-        the adjusted image is less than a set tolerated error, or until the maximum
-        number of iterations is reached.
+        The RFs are updated using a pruning model that balances the coverage of the retina image with
+        the growth and pruning rate of RFs. This process aims to converge the global coverage factor (GCF,
+        sum over individual RFs) towards a target value (1.0 in this case).
 
         Parameters
         ----------
         rfs : numpy.ndarray
-            Receptive fields of shape (n_rfs, n_pixels, n_pixels)
+            Array representing the RFs, with shape (n_rfs, n_pixels, n_pixels).
         masks : numpy.ndarray
-            Masks of shape (n_rfs, n_pixels, n_pixels)
+            Array of masks corresponding to the RFs, with the same shape as `rfs`.
         img_ret : numpy.ndarray
-            Compiled retina image of shape (h_pixels, w_pixels)
+            The compiled retina image to be covered, with shape (h_pixels, w_pixels).
         rf_lu_pix : numpy.ndarray
-            Left upper corner pixel coordinates of each rf image of shape (n_rfs, 2)
+            Array representing the coordinates of the upper-left pixel of each RF, with shape (n_rfs, 2).
         tolerate_error: float, optional
-            The tolerated error from the converge_to value, default is 0.2
+            The error tolerance between the GCF and the target value. The adjustment process will stop
+            when the maximum absolute difference is less than this value. Default is 0.2.
         max_iters: int, optional
-            Maximum number of iterations to prevent infinite loop, default is 100
+            The maximum number of iterations to prevent infinite loop. Default is 100.
+
+        Returns
+        -------
+        rfs_adjusted : numpy.ndarray
+            The adjusted RFs with the same shape as `rfs`.
+        img_ret_adjusted : numpy.ndarray
+            The adjusted retina image with the same shape as `img_ret`.
         """
 
-        def _get_local_gain_mask(img, mask):
+        def _get_local_gain_mask(
+            img, mask, min_midpoint, min_slope, max_midpoint, max_slope
+        ):
             """
-            Returns the local gain mask of an RF.
-            """
-            min_val = np.min(img)
-            max_val = np.max(img)
+            Computes a mask that scales changes in RFs according to the piecewise logistic function.
 
-            # Perform the reverse linear transformation. Set the
-            # min values to 1 and max values to 0. Thus the max values
-            # will never change. If they are arbirarily low, they will stay low.
-            img_reversed = 1 - ((img - min_val) / (max_val - min_val))
+            It ensures that the changes are applied only to the pixels within the given mask. The logistic
+            function parameters can be adjusted to manipulate the gain mask.
+            """
+
+            # Piecewise logistic function
+            def piecewise_logistic(x):
+                # Negative side logistic function, user defined midpoint and slope
+                def logistic_negative(x):
+                    x = (x - min_midpoint) * min_slope
+                    return 1 / (1 + np.exp(-x))
+
+                # Positive side logistic function, user defined midpoint and slope
+                def logistic_positive(x):
+                    x = (x - max_midpoint) * max_slope
+                    return 1 - (1 / (1 + np.exp(-x)))
+
+                return np.piecewise(
+                    x, [x < 0, x >= 0], [logistic_negative, logistic_positive]
+                )
+
+            # Apply the piecewise logistic transformation
+            img_transformed = piecewise_logistic(img)
+            if 0:
+                # Visualize the function between -1 and 3 with 1000 points
+                x = np.linspace(-1, 3, 1000)
+                y = piecewise_logistic(x)
+                plt.plot(x, y)
+                # Put vertical lines to min_gc_value and max_gc_value
+                plt.axvline(x=min_gc_value, color="r", linestyle="--")
+                plt.axvline(x=max_gc_value, color="r", linestyle="--")
+                plt.show()
+                exit()
 
             # Apply mask
-            img_reversed_masked = img_reversed * mask
+            img_transformed_masked = img_transformed * mask
 
-            return img_reversed_masked
+            return img_transformed_masked
+
+        # For area to calculate the error later
+        img_ret_mask = img_ret_mask.astype(bool)
+        max_gc_value = np.max(img_ret[img_ret_mask])
+        min_gc_value = np.min(img_ret[img_ret_mask])
+
+        min_midpoint = min_gc_value / 2
+        min_slope = 10 / abs(min_gc_value)
+        max_midpoint = max_gc_value / 2
+        max_slope = 10 / max_gc_value
 
         def _pruning_model(x, x_max, y_min, y_max, x_zero):
+            """
+            Computes the global delta using a linear model which represents the changes in RF.
+
+            It determines the growth or pruning rate of an RF based on its current GCF and its
+            deviation from the target value.
+            """
+
             # Compute the slope and intercept of the line
             slope = y_min / (x_max - x_zero)  # negative slope from x_zero to x_max
             intercept = slope * x_zero
@@ -1283,21 +1319,18 @@ class ConstructRetina(RetinaMath):
 
         max_pruning = -0.1
         max_growth = 0.1
-        converge_to = 1.0
+        converge_to = 1.0  # Global coverage factor (GCF) target value
 
         height = rfs.shape[1]
         width = rfs.shape[2]
-
-        # For area to calculate the error later
-        img_ret_mask = img_ret_mask.astype(bool)
 
         # Adjust rfs iteratively
         rfs_adjusted = rfs.copy()
         local_gain_masks = np.zeros(rfs.shape)
         error = np.inf
         iteration = 0
-        max_gcv = np.max(img_ret[img_ret_mask])
         img_ret_adjusted = img_ret
+        min_rf_value = np.zeros((100, rfs.shape[0]))
 
         while error > tolerate_error and iteration < max_iters:
             iteration += 1
@@ -1312,15 +1345,24 @@ class ConstructRetina(RetinaMath):
                 ]
 
                 this_global_delta = _pruning_model(
-                    this_gcf, max_gcv, max_pruning, max_growth, converge_to
+                    this_gcf, max_gc_value, max_pruning, max_growth, converge_to
                 )
 
                 # Note that local gain mask does not cover all pixels,
                 # thus the negative surround of the RF is not affected
-                local_gain_masks[i] = _get_local_gain_mask(rf, masks[i])
+                local_gain_masks[i] = _get_local_gain_mask(
+                    rf,
+                    masks[i],
+                    min_midpoint,
+                    min_slope,
+                    max_midpoint,
+                    max_slope,
+                )
 
                 this_local_delta = this_global_delta * local_gain_masks[i]
                 rfs_adjusted[i] += this_local_delta
+
+                min_rf_value[iteration, i] = np.min(rfs_adjusted[i])
 
             # Re calculate the coverage factor of each pixel, and check if it has converged
             img_ret_adjusted = np.zeros(img_ret.shape)
@@ -1497,7 +1539,12 @@ class ConstructRetina(RetinaMath):
             )
 
             img_pruned, img_ret_pruned = self._prune_dendrites(
-                img_upsampled_scaled, img_rf_masks, img_ret, img_ret_masked, rf_lu_pix
+                img_upsampled_scaled,
+                img_rf_masks,
+                img_ret,
+                img_ret_masked,
+                rf_lu_pix,
+                tolerate_error=0.01,
             )
 
             self.gen_rfs_to_viz = {
@@ -1511,9 +1558,6 @@ class ConstructRetina(RetinaMath):
                 "img_ret_masked": img_ret_masked,
                 "img_ret_pruned": img_ret_pruned,
             }
-
-            # TÄHÄN JÄIT:
-            # -IMPLEMENTOI ROTAATIO JA OVERLAP ANALYYSI
 
         # -- Third, endow cells with temporal receptive fields
         self._create_temporal_receptive_fields()
@@ -1652,3 +1696,11 @@ class ConstructRetina(RetinaMath):
 
         # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
         self.viz.show_rf_imgs(self, n_samples=n_samples)
+
+    def show_rf_boxplot(self):
+        """
+        Show each RF and adjusted RF of the VAE retina as boxplots
+        """
+
+        # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
+        self.viz.show_rf_boxplot(self)
