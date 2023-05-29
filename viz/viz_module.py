@@ -1729,6 +1729,7 @@ class Viz:
         plt.subplot(221)
         plt.imshow(img_ret, cmap="gray")
         plt.colorbar()
+        plt.title("Original coverage")
         plt.subplot(222)
 
         cmap = plt.cm.get_cmap("viridis")
@@ -1737,10 +1738,12 @@ class Viz:
         )
         plt.imshow(img_ret_masked, cmap=custom_cmap)
         plt.colorbar()
+        plt.title("Summed masks")
 
         plt.subplot(223)
         plt.imshow(img_ret_pruned, cmap="gray")
         plt.colorbar()
+        plt.title("Pruned coverage")
 
     def show_rf_imgs(self, retina, n_samples=10):
         """
@@ -1767,6 +1770,26 @@ class Viz:
 
             axs[2, i].imshow(img_pruned[sample], cmap="gray")
             axs[2, i].axis("off")
+
+        # On the left side of the first axis of each row, set text labels.
+        axs[0, 0].set_ylabel("RF")
+        axs[0, 0].axis("on")
+        axs[1, 0].set_ylabel("Mask")
+        axs[1, 0].axis("on")
+        axs[2, 0].set_ylabel("Pruned")
+        axs[2, 0].axis("on")
+
+        axs[0, 0].set_xticks([])
+        axs[0, 0].set_yticks([])
+
+        axs[1, 0].set_xticks([])
+        axs[1, 0].set_yticks([])
+
+        axs[2, 0].set_xticks([])
+        axs[2, 0].set_yticks([])
+
+        # # Adjust the layout so labels are visible
+        # fig.subplots_adjust(left=0.15)
 
     def show_rf_boxplot(self, retina):
         """
