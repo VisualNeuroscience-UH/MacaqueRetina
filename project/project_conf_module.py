@@ -152,8 +152,7 @@ Valid stimulus_options include (overriding visual_stimulus_module.VideoBaseClass
 
 image_width: in pixels
 image_height: in pixels
-container: file format to export
-codec: compression format
+pix_per_deg: pixels per degree
 fps: frames per second
 duration_seconds: stimulus duration
 baseline_start_seconds: midgray at the beginning
@@ -163,8 +162,14 @@ pattern:
     'natural_images'; 'phase_scrambled_images'; 'natural_video'; 'phase_scrambled_video';
     'temporal_sine_pattern'; 'temporal_square_pattern'; 'spatially_uniform_binary_noise'
 stimulus_form: 'circular'; 'rectangular'; 'annulus'
+
+For stimulus_form annulus, additional arguments are:
+size_inner: in degrees
+size_outer: in degrees
+
 stimulus_position: in degrees, (0,0) is the center.
-stimulus_size: In degrees. Radius for circle and annulus, half-width for rectangle.
+stimulus_size: In degrees. Radius for circle and annulus, half-width for rectangle. 0 for full image.
+background: intensity between 0, 256
 contrast: between 0 and 1
 mean: mean stimulus intensity between 0, 256
 
@@ -173,8 +178,8 @@ Note if mean + ((contrast * max(intensity)) / 2) exceed 255 or if
         the stimulus generation fails
 
 For sine_grating and square_grating, additional arguments are:
-spatial_frequency: in cycles per degree
 temporal_frequency: in Hz
+spatial_frequency: in cycles per degree
 orientation: in degrees
 
 For all temporal and spatial gratings, additional argument is
@@ -192,19 +197,20 @@ my_stimulus_options = {
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
     "fps": 30,
-    "pattern": "sine_grating",  # Natural video is not supported yet. One of the StimulusPatterns
-    # stimulus only
-    "stimulus_form": "rectangular",
-    "temporal_frequency": 2,
-    "spatial_frequency": 1.0,
-    "stimulus_position": (0, 0),
     "duration_seconds": 4.0,
-    "stimulus_size": 1.4,
-    "contrast": 0.99,
     "baseline_start_seconds": 0.5,
     "baseline_end_seconds": 0.5,
+    "pattern": "sine_grating",  # Natural video is not supported yet. One of the StimulusPatterns
+    "stimulus_form": "rectangular",
+    "size_inner": None,  # Applies to annulus only
+    "size_outer": None,  # Applies to annulus only
+    "stimulus_position": (0, 0),
+    "stimulus_size": 0,
     "background": 128,
+    "contrast": 0.99,
     "mean": 128,
+    "temporal_frequency": 2,
+    "spatial_frequency": 1.0,
     "phase_shift": 0,
 }
 
@@ -387,38 +393,6 @@ if __name__ == "__main__":
     # stimulus video will be saved on output_folder in mp4 format (viewing and hdf5 format (for reloading)
     PM.stimulate.make_stimulus_video()
 
-    ##############################
-    ### Create analog stimulus ###
-    ##############################
-
-    # # Analog stimulus comprises of continuous waveforms of types 'quadratic_oscillation', 'noise' or 'step_current'. You get few input  channels (N_units) of temporal signals. These signals do not pass through the retina, instead they are saved as .mat files.
-
-    # N_tp = 20000
-    # dt = 0.1 # ms
-
-    # # for freq in range(1,101):
-    # #     N_cycles = freq * (dt/1000) * N_tp
-    # #     print(f"Creating stim with {freq=}, holding {N_cycles=}")
-
-    # #     filename_out =  f'freq_{freq:02}.mat'
-
-    # freq = 2
-    # N_cycles = freq * (dt/1000) * N_tp
-    # filename_out =  'test.mat'
-    # analog_options = {
-    # "filename_out" : filename_out,
-    # "N_units" :3,
-    # "coord_type" :"real",
-    # "N_tp" : N_tp,
-    # "input_type" : 'quadratic_oscillation', # 'quadratic_oscillation' or 'noise' or 'step_current'
-    # "N_cycles" : [N_cycles, 0, 0], # Scalar provides two units at quadrature, other units are zero. List of ints/floats provides separate freq to each. Ignored for noise.
-    # "dt" : dt, # IMPORTANT: assuming milliseconds
-    # "save_stimulus" : True
-    # }
-
-    # PM.analog_input.make_stimulus_video(analog_options=analog_options)
-    # PM.viz.plot_analog_stimulus(PM.analog_input)
-
     #################################
     ### Load stimulus to get working retina ###
     #################################
@@ -472,6 +446,35 @@ if __name__ == "__main__":
 
     # PM.working_retina.save_spikes_csv(filename='testi_spikes.csv') # => METADATA
     # PM.working_retina.save_structure_csv(filename='testi_structure.csv') # => METADATA
+
+    ##############################
+    ### Create analog stimulus ###
+    ##############################
+
+    # # If you need current injection to the soma, use this method.
+    # N_tp = 20000
+    # dt = 0.1  # ms
+
+    # freq = 2
+    # N_cycles = freq * (dt / 1000) * N_tp
+    # filename_out = "test.mat"
+    # analog_options = {
+    #     "filename_out": filename_out,
+    #     "N_units": 3,
+    #     "coord_type": "real",
+    #     "N_tp": N_tp,
+    #     "input_type": "noise",  # 'quadratic_oscillation' or 'noise' or 'step_current'
+    #     "N_cycles": [
+    #         N_cycles,
+    #         0,
+    #         0,
+    #     ],  # Scalar provides two units at quadrature, other units are zero. List of ints/floats provides separate freq to each. Ignored for noise.
+    #     "dt": dt,  # IMPORTANT: assuming milliseconds
+    #     "save_stimulus": True,
+    # }
+
+    # PM.analog_input.make_stimulus_video(analog_options=analog_options)
+    # PM.viz.plot_analog_stimulus(PM.analog_input)
 
     """
     ### Housekeeping ###. Do not comment out.
