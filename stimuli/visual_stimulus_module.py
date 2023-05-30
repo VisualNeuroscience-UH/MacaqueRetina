@@ -43,7 +43,7 @@ class VideoBaseClass(object):
         options = {}
         options["image_width"] = 1280  # Image width in pixels
         options["image_height"] = 720  # Image height in pixels
-        options["container"] = "mp4"
+        options["container"] = "mp4"  # file format to export
         # options["codec"] = "MP42"
         options["codec"] = "mp4v"  # only mp4v works for my ubuntu 22.04
         options["fps"] = 100.0  # 64.0  # Frames per second
@@ -74,7 +74,7 @@ class VideoBaseClass(object):
         # Init optional arguments
         options["spatial_frequency"] = None
         options["temporal_frequency"] = None
-        options["spatial_band_pass"] = None
+        options[""] = None
         options["temporal_band_pass"] = None
         options["orientation"] = 0.0  # No rotation or vertical
         options["size_inner"] = None
@@ -102,7 +102,6 @@ class VideoBaseClass(object):
         self.options = options
 
     def _scale_intensity(self):
-
         """Scale intensity to 8-bit grey scale. Calculating peak-to-peak here allows different
         luminances and contrasts"""
 
@@ -216,7 +215,6 @@ class VideoBaseClass(object):
         self.frames = self.frames[0:image_height, 0:image_width, :]
 
     def _prepare_form(self, stimulus_size):
-
         center_deg = self.options["stimulus_position"]  # in degrees
         radius_deg = stimulus_size  # in degrees
         height = self.options["image_height"]  # in pixels
@@ -249,7 +247,6 @@ class VideoBaseClass(object):
         return X, Y, center_pix, radius_pix
 
     def _prepare_circular_mask(self, stimulus_size):
-
         X, Y, center_pix, radius_pix = self._prepare_form(stimulus_size)
         dist_from_center = np.sqrt((X - center_pix[0]) ** 2 + (Y - center_pix[1]) ** 2)
 
@@ -306,7 +303,6 @@ class VideoBaseClass(object):
         self.frames = frames
 
     def _raw_intensity_from_data(self):
-
         self.options["raw_intensity"] = (np.min(self.frames), np.max(self.frames))
 
     def _create_frames(self, epoch__in_seconds):
@@ -463,7 +459,6 @@ class StimulusPattern:
         self.frames = np.zeros(self.frames.shape) + frame_time_series
 
     def natural_images(self):
-
         if self.context.my_stimulus_metadata["apply_cone_filter"] is True:
             self.cones.image2cone_response()
             self.image = self.cones.cone_response
@@ -497,7 +492,6 @@ class StimulusPattern:
         self._raw_intensity_from_data()
 
     def natural_video(self):
-
         # self.cones.image2cone_response()
         # self.image = self.cones.cone_response
         video_file_name = self.context.my_stimulus_metadata["stimulus_file"]
@@ -553,14 +547,12 @@ class StimulusForm:
     """
 
     def circular(self):
-
         mask = self._prepare_circular_mask(self.options["stimulus_size"])
 
         # self.frames = self.frames * mask[..., np.newaxis]
         self._combine_background(mask)
 
     def rectangular(self):
-
         X, Y, center_pix, radius_pix = self._prepare_form(self.options["stimulus_size"])
 
         # Prepare rectangular distance map in pixels
@@ -579,7 +571,6 @@ class StimulusForm:
         self._combine_background(mask)
 
     def annulus(self):
-
         size_inner = self.options["size_inner"]
         size_outer = self.options["size_outer"]
         if not size_inner:
@@ -771,7 +762,10 @@ class ConstructStimulus(VideoBaseClass):
 
 class AnalogInput:
     """
-    Creates analog input in CxSystem compatible video mat file format.
+    Creates analog input in CxSystem compatible video mat file format. Analog stimulus comprises of
+    continuous waveforms of types 'quadratic_oscillation', 'noise' or 'step_current'. You get few input
+    channels (N_units) of temporal signals. These signals do not pass through the retina, instead
+    they are saved as .mat files. Use e.g. as current injection to a unit.
 
     frameduration assumes milliseconds
     """
@@ -807,7 +801,6 @@ class AnalogInput:
         return self._viz
 
     def make_stimulus_video(self, analog_options=None):
-
         assert analog_options is not None, "analog_options not set, aborting... "
 
         N_units = analog_options["N_units"]
@@ -861,7 +854,6 @@ class AnalogInput:
             )
 
     def _gaussian_filter(self):
-
         sigma = 30  # was abs(30)
         w = (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp(
             -1 * np.power(np.arange(1000) - 500, 2) / (2 * np.power(sigma, 2))
@@ -876,7 +868,6 @@ class AnalogInput:
         return Input
 
     def create_noise_input(self, Nx=0, N_tp=None):
-
         assert Nx != 0, "N units not set, aborting..."
         assert N_tp is not None, "N timepoints not set, aborting..."
         Input = (np.random.multivariate_normal(np.zeros([Nx]), np.eye(Nx), N_tp)).T
@@ -937,7 +928,6 @@ class AnalogInput:
         return Input
 
     def create_step_input(self, Nx=0, N_tp=None):
-
         assert Nx != 0, "N units not set, aborting..."
         assert N_tp is not None, "N timepoints not set, aborting..."
 

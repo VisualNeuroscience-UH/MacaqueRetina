@@ -11,7 +11,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Local
-from retina.working_retina_module import ConstructRetina, WorkingRetina
+from retina.construct_retina_module import ConstructRetina
+from retina.working_retina_module import WorkingRetina
 from stimuli import visual_stimulus_module as vs
 from cxsystem2.core.tools import write_to_file, load_from_file
 
@@ -35,13 +36,11 @@ class Experiment:
         self._replace_options(input_options)
 
     def _replace_options(self, input_options):
-
         # Replace with input options
         for this_key in input_options.keys():
             self.options[this_key] = input_options[this_key]
 
     def _meshgrid_conditions(self, conditions_to_meshgrid, *varargs):
-
         assert len(conditions_to_meshgrid) == len(
             varargs
         ), "N conditions does not match N 1D vectors of values, cannot meshgrid"
@@ -219,7 +218,6 @@ class Experiment:
 
 
 if __name__ == "__main__":
-
     root_path = r"C:\Users\Simo\Laskenta\SimuOut"
     # root_path = ''
 
@@ -229,39 +227,35 @@ if __name__ == "__main__":
     n_trials = 200
 
     options = {}
-    options["duration_seconds"] = 0.4  # seconds
-    options["mean"] = 128  # intensity mean
-    options["contrast"] = 0.9
-    options["image_width"] = 240  # Image width in pixels
-    options["image_height"] = 240  # Image height in pixels
-    options["background"] = 128
-    options["mean"] = 128  # intensity mean
+    # options["duration_seconds"] = 0.4  # seconds
+    # options["contrast"] = 0.9
+    # options["image_width"] = 240  # Image width in pixels
+    # options["image_height"] = 240  # Image height in pixels
+    # options["background"] = 128
+    # options["mean"] = 128  # intensity mean
 
     # Valid options sine_grating; square_grating; colored_temporal_noise; white_gaussian_noise;
     # natural_images; natural_video; phase_scrambled_video; temporal_sine_pattern; temporal_square_pattern
-    options["pattern"] = "temporal_square_pattern"
-    options[
-        "phase_shift"
-    ] = 0  # 0 - 2pi, to have grating or temporal oscillation phase shifted
-    options[
-        "stimulus_form"
-    ] = "circular"  # Valid options circular, rectangular, annulus
-    options["stimulus_position"] = (
-        -0.06,
-        0.03,
-    )  # (0, 0) Stimulus center position in degrees inside the video. (0,0) is the center.
+    # options["pattern"] = "temporal_square_pattern"
+    # options[
+    #     "phase_shift"
+    # ] = 0  # 0 - 2pi, to have grating or temporal oscillation phase shifted
+    # options[
+    #     "stimulus_form"
+    # ] = "circular"  # Valid options circular, rectangular, annulus
+    # options["stimulus_position"] = (
+    #     -0.06,
+    #     0.03,
+    # )  # (0, 0) Stimulus center position in degrees inside the video. (0,0) is the center.
 
     # In degrees. Radius for circle and annulus, half-width for rectangle. 0 gives smallest distance from image borders, ie max radius
-    options["stimulus_size"] = 0.1
+    # options["stimulus_size"] = 0.1
 
     # Init optional arguments
-    options["spatial_frequency"] = 1.0
-    options["temporal_frequency"] = 1.0
-    options["spatial_band_pass"] = None
-    options["temporal_band_pass"] = None
-    options["orientation"] = 0.0  # No rotation or vertical
-    options["size_inner"] = None
-    options["size_outer"] = None
+    # options["spatial_frequency"] = 1.0
+    # options["temporal_frequency"] = 1.0
+    # options["size_inner"] = None
+    # options["size_outer"] = None
     options["on_proportion"] = 0.5  # between 0 and 1, proportion of stimulus-on time
     options["direction"] = "increment"  # or 'decrement'
 
