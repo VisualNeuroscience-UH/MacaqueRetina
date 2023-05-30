@@ -167,7 +167,7 @@ class Viz:
             # # Ellipses for DoG2D_fixed_surround
 
             if surround_model == 1:
-                # xy_tuple, ampl_c, xoc, yoc, semi_xc, semi_yc, orient_cen, ampl_s, sur_ratio, offset
+                # xy_tuple, ampl_c, xoc, yoc, semi_xc, semi_yc, orient_cen, ampl_s, relat_sur_diam, offset
                 data_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
 
                 e1 = Ellipse(
@@ -197,7 +197,7 @@ class Viz:
                         popt[4],
                         -popt[5] * 180 / np.pi,
                     )
-                    print(popt[6], "sur_ratio=", popt[7], "offset=", popt[8])
+                    print(popt[6], "relat_sur_diam=", popt[7], "offset=", popt[8])
             else:
                 data_fitted = self.DoG2D_independent_surround((x_grid, y_grid), *popt)
                 e1 = Ellipse(
@@ -321,7 +321,7 @@ class Viz:
         gc_rf_models[:, 1] = mosaic.gc_df["semi_yc"]
         gc_rf_models[:, 2] = mosaic.gc_df["xy_aspect_ratio"]
         gc_rf_models[:, 3] = mosaic.gc_df["ampl_s"]
-        gc_rf_models[:, 4] = mosaic.gc_df["sur_ratio"]
+        gc_rf_models[:, 4] = mosaic.gc_df["relat_sur_diam"]
         gc_rf_models[:, 5] = mosaic.gc_df["orient_cen"]
 
         # to cartesian
@@ -331,7 +331,7 @@ class Viz:
         ax.plot(xcoord.flatten(), ycoord.flatten(), "b.", label=mosaic.gc_type)
 
         if mosaic.surround_fixed:
-            # gc_rf_models parameters:'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','sur_ratio', 'orient_cen'
+            # gc_rf_models parameters:'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','relat_sur_diam', 'orient_cen'
             # Ellipse parameters: Ellipse(xy, width, height, angle=0, **kwargs). Only possible one at the time, unfortunately.
             for index in np.arange(len(xcoord)):
                 ellipse_center_x = xcoord[index]
@@ -414,7 +414,7 @@ class Viz:
                     ax.set_ylim([ax.get_ylim()[0], 1.1 * bin_values.max()])
 
         # Check correlations
-        # distributions = ['semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','sur_ratio', 'orient_cen']
+        # distributions = ['semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','relat_sur_diam', 'orient_cen']
         fig2, axes2 = plt.subplots(2, 3, figsize=(13, 4))
         axes2 = axes2.flatten()
         ref_index = 1
@@ -1719,11 +1719,13 @@ class Viz:
         plt.plot(data.T)
 
     def show_retina_img(self, retina):
-        """ """
+        """
+        Show the image of whole retina with all the receptive fields summed up.
+        """
 
         img_ret = retina.gen_ret_to_viz["img_ret"]
         img_ret_masked = retina.gen_ret_to_viz["img_ret_masked"]
-        img_ret_pruned = retina.gen_ret_to_viz["img_ret_pruned"]
+        img_ret_adjusted = retina.gen_ret_to_viz["img_ret_adjusted"]
 
         plt.figure()
         plt.subplot(221)
@@ -1741,22 +1743,22 @@ class Viz:
         plt.title("Summed masks")
 
         plt.subplot(223)
-        plt.imshow(img_ret_pruned, cmap="gray")
+        plt.imshow(img_ret_adjusted, cmap="gray")
         plt.colorbar()
-        plt.title("Pruned coverage")
+        plt.title("Adjusted coverage")
 
     def show_rf_imgs(self, retina, n_samples=10):
         """
         Show the individual RFs of the VAE retina
 
         img_rf: (n_cells, n_pix, n_pix)
-        img_mask: (n_cells, n_pix, n_pix)
-        img_pruned: (n_cells, n_pix, n_pix)
+        img_rf_mask: (n_cells, n_pix, n_pix)
+        img_rfs_adjusted: (n_cells, n_pix, n_pix)
         """
 
         img_rf = retina.gen_rfs_to_viz["img_rf"]
-        img_mask = retina.gen_rfs_to_viz["img_mask"]
-        img_pruned = retina.gen_rfs_to_viz["img_pruned"]
+        img_rf_mask = retina.gen_rfs_to_viz["img_rf_mask"]
+        img_rfs_adjusted = retina.gen_rfs_to_viz["img_rfs_adjusted"]
 
         fig, axs = plt.subplots(3, n_samples, figsize=(n_samples, 3))
         samples = np.random.choice(img_rf.shape[0], n_samples, replace=False)
@@ -1765,10 +1767,10 @@ class Viz:
             axs[0, i].axis("off")
             axs[0, i].set_title("Cell " + str(sample))
 
-            axs[1, i].imshow(img_mask[sample], cmap="gray")
+            axs[1, i].imshow(img_rf_mask[sample], cmap="gray")
             axs[1, i].axis("off")
 
-            axs[2, i].imshow(img_pruned[sample], cmap="gray")
+            axs[2, i].imshow(img_rfs_adjusted[sample], cmap="gray")
             axs[2, i].axis("off")
 
         # On the left side of the first axis of each row, set text labels.
@@ -1776,7 +1778,7 @@ class Viz:
         axs[0, 0].axis("on")
         axs[1, 0].set_ylabel("Mask")
         axs[1, 0].axis("on")
-        axs[2, 0].set_ylabel("Pruned")
+        axs[2, 0].set_ylabel("Adjusted RF")
         axs[2, 0].axis("on")
 
         axs[0, 0].set_xticks([])
@@ -1791,16 +1793,16 @@ class Viz:
         # # Adjust the layout so labels are visible
         # fig.subplots_adjust(left=0.15)
 
-    def show_rf_boxplot(self, retina):
+    def show_rf_violinplot(self, retina):
         """
         Show the individual RFs of the VAE retina
 
         img_rf: (n_cells, n_pix, n_pix)
-        img_pruned: (n_cells, n_pix, n_pix)
+        img_rfs_adjusted: (n_cells, n_pix, n_pix)
         """
 
         img_rf = retina.gen_rfs_to_viz["img_rf"]
-        img_pruned = retina.gen_rfs_to_viz["img_pruned"]
+        img_rfs_adjusted = retina.gen_rfs_to_viz["img_rfs_adjusted"]
 
         fig, axs = plt.subplots(
             2, 1, figsize=(10, 10)
@@ -1808,7 +1810,9 @@ class Viz:
 
         # reshape and transpose arrays so that we have one row per cell
         df_rf = pd.DataFrame(img_rf.reshape(img_rf.shape[0], -1).T)
-        df_pruned = pd.DataFrame(img_pruned.reshape(img_pruned.shape[0], -1).T)
+        df_pruned = pd.DataFrame(
+            img_rfs_adjusted.reshape(img_rfs_adjusted.shape[0], -1).T
+        )
 
         # Show seaborn boxplot with RF values, one box for each cell
         sns.violinplot(data=df_rf, ax=axs[0])

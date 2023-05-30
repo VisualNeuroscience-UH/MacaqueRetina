@@ -208,7 +208,7 @@ class ConstructRetina(RetinaMath):
             "semi_yc",
             "xy_aspect_ratio",
             "ampl_s",
-            "sur_ratio",
+            "relat_sur_diam",
             "orient_cen",
         ]
         self.gc_df = pd.DataFrame(columns=columns)
@@ -475,7 +475,7 @@ class ConstructRetina(RetinaMath):
         """
         Create spatial receptive fields to model cells using coverage = 1.
         Starting from 2D difference-of-gaussian parameters:
-        'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','sur_ratio', 'orient_cen'
+        'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','relat_sur_diam', 'orient_cen'
 
         Places all ganglion cell spatial parameters to ganglion cell object dataframe self.gc_df
         """
@@ -544,7 +544,7 @@ class ConstructRetina(RetinaMath):
         """
         Create spatial receptive fields to model cells according to eccentricity.
         Starting from 2D difference-of-gaussian parameters:
-        'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','sur_ratio', 'orient_cen'
+        'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','relat_sur_diam', 'orient_cen'
 
         Places all ganglion cell spatial parameters to ganglion cell object dataframe self.gc_df
         """
@@ -1440,8 +1440,9 @@ class ConstructRetina(RetinaMath):
             self.gc_df
         )  # TODO - what was the purpose of this? Working retina uses ampl_c
 
-        # At this point the spatial receptive fields are ready.
-        # The positions are in gc_eccentricity, gc_polar_angle, and the rf parameters in gc_rf_models
+        # At this point the fitted ellipse spatial receptive fields are ready. All parameters are in self.gc_df.
+        # The positions are in the columns 'pos_ecc_mm', 'pos_polar_deg', 'ecc_group_idx', and the rf parameters in 'semi_xc',
+        # 'semi_yc', 'xy_aspect_ratio', 'ampl_c', 'ampl_s', 'relat_sur_diam', 'relat_sur_ampl', 'orient_cen', 'den_diam_um'
 
         if self.model_type == "VAE":
             # Fit or load variational autoencoder to generate receptive fields
@@ -1474,7 +1475,7 @@ class ConstructRetina(RetinaMath):
             data_um_per_pix = self.context.apricot_metadata["data_microm_per_pix"]
 
             # Upsample according to smallest rf diameter
-            img_upsampled_scaled, new_um_per_pix = self._get_upsampled_scaled_rfs(
+            img_rfs, new_um_per_pix = self._get_upsampled_scaled_rfs(
                 img_processed,
                 dd_ecc_params,
                 ret_pos_ecc_mm,
@@ -1483,13 +1484,11 @@ class ConstructRetina(RetinaMath):
             )
 
             # Extract receptive field contours from the generated spatial data
-            img_rf_masks = self._get_rf_masks(img_upsampled_scaled, mask_threshold=0.1)
+            img_rfs_mask = self._get_rf_masks(img_rfs, mask_threshold=0.1)
 
             # Save the generated receptive fields
             output_path = self.context.output_folder
-            img_paths = self.data_io.save_generated_rfs(
-                img_upsampled_scaled, output_path
-            )
+            img_paths = self.data_io.save_generated_rfs(img_rfs, output_path)
 
             # Add image paths as a columnd to self.gc_df
             self.gc_df["img_path"] = img_paths
@@ -1506,7 +1505,7 @@ class ConstructRetina(RetinaMath):
                 self.context.apricot_data_folder,
                 self.gc_type,
                 self.response_type,
-                spatial_data=img_upsampled_scaled,
+                spatial_data=img_rfs,
                 fit_type="generated",
                 new_um_per_pix=new_um_per_pix,
             ).get_generated_spatial_fits()
@@ -1521,11 +1520,11 @@ class ConstructRetina(RetinaMath):
                 self.dd_vs_ecc_to_viz["dd_vae_y"],
             ) = self._get_dd_fit_for_viz(self.gc_vae_df)
 
-            # Place separate rf images to one retina
+            # Sum separate rf images onto one retina
             img_ret, rf_lu_pix = self._get_full_retina_with_rf_images(
                 self.ecc_lim_mm,
                 self.polar_lim_deg,
-                img_upsampled_scaled,
+                img_rfs,
                 self.gc_vae_df,
                 new_um_per_pix,
             )
@@ -1533,14 +1532,14 @@ class ConstructRetina(RetinaMath):
             img_ret_masked, _ = self._get_full_retina_with_rf_images(
                 self.ecc_lim_mm,
                 self.polar_lim_deg,
-                img_rf_masks,
+                img_rfs_mask,
                 self.gc_vae_df,
                 new_um_per_pix,
             )
 
-            img_pruned, img_ret_pruned = self._prune_dendrites(
-                img_upsampled_scaled,
-                img_rf_masks,
+            img_rfs_adjusted, img_ret_adjusted = self._prune_dendrites(
+                img_rfs,
+                img_rfs_mask,
                 img_ret,
                 img_ret_masked,
                 rf_lu_pix,
@@ -1548,15 +1547,15 @@ class ConstructRetina(RetinaMath):
             )
 
             self.gen_rfs_to_viz = {
-                "img_rf": img_upsampled_scaled,
-                "img_mask": img_rf_masks,
-                "img_pruned": img_pruned,
+                "img_rf": img_rfs,
+                "img_rf_mask": img_rfs_mask,
+                "img_rfs_adjusted": img_rfs_adjusted,
             }
 
             self.gen_ret_to_viz = {
                 "img_ret": img_ret,
                 "img_ret_masked": img_ret_masked,
-                "img_ret_pruned": img_ret_pruned,
+                "img_ret_adjusted": img_ret_adjusted,
             }
 
         # -- Third, endow cells with temporal receptive fields
@@ -1697,10 +1696,10 @@ class ConstructRetina(RetinaMath):
         # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
         self.viz.show_rf_imgs(self, n_samples=n_samples)
 
-    def show_rf_boxplot(self):
+    def show_rf_violinplot(self):
         """
         Show each RF and adjusted RF of the VAE retina as boxplots
         """
 
         # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
-        self.viz.show_rf_boxplot(self)
+        self.viz.show_rf_violinplot(self)

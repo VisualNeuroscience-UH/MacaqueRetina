@@ -260,7 +260,7 @@ class WorkingRetina(RetinaMath):
             gc.semi_yc,
             orient_cen,
             gc.ampl_s,
-            gc.sur_ratio,
+            gc.relat_sur_diam,
             offset,
         )
         spatial_kernel = np.reshape(spatial_kernel, (s, s))
@@ -433,8 +433,12 @@ class WorkingRetina(RetinaMath):
             * 3
             * int(
                 max(
-                    max(self.gc_df_pixspace.semi_xc * self.gc_df_pixspace.sur_ratio),
-                    max(self.gc_df_pixspace.semi_yc * self.gc_df_pixspace.sur_ratio),
+                    max(
+                        self.gc_df_pixspace.semi_xc * self.gc_df_pixspace.relat_sur_diam
+                    ),
+                    max(
+                        self.gc_df_pixspace.semi_yc * self.gc_df_pixspace.relat_sur_diam
+                    ),
                 )
             )
             + 1

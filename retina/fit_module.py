@@ -220,7 +220,7 @@ class Fit(ApricotData, RetinaMath):
         tuple
             A dataframe with spatial parameters and errors for each cell, and a dictionary of spatial filters to show with visualization.
             The dataframe has shape `(n_cells, 8)` and columns: ['ampl_c', 'xoc', 'yoc', 'semi_xc', 'semi_yc', 'orient_cen',
-            'ampl_s', 'sur_ratio', 'offset'] if surround_model=1, or shape `(n_cells, 13)` and columns:
+            'ampl_s', 'relat_sur_diam', 'offset'] if surround_model=1, or shape `(n_cells, 13)` and columns:
             ['ampl_c', 'xoc', 'yoc', 'semi_xc', 'semi_yc', 'orient_cen', 'ampl_s', 'xos', 'yos', 'semi_xs',
             'semi_ys', 'orientation_surround', 'offset'] if surround_model=0.
             The dictionary spat_filt_to_viz has keys:
@@ -259,7 +259,7 @@ class Fit(ApricotData, RetinaMath):
                 "semi_yc",
                 "orient_cen",
                 "ampl_s",
-                "sur_ratio",
+                "relat_sur_diam",
                 "offset",
             ]
             data_all_viable_cells = np.zeros(np.array([n_cells, len(parameter_names)]))
@@ -300,7 +300,7 @@ class Fit(ApricotData, RetinaMath):
         # Set initial guess for fitting
         rot = 0.0
         if surround_model == 1:
-            # Build initial guess for (ampl_c, xoc, yoc, semi_xc, semi_yc, orient_cen, ampl_s, sur_ratio, offset)
+            # Build initial guess for (ampl_c, xoc, yoc, semi_xc, semi_yc, orient_cen, ampl_s, relat_sur_diam, offset)
             p0 = np.array(
                 [
                     1,
@@ -634,7 +634,7 @@ class Fit(ApricotData, RetinaMath):
     def _fit_spatial_statistics(self, good_idx):
         """
         Fits gamma distribution parameters for the 'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s',
-        and 'sur_ratio' RF parameters, and fits vonmisees distribution parameters for the 'orient_cen' RF parameter.
+        and 'relat_sur_diam' RF parameters, and fits vonmisees distribution parameters for the 'orient_cen' RF parameter.
 
         Parameters:
         -----------
@@ -645,7 +645,7 @@ class Fit(ApricotData, RetinaMath):
         --------
         spatial_stat_df : pandas DataFrame
             A DataFrame containing gamma distribution parameters for the RF parameters 'semi_xc', 'semi_yc',
-            'xy_aspect_ratio', 'ampl_s', and 'sur_ratio', and vonmises   distribution parameters for the 'orient_cen'.
+            'xy_aspect_ratio', 'ampl_s', and 'relat_sur_diam', and vonmises   distribution parameters for the 'orient_cen'.
         spat_stat_to_viz : dict
             A dictionary containing data that can be used to visualize the RF parameters' spatial statistics.
             Includes 'ydata', 'spatial_statistics_dict', and 'model_fit_data'.
@@ -669,7 +669,7 @@ class Fit(ApricotData, RetinaMath):
             "semi_yc",
             "xy_aspect_ratio",
             "ampl_s",
-            "sur_ratio",
+            "relat_sur_diam",
             "orient_cen",
         ]
 
@@ -686,7 +686,7 @@ class Fit(ApricotData, RetinaMath):
         # Create dict for statistical parameters
         spatial_statistics_dict = {}
 
-        # Model 'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','sur_ratio' rf_parameter_names with a gamma function.
+        # Model 'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','relat_sur_diam' rf_parameter_names with a gamma function.
         for index, distribution in enumerate(rf_parameter_names[:-1]):
             # fit the rf_parameter_names, get the PDF distribution using the parameters
             ydata[:, index] = spatial_data_df[distribution]
@@ -890,7 +890,7 @@ class Fit(ApricotData, RetinaMath):
         # Get mean center and surround RF size from data in millimeters
         mean_center_sd = np.mean(np.sqrt(df.semi_xc * df.semi_yc)) * self.DATA_PIXEL_LEN
         mean_surround_sd = (
-            np.mean(np.sqrt((df.sur_ratio**2 * df.semi_xc * df.semi_yc)))
+            np.mean(np.sqrt((df.relat_sur_diam**2 * df.semi_xc * df.semi_yc)))
             * self.DATA_PIXEL_LEN
         )
         return mean_center_sd, mean_surround_sd

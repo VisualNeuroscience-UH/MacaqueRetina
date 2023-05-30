@@ -264,7 +264,7 @@ class RetinaMath:
         semi_yc,
         orient_cen,
         ampl_s,
-        sur_ratio,
+        relat_sur_diam,
         offset,
     ):
         """
@@ -283,15 +283,15 @@ class RetinaMath:
             np.cos(orient_cen) ** 2
         ) / (2 * semi_yc**2)
 
-        asur = (np.cos(orient_cen) ** 2) / (2 * (sur_ratio * semi_xc) ** 2) + (
+        asur = (np.cos(orient_cen) ** 2) / (2 * (relat_sur_diam * semi_xc) ** 2) + (
             np.sin(orient_cen) ** 2
-        ) / (2 * (sur_ratio * semi_yc) ** 2)
-        bsur = -(np.sin(2 * orient_cen)) / (4 * (sur_ratio * semi_xc) ** 2) + (
+        ) / (2 * (relat_sur_diam * semi_yc) ** 2)
+        bsur = -(np.sin(2 * orient_cen)) / (4 * (relat_sur_diam * semi_xc) ** 2) + (
             np.sin(2 * orient_cen)
-        ) / (4 * (sur_ratio * semi_yc) ** 2)
-        csur = (np.sin(orient_cen) ** 2) / (2 * (sur_ratio * semi_xc) ** 2) + (
+        ) / (4 * (relat_sur_diam * semi_yc) ** 2)
+        csur = (np.sin(orient_cen) ** 2) / (2 * (relat_sur_diam * semi_xc) ** 2) + (
             np.cos(orient_cen) ** 2
-        ) / (2 * (sur_ratio * semi_yc) ** 2)
+        ) / (2 * (relat_sur_diam * semi_yc) ** 2)
 
         ## Difference of gaussians
         model_fit = (
