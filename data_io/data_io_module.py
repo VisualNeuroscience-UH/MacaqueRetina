@@ -247,22 +247,30 @@ class DataIO(DataIOBase):
 
     def _recursively_save_dict_contents_to_group(self, h5file, path, dic):
         for key, item in dic.items():
-            if isinstance(item, (np.ndarray)):
-                h5file.create_dataset(
-                    path + key, data=item, compression="gzip", compression_opts=6
-                )
-            elif isinstance(
-                item, (np.uint64, np.float64, str, bytes, int, tuple, float)
-            ):
-                h5file[path + key] = item
-            elif isinstance(item, dict):
+            if isinstance(item, dict):
                 self._recursively_save_dict_contents_to_group(
                     h5file, path + key + "/", item
                 )
-            elif item is None:
-                h5file[path + key] = ""
-            else:
-                raise ValueError("Cannot save %s type" % type(item))
+            elif item is not None:  # If item is None, we skip it
+                if path + key in h5file:  # If dataset already exists, delete it
+                    del h5file[path + key]
+                # Use create_dataset for all non-dictionary items
+                if isinstance(item, (np.uint64, np.float64, bytes, int, float)):
+                    # For numpy types and int and float, we need to wrap them in a numpy array
+                    h5file.create_dataset(path + key, data=np.array([item]))
+                elif isinstance(item, str):
+                    # For string type, we create a special dtype=h5py.string_dtype() dataset
+                    str_type = h5py.string_dtype(encoding="utf-8")
+                    h5file.create_dataset(
+                        path + key, data=np.array(item, dtype=str_type)
+                    )
+                elif isinstance(item, tuple):
+                    # For tuple, we convert it to list first
+                    h5file.create_dataset(path + key, data=np.array(list(item)))
+                elif isinstance(item, np.ndarray):
+                    h5file.create_dataset(path + key, data=item)
+                else:
+                    raise ValueError("Cannot save %s type" % type(item))
 
     def load_dict_from_hdf5(self, filename):
         """
@@ -276,7 +284,19 @@ class DataIO(DataIOBase):
         ans = {}
         for key, item in h5file[path].items():
             if isinstance(item, h5py._hl.dataset.Dataset):
-                ans[key] = item[()]  # was ans[key] = item.value
+                # Convert single item numpy arrays to their corresponding scalars
+                val = item[()]
+                if isinstance(val, bytes):  # If it's bytes, decode it
+                    val = val.decode()
+                if isinstance(val, np.ndarray):
+                    # If it's a string, decode it
+                    if val.dtype == np.dtype("O"):
+                        val = val[0].decode()
+                    # If it's a size-1 array, convert to python scalar
+                    elif val.shape == (1,):
+                        val = val[0]
+
+                ans[key] = val
             elif isinstance(item, h5py._hl.group.Group):
                 ans[key] = self._recursively_load_dict_contents_from_group(
                     h5file, path + key + "/"
