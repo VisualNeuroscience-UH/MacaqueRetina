@@ -194,8 +194,8 @@ class VideoBaseClass(object):
         large_frames = np.moveaxis(large_frames, 2, 1)
         total_temporal_shift = temporal_frequency * one_cycle * duration_seconds
         one_frame_temporal_shift = (temporal_frequency * one_cycle) / fps
-        temporal_shift_vector = np.arange(
-            0, total_temporal_shift - one_frame_temporal_shift, one_frame_temporal_shift
+        temporal_shift_vector = np.linspace(
+            0, total_temporal_shift - one_frame_temporal_shift, n_frames
         )
         assert (
             len(temporal_shift_vector) == n_frames

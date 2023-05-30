@@ -354,9 +354,8 @@ if __name__ == "__main__":
     """
     Build and test your retina here, one gc type at a time. Temporal hemiretina of macaques.
     """
-    # TÄHÄN JÄIT: DEND PRUNING MODEL TOIMII. VIIMEISTELE KUVAT (AJAT TÄMÄ).
 
-    # Main retina construction method. This method calls all other methods in the retina construction process.
+    # # Main retina construction method. This method calls all other methods in the retina construction process.
     PM.construct_retina.build()
 
     # The following visualizations are dependent on the ConstructRetina instance.
@@ -451,22 +450,14 @@ if __name__ == "__main__":
     ### Run Experiment ###
     ################################
     # Get all conditions to run
-    (
-        cond_options,
-        metadata,
-        cond_names,
-        cond_array_list,
-    ) = PM.experiment.contrast_respose(
+    contrast_experiment = PM.experiment.contrast_respose(
         contrast_min=0.5,
         contrast_max=0.98,
         contrast_steps=2,
     )
-    pdb.set_trace()
+    # pdb.set_trace()
     PM.experiment.run(
-        cond_options,
-        metadata,
-        cond_names,
-        cond_array_list,
+        contrast_experiment,
         n_trials=5,
     )
 

@@ -238,26 +238,74 @@ class DataIO(DataIOBase):
 
     def save_dict_to_hdf5(self, filename, dic):
         """
-        Save a dictionary to hdf5 file.
-        :param filename: hdf5 file name
-        :param dic: dictionary to save
+        Save a dictionary to an hdf5 file.
+
+        Parameters
+        ----------
+        filename : str
+            The filename for the hdf5 file to be saved.
+        dic : dict
+            The dictionary to be saved.
+
+        Notes
+        -----
+        The function opens an hdf5 file and calls the helper method
+        _recursively_save_dict_contents_to_group to store the dictionary contents
+        into the hdf5 file.
         """
         with h5py.File(filename, "w") as h5file:
+            # self._recursively_save_dict_contents_to_group(h5file, "/", dic)
             self._recursively_save_dict_contents_to_group(h5file, "/", dic)
 
-    def _recursively_save_dict_contents_to_group(self, h5file, path, dic):
+    def _recursively_save_dict_contents_to_group(
+        self, h5file, path, dic, compression="gzip", compression_opts=9
+    ):
+        """
+        Recursively save dictionary contents to a group in an hdf5 file.
+
+        Parameters
+        ----------
+        h5file : File
+            The hdf5 File object to which the data needs to be written.
+        path : str
+            The path in the hdf5 file where the data needs to be saved.
+        dic : dict
+            The dictionary whose contents need to be saved.
+        compression : str, optional
+            The compression strategy to be used while saving data. Default is 'gzip'.
+        compression_opts : int, optional
+            Specifies a compression preset if gzip is used. Default is 9.
+
+        Raises
+        ------
+        ValueError
+            If an unsupported datatype is provided in the dictionary, a ValueError is raised.
+
+        Notes
+        -----
+        This function saves all non-None and non-dictionary items in the input dictionary
+        into an hdf5 group. The function calls itself recursively for dictionary items
+        in the input dictionary. For numerical data (types np.uint64, np.float64, int, float,
+        tuple, np.ndarray), gzip compression is used by default.
+        """
+        
         for key, item in dic.items():
             if isinstance(item, dict):
                 self._recursively_save_dict_contents_to_group(
-                    h5file, path + key + "/", item
+                    h5file, path + key + "/", item, compression, compression_opts
                 )
             elif item is not None:  # If item is None, we skip it
                 if path + key in h5file:  # If dataset already exists, delete it
                     del h5file[path + key]
                 # Use create_dataset for all non-dictionary items
-                if isinstance(item, (np.uint64, np.float64, bytes, int, float)):
+                if isinstance(item, (np.uint64, np.float64, int, float)):
                     # For numpy types and int and float, we need to wrap them in a numpy array
-                    h5file.create_dataset(path + key, data=np.array([item]))
+                    h5file.create_dataset(
+                        path + key,
+                        data=np.array([item]),
+                        compression=compression,
+                        compression_opts=compression_opts,
+                    )
                 elif isinstance(item, str):
                     # For string type, we create a special dtype=h5py.string_dtype() dataset
                     str_type = h5py.string_dtype(encoding="utf-8")
@@ -266,9 +314,19 @@ class DataIO(DataIOBase):
                     )
                 elif isinstance(item, tuple):
                     # For tuple, we convert it to list first
-                    h5file.create_dataset(path + key, data=np.array(list(item)))
+                    h5file.create_dataset(
+                        path + key,
+                        data=np.array(list(item)),
+                        compression=compression,
+                        compression_opts=compression_opts,
+                    )
                 elif isinstance(item, np.ndarray):
-                    h5file.create_dataset(path + key, data=item)
+                    h5file.create_dataset(
+                        path + key,
+                        data=item,
+                        compression=compression,
+                        compression_opts=compression_opts,
+                    )
                 else:
                     raise ValueError("Cannot save %s type" % type(item))
 
