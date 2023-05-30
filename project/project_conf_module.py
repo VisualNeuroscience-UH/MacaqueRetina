@@ -131,8 +131,8 @@ my_retina = {
     "ecc_limits": [4, 6],  # degrees
     "sector_limits": [-5, 5],  # polar angle in degrees
     "model_density": 1.0,
-    "compute_dendr_diameter": "from_literature",  # "from_coverage_1" or "from_literature"
-    "dd_regr_model": "cubic",  # linear, quadratic, cubic. Only used if compute_dendr_diameter is "from_literalure"
+    "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models
+    "dd_regr_model": "cubic",  # linear, quadratic, cubic. Only used if rf_coverage_adjusted_to_1 is "from_literalure"
     "randomize_position": 0.0,
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "model_type": "VAE",  # "FIT" or "VAE" for variational autoencoder.
@@ -196,7 +196,7 @@ my_stimulus_options = {
     # stimulus only
     "stimulus_form": "rectangular",
     "temporal_frequency": 2,
-    "spatial_frequency": 2.0,
+    "spatial_frequency": 1.0,
     "stimulus_position": (0, 0),
     "duration_seconds": 4.0,
     "stimulus_size": 1.4,
@@ -213,7 +213,7 @@ n_files = 1
 
 # Either n_trials or n_cells must be 1, and the other > 1
 my_run_options = {
-    "cell_index": 2,  # int or None for all cells
+    "cell_index": 20,  # int or None for all cells
     "n_trials": 10,  # For each of the response files
     "spike_generator_model": "refractory",  # poisson or refractory
     "save_data": True,
@@ -367,9 +367,9 @@ if __name__ == "__main__":
     # PM.construct_retina.show_latent_tsne_space()
     # PM.construct_retina.show_gen_spat_post_hist()
     # PM.construct_retina.show_latent_space_and_samples()
-    PM.construct_retina.show_retina_img()
-    PM.construct_retina.show_rf_imgs(n_samples=10)
-    PM.construct_retina.show_rf_violinplot()
+    # PM.construct_retina.show_retina_img()
+    # PM.construct_retina.show_rf_imgs(n_samples=10)
+    # PM.construct_retina.show_rf_violinplot()
 
     # # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
     # this_dep_var = "val_loss"
@@ -385,7 +385,7 @@ if __name__ == "__main__":
 
     # options are defined in my_stimulus_options
     # stimulus video will be saved on output_folder in mp4 format (viewing and hdf5 format (for reloading)
-    # PM.stimulate.make_stimulus_video()
+    PM.stimulate.make_stimulus_video()
 
     ##############################
     ### Create analog stimulus ###
@@ -423,7 +423,7 @@ if __name__ == "__main__":
     ### Load stimulus to get working retina ###
     #################################
 
-    # PM.working_retina.load_stimulus()
+    PM.working_retina.load_stimulus()
 
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
     # ret.load_stimulus(movie)# => METADATA
@@ -442,13 +442,13 @@ if __name__ == "__main__":
     ### Run multiple trials for single cell ###
     #################################
 
-    # PM.working_retina.run_with_my_run_options()
+    PM.working_retina.run_with_my_run_options()
 
-    # PM.viz.show_gc_responses(PM.working_retina)
+    PM.viz.show_gc_responses(PM.working_retina)
 
-    # PM.viz.show_stimulus_with_gcs(
-    #     PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51
-    # )
+    PM.viz.show_stimulus_with_gcs(
+        PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51
+    )
 
     # PM.viz.show_single_gc_view(PM.working_retina, cell_index=example_gc, frame_number=21)
 

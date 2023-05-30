@@ -127,7 +127,7 @@ class ConstructRetina(RetinaMath):
         ecc_limits = my_retina["ecc_limits"]
         sector_limits = my_retina["sector_limits"]
         model_density = my_retina["model_density"]
-        self.compute_dendr_diameter = my_retina["compute_dendr_diameter"]
+        self.rf_coverage_adjusted_to_1 = my_retina["rf_coverage_adjusted_to_1"]
         self.dd_regr_model = my_retina["dd_regr_model"]
         randomize_position = my_retina["randomize_position"]
         self.deg_per_mm = my_retina["deg_per_mm"]
@@ -1424,10 +1424,11 @@ class ConstructRetina(RetinaMath):
         # data_ecc_deg = data_ecc_mm * self.deg_per_mm  # 38.4 deg
 
         # -- Second, endow cells with spatial receptive fields (units mm)
-        if self.compute_dendr_diameter == "from_coverage_1":
+        if self.rf_coverage_adjusted_to_1 == True:
             # Assumes that the dendritic field diameter is proportional to the coverage
             self._create_spatial_rfs_coverage()
-        elif self.compute_dendr_diameter == "from_literature":
+        elif self.rf_coverage_adjusted_to_1 == False:
+            # Read the dendritic field diameter from literature data
             self._create_spatial_rfs_ecc(dd_ecc_params, dd_regr_model)
         # Add FIT:ed dendritic diameter for visualization
         (
@@ -1537,14 +1538,46 @@ class ConstructRetina(RetinaMath):
                 new_um_per_pix,
             )
 
-            img_rfs_adjusted, img_ret_adjusted = self._adjust_rf_coverage(
-                img_rfs,
-                img_rfs_mask,
-                img_ret,
-                img_ret_masked,
-                rf_lu_pix,
-                tolerate_error=0.01,
-            )
+            if self.rf_coverage_adjusted_to_1:
+                img_rfs_adjusted, img_ret_adjusted = self._adjust_rf_coverage(
+                    img_rfs,
+                    img_rfs_mask,
+                    img_ret,
+                    img_ret_masked,
+                    rf_lu_pix,
+                    tolerate_error=0.01,
+                )
+
+                # Fit elliptical gaussians to the adjusted receptive fields
+                (
+                    self.gen_stat_df,
+                    self.gen_spat_cen_sd,
+                    self.gen_spat_sur_sd,
+                    self.gen_spat_filt_to_viz,
+                    self.gen_spat_stat_to_viz,
+                    self.gc_vae_df,
+                ) = Fit(
+                    self.context.apricot_data_folder,
+                    self.gc_type,
+                    self.response_type,
+                    spatial_data=img_rfs,
+                    fit_type="generated",
+                    new_um_per_pix=new_um_per_pix,
+                ).get_generated_spatial_fits()
+
+                # Update gc_vae_df to have the same columns as gc_df
+                self.gc_vae_df = self._update_gc_vae_df(self.gc_vae_df, new_um_per_pix)
+
+                # Add fitted VAE dendritic diameter for visualization
+                (
+                    self.gc_vae_df,
+                    self.dd_vs_ecc_to_viz["dd_vae_x"],
+                    self.dd_vs_ecc_to_viz["dd_vae_y"],
+                ) = self._get_dd_fit_for_viz(self.gc_vae_df)
+
+            else:
+                img_rfs_adjusted = np.zeros_like(img_rfs)
+                img_ret_adjusted = np.zeros_like(img_ret)
 
             self.gen_rfs_to_viz = {
                 "img_rf": img_rfs,
@@ -1557,6 +1590,9 @@ class ConstructRetina(RetinaMath):
                 "img_ret_masked": img_ret_masked,
                 "img_ret_adjusted": img_ret_adjusted,
             }
+
+            # Apply the spatial VAE model to df
+            self.gc_df = self.gc_vae_df
 
         # -- Third, endow cells with temporal receptive fields
         self._create_temporal_receptive_fields()
