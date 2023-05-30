@@ -559,7 +559,7 @@ class DataIO(DataIOBase):
 
         return result_grid
 
-    def save_generated_rfs(self, img_stack, output_path):
+    def save_generated_rfs(self, img_stack, output_path, filename_stem="rf_values"):
         """
         Save a 3D image stack as a series of 2D image files using Pillow and save the original stack in a numpy format.
 
@@ -575,28 +575,16 @@ class DataIO(DataIOBase):
             output_path = Path(output_path)
 
         output_path.mkdir(parents=True, exist_ok=True)
-        img_paths_s = pd.Series(index=range(img_stack.shape[0]))
 
         # Save the original img_stack as numpy or pickle format
         stack_filename = (
-            output_path / "rf_values.npy"
+            output_path / f"{filename_stem}.npy"
         )  # or "rf_values.pkl" for pickle format
         np.save(
             stack_filename, img_stack
         )  # or pickle.dump(img_stack, open(stack_filename, "wb"))
 
-        for i in range(img_stack.shape[0]):
-            # Rescale the pixel values to the range of 0 to 65535 for saving as PNG
-            img_array = (img_stack[i, :, :] * 65535.0).astype(np.uint16)
-
-            img = Image.fromarray(img_array)
-            filename_full = output_path / f"slice_{i+1}.png"
-            img.save(filename_full)
-            img_paths_s[i] = filename_full
-
-        return img_paths_s
-
-    def load_generated_rfs(self, input_path):
+    def load_generated_rfs(self, input_path, filename_stem="rf_values"):
         """
         Loads receptive field file into a 3D image stack.
 
@@ -604,6 +592,8 @@ class DataIO(DataIOBase):
         ----------
         input_path : str or Path
             The path to the folder containing the image files.
+        filename_stem : str, optional
+            The filename stem of the image files, by default "rf_values".
 
         Returns
         -------
@@ -614,7 +604,7 @@ class DataIO(DataIOBase):
             input_path = Path(input_path)
 
         # Load the numpy stack
-        stack_path = input_path / "rf_values.npy"
+        stack_path = input_path / f"{filename_stem}.npy"
         img_stack = np.load(stack_path)
 
         return img_stack

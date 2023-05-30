@@ -1059,7 +1059,6 @@ class ConstructRetina(RetinaMath):
         )
 
         gc_vae_df["orient_cen"] = gc_vae_df_in["orient_cen"]
-        gc_vae_df["img_path"] = self.gc_df["img_path"]
 
         gc_vae_df["xy_aspect_ratio"] = gc_vae_df_in["semi_yc"] / gc_vae_df_in["semi_xc"]
 
@@ -1202,7 +1201,7 @@ class ConstructRetina(RetinaMath):
 
         return ret_img, rf_lu_pix
 
-    def _prune_dendrites(
+    def _adjust_rf_coverage(
         self,
         rfs,
         masks,
@@ -1276,28 +1275,18 @@ class ConstructRetina(RetinaMath):
                 x = np.linspace(-1, 3, 1000)
                 y = piecewise_logistic(x)
                 plt.plot(x, y)
-                # Put vertical lines to min_gc_value and max_gc_value
-                plt.axvline(x=min_gc_value, color="r", linestyle="--")
-                plt.axvline(x=max_gc_value, color="r", linestyle="--")
+                # Put vertical lines to min_ret_value and max_ret_value
+                plt.axvline(x=min_ret_value, color="r", linestyle="--")
+                plt.axvline(x=max_ret_value, color="r", linestyle="--")
                 plt.show()
                 exit()
 
-            # Apply mask
+            # Apply mask. Necessary to avoid the rectangular grid to start evolving into RFs
             img_transformed_masked = img_transformed * mask
 
             return img_transformed_masked
 
-        # For area to calculate the error later
-        img_ret_mask = img_ret_mask.astype(bool)
-        max_gc_value = np.max(img_ret[img_ret_mask])
-        min_gc_value = np.min(img_ret[img_ret_mask])
-
-        min_midpoint = min_gc_value / 2
-        min_slope = 10 / abs(min_gc_value)
-        max_midpoint = max_gc_value / 2
-        max_slope = 10 / max_gc_value
-
-        def _pruning_model(x, x_max, y_min, y_max, x_zero):
+        def _dendritic_adjustment_model(x, x_max, y_min, y_max, x_zero):
             """
             Computes the global delta using a linear model which represents the changes in RF.
 
@@ -1317,6 +1306,18 @@ class ConstructRetina(RetinaMath):
 
             return y
 
+        # For area to calculate the error later
+        img_ret_mask = img_ret_mask.astype(bool)
+        max_ret_value = np.max(img_ret[img_ret_mask])
+        min_ret_value = np.min(img_ret[img_ret_mask])
+
+        # Piecewise logistic parameters for local gain mask
+        min_midpoint = min_ret_value / 2
+        min_slope = 10 / abs(min_ret_value)
+        max_midpoint = max_ret_value / 2
+        max_slope = 10 / max_ret_value
+
+        # Dendritic adjustment model parameters
         max_pruning = -0.1
         max_growth = 0.1
         converge_to = 1.0  # Global coverage factor (GCF) target value
@@ -1344,12 +1345,12 @@ class ConstructRetina(RetinaMath):
                     y_pix : y_pix + height, x_pix : x_pix + width
                 ]
 
-                this_global_delta = _pruning_model(
-                    this_gcf, max_gc_value, max_pruning, max_growth, converge_to
+                this_global_delta = _dendritic_adjustment_model(
+                    this_gcf, max_ret_value, max_pruning, max_growth, converge_to
                 )
 
                 # Note that local gain mask does not cover all pixels,
-                # thus the negative surround of the RF is not affected
+                # thus the original negative surround of the RF is not affected
                 local_gain_masks[i] = _get_local_gain_mask(
                     rf,
                     masks[i],
@@ -1488,10 +1489,9 @@ class ConstructRetina(RetinaMath):
 
             # Save the generated receptive fields
             output_path = self.context.output_folder
-            img_paths = self.data_io.save_generated_rfs(img_rfs, output_path)
-
-            # Add image paths as a columnd to self.gc_df
-            self.gc_df["img_path"] = img_paths
+            self.data_io.save_generated_rfs(
+                img_rfs, output_path, filename_stem="rf_values"
+            )
 
             # Fit elliptical gaussians to the generated receptive fields
             (
@@ -1537,7 +1537,7 @@ class ConstructRetina(RetinaMath):
                 new_um_per_pix,
             )
 
-            img_rfs_adjusted, img_ret_adjusted = self._prune_dendrites(
+            img_rfs_adjusted, img_ret_adjusted = self._adjust_rf_coverage(
                 img_rfs,
                 img_rfs_mask,
                 img_ret,
