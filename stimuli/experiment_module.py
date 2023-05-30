@@ -41,15 +41,6 @@ class Experiment(VideoBaseClass):
     def data_io(self):
         return self._data_io
 
-    # def __init__(self, input_options={}):
-    #     """ """
-    #     # Get VideoBaseClass options
-    #     VBC = vs.VideoBaseClass()
-    #     self.options = VBC.options
-
-    #     # Replace with input options
-    #     self._replace_options(input_options)
-
     def _replace_options(self, input_options):
         # Replace with input options
         for this_key in input_options.keys():
@@ -190,6 +181,7 @@ class Experiment(VideoBaseClass):
 
         if save_only_metadata:
             return
+
         # Replace with input options
         for idx, input_options in enumerate(cond_options):
             stimulus_video_name = "Stim_" + cond_names[idx]

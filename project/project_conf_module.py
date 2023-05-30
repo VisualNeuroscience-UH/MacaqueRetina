@@ -461,14 +461,13 @@ if __name__ == "__main__":
         contrast_max=0.98,
         contrast_steps=2,
     )
-
+    pdb.set_trace()
     PM.experiment.run(
         cond_options,
         metadata,
         cond_names,
         cond_array_list,
         n_trials=5,
-        save_only_metadata=False,
     )
 
     ##############################
