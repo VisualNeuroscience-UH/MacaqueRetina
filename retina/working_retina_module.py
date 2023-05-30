@@ -548,7 +548,7 @@ class WorkingRetina(RetinaMath):
             self._initialize()
 
         if stimulus_video is None:
-            video_file_name = self.context.my_stimulus_metadata["stimulus_video_name"]
+            video_file_name = self.context.my_stimulus_options["stimulus_video_name"]
 
             stimulus_video = self.data_io.load_stimulus_from_videofile(video_file_name)
 

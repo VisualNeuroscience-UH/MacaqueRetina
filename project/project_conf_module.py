@@ -139,10 +139,9 @@ my_retina = {
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" Applies to VAE only.
 }
 
-
+# For external video input. See visual_stimulus_module.VideoBaseClass for more options.
 my_stimulus_metadata = {
     "stimulus_file": "nature1.avi",  # nature1.avi, testi.jpg
-    "stimulus_video_name": "testi.mp4",  # REFACTOR
     "pix_per_deg": 60,
     "apply_cone_filter": False,
 }
@@ -212,6 +211,7 @@ my_stimulus_options = {
     "temporal_frequency": 2,
     "spatial_frequency": 1.0,
     "phase_shift": 0,
+    "stimulus_video_name": "testi.mp4",
 }
 
 # Each gc response file contain n_trials
