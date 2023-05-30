@@ -161,7 +161,8 @@ class WorkingRetina(RetinaMath):
             plt.plot(self.gc_df.x_deg, self.gc_df.y_deg, "b.")
             plt.axis("equal")
             plt.show()
-            pdb.set_trace()
+            exit()
+
         self.model_type = self.context.my_retina["model_type"]
 
         if self.model_type is "VAE":

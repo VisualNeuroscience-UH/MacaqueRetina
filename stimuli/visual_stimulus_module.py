@@ -195,9 +195,13 @@ class VideoBaseClass(object):
         total_temporal_shift = temporal_frequency * one_cycle * duration_seconds
         one_frame_temporal_shift = (temporal_frequency * one_cycle) / fps
         temporal_shift_vector = np.arange(
-            0, total_temporal_shift, one_frame_temporal_shift
+            0, total_temporal_shift - one_frame_temporal_shift, one_frame_temporal_shift
         )
+        assert (
+            len(temporal_shift_vector) == n_frames
+        ), "Temporal shift vector length does not match number of frames, aborting..."
         # Shift grating phase in time. Broadcasting temporal vector automatically to correct dimension.
+
         large_frames = large_frames + temporal_shift_vector
 
         # Rotate to desired orientation
@@ -623,7 +627,7 @@ class ConstructStimulus(VideoBaseClass):
     def cones(self):
         return self._cones
 
-    def make_stimulus_video(self):
+    def make_stimulus_video(self, options=None):
         """
         Valid stimulus_options include
 
@@ -676,7 +680,10 @@ class ConstructStimulus(VideoBaseClass):
         # Set input arguments to video-object, updates the defaults from VideoBaseClass
         print("Making a stimulus with the following properties:")
 
-        my_stimulus_options = self.context.my_stimulus_options
+        if options is None:
+            my_stimulus_options = self.context.my_stimulus_options
+        else:
+            my_stimulus_options = options
 
         for this_option in my_stimulus_options:
             print(this_option, ":", my_stimulus_options[this_option])
@@ -747,6 +754,8 @@ class ConstructStimulus(VideoBaseClass):
         # Save video
         stimulus_video_name = Path(self.options["stimulus_video_name"])
         self.data_io.save_stimulus_to_videofile(stimulus_video_name, stimulus_video)
+
+        return stimulus_video
 
     def get_2d_video(self):
         stim_video_2d = np.reshape(

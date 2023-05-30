@@ -2,38 +2,53 @@
 import numpy as np
 import pandas as pd
 
-# Comput Neurosci
-# import neo
-# import quantities as pq
-# import elephant
-
 # Viz
 import matplotlib.pyplot as plt
 
 # Local
-from retina.construct_retina_module import ConstructRetina
-from retina.working_retina_module import WorkingRetina
-from stimuli import visual_stimulus_module as vs
-from cxsystem2.core.tools import write_to_file, load_from_file
+from stimuli.visual_stimulus_module import VideoBaseClass, ConstructStimulus
 
 # Builtin
 import pdb
 import os
+from pathlib import Path
 
 
-class Experiment:
+class Experiment(VideoBaseClass):
     """
     Build your experiment here
     """
 
-    def __init__(self, input_options={}):
-        """ """
-        # Get VideoBaseClass options
-        VBC = vs.VideoBaseClass()
-        self.options = VBC.options
+    _properties_list = [
+        "path",
+        "output_folder",
+        "input_folder",
+        "my_stimulus_options",
+        "my_stimulus_metadata",
+    ]
 
-        # Replace with input options
-        self._replace_options(input_options)
+    def __init__(self, context, data_io):
+        super().__init__()
+
+        self._context = context.set_context(self._properties_list)
+        self._data_io = data_io
+
+    @property
+    def context(self):
+        return self._context
+
+    @property
+    def data_io(self):
+        return self._data_io
+
+    # def __init__(self, input_options={}):
+    #     """ """
+    #     # Get VideoBaseClass options
+    #     VBC = vs.VideoBaseClass()
+    #     self.options = VBC.options
+
+    #     # Replace with input options
+    #     self._replace_options(input_options)
 
     def _replace_options(self, input_options):
         # Replace with input options
@@ -51,16 +66,16 @@ class Experiment:
         # flatten arrays for easier indexing later
         values_flat = [v.flatten() for v in values]
 
-        # Get conditions_idx
+        # Get cond_names
         conditions_metadata_idx = np.meshgrid(*[np.arange(len(v)) for v in varargs])
-        conditions_metadata_idx_flat = [v.flatten() for v in conditions_metadata_idx]
-        # Get conditions
+        cond_array_list = [v.flatten() for v in conditions_metadata_idx]
+        # Get conditions to replace the corresponding options in the stimulus
         # list with N dicts, N = N experiments to run. Each of the N dicts contains all
         # condition:value pairs
-        conditions = []
-        # conditions_idx contains list of strings with 1st letters of condition names and
+        cond_options = []
+        # cond_names contains list of strings with 1st letters of condition names and
         # a running idx to value
-        conditions_idx = []
+        cond_names = []
         n_dicts = len(values_flat[0])
         for dict_idx in range(n_dicts):
             this_dict = {}
@@ -75,65 +90,50 @@ class Experiment:
                     this_str
                     + this_condition[0]
                     + other_letters
-                    + str(conditions_metadata_idx_flat[condition_idx][dict_idx])
+                    + str(cond_array_list[condition_idx][dict_idx])
                 )
-            conditions.append(this_dict)
-            conditions_idx.append(this_str)
+            cond_options.append(this_dict)
+            cond_names.append(this_str)
 
-        # Get conditions_metadata_key
-        conditions_metadata_key = dict(zip(conditions_to_meshgrid, varargs))
+        # Get cond_metadata_key
+        cond_metadata_key = dict(zip(conditions_to_meshgrid, varargs))
 
         return (
-            conditions,
-            conditions_metadata_key,
-            conditions_idx,
-            conditions_metadata_idx_flat,
+            cond_options,
+            cond_metadata_key,
+            cond_names,
+            cond_array_list,
         )
 
     def contrast_respose(self, contrast_min=0.98, contrast_max=0.98, contrast_steps=1):
         """
         Setup
         """
-        # contrast_min = 0.02
-        # contrast_max = .98
-        # contrast_steps = 13
-        # contrast_min = .98
-        # contrast_max = .98
-        # contrast_steps = 1
 
         contrasts = np.logspace(
             np.log10(contrast_min), np.log10(contrast_max), contrast_steps
         )
 
-        # mean_min = 128
-        # mean_max = 128
-        # mean_steps = 1
-
-        # means = np.logspace(np.log10(mean_min),np.log10(mean_max),mean_steps)
-
-        # temporal_frequencies = np.array([1.22, 9.76, 39.1])
         temporal_frequencies = np.array([1.22])
 
         # Calculate voltage values, assuming voltage = Td
-        # meshgrid with mean lum and freq
-        # Return conditions -- a dict with all keywords matching visual_stimulus_module.ConstructStimulus
-        # conditions_to_meshgrid = ['contrast', 'mean', 'temporal_frequency']
+        # Return cond_options -- a dict with all keywords matching visual_stimulus_module.ConstructStimulus
         conditions_to_meshgrid = ["contrast", "temporal_frequency"]
 
         (
-            conditions,
-            conditions_metadata_key,
-            conditions_idx,
-            conditions_metadata_idx_flat,
+            cond_options,
+            cond_metadata_key,
+            cond_names,
+            cond_array_list,
         ) = self._meshgrid_conditions(
             conditions_to_meshgrid, contrasts, temporal_frequencies
         )
 
         return (
-            conditions,
-            conditions_metadata_key,
-            conditions_idx,
-            conditions_metadata_idx_flat,
+            cond_options,
+            cond_metadata_key,
+            cond_names,
+            cond_array_list,
         )
 
     def amplitude_sensitivity(self):
@@ -162,13 +162,11 @@ class Experiment:
 
     def run(
         self,
-        ret,
-        conditions,
+        cond_options,
         metadata,
-        conditions_idx,
-        conditions_metadata_idx_flat,
+        cond_names,
+        cond_array_list,
         n_trials=1,
-        data_folder="",
         save_only_metadata=False,
     ):
         """
@@ -179,37 +177,38 @@ class Experiment:
                 this_key in self.options.keys()
             ), "Missing {this_key} in visual stimuli options, check stim param name"
 
-        # Test data_folder, create if missing
-        os.makedirs(data_folder, exist_ok=True)
+        # Update options to match my_stimulus_options in conf file
+        self._replace_options(self.context.my_stimulus_options)
 
-        save_path = os.path.join(data_folder, "metadata_conditions.gz")
-        write_to_file(
+        # Test data_folder, create if missing, write metadata
+        data_folder = self.context.output_folder
+        save_path = data_folder / "metadata_conditions.gz"
+        self.data_io.write_to_file(
             save_path,
-            [metadata, conditions_idx, conditions_metadata_idx_flat, self.options],
+            [metadata, cond_names, cond_array_list, self.options],
         )
 
         if save_only_metadata:
             return
-
         # Replace with input options
-        for idx, input_options in enumerate(conditions):
+        for idx, input_options in enumerate(cond_options):
+            stimulus_video_name = "Stim_" + cond_names[idx]
+            input_options["stimulus_video_name"] = stimulus_video_name
             self._replace_options(input_options)
-            stim = vs.ConstructStimulus(**self.options)
 
-            stim.save_stimulus_to_videofile(
-                filename=os.path.join(data_folder, "Stim_" + conditions_idx[idx])
-            )
+            stim = self.stimulate.make_stimulus_video(self.options)
+            stimulus_video_name_full = Path(data_folder) / stimulus_video_name
+            self.data_io.save_stimulus_to_videofile(stimulus_video_name_full, stim)
 
-            ret.load_stimulus(stim)
+            self.working_retina.load_stimulus(stim)
 
             example_gc = None  # int or 'None'
 
-            filename = os.path.join(data_folder, "Response_" + conditions_idx[idx])
+            filename = Path(data_folder) / ("Response_" + cond_names[idx])
 
-            ret.run_cells(
+            self.working_retina.run_cells(
                 cell_index=example_gc,
                 n_trials=n_trials,
-                viz_module=False,
                 save_data=True,
                 spike_generator_model="poisson",
                 return_monitor=False,
@@ -218,15 +217,16 @@ class Experiment:
 
 
 if __name__ == "__main__":
-    root_path = r"C:\Users\Simo\Laskenta\SimuOut"
-    # root_path = ''
+    pass
+    # root_path = r"C:\Users\Simo\Laskenta\SimuOut"
+    # # root_path = ''
 
-    cell_type = "parasol"
-    response_type = "on"
+    # cell_type = "parasol"
+    # response_type = "on"
 
-    n_trials = 200
+    # n_trials = 200
 
-    options = {}
+    # options = {}
     # options["duration_seconds"] = 0.4  # seconds
     # options["contrast"] = 0.9
     # options["image_width"] = 240  # Image width in pixels
@@ -256,50 +256,50 @@ if __name__ == "__main__":
     # options["temporal_frequency"] = 1.0
     # options["size_inner"] = None
     # options["size_outer"] = None
-    options["on_proportion"] = 0.5  # between 0 and 1, proportion of stimulus-on time
-    options["direction"] = "increment"  # or 'decrement'
+    # options["on_proportion"] = 0.5  # between 0 and 1, proportion of stimulus-on time
+    # options["direction"] = "increment"  # or 'decrement'
 
-    options["baseline_start_seconds"] = 0.4
-    options["baseline_end_seconds"] = 0.2
+    # options["baseline_start_seconds"] = 0.4
+    # options["baseline_end_seconds"] = 0.2
 
-    E = Experiment(options)
+    # E = Experiment(options)
 
     # Get retina
-    testmosaic = pd.read_csv(f"{cell_type}_{response_type}_single.csv", index_col=0)
+    # testmosaic = pd.read_csv(f"{cell_type}_{response_type}_single.csv", index_col=0)
 
     # ret = WorkingRetina(testmosaic, cell_type, response_type, stimulus_center=5.03-0.01j,
     #                        stimulus_width_pix=240, stimulus_height_pix=240)
-    ret = WorkingRetina(
-        testmosaic,
-        cell_type,
-        response_type,
-        stimulus_center=5 + 0j,
-        stimulus_width_pix=240,
-        stimulus_height_pix=240,
-    )
+    # ret = WorkingRetina(
+    #     testmosaic,
+    #     cell_type,
+    #     response_type,
+    #     stimulus_center=5 + 0j,
+    #     stimulus_width_pix=240,
+    #     stimulus_height_pix=240,
+    # )
 
-    # Get all conditions to run
-    conditions, metadata, idx, conditions_metadata_idx_flat = E.contrast_respose(
-        # contrast_min = 0.02,
-        # contrast_max = .98,
-        # contrast_steps = 13)
-        contrast_min=0.98,
-        contrast_max=0.98,
-        contrast_steps=1,
-    )
+    # # Get all conditions to run
+    # conditions, metadata, idx, cond_array_list = E.contrast_respose(
+    #     # contrast_min = 0.02,
+    #     # contrast_max = .98,
+    #     # contrast_steps = 13)
+    #     contrast_min=0.98,
+    #     contrast_max=0.98,
+    #     contrast_steps=1,
+    # )
 
-    # data_folder = cell_type + '_' + response_type.upper() + '_c12tf0'
-    data_folder_path = os.path.join(
-        root_path, cell_type + "_" + response_type.upper() + "_c1tmp4"
-    )
-    # data_folder = cell_type + '_' + response_type.upper() + '_metadata'
-    E.run(
-        ret,
-        conditions,
-        metadata,
-        idx,
-        conditions_metadata_idx_flat,
-        n_trials=n_trials,
-        data_folder=data_folder_path,
-        save_only_metadata=False,
-    )
+    # # data_folder = cell_type + '_' + response_type.upper() + '_c12tf0'
+    # data_folder_path = os.path.join(
+    #     root_path, cell_type + "_" + response_type.upper() + "_c1tmp4"
+    # )
+    # # data_folder = cell_type + '_' + response_type.upper() + '_metadata'
+    # E.run(
+    #     ret,
+    #     conditions,
+    #     metadata,
+    #     idx,
+    #     cond_array_list,
+    #     n_trials=n_trials,
+    #     data_folder=data_folder_path,
+    #     save_only_metadata=False,
+    # )

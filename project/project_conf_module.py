@@ -204,7 +204,7 @@ my_stimulus_options = {
     "size_inner": None,  # Applies to annulus only
     "size_outer": None,  # Applies to annulus only
     "stimulus_position": (0, 0),
-    "stimulus_size": 0,
+    "stimulus_size": 2,
     "background": 128,
     "contrast": 0.99,
     "mean": 128,
@@ -391,13 +391,13 @@ if __name__ == "__main__":
 
     # options are defined in my_stimulus_options
     # stimulus video will be saved on output_folder in mp4 format (viewing and hdf5 format (for reloading)
-    PM.stimulate.make_stimulus_video()
+    # PM.stimulate.make_stimulus_video()
 
-    #################################
-    ### Load stimulus to get working retina ###
-    #################################
+    # #################################
+    # ### Load stimulus to get working retina ###
+    # #################################
 
-    PM.working_retina.load_stimulus()
+    # PM.working_retina.load_stimulus()
 
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
     # ret.load_stimulus(movie)# => METADATA
@@ -416,13 +416,13 @@ if __name__ == "__main__":
     ### Run multiple trials for single cell ###
     #################################
 
-    PM.working_retina.run_with_my_run_options()
+    # PM.working_retina.run_with_my_run_options()
 
-    PM.viz.show_gc_responses(PM.working_retina)
+    # PM.viz.show_gc_responses(PM.working_retina)
 
-    PM.viz.show_stimulus_with_gcs(
-        PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51
-    )
+    # PM.viz.show_stimulus_with_gcs(
+    #     PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51
+    # )
 
     # PM.viz.show_single_gc_view(PM.working_retina, cell_index=example_gc, frame_number=21)
 
@@ -446,6 +446,30 @@ if __name__ == "__main__":
 
     # PM.working_retina.save_spikes_csv(filename='testi_spikes.csv') # => METADATA
     # PM.working_retina.save_structure_csv(filename='testi_structure.csv') # => METADATA
+
+    ################################
+    ### Run Experiment ###
+    ################################
+    # Get all conditions to run
+    (
+        cond_options,
+        metadata,
+        cond_names,
+        cond_array_list,
+    ) = PM.experiment.contrast_respose(
+        contrast_min=0.5,
+        contrast_max=0.98,
+        contrast_steps=2,
+    )
+
+    PM.experiment.run(
+        cond_options,
+        metadata,
+        cond_names,
+        cond_array_list,
+        n_trials=5,
+        save_only_metadata=False,
+    )
 
     ##############################
     ### Create analog stimulus ###

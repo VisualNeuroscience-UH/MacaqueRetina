@@ -9,6 +9,7 @@ from retina.construct_retina_module import ConstructRetina
 from retina.working_retina_module import WorkingRetina, PhotoReceptor
 from retina.retina_math_module import RetinaMath
 from stimuli.visual_stimulus_module import ConstructStimulus, AnalogInput
+from stimuli.experiment_module import Experiment
 
 # Numerical
 import numpy as np
@@ -95,6 +96,11 @@ class ProjectManager(ProjectBase, ProjectUtilities):
 
         self.construct_retina = ConstructRetina(context, data_io, viz)
         self.working_retina = WorkingRetina(context, data_io, viz)
+
+        experiment = Experiment(context, data_io)
+        self.experiment = experiment
+        self.experiment.stimulate = stimulate
+        self.experiment.working_retina = self.working_retina
 
         analog_input = AnalogInput(
             context,
