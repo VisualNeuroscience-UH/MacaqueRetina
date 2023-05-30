@@ -647,7 +647,7 @@ class WorkingRetina(RetinaMath):
         # Get cropped stimulus
         stimulus_cropped = self._get_cropped_video(cell_index, reshape=True)
 
-        # Run convolution
+        # Run convolution. NOTE: expensive computation
         generator_potential = convolve(
             stimulus_cropped, spatiotemporal_filter, mode="valid"
         )

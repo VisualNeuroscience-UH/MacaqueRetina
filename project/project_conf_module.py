@@ -356,7 +356,7 @@ if __name__ == "__main__":
     """
 
     # # Main retina construction method. This method calls all other methods in the retina construction process.
-    PM.construct_retina.build()
+    # PM.construct_retina.build()
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # This is why they are called via the construct_retina attribute. The instance

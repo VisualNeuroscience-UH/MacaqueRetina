@@ -288,7 +288,7 @@ class DataIO(DataIOBase):
         in the input dictionary. For numerical data (types np.uint64, np.float64, int, float,
         tuple, np.ndarray), gzip compression is used by default.
         """
-        
+
         for key, item in dic.items():
             if isinstance(item, dict):
                 self._recursively_save_dict_contents_to_group(
@@ -456,11 +456,18 @@ class DataIO(DataIOBase):
 
     def save_stimulus_to_videofile(self, filename, stimulus):
         """
-        Save stimulus to videofile. This saves two different files.
+        Save stimulus to a videofile and an hdf5 file.
+
+        This function saves two different files:
         1. A video file in mp4 or comparable video format for viewing.
         2. A hdf5 file for reloading.
-        :param filename: video name
-        :param stimulus: stimulus object
+
+        Parameters
+        ----------
+        filename : str
+            The name of the video file to be saved.
+        stimulus : object
+            The stimulus object to be saved.
         """
 
         fullpath_filename = self.get_video_full_name(filename)
