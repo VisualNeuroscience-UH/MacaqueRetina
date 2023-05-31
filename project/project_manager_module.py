@@ -69,7 +69,7 @@ class ProjectManager(ProjectBase, ProjectUtilities):
             data_io,
             # Dictionaries
             # Methods, which are needed also elsewhere
-            round_to_n_significant=self.round_to_n_significant,
+            # round_to_n_significant=self.round_to_n_significant,
             # pp_df_full=self.pp_df_full,
         )
 

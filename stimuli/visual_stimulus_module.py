@@ -74,7 +74,6 @@ class VideoBaseClass(object):
         # Init optional arguments
         options["spatial_frequency"] = None
         options["temporal_frequency"] = None
-        options[""] = None
         options["temporal_band_pass"] = None
         options["orientation"] = 0.0  # No rotation or vertical
         options["size_inner"] = None

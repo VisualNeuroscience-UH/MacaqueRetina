@@ -224,6 +224,7 @@ my_run_options = {
     "spike_generator_model": "refractory",  # poisson or refractory
     "save_data": True,
     "gc_response_filenames": [f"gc_response_{x:02}" for x in range(n_files)],
+    "simulation_dt": 0.001,  # 1 ms
 }
 
 
@@ -455,11 +456,13 @@ if __name__ == "__main__":
         contrast_max=0.98,
         contrast_steps=2,
     )
-    # pdb.set_trace()
+
     PM.experiment.run(
         contrast_experiment,
         n_trials=5,
     )
+
+    # PM.ana.contrast_respose()
 
     ##############################
     ### Create analog stimulus ###

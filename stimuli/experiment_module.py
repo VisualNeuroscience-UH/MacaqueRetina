@@ -173,7 +173,6 @@ class Experiment(VideoBaseClass):
         self,
         this_experiment,
         n_trials=1,
-        save_only_metadata=False,
     ):
         """
         Unpack and run all conditions
@@ -191,18 +190,13 @@ class Experiment(VideoBaseClass):
         # Update options to match my_stimulus_options in conf file
         self._replace_options(self.context.my_stimulus_options)
 
-        # Test data_folder, create if missing, write metadata
-        data_folder = self.context.output_folder
-        save_path = data_folder / "metadata_conditions.gz"
-        self.data_io.write_to_file(
-            save_path,
-            [metadata, cond_names, self.options],
-        )
-
-        if save_only_metadata:
-            return
+        # Update simulation options
+        spike_generator_model = self.context.my_run_options["spike_generator_model"]
+        dt = self.context.my_run_options["simulation_dt"]
 
         video_name_list = []
+        data_folder = self.context.output_folder
+
         # Replace with input options
         for idx, input_options in enumerate(cond_options):
             stimulus_video_name = "Stim_" + cond_names[idx]
@@ -211,9 +205,6 @@ class Experiment(VideoBaseClass):
             self._replace_options(input_options)
 
             stim = self.stimulate.make_stimulus_video(self.options)
-            stimulus_video_name_full = Path(data_folder) / stimulus_video_name
-            self.data_io.save_stimulus_to_videofile(stimulus_video_name_full, stim)
-
             self.working_retina.load_stimulus(stim)
 
             example_gc = None  # int or 'None'
@@ -224,16 +215,25 @@ class Experiment(VideoBaseClass):
                 cell_index=example_gc,
                 n_trials=n_trials,
                 save_data=True,
-                spike_generator_model="poisson",
+                spike_generator_model=spike_generator_model,
                 return_monitor=False,
                 filename=filename,
+                dt=dt,
             )  # spike_generator_model='refractory' or 'poisson'
+
+        # Write metadata
+        self.options["n_trials"] = n_trials
+        save_path = data_folder / "exp_metadata.gz"
+        self.data_io.write_to_file(
+            save_path,
+            [metadata, cond_names, self.options],
+        )
 
         result_df = self._create_dataframe(
             metadata, cond_names, self.options, video_name_list
         )
         # Save dataframe
-        save_path = data_folder / "metadata_conditions.csv"
+        save_path = data_folder / "exp_metadata.csv"
         result_df.to_csv(save_path)
 
 

@@ -165,7 +165,7 @@ class WorkingRetina(RetinaMath):
 
         self.model_type = self.context.my_retina["model_type"]
 
-        if self.model_type is "VAE":
+        if self.model_type == "VAE":
             # Load generated spatial RF:s as numpy arrays, shape (n_cells, s, s)
             self.spat_rf = self.data_io.load_generated_rfs(self.context.output_folder)
 
@@ -599,9 +599,9 @@ class WorkingRetina(RetinaMath):
             The column-dimension is the number of frames in the stimulus
         """
 
-        if self.model_type is "FIT":
+        if self.model_type == "FIT":
             spatial_filter = self._create_spatial_filter_FIT(cell_index)
-        elif self.model_type is "VAE":
+        elif self.model_type == "VAE":
             spatial_filter = self._create_spatial_filter_VAE(cell_index)
         else:
             raise ValueError("Unknown model type, aborting...")
@@ -685,6 +685,7 @@ class WorkingRetina(RetinaMath):
         spike_generator_model="refractory",
         return_monitor=False,
         filename=None,
+        dt=0.001,
     ):
         """
         Runs the LNP pipeline for a single ganglion cell (spiking by Brian2)
@@ -703,6 +704,8 @@ class WorkingRetina(RetinaMath):
             Whether to return a raw Brian2 SpikeMonitor. The default is False.
         filename : str, optional
             Filename to save the data to. The default is None.
+        dt : float, optional
+            Time step of the simulation. The default is 0.001 (1 ms)
         """
 
         # Save spike generation model
@@ -710,7 +713,8 @@ class WorkingRetina(RetinaMath):
 
         video_dt = (1 / self.stimulus_video.fps) * b2u.second
         duration = self.stimulus_video.video_n_frames * video_dt
-        poissongen_dt = 1.0 * b2u.ms
+        poissongen_dt = dt * b2u.second
+        # poissongen_dt = 0.001 * b2u.second
 
         # Run all cells
         if cell_index is None:
@@ -855,6 +859,7 @@ class WorkingRetina(RetinaMath):
         n_trials = self.context.my_run_options["n_trials"]
         save_data = self.context.my_run_options["save_data"]
         spike_generator_model = self.context.my_run_options["spike_generator_model"]
+        dt = self.context.my_run_options["simulation_dt"]
 
         for filename in filenames:
             self.run_cells(
@@ -864,6 +869,7 @@ class WorkingRetina(RetinaMath):
                 spike_generator_model=spike_generator_model,
                 return_monitor=False,
                 filename=filename,
+                dt=dt,
             )
 
     def run_all_cells(
