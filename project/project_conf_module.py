@@ -197,7 +197,7 @@ my_stimulus_options = {
     "pix_per_deg": 60,
     "fps": 30,
     "duration_seconds": 4.0,
-    "baseline_start_seconds": 0.5,
+    "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
     "pattern": "sine_grating",  # Natural video is not supported yet. One of the StimulusPatterns
     "stimulus_form": "rectangular",
@@ -452,17 +452,26 @@ if __name__ == "__main__":
     ################################
     # Get all conditions to run
     contrast_experiment = PM.experiment.contrast_respose(
-        contrast_min=0.5,
+        contrast_min=0.02,
         contrast_max=0.98,
-        contrast_steps=2,
+        contrast_steps=20,
     )
 
     PM.experiment.run(
         contrast_experiment,
-        n_trials=5,
+        n_trials=10,
     )
 
-    # PM.ana.contrast_respose()
+    ################################
+    ### Analyze Experiment ###
+    ################################
+
+    my_analysis_options = {
+        "t_start_ana": 1.0,
+        "t_end_ana": 4.0,
+    }
+
+    PM.ana.contrast_respose(my_analysis_options)
 
     ##############################
     ### Create analog stimulus ###

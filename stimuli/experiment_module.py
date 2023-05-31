@@ -192,7 +192,7 @@ class Experiment(VideoBaseClass):
 
         # Update simulation options
         spike_generator_model = self.context.my_run_options["spike_generator_model"]
-        dt = self.context.my_run_options["simulation_dt"]
+        simulation_dt = self.context.my_run_options["simulation_dt"]
 
         video_name_list = []
         data_folder = self.context.output_folder
@@ -218,21 +218,14 @@ class Experiment(VideoBaseClass):
                 spike_generator_model=spike_generator_model,
                 return_monitor=False,
                 filename=filename,
-                dt=dt,
+                simulation_dt=simulation_dt,
             )  # spike_generator_model='refractory' or 'poisson'
 
-        # Write metadata
+        # Write metadata to csv
         self.options["n_trials"] = n_trials
-        save_path = data_folder / "exp_metadata.gz"
-        self.data_io.write_to_file(
-            save_path,
-            [metadata, cond_names, self.options],
-        )
-
         result_df = self._create_dataframe(
             metadata, cond_names, self.options, video_name_list
         )
-        # Save dataframe
         save_path = data_folder / "exp_metadata.csv"
         result_df.to_csv(save_path)
 

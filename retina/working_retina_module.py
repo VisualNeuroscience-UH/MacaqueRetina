@@ -346,7 +346,9 @@ class WorkingRetina(RetinaMath):
 
         return firing_rate
 
-    def _save_for_cxsystem(self, spike_mons, filename=None, analog_signal=None):
+    def _save_for_cxsystem(
+        self, spike_mons, filename=None, analog_signal=None, dt=None
+    ):
         self.w_coord, self.z_coord = self.get_w_z_coords()
 
         # Copied from CxSystem2\cxsystem2\core\stimuli.py The Stimuli class does not support reuse
@@ -355,15 +357,18 @@ class WorkingRetina(RetinaMath):
         data_to_save = {}
         for ii in range(len(spike_mons)):
             data_to_save["spikes_" + str(ii)] = []
-            # data_to_save['spikes_' + str(ii)].append(spike_mons[ii].it[0].__array__())
-            # data_to_save['spikes_' + str(ii)].append(spike_mons[ii].it[1].__array__())
+            # units, i in cxsystem2
             data_to_save["spikes_" + str(ii)].append(spike_mons[ii][0])
+            # times, t in cxsystem2
             data_to_save["spikes_" + str(ii)].append(spike_mons[ii][1])
         data_to_save["w_coord"] = self.w_coord
         data_to_save["z_coord"] = self.z_coord
 
         if analog_signal is not None:
             data_to_save["analog_signal"] = analog_signal
+
+        if dt is not None:
+            data_to_save["dt"] = dt
 
         if filename is None:
             save_path = self.context.output_folder.joinpath("most_recent_spikes")
@@ -685,7 +690,7 @@ class WorkingRetina(RetinaMath):
         spike_generator_model="refractory",
         return_monitor=False,
         filename=None,
-        dt=0.001,
+        simulation_dt=0.001,
     ):
         """
         Runs the LNP pipeline for a single ganglion cell (spiking by Brian2)
@@ -704,7 +709,7 @@ class WorkingRetina(RetinaMath):
             Whether to return a raw Brian2 SpikeMonitor. The default is False.
         filename : str, optional
             Filename to save the data to. The default is None.
-        dt : float, optional
+        simulation_dt : float, optional
             Time step of the simulation. The default is 0.001 (1 ms)
         """
 
@@ -713,8 +718,7 @@ class WorkingRetina(RetinaMath):
 
         video_dt = (1 / self.stimulus_video.fps) * b2u.second
         duration = self.stimulus_video.video_n_frames * video_dt
-        poissongen_dt = dt * b2u.second
-        # poissongen_dt = 0.001 * b2u.second
+        simulation_dt = simulation_dt * b2u.second
 
         # Run all cells
         if cell_index is None:
@@ -735,10 +739,7 @@ class WorkingRetina(RetinaMath):
                 this_cell, called_from_loop=True
             )
 
-        # exp_generator_potential = np.array(np.exp(generator_potential))
-        # exp_generator_potential = generator_potential
         exp_generator_potential = self._generator_to_firing_rate(generator_potential)
-        # exp_generator_potential = stats.norm.cdf(generator_potential)
 
         # Let's interpolate the rate to 1ms intervals
         tvec_original = np.arange(1, self.stimulus_video.video_n_frames + 1) * video_dt
@@ -750,13 +751,13 @@ class WorkingRetina(RetinaMath):
             bounds_error=False,
         )
 
-        tvec_new = np.arange(0, duration, poissongen_dt)
+        tvec_new = np.arange(0, duration, simulation_dt)
         interpolated_rates_array = rates_func(
             tvec_new
         )  # This needs to be 2D array for Brian!
 
         # Identical rates array for every trial; rows=time, columns=cell index
-        inst_rates = b2.TimedArray(interpolated_rates_array * b2u.Hz, poissongen_dt)
+        inst_rates = b2.TimedArray(interpolated_rates_array * b2u.Hz, simulation_dt)
 
         # Cells in parallel (NG), trial iterations (repeated runs)
         if spike_generator_model == "refractory":
@@ -781,6 +782,7 @@ class WorkingRetina(RetinaMath):
                 """,
                 threshold="rand()<lambda_ttlast",
                 refractory="(t-lastspike) < abs_refractory",
+                dt=simulation_dt,
             )  # This is necessary for brian2 to generate lastspike variable. Does not affect refractory behavior
 
             spike_monitor = b2.SpikeMonitor(neuron_group)
@@ -826,7 +828,10 @@ class WorkingRetina(RetinaMath):
 
         if save_data is True:
             self._save_for_cxsystem(
-                spikearrays, filename=filename, analog_signal=interpolated_rates_array
+                spikearrays,
+                filename=filename,
+                analog_signal=interpolated_rates_array,
+                dt=simulation_dt,
             )
 
         # For save_spikes_csv. Only 1st trial is saved.
@@ -859,7 +864,7 @@ class WorkingRetina(RetinaMath):
         n_trials = self.context.my_run_options["n_trials"]
         save_data = self.context.my_run_options["save_data"]
         spike_generator_model = self.context.my_run_options["spike_generator_model"]
-        dt = self.context.my_run_options["simulation_dt"]
+        simulation_dt = self.context.my_run_options["simulation_dt"]
 
         for filename in filenames:
             self.run_cells(
@@ -869,7 +874,7 @@ class WorkingRetina(RetinaMath):
                 spike_generator_model=spike_generator_model,
                 return_monitor=False,
                 filename=filename,
-                dt=dt,
+                simulation_dt=simulation_dt,
             )
 
     def run_all_cells(

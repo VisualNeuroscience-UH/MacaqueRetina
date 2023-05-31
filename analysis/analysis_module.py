@@ -51,119 +51,59 @@ class Analysis(AnalysisBase):
     def data_io(self):
         return self._data_io
 
-    def _show_rasterplot(self, spiketrain_list, title):
-        for i, spiketrain in enumerate(spiketrain_list):
-            t = spiketrain.rescale(b2u.ms)
-            plt.plot(t, i * np.ones_like(t), "k.", markersize=2)
-        plt.axis("tight")
-        plt.xlim(0, 7000)
-        plt.xlabel("Time (ms)", fontsize=16)
-        plt.ylabel("Spike Train Index", fontsize=16)
-        plt.gca().tick_params(axis="both", which="major", labelsize=14)
-        plt.title(title)
-        plt.show()
+    def _get_spikes_by_interval(self, data, trial, t_start, t_end):
+        key_name = f"spikes_{trial}"
+        data_by_trial = data[key_name]
 
-    def _show_rasterplot_from_df(self, spiketrain_df, unit_idx=0, title=""):
-        plt.figure()
-        unit_data_df = spiketrain_df.loc[spiketrain_df["unit_idx"] == unit_idx]
-        plt.plot(unit_data_df["spike_time"], unit_data_df["trial"], "k.", markersize=2)
-        plt.axis("tight")
-        # plt.xlim(0, 7000)
-        plt.xlabel("Time (ms)", fontsize=16)
-        plt.ylabel("Spike Train Index", fontsize=16)
-        plt.gca().tick_params(axis="both", which="major", labelsize=14)
-        plt.title(title)
-
-    def _get_spike_trains(self, fullpath):
-        """
-        Return pandas dataframe with columns=['trial', 'unit_idx', 'spike_time']
-        Successive trials are appended to the end of df
-        """
-
-        file_type = self.file_type
-
-        assert (
-            file_type == "cxsystem"
-        ), "Sorry, nix is defunc at the moment, u need to use cxsystem and gz filetype"
-
-        data = load_from_file(fullpath)
-        trial_name_list = [name for name in data.keys() if "spikes" in name]
-
-        # build pandas df
-        spiketrains_df = pd.DataFrame(columns=["trial", "unit_idx", "spike_time"])
-        for trial_idx, trial_key in enumerate(trial_name_list):
-            it_list = data[trial_key]
-            trial_df = pd.DataFrame(it_list[0], columns=["unit_idx"])
-            trial_df["spike_time"] = it_list[1] / b2u.second
-            trial_df["trial"] = trial_idx
-            spiketrains_df = spiketrains_df.append(trial_df, ignore_index=True)
-
-        return spiketrains_df
-
-    # Imported and modified from SystemTools
-    # TÄHÄN JÄIT: SEURAAVAT KOLME MENETELMÄÄ SOVITETAAN TÄHÄN
-
-    def get_n_samples(self, data):
-        nsamples = len(data["time_vector"])
-        assert (
-            nsamples == data["time_vector"].shape[0]
-        ), "time_vector shape inconsistency, aborting..."
-        return nsamples
-
-    def _get_spikes_by_interval(self, data, NG, t_idx_start, t_idx_end):
-        data_by_group = data["spikes_all"][NG]
-
-        # Get and mark MeanFR to df
-        N_neurons = data_by_group["count"].size
-
-        # spikes by interval needs seconds, thus we need to multiply with dt
-        dt = self.get_dt(data)
-
-        t_start = t_idx_start * dt
-        t_end = t_idx_end * dt
-
-        spikes = data_by_group["t"][
-            np.logical_and(
-                data_by_group["t"] > t_start * b2u.second,
-                data_by_group["t"] < t_end * b2u.second,
-            )
-        ]
-
-        return N_neurons, spikes, dt
-
-    def _analyze_meanfr(self, data, NG):
-        t_idx_start = self.context.t_idx_start
-        t_idx_end = self.context.t_idx_end
-
-        n_samples = self.get_n_samples(data)
-        t_idx_end = self.end2idx(t_idx_end, n_samples)
-
-        N_neurons, spikes, dt = self._get_spikes_by_interval(
-            data, NG, t_idx_start=t_idx_start, t_idx_end=t_idx_end
+        idx_mask = np.logical_and(
+            data_by_trial[1] > t_start * b2u.second,
+            data_by_trial[1] < t_end * b2u.second,
         )
 
-        MeanFR = spikes.size / (N_neurons * (t_idx_end - t_idx_start) * dt)
+        spike_units = data_by_trial[0][idx_mask]
+        spike_times = data_by_trial[1][idx_mask]
+
+        return spike_units, spike_times
+
+    def _analyze_meanfr(self, data, trial, t_start, t_end):
+        units, times = self._get_spikes_by_interval(data, trial, t_start, t_end)
+        N_neurons = len(np.unique(units))
+        MeanFR = times.size / (N_neurons * (t_end - t_start))
 
         return MeanFR
 
-    def contrast_respose(self):
+    def contrast_respose(self, my_analysis_options):
         """
         Contrast response function: Lee_1990_JOSA
         """
-        output_folder = self.context.output_folder
-        load_path = output_folder / "exp_metadata.gz"
-        [cond_metadata_key, cond_names, cond_options] = load_from_file(load_path)
-        # experiment_df = pd.read_csv(output_folder / "exp_metadata.csv", index_col=0)
         data_folder = self.context.output_folder
+        experiment_df = pd.read_csv(data_folder / "exp_metadata.csv", index_col=0)
+        cond_names = experiment_df.columns.values
+        t_start = my_analysis_options["t_start_ana"]
+        t_end = my_analysis_options["t_end_ana"]
+        n_trials_vec = pd.to_numeric(experiment_df.loc["n_trials", :].values)
+
+        # Assert for equal number of trials
+        assert np.all(
+            n_trials_vec == n_trials_vec[0]
+        ), "Not equal number of trials, aborting..."
+
+        # Make dataframe with columns = conditions and index = trials
+        data_df = pd.DataFrame(index=range(n_trials_vec[0]), columns=cond_names)
 
         # Loop conditions
         for idx, cond_name in enumerate(cond_names):
             filename = Path(data_folder) / ("Response_" + cond_name + ".gz")
             data_dict = self.data_io.get_data(filename)
-            pdb.set_trace()
+            n_trials = n_trials_vec[idx]
+
+            for this_trial in range(n_trials):
+                MeanFR = self._analyze_meanfr(data_dict, this_trial, t_start, t_end)
+                # Set results to dataframe
+                data_df.loc[this_trial, cond_name] = MeanFR
 
         # get spike trains
-        csv_save_path = output_folder / "contrast_df.csv"
+        csv_save_path = data_folder / "contrast_results.csv"
         data_df.to_csv(csv_save_path)
 
     def amplitude_sensitivity(self):
