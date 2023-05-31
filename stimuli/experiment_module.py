@@ -153,10 +153,15 @@ class Experiment(VideoBaseClass):
 
     def _create_dataframe(self, metadata, cond_names, options, video_name_list):
         df = pd.DataFrame(index=options.keys(), columns=cond_names)
+        n_columns = len(cond_names)
 
         # Set all values equal to options.values()
         for key, value in options.items():
-            df.loc[key] = value
+            if isinstance(value, tuple):
+                repeated_tuple = tuple([value] * n_columns)
+                df.loc[key] = repeated_tuple
+            else:
+                df.loc[key] = value
 
         for key, value in metadata.items():
             if isinstance(value, np.ndarray):
