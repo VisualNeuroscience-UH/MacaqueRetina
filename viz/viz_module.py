@@ -1825,3 +1825,21 @@ class Viz:
         axs[1].grid(True)
 
         plt.show()
+
+    # Results visualization
+
+    def contrast_response(self):
+        """
+        Plot the contrast response curve.
+        """
+
+        data_folder = self.context.output_folder
+        experiment_df = pd.read_csv(data_folder / "exp_metadata.csv", index_col=0)
+        data_df = pd.read_csv(
+            data_folder / "contrast_population_means.csv", index_col=0
+        )
+        data_df_units = pd.read_csv(
+            data_folder / "contrast_unit_means.csv", index_col=0
+        )
+        pdb.set_trace()
+        pass

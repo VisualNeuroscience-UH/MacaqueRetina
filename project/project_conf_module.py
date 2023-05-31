@@ -450,17 +450,17 @@ if __name__ == "__main__":
     ################################
     ### Run Experiment ###
     ################################
-    # Get all conditions to run
-    contrast_experiment = PM.experiment.contrast_respose(
-        contrast_min=0.02,
-        contrast_max=0.98,
-        contrast_steps=20,
-    )
+    # # Get all conditions to run
+    # contrast_experiment = PM.experiment.contrast_respose(
+    #     contrast_min=0.02,
+    #     contrast_max=0.98,
+    #     contrast_steps=4,
+    # )
 
-    PM.experiment.run(
-        contrast_experiment,
-        n_trials=10,
-    )
+    # PM.experiment.run(
+    #     contrast_experiment,
+    #     n_trials=10,
+    # )
 
     ################################
     ### Analyze Experiment ###
@@ -472,6 +472,12 @@ if __name__ == "__main__":
     }
 
     PM.ana.contrast_respose(my_analysis_options)
+
+    ################################
+    ### Visualize Experiment ###
+    ################################
+
+    PM.viz.contrast_response()
 
     ##############################
     ### Create analog stimulus ###

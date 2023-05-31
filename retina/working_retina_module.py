@@ -347,7 +347,7 @@ class WorkingRetina(RetinaMath):
         return firing_rate
 
     def _save_for_cxsystem(
-        self, spike_mons, filename=None, analog_signal=None, dt=None
+        self, spike_mons, n_units, filename=None, analog_signal=None, dt=None
     ):
         self.w_coord, self.z_coord = self.get_w_z_coords()
 
@@ -363,6 +363,8 @@ class WorkingRetina(RetinaMath):
             data_to_save["spikes_" + str(ii)].append(spike_mons[ii][1])
         data_to_save["w_coord"] = self.w_coord
         data_to_save["z_coord"] = self.z_coord
+
+        data_to_save["n_units"] = n_units
 
         if analog_signal is not None:
             data_to_save["analog_signal"] = analog_signal
@@ -829,6 +831,7 @@ class WorkingRetina(RetinaMath):
         if save_data is True:
             self._save_for_cxsystem(
                 spikearrays,
+                n_units=n_cells,
                 filename=filename,
                 analog_signal=interpolated_rates_array,
                 dt=simulation_dt,

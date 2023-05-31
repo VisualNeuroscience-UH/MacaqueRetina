@@ -67,10 +67,23 @@ class Analysis(AnalysisBase):
 
     def _analyze_meanfr(self, data, trial, t_start, t_end):
         units, times = self._get_spikes_by_interval(data, trial, t_start, t_end)
-        N_neurons = len(np.unique(units))
+        N_neurons = data["n_units"]
         MeanFR = times.size / (N_neurons * (t_end - t_start))
 
         return MeanFR
+
+    def _analyze_fr(self, data, trial, t_start, t_end):
+        units, times = self._get_spikes_by_interval(data, trial, t_start, t_end)
+        N_neurons = data["n_units"]
+
+        # Get firing rate for each neuron
+        FR = np.zeros(N_neurons)
+        for this_unit in range(N_neurons):
+            unit_mask = units == this_unit
+            times_unit = times[unit_mask]
+            FR[this_unit] = times_unit.size / (t_end - t_start)
+
+        return FR, N_neurons
 
     def contrast_respose(self, my_analysis_options):
         """
@@ -89,7 +102,9 @@ class Analysis(AnalysisBase):
         ), "Not equal number of trials, aborting..."
 
         # Make dataframe with columns = conditions and index = trials
-        data_df = pd.DataFrame(index=range(n_trials_vec[0]), columns=cond_names)
+        data_df_population_means = pd.DataFrame(
+            index=range(n_trials_vec[0]), columns=cond_names
+        )
 
         # Loop conditions
         for idx, cond_name in enumerate(cond_names):
@@ -100,11 +115,24 @@ class Analysis(AnalysisBase):
             for this_trial in range(n_trials):
                 MeanFR = self._analyze_meanfr(data_dict, this_trial, t_start, t_end)
                 # Set results to dataframe
-                data_df.loc[this_trial, cond_name] = MeanFR
+                data_df_population_means.loc[this_trial, cond_name] = MeanFR
+                FR, N_neurons = self._analyze_fr(data_dict, this_trial, t_start, t_end)
+                # If first trial, initialize FR dataframe
+                if idx == 0 and this_trial == 0:
+                    FR_compiled = np.zeros((N_neurons, len(cond_names), n_trials))
+                # Set results to FR_compiled
+                FR_compiled[:, idx, this_trial] = FR
 
-        # get spike trains
-        csv_save_path = data_folder / "contrast_results.csv"
-        data_df.to_csv(csv_save_path)
+        # Set results to dataframe
+        FR_compiled_mean = np.mean(FR_compiled, axis=2)
+        data_df_units = pd.DataFrame(FR_compiled_mean, columns=cond_names)
+
+        # Save results
+        csv_save_path = data_folder / "contrast_population_means.csv"
+        data_df_population_means.to_csv(csv_save_path)
+
+        csv_save_path = data_folder / "contrast_unit_means.csv"
+        data_df_units.to_csv(csv_save_path)
 
     def amplitude_sensitivity(self):
         """ """

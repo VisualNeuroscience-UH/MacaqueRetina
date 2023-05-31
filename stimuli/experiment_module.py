@@ -210,6 +210,8 @@ class Experiment(VideoBaseClass):
             self._replace_options(input_options)
 
             stim = self.stimulate.make_stimulus_video(self.options)
+            # Raw intensity is stimulus specific
+            self.options["raw_intensity"] = stim.options["raw_intensity"]
             self.working_retina.load_stimulus(stim)
 
             example_gc = None  # int or 'None'
