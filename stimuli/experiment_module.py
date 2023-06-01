@@ -100,9 +100,11 @@ class Experiment(VideoBaseClass):
         Setup
         """
 
-        contrasts = np.logspace(
-            np.log10(contrast_min), np.log10(contrast_max), contrast_steps
-        )
+        # contrasts = np.logspace(
+        #     np.log10(contrast_min), np.log10(contrast_max), contrast_steps
+        # )
+
+        contrasts = np.linspace(contrast_min, contrast_max, contrast_steps)
 
         # Calculate voltage values, assuming voltage = Td
         # Return cond_options -- a dict with all keywords matching visual_stimulus_module.ConstructStimulus

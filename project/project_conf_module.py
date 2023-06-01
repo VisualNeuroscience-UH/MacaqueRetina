@@ -135,11 +135,11 @@ my_retina = {
     "dd_regr_model": "cubic",  # linear, quadratic, cubic. Only used if rf_coverage_adjusted_to_1 is "from_literalure"
     "randomize_position": 0.0,
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
-    "model_type": "VAE",  # "FIT" or "VAE" for variational autoencoder.
+    "model_type": "FIT",  # "FIT" or "VAE" for variational autoencoder.
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" Applies to VAE only.
 }
 
-# For external video input. See visual_stimulus_module.VideoBaseClass for more options.
+# For external video and image input. See visual_stimulus_module.VideoBaseClass for more options.
 my_stimulus_metadata = {
     "stimulus_file": "nature1.avi",  # nature1.avi, testi.jpg
     "pix_per_deg": 60,
@@ -454,7 +454,7 @@ if __name__ == "__main__":
     # contrast_experiment = PM.experiment.contrast_respose(
     #     contrast_min=0.02,
     #     contrast_max=0.98,
-    #     contrast_steps=4,
+    #     contrast_steps=10,
     # )
 
     # PM.experiment.run(
@@ -462,13 +462,13 @@ if __name__ == "__main__":
     #     n_trials=10,
     # )
 
-    ################################
-    ### Analyze Experiment ###
-    ################################
+    ###############################
+    ## Analyze Experiment ###
+    ###############################
 
     my_analysis_options = {
-        "t_start_ana": 1.0,
-        "t_end_ana": 4.0,
+        "t_start_ana": 0.5,
+        "t_end_ana": 1.0,
     }
 
     PM.ana.contrast_respose(my_analysis_options)
@@ -478,6 +478,16 @@ if __name__ == "__main__":
     ################################
 
     PM.viz.contrast_response()
+
+    # TÄHÄN JÄIT: HARKITSE FOURIER SPEKTRIN AMPLITUDIRESPONSSIA VASTEENA
+    # NÄIN SAISI HETKELLISEN TAAJUUDEN EIKÄ KESKIMÄÄRÄISTÄ TAAJUUTTA
+    # LEE_1990_JOSA
+    # CRF FIT R(c) - 2 = Rm c/(c + b), missä Rm on maksimivaste ja b on "contrast evoking a half-maximal response"
+    # "Contrast gain is defined as the slope of the initial section of the contrastresponse
+    # function Rm/b and is expressed as impulses per second/(percent modulation).""
+    #
+    # SELVITÄ MEAN FR GANG SOLUISTA JA SEN SYNTYMEKANISMI
+    # KS SINHA_2017_CELL
 
     ##############################
     ### Create analog stimulus ###

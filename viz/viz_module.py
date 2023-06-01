@@ -1841,5 +1841,31 @@ class Viz:
         data_df_units = pd.read_csv(
             data_folder / "contrast_unit_means.csv", index_col=0
         )
-        pdb.set_trace()
-        pass
+
+        contrast_levels_s = experiment_df.loc["contrast", :]
+        mean_response_levels_s = data_df.mean()
+        contrast_levels_s = pd.to_numeric(contrast_levels_s)
+        contrast_levels_s = contrast_levels_s.round(decimals=2)
+
+        contrast_response_function_df = pd.DataFrame(
+            {"contrast": contrast_levels_s, "response": mean_response_levels_s}
+        )
+
+        fig, ax = plt.subplots(1, 2, figsize=(8, 4))
+
+        sns.lineplot(
+            data=contrast_response_function_df,
+            x="contrast",
+            y="response",
+            marker="o",
+            color="black",
+            ax=ax[0],
+        )
+        # Title
+        ax[0].set_title("Contrast response function (population mean)")
+
+        sns.boxplot(data=data_df_units, color="white", linewidth=2, whis=100, ax=ax[1])
+        sns.swarmplot(data=data_df_units, color="black", size=3, ax=ax[1])
+
+        # Title
+        ax[1].set_title("Contrast response function (individual units)")
