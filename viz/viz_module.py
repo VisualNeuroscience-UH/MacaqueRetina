@@ -1013,6 +1013,18 @@ class Viz:
         if hasattr(model, "test_data"):
             test_data = model.test_data[:nsamples, :, :, :]
         else:
+            # Make a list of dict keys starting "cell_ix_" from exp_spat_filt_to_viz dictionary
+            keys = exp_spat_filt_to_viz.keys()
+            cell_ix_names_list = [key for key in keys if "cell_ix_" in key]
+            # Make a numpy array of numbers following "cell_ix_"
+            cell_ix_array = np.array(
+                [int(key.split("cell_ix_")[1]) for key in cell_ix_names_list]
+            )
+
+            # Take first nsamples from cell_ix_array. They have to be constant,
+            # because we are showing multiple sets of images on top of each other.
+            samples = cell_ix_array[:nsamples]
+
             test_data = np.zeros(
                 [
                     nsamples,
@@ -1021,10 +1033,10 @@ class Viz:
                     exp_spat_filt_to_viz["num_pix_x"],
                 ]
             )
-            for i in range(nsamples):
-                test_data[i, 0, :, :] = exp_spat_filt_to_viz[f"cell_ix_{i}"][
-                    "spatial_data_array"
-                ]
+            for idx, this_sample in enumerate(samples):
+                test_data[idx, 0, :, :] = exp_spat_filt_to_viz[
+                    f"cell_ix_{this_sample}"
+                ]["spatial_data_array"]
 
         # Hack to reuse the AugmentedDataset._feature_scaling method. Scales to [0,1]
         test_data = AugmentedDataset._feature_scaling("", test_data)

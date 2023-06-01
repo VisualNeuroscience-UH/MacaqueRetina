@@ -886,7 +886,7 @@ class RetinaVAE(RetinaMath):
 
         self.batch_size = 256  # None will take the batch size from test_split size.
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
-        self.train_by = [["parasol"], ["on"]]  # Train by these factors
+        self.train_by = [["parasol"], ["off"]]  # Train by these factors
         # self.train_by = [["midget"], ["off"]]  # Train by these factors
 
         self.kernel_stride = "k7s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
@@ -1000,15 +1000,12 @@ class RetinaVAE(RetinaMath):
                     "latent_dim": [32],
                     "resolution_hw": [13],  # Both x and y, 13 or 28
                     # k3s2,k3s1,k5s2,k5s1,k7s1, k9s1 Kernel-stride-padding for conv layers. NOTE you cannot use >3 conv layers with stride 2
-                    "kernel_stride": ["k7s1"],
-                    "channels": [16],
+                    "kernel_stride": ["k7s1"],  # "k3s1", "k5s1", "k7s1", "k9s1"
+                    "channels": [4, 8, 16, 32], # 4, 8, 16, 32
                     "batch_size": [256],
-                    "conv_layers": [2],
-                    "batch_norm": [False, True],
-                    "latent_distribution": [
-                        "normal",
-                        "uniform",
-                    ],  # "normal" or "uniform"
+                    "conv_layers": [2],  # 1, 2, 3, 4
+                    "batch_norm": [True],  # False, True
+                    "latent_distribution": ["uniform"],  # "normal", "uniform"
                     "rotation": [0],  # Augment: max rotation in degrees
                     # Augment: fract of im, max in (x, y)/[xy] dir
                     "translation": [0],  # 1/13 pixels
@@ -1072,7 +1069,7 @@ class RetinaVAE(RetinaMath):
             case "load_model":
                 # Load previously calculated model for vizualization
                 # Load model to self.vae
-                self.trial_name = "a9202_00017"
+                # self.trial_name = "a9202_00017"
 
                 if hasattr(self, "trial_name"):  # After tune_model
                     self.vae, result_grid, trial_folder = self._load_model(

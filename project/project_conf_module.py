@@ -7,6 +7,7 @@ import sys
 import pdb
 import time
 import warnings
+import random
 
 # sys.path.append(Path(__file__).resolve().parent.parent)
 # Start measuring time
@@ -94,7 +95,7 @@ project = "Retina"
 """
 Current experiment
 """
-experiment = "VAE_nLayers"  # "test"
+experiment = "VAE_pOFF_channels"  # "test"
 
 
 """
@@ -114,7 +115,7 @@ output_folder = "out"
 """
 Remove random variations by setting the numpy random seed
 """
-numpy_seed = 42  # 42  # or None for random values
+numpy_seed = random.randint(0, 1000000)  # 42
 
 """
 ### Housekeeping ###. Do not comment out.
@@ -127,16 +128,16 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 # _set_ray_tuner contains the starting point.
 my_retina = {
     "gc_type": "parasol",
-    "response_type": "on",
+    "response_type": "off",
     "ecc_limits": [4, 6],  # degrees
     "sector_limits": [-5, 5],  # polar angle in degrees
     "model_density": 1.0,
-    "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models
     "dd_regr_model": "cubic",  # linear, quadratic, cubic. Only used if rf_coverage_adjusted_to_1 is "from_literalure"
     "randomize_position": 0.0,
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
-    "model_type": "FIT",  # "FIT" or "VAE" for variational autoencoder.
-    "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" Applies to VAE only.
+    "model_type": "VAE",  # "FIT" or "VAE" for variational autoencoder.
+    "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models
+    "training_mode": "tune_model",  # "train_model" or "tune_model" or "load_model" Applies to VAE only.
 }
 
 # For external video and image input. See visual_stimulus_module.VideoBaseClass for more options.
@@ -356,7 +357,7 @@ if __name__ == "__main__":
     Build and test your retina here, one gc type at a time. Temporal hemiretina of macaques.
     """
 
-    # # Main retina construction method. This method calls all other methods in the retina construction process.
+    # Main retina construction method. This method calls all other methods in the retina construction process.
     # PM.construct_retina.build()
 
     # The following visualizations are dependent on the ConstructRetina instance.
@@ -377,13 +378,13 @@ if __name__ == "__main__":
     # PM.construct_retina.show_rf_imgs(n_samples=10)
     # PM.construct_retina.show_rf_violinplot()
 
-    # # # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
-    # this_dep_var = "val_loss"
-    # ray_exp_name = None  # "TrainableVAE_2023-04-20_22-17-35"  # None for most recent
-    # highlight_trial = "a9202_00017"  # "fc63f_00003"  # or None
-    # PM.construct_retina.show_ray_experiment(
-    #     ray_exp_name, this_dep_var, highlight_trial=highlight_trial
-    # )
+    # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
+    this_dep_var = "val_loss"
+    ray_exp_name = None  # "TrainableVAE_2023-04-20_22-17-35"  # None for most recent
+    highlight_trial = None  # "fc63f_00003"  # or None
+    PM.construct_retina.show_ray_experiment(
+        ray_exp_name, this_dep_var, highlight_trial=highlight_trial
+    )
 
     #################################
     ### Create stimulus ###
@@ -466,28 +467,31 @@ if __name__ == "__main__":
     ## Analyze Experiment ###
     ###############################
 
-    my_analysis_options = {
-        "t_start_ana": 0.5,
-        "t_end_ana": 1.0,
-    }
+    # my_analysis_options = {
+    #     "t_start_ana": 0.5,
+    #     "t_end_ana": 1.0,
+    # }
 
-    PM.ana.contrast_respose(my_analysis_options)
+    # PM.ana.contrast_respose(my_analysis_options)
 
     ################################
     ### Visualize Experiment ###
     ################################
 
-    PM.viz.contrast_response()
+    # PM.viz.contrast_response()
 
     # TÄHÄN JÄIT: HARKITSE FOURIER SPEKTRIN AMPLITUDIRESPONSSIA VASTEENA
+    # viz responssi spatiaali ja temporaali taajuuden vasteena
     # NÄIN SAISI HETKELLISEN TAAJUUDEN EIKÄ KESKIMÄÄRÄISTÄ TAAJUUTTA
     # LEE_1990_JOSA
+    # Huomaa myös parasol solujen epälineaarinen contrasti responssifunktio, a.k.a. kontrastiadaptaatio, malli:
     # CRF FIT R(c) - 2 = Rm c/(c + b), missä Rm on maksimivaste ja b on "contrast evoking a half-maximal response"
     # "Contrast gain is defined as the slope of the initial section of the contrastresponse
     # function Rm/b and is expressed as impulses per second/(percent modulation).""
     #
-    # SELVITÄ MEAN FR GANG SOLUISTA JA SEN SYNTYMEKANISMI
-    # KS SINHA_2017_CELL
+    # Implementoi contrast gain control, ks
+    # parametrit kattavasti ks Benardete_1999_VisNeurosci, ks myös Chichilnisky_2002_JNeurosci jossa vastaava malli kuin meillä.
+    # fysiologiset mekanismit katsaus Demb_2008_JPhysiol ja Beaudoin_2007_JNeurosci
 
     ##############################
     ### Create analog stimulus ###
