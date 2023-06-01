@@ -2,6 +2,8 @@
 
 Python software to build model of macaque retina and convert various visual stimuli to ganglion cell action potentials
 
+This project is under development.
+
 ## Setup
 
 Follow the mr_environment_installation_commands
@@ -10,7 +12,7 @@ Follow the mr_environment_installation_commands
 
 The main files are in the project directory:
 
-    project/project_conf_module.py: conf below, provides the primary interface to work with SystemTools.
+    project/project_conf_module.py: conf below, provides the primary interface to work with MacaqueRetina.
     project/project_manager_module.py provides a facade for the rest of the code.
 
 ## How to cite this project
