@@ -95,7 +95,7 @@ project = "Retina"
 """
 Current experiment
 """
-experiment = "VAE_pOFF_channels"  # "test"
+experiment = "VAE_nLayers2"  # "test"
 
 
 """
@@ -128,7 +128,7 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 # _set_ray_tuner contains the starting point.
 my_retina = {
     "gc_type": "parasol",
-    "response_type": "off",
+    "response_type": "on",
     "ecc_limits": [4, 6],  # degrees
     "sector_limits": [-5, 5],  # polar angle in degrees
     "model_density": 1.0,
@@ -137,7 +137,8 @@ my_retina = {
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "model_type": "VAE",  # "FIT" or "VAE" for variational autoencoder.
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models
-    "training_mode": "tune_model",  # "train_model" or "tune_model" or "load_model" Applies to VAE only.
+    "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
+    "ray_tune_trial_id": "2199e_00029",  # Trial_id for tune, None for loading single run after "train_model". Applies to VAE "load_model" only.
 }
 
 # For external video and image input. See visual_stimulus_module.VideoBaseClass for more options.
@@ -229,9 +230,10 @@ my_run_options = {
 }
 
 
-"""
-Semi-constant variables
-"""
+############################
+###  Semi-constant variables
+############################
+
 # TODO: Refactor apricot_data_module.py to use these. Requires new composition of the module.
 apricot_metadata = {
     "data_microm_per_pix": 60,
@@ -378,13 +380,13 @@ if __name__ == "__main__":
     # PM.construct_retina.show_rf_imgs(n_samples=10)
     # PM.construct_retina.show_rf_violinplot()
 
-    # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
-    this_dep_var = "val_loss"
-    ray_exp_name = None  # "TrainableVAE_2023-04-20_22-17-35"  # None for most recent
-    highlight_trial = None  # "fc63f_00003"  # or None
-    PM.construct_retina.show_ray_experiment(
-        ray_exp_name, this_dep_var, highlight_trial=highlight_trial
-    )
+    # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
+    # this_dep_var = "val_loss"
+    # ray_exp_name = None  # "TrainableVAE_2023-04-20_22-17-35"  # None for most recent
+    # highlight_trial = "2199e_00029"  # or None
+    # PM.construct_retina.show_ray_experiment(
+    #     ray_exp_name, this_dep_var, highlight_trial=highlight_trial
+    # )
 
     #################################
     ### Create stimulus ###
@@ -398,7 +400,7 @@ if __name__ == "__main__":
     # ### Load stimulus to get working retina ###
     # #################################
 
-    # PM.working_retina.load_stimulus()
+    PM.working_retina.load_stimulus()
 
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
     # ret.load_stimulus(movie)# => METADATA

@@ -886,7 +886,7 @@ class RetinaVAE(RetinaMath):
 
         self.batch_size = 256  # None will take the batch size from test_split size.
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
-        self.train_by = [["parasol"], ["off"]]  # Train by these factors
+        self.train_by = [["parasol"], ["on"]]  # Train by these factors
         # self.train_by = [["midget"], ["off"]]  # Train by these factors
 
         self.kernel_stride = "k7s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
@@ -1069,21 +1069,22 @@ class RetinaVAE(RetinaMath):
             case "load_model":
                 # Load previously calculated model for vizualization
                 # Load model to self.vae
-                # self.trial_name = "a9202_00017"
 
-                if hasattr(self, "trial_name"):  # After tune_model
+                if context.my_retina['ray_tune_trial_id'] is not None: # After tune_model
+
+                    trial_name = context.my_retina['ray_tune_trial_id'] 
                     self.vae, result_grid, trial_folder = self._load_model(
-                        model_path=None, trial_name=self.trial_name
+                        model_path=None, trial_name=trial_name
                     )
 
                     [this_result] = [
                         result
                         for result in result_grid
-                        if self.trial_name in result.metrics["trial_id"]
+                        if trial_name in result.metrics["trial_id"]
                     ]
                     self._update_retinavae_to_ray_result(this_result)
 
-                elif hasattr(self, "models_folder"):  # After train_model
+                elif context.my_retina['ray_tune_trial_id'] is None:  # After train_model
                     self.vae = self._load_model(
                         model_path=self.models_folder, trial_name=None
                     )
