@@ -210,7 +210,9 @@ class DataIO(DataIOBase):
         elif "csv" in filename_extension:
             data = pd.read_csv(data_fullpath_filename)
             if "Unnamed: 0" in data.columns:
-                data = data.drop(["Unnamed: 0"], axis=1)
+                # data = data.drop(["Unnamed: 0"], axis=1)
+                data.set_index("Unnamed: 0", inplace=True)
+                data.index.name = None
         elif "jpg" in filename_extension or "png" in filename_extension:
             image = cv2.imread(
                 str(data_fullpath_filename), 0

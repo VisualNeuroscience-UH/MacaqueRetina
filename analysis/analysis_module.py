@@ -90,7 +90,7 @@ class Analysis(AnalysisBase):
         Contrast response function: Lee_1990_JOSA
         """
         data_folder = self.context.output_folder
-        experiment_df = pd.read_csv(data_folder / "exp_metadata.csv", index_col=0)
+        experiment_df = self.data_io.get_data(filename="exp_metadata.csv")
         cond_names = experiment_df.columns.values
         t_start = my_analysis_options["t_start_ana"]
         t_end = my_analysis_options["t_end_ana"]
@@ -157,17 +157,3 @@ class Analysis(AnalysisBase):
     def spatial_correlation(self):
         """ """
         pass
-
-
-# if __name__ == "__main__":
-#     root_path = r"C:\Users\Simo\Laskenta\SimuOut"
-
-#     cell_type = "parasol"
-#     response_type = "on"
-
-#     # data_folder = cell_type + '_' + response_type.upper() + '_c12tf0'
-#     data_folder_path = os.path.join(
-#         root_path, cell_type + "_" + response_type.upper() + "_c13"
-#     )
-#     R = Analysis(data_folder_path)
-#     R.contrast_respose()

@@ -364,7 +364,7 @@ if __name__ == "__main__":
     """
 
     # Main retina construction method. This method calls all other methods in the retina construction process.
-    PM.construct_retina.build()
+    # PM.construct_retina.build()
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # This is why they are called via the construct_retina attribute. The instance
@@ -457,28 +457,28 @@ if __name__ == "__main__":
     ################################
     ### Run Experiment ###
     ################################
-    # # Get all conditions to run
-    # contrast_experiment = PM.experiment.contrast_respose(
-    #     contrast_min=0.02,
-    #     contrast_max=0.98,
-    #     contrast_steps=10,
-    # )
+    # Get all conditions to run
+    contrast_experiment = PM.experiment.contrast_respose(
+        contrast_min=0.02,
+        contrast_max=0.98,
+        contrast_steps=2,
+    )
 
-    # PM.experiment.run(
-    #     contrast_experiment,
-    #     n_trials=10,
-    # )
+    PM.experiment.run(
+        contrast_experiment,
+        n_trials=10,
+    )
 
     ###############################
     ## Analyze Experiment ###
     ###############################
 
-    # my_analysis_options = {
-    #     "t_start_ana": 0.5,
-    #     "t_end_ana": 1.0,
-    # }
+    my_analysis_options = {
+        "t_start_ana": 0.5,
+        "t_end_ana": 1.0,
+    }
 
-    # PM.ana.contrast_respose(my_analysis_options)
+    PM.ana.contrast_respose(my_analysis_options)
 
     ################################
     ### Visualize Experiment ###
