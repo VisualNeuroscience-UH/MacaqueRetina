@@ -126,9 +126,12 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 # When training or tuning generative models, multiple hyperparameters are set at the RetinaVAE class.
 # For training, see __init__ method. For tuning, the __init__ contains search space and
 # _set_ray_tuner contains the starting point.
+gc_type = "parasol"
+response_type = "on"
+
 my_retina = {
-    "gc_type": "parasol",
-    "response_type": "on",
+    "gc_type": gc_type,
+    "response_type": response_type,
     "ecc_limits": [4, 6],  # degrees
     "sector_limits": [-5, 5],  # polar angle in degrees
     "model_density": 1.0,
@@ -264,11 +267,12 @@ cone_sensitivity_min = 5e2
 cone_sensitivity_max = 1e4
 
 my_retina_append = {
+    "mosaic_file": gc_type + "_" + response_type + "_mosaic",
+    "spatial_rfs_file": gc_type + "_" + response_type + "_spatial_rfs",
     "proportion_of_parasol_gc_type": proportion_of_parasol_gc_type,
     "proportion_of_midget_gc_type": proportion_of_midget_gc_type,
     "proportion_of_ON_response_type": proportion_of_ON_response_type,
     "proportion_of_OFF_response_type": proportion_of_OFF_response_type,
-    "mosaic_file_name": "parasol_on_single.csv",
     "deg_per_mm": deg_per_mm,
     "optical_aberration": 2 / 60,  # unit is degree
     "cone_sensitivity_min": cone_sensitivity_min,
@@ -360,7 +364,7 @@ if __name__ == "__main__":
     """
 
     # Main retina construction method. This method calls all other methods in the retina construction process.
-    # PM.construct_retina.build()
+    PM.construct_retina.build()
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # This is why they are called via the construct_retina attribute. The instance
@@ -400,7 +404,7 @@ if __name__ == "__main__":
     # ### Load stimulus to get working retina ###
     # #################################
 
-    PM.working_retina.load_stimulus()
+    # PM.working_retina.load_stimulus()
 
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
     # ret.load_stimulus(movie)# => METADATA

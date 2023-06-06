@@ -1021,16 +1021,6 @@ class ConstructRetina(RetinaMath):
         return img_upsampled, min_um_per_pix
 
     def _get_dd_fit_for_viz(self, gc_df):
-        # # Add diameters to dataframe
-        # self.gc_df["den_diam_um"] = self.ellipse2diam(
-        #     self.gc_df["semi_xc"].values * 1000, self.gc_df["semi_yc"].values * 1000
-        # )
-        # self.dd_vs_ecc_to_viz["dd_fit_x"] = self.gc_df[
-        #     "pos_ecc_mm"
-        # ].values
-        # self.dd_vs_ecc_to_viz["dd_fit_y"] = self.gc_df[
-        #     "den_diam_um"
-        # ].values
         # Add diameters to dataframe
         gc_df["den_diam_um"] = self.ellipse2diam(
             gc_df["semi_xc"].values * 1000, gc_df["semi_yc"].values * 1000
@@ -1490,8 +1480,9 @@ class ConstructRetina(RetinaMath):
 
             # Save the generated receptive fields
             output_path = self.context.output_folder
+            filename_stem = self.context.my_retina["spatial_rfs_file"]
             self.data_io.save_generated_rfs(
-                img_rfs, output_path, filename_stem="rf_values"
+                img_rfs, output_path, filename_stem=filename_stem
             )
 
             # Fit elliptical gaussians to the generated receptive fields
@@ -1639,8 +1630,8 @@ class ConstructRetina(RetinaMath):
             Path.mkdir(output_folder, mode=0o771, parents=True, exist_ok=False)
 
         if filename is None:
-            filepath = output_folder.joinpath(
-                self.context.my_retina["mosaic_file_name"]
+            filepath = (
+                output_folder.joinpath(self.context.my_retina["mosaic_file"]) + ".csv"
             )
         else:
             filepath = output_folder.joinpath(filename)
