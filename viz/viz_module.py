@@ -1366,17 +1366,25 @@ class Viz:
             ax.grid(True)
 
     # WorkingRetina visualization
-    def show_stimulus_with_gcs(self, retina, frame_number=0, ax=None, example_gc=5):
+    def show_stimulus_with_gcs(
+        self, retina, frame_number=0, ax=None, example_gc=5, show_rf_id=False
+    ):
         """
-        Plots the 1SD ellipses of the RGC mosaic
+        Plots the 1SD ellipses of the RGC mosaic. This method is a WorkingRetina call.
 
-        WorkingRetina call.
-
-        :param frame_number: int
-        :param ax: matplotlib Axes object
-        :return:
+        Parameters
+        ----------
+        retina : object
+            The retina object that contains all the relevant information about the stimulus video and ganglion cells.
+        frame_number : int, optional
+            The index of the frame from the stimulus video to be displayed. Default is 0.
+        ax : matplotlib.axes.Axes, optional
+            The axes object to draw the plot on. If None, the current axes is used. Default is None.
+        example_gc : int, optional
+            The index of the ganglion cell to be highlighted. Default is 5.
+        show_rf_id : bool, optional
+            If True, the index of each ganglion cell will be printed at the center of its ellipse. Default is False..
         """
-
         stimulus_video = retina.stimulus_video
         gc_df_pixspace = retina.gc_df_pixspace
         stimulus_height_pix = retina.stimulus_height_pix
@@ -1390,9 +1398,6 @@ class Viz:
         ax = plt.gca()
 
         for index, gc in gc_df_pixspace.iterrows():
-            # When in pixel coordinates, positive value in Ellipse angle is clockwise. Thus minus here.
-            # Note that Ellipse angle is in degrees.
-            # Width and height in Ellipse are diameters, thus x2.
             if index == example_gc:
                 facecolor = "yellow"
             else:
@@ -1408,22 +1413,27 @@ class Viz:
             )
             ax.add_patch(circ)
 
-        # Annotate
-        # Get y tics in pixels
+            # If show_rf_id is True, annotate each ellipse with the index
+            if show_rf_id:
+                ax.annotate(
+                    str(index),
+                    (gc.q_pix, gc.r_pix),
+                    color="black",
+                    weight="bold",
+                    fontsize=8,
+                    ha="center",
+                    va="center",
+                )
+
         locs, labels = plt.yticks()
 
-        # Remove tick marks outside stimulus
         locs = locs[locs < stimulus_height_pix]
-        # locs=locs[locs>=0] # Including zero seems to shift center at least in deg
         locs = locs[locs > 0]
 
-        # Set left y tick labels (pixels)
         left_y_labels = locs.astype(int)
-        # plt.yticks(ticks=locs, labels=left_y_labels)
         plt.yticks(ticks=locs)
         ax.set_ylabel("pix")
 
-        # Set x tick labels (degrees)
         xlocs = locs - np.mean(locs)
         down_x_labels = np.round(xlocs / pix_per_deg, decimals=2) + np.real(
             stimulus_center
@@ -1431,8 +1441,7 @@ class Viz:
         plt.xticks(ticks=locs, labels=down_x_labels)
         ax.set_xlabel("deg")
 
-        # Set right y tick labels (mm)
-        ax2 = ax.twinx()  # instantiate a second axes that shares the same x-axis
+        ax2 = ax.twinx()
         ax2.tick_params(axis="y")
         right_y_labels = np.round((locs / pix_per_deg) / deg_per_mm, decimals=2)
         plt.yticks(ticks=locs, labels=right_y_labels)
