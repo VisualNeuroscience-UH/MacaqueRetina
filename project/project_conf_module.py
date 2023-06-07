@@ -201,15 +201,15 @@ my_stimulus_options = {
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
     "fps": 30,
-    "duration_seconds": 4.0,
+    "duration_seconds": 12.0,
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
-    "pattern": "sine_grating",  # Natural video is not supported yet. One of the StimulusPatterns
+    "pattern": "temporal_sine_pattern",  # Natural video is not supported yet. One of the StimulusPatterns
     "stimulus_form": "rectangular",
     "size_inner": None,  # Applies to annulus only
     "size_outer": None,  # Applies to annulus only
     "stimulus_position": (0, 0),
-    "stimulus_size": 2,
+    "stimulus_size": 1.5,  # 4.6 deg in Lee_1990_JOSA
     "background": 128,
     "contrast": 0.99,
     "mean": 128,
@@ -224,8 +224,8 @@ n_files = 1
 
 # Either n_trials or n_cells must be 1, and the other > 1
 my_run_options = {
-    "cell_index": 20,  # int or None for all cells
-    "n_trials": 10,  # For each of the response files
+    "cell_index": None,  # int or None for all cells
+    "n_trials": 1,  # For each of the response files
     "spike_generator_model": "refractory",  # poisson or refractory
     "save_data": True,
     "gc_response_filenames": [f"gc_response_{x:02}" for x in range(n_files)],
@@ -397,8 +397,8 @@ if __name__ == "__main__":
     #################################
 
     # options are defined in my_stimulus_options
-    # stimulus video will be saved on output_folder in mp4 format (viewing and hdf5 format (for reloading)
-    # PM.stimulate.make_stimulus_video()
+    # stimulus video will be saved on output_folder in mp4 format (viewing) and hdf5 format (reloading)
+    PM.stimulate.make_stimulus_video()
 
     # #################################
     # ### Load stimulus to get working retina ###
@@ -428,7 +428,10 @@ if __name__ == "__main__":
     # PM.viz.show_gc_responses(PM.working_retina)
 
     # PM.viz.show_stimulus_with_gcs(
-    #     PM.working_retina, example_gc=my_run_options["cell_index"], frame_number=51
+    #     PM.working_retina,
+    #     example_gc=my_run_options["cell_index"],
+    #     frame_number=51,
+    #     show_rf_id=True,
     # )
 
     # PM.viz.show_single_gc_view(PM.working_retina, cell_index=example_gc, frame_number=21)
@@ -459,14 +462,14 @@ if __name__ == "__main__":
     ################################
     # Get all conditions to run
     contrast_experiment = PM.experiment.contrast_respose(
-        contrast_min=0.02,
+        contrast_min=0.90,
         contrast_max=0.98,
         contrast_steps=2,
     )
 
     PM.experiment.run(
         contrast_experiment,
-        n_trials=10,
+        n_trials=1,
     )
 
     ###############################
@@ -475,14 +478,14 @@ if __name__ == "__main__":
 
     my_analysis_options = {
         "t_start_ana": 0.5,
-        "t_end_ana": 1.0,
+        "t_end_ana": 6.5,
     }
 
     PM.ana.contrast_respose(my_analysis_options)
 
-    ################################
-    ### Visualize Experiment ###
-    ################################
+    # ################################
+    # ### Visualize Experiment ###
+    # ################################
 
     # PM.viz.contrast_response()
 
