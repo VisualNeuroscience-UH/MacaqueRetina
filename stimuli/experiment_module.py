@@ -103,7 +103,7 @@ class Experiment(VideoBaseClass):
         Setup
         """
 
-        options_to_vary = experiment_dict["options_to_vary"]
+        exp_variables = experiment_dict["exp_variables"]
         min_max_values = experiment_dict["min_max_values"]
         n_steps = experiment_dict["n_steps"]
         logaritmic = experiment_dict["logaritmic"]  # True or False
@@ -112,7 +112,7 @@ class Experiment(VideoBaseClass):
         # the values include n_steps between the corresponding min_max_values. The steps
         # can be linear or logaritmic
         cond_metadata_key = {}
-        for idx, option in enumerate(options_to_vary):
+        for idx, option in enumerate(exp_variables):
             if logaritmic[idx]:
                 cond_metadata_key[option] = np.logspace(
                     np.log10(min_max_values[idx][0]),
@@ -249,7 +249,7 @@ class Experiment(VideoBaseClass):
         # Write metadata to csv
         self.options["n_trials"] = n_trials
         result_df = self._create_dataframe(cond_options, cond_names, self.options)
-        cond_names_string = "_".join(experiment_dict["options_to_vary"])
+        cond_names_string = "_".join(experiment_dict["exp_variables"])
         filename_df = f"exp_metadata_{cond_names_string}.csv"
         save_path = data_folder / filename_df
         result_df.to_csv(save_path)
