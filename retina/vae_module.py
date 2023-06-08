@@ -274,6 +274,9 @@ class AugmentedDataset(torch.utils.data.Dataset):
         """
         shift_proportions = self.augmentation_dict["translation"]
 
+        if isinstance(shift_proportions, float):
+            shift_proportions = (shift_proportions, shift_proportions)
+
         shift_max = (
             int(image.shape[1] * shift_proportions[0]),
             int(image.shape[2] * shift_proportions[1]),
@@ -886,7 +889,7 @@ class RetinaVAE(RetinaMath):
 
         self.batch_size = 256  # None will take the batch size from test_split size.
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
-        self.train_by = [["parasol"], ["on"]]  # Train by these factors
+        self.train_by = [["parasol"], ["off"]]  # Train by these factors
         # self.train_by = [["midget"], ["off"]]  # Train by these factors
 
         self.kernel_stride = "k7s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
@@ -997,19 +1000,20 @@ class RetinaVAE(RetinaMath):
                 # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
                 self.search_space = {
                     "lr": [0.0005],
-                    "latent_dim": [32],
+                    "latent_dim": [32],  # 4, 8, 16, 32
                     "resolution_hw": [13],  # Both x and y, 13 or 28
                     # k3s2,k3s1,k5s2,k5s1,k7s1, k9s1 Kernel-stride-padding for conv layers. NOTE you cannot use >3 conv layers with stride 2
                     "kernel_stride": ["k7s1"],  # "k3s1", "k5s1", "k7s1", "k9s1"
-                    "channels": [4, 8, 16, 32], # 4, 8, 16, 32
+                    "channels": [16],  # 4, 8, 16, 32
                     "batch_size": [256],
                     "conv_layers": [2],  # 1, 2, 3, 4
                     "batch_norm": [True],  # False, True
                     "latent_distribution": ["uniform"],  # "normal", "uniform"
-                    "rotation": [0],  # Augment: max rotation in degrees
+                    "rotation": [0, 15],  # Augment: max rotation in degrees
                     # Augment: fract of im, max in (x, y)/[xy] dir
-                    "translation": [0],  # 1/13 pixels
-                    "noise": [0],  # Augment: noise added, btw [0., 1.]
+                    "translation": [0, 0.077],  # 1/13 pixels
+                    # Augment: noise added, btw [0., 1.]
+                    "noise": [0],  # 0, 0.025, 0.05, 0.1
                     "flip": [0.5],  # Augment: flip prob, both horiz and vert
                     "data_multiplier": [4],  # N times to get the data w/ augmentation
                     "num_models": 8,  # repetitions of the same model
@@ -1070,9 +1074,10 @@ class RetinaVAE(RetinaMath):
                 # Load previously calculated model for vizualization
                 # Load model to self.vae
 
-                if context.my_retina['ray_tune_trial_id'] is not None: # After tune_model
-
-                    trial_name = context.my_retina['ray_tune_trial_id'] 
+                if (
+                    context.my_retina["ray_tune_trial_id"] is not None
+                ):  # After tune_model
+                    trial_name = context.my_retina["ray_tune_trial_id"]
                     self.vae, result_grid, trial_folder = self._load_model(
                         model_path=None, trial_name=trial_name
                     )
@@ -1084,7 +1089,9 @@ class RetinaVAE(RetinaMath):
                     ]
                     self._update_retinavae_to_ray_result(this_result)
 
-                elif context.my_retina['ray_tune_trial_id'] is None:  # After train_model
+                elif (
+                    context.my_retina["ray_tune_trial_id"] is None
+                ):  # After train_model
                     self.vae = self._load_model(
                         model_path=self.models_folder, trial_name=None
                     )
