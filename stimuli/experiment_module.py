@@ -98,7 +98,6 @@ class Experiment(VideoBaseClass):
             cond_names,
         )
 
-    # def contrast_respose(self, contrast_min=0.98, contrast_max=0.98, contrast_steps=1):
     def _build(self, experiment_dict):
         """
         Setup
@@ -134,13 +133,13 @@ class Experiment(VideoBaseClass):
         ) = self._meshgrid_conditions(cond_metadata_key)
 
         # Return a nice list with all conditions to run
-        contrast_experiment = {
+        conditions_dict = {
             "cond_options": cond_options,  # list of dicts
             "cond_metadata_key": cond_metadata_key,  # dict
             "cond_names": cond_names,  # list of strings
         }
 
-        return contrast_experiment
+        return conditions_dict
 
     def amplitude_sensitivity(self):
         """ """
@@ -193,16 +192,16 @@ class Experiment(VideoBaseClass):
         experiment_dict,
         n_trials=1,
     ):
-        this_experiment = self._build(experiment_dict)
+        conditions_dict = self._build(experiment_dict)
 
         """
         Unpack and run all conditions
         """
 
         # Get parameters to vary in this experiment
-        cond_options = this_experiment["cond_options"]
-        metadata = this_experiment["cond_metadata_key"]
-        cond_names = this_experiment["cond_names"]
+        cond_options = conditions_dict["cond_options"]
+        metadata = conditions_dict["cond_metadata_key"]
+        cond_names = conditions_dict["cond_names"]
 
         # First check that experiment metadata keys are valid stimulus options
         for this_key in metadata.keys():
@@ -250,7 +249,9 @@ class Experiment(VideoBaseClass):
         # Write metadata to csv
         self.options["n_trials"] = n_trials
         result_df = self._create_dataframe(cond_options, cond_names, self.options)
-        save_path = data_folder / "exp_metadata.csv"
+        cond_names_string = "_".join(experiment_dict["options_to_vary"])
+        filename_df = f"exp_metadata_{cond_names_string}.csv"
+        save_path = data_folder / filename_df
         result_df.to_csv(save_path)
 
 
