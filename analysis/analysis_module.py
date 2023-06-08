@@ -133,7 +133,7 @@ class Analysis(AnalysisBase):
                 spike_counts, _ = np.histogram(times_unit, bins=bins)
                 # Convert spike counts to spike rates
                 spike_rate = spike_counts / (cycle_length / bins_per_cycle)
-                print(spike_rate)
+
                 # Analyze Fourier amplitude
                 # Compute the one-dimensional n-point discrete Fourier Transform for real input
                 sp = np.fft.rfft(spike_rate)
@@ -143,13 +143,15 @@ class Analysis(AnalysisBase):
                 )
 
                 # Save the spectrum for plotting
-                spectra.append(np.abs(sp))
+                normalized_spectrum = np.abs(sp) / len(spike_rate) * 2
+                spectra.append(normalized_spectrum)
 
                 # Get F1 amplitude
                 closest_freq_index = np.abs(freq - temp_freq).argmin()
-                amplitudes[this_unit] = np.abs(sp[closest_freq_index])
+                amplitudes[this_unit] = (
+                    np.abs(sp[closest_freq_index]) / len(spike_rate) * 2
+                )
 
-        pdb.set_trace()
         # Creating subplots
         fig, axs = plt.subplots(2, 1, figsize=(8, 12))
 
@@ -169,6 +171,7 @@ class Analysis(AnalysisBase):
 
         plt.tight_layout()
         plt.show()
+        pdb.set_trace()
 
         return amplitudes, N_neurons
 
@@ -253,10 +256,6 @@ class Analysis(AnalysisBase):
 
         pdb.set_trace()
 
-        # TÄHÄN JÄIT: AMPLITUDIEN SKAALAUS
-        # MITEN NORMALISOIDAAN FOURIER SPEKTRIT?
-        #
-
         return amplitude
 
     def contrast_respose(self, my_analysis_options):
@@ -280,9 +279,6 @@ class Analysis(AnalysisBase):
             index=range(n_trials_vec[0]), columns=cond_names
         )
 
-        temp_freqs = [0.231, 0.495, 1.023, 2.079, 4.191, 8.415, 16.863, 33.758]
-        modulation_depth = [0, 0, 0, 0, 1, 0, 0, 0]
-
         # Loop conditions
         for idx, cond_name in enumerate(cond_names):
             filename = Path(data_folder) / ("Response_" + cond_name + ".gz")
@@ -303,12 +299,12 @@ class Analysis(AnalysisBase):
                 # Set results to FR_compiled
                 FR_compiled[:, idx, this_trial] = FR
 
+                amplitudes, N_neurons = self._fourier_amplitude(
+                    data_dict, this_trial, t_start, t_end, temp_freq
+                )
                 amplitudes, N_neurons = self._fourier_amplitude_pooled(
                     data_dict, this_trial, t_start, t_end, temp_freq
                 )
-                # kernels = self._first_order_kernel(
-                #     data_dict, this_trial, t_start, t_end, temp_freqs, modulation_depth
-                # )
                 pdb.set_trace()
 
         # Set results to dataframe

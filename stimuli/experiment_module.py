@@ -46,20 +46,27 @@ class Experiment(VideoBaseClass):
         for this_key in input_options.keys():
             self.options[this_key] = input_options[this_key]
 
-    def _meshgrid_conditions(self, conditions_to_meshgrid, *varargs):
-        assert len(conditions_to_meshgrid) == len(
-            varargs
-        ), "N conditions does not match N 1D vectors of values, cannot meshgrid"
+    def _meshgrid_conditions(self, options):
+        # Get all conditions to meshgrid
+        conditions_to_meshgrid = list(options.keys())
+
+        # Get all values to meshgrid
+        values_to_meshgrid = [
+            options[condition] for condition in conditions_to_meshgrid
+        ]
 
         # Get meshgrid of all values
-        values = np.meshgrid(*varargs)
+        values = np.meshgrid(*values_to_meshgrid)
 
         # flatten arrays for easier indexing later
         values_flat = [v.flatten() for v in values]
 
         # Get cond_names
-        conditions_metadata_idx = np.meshgrid(*[np.arange(len(v)) for v in varargs])
+        conditions_metadata_idx = np.meshgrid(
+            *[np.arange(len(v)) for v in values_to_meshgrid]
+        )
         cond_array_list = [v.flatten() for v in conditions_metadata_idx]
+
         # Get conditions to replace the corresponding options in the stimulus
         # list with N dicts, N = N experiments to run. Each of the N dicts contains all
         # condition:value pairs
@@ -86,39 +93,45 @@ class Experiment(VideoBaseClass):
             cond_options.append(this_dict)
             cond_names.append(this_str)
 
-        # Get cond_metadata_key
-        cond_metadata_key = dict(zip(conditions_to_meshgrid, varargs))
-
         return (
             cond_options,
-            cond_metadata_key,
             cond_names,
         )
 
-    def contrast_respose(self, contrast_min=0.98, contrast_max=0.98, contrast_steps=1):
+    # def contrast_respose(self, contrast_min=0.98, contrast_max=0.98, contrast_steps=1):
+    def _build(self, experiment_dict):
         """
         Setup
         """
 
-        # contrasts = np.logspace(
-        #     np.log10(contrast_min), np.log10(contrast_max), contrast_steps
-        # )
+        options_to_vary = experiment_dict["options_to_vary"]
+        min_max_values = experiment_dict["min_max_values"]
+        n_steps = experiment_dict["n_steps"]
+        logaritmic = experiment_dict["logaritmic"]  # True or False
 
-        contrasts = np.linspace(contrast_min, contrast_max, contrast_steps)
+        # Create a dictionary with all options to vary. The keys are the options to vary,
+        # the values include n_steps between the corresponding min_max_values. The steps
+        # can be linear or logaritmic
+        cond_metadata_key = {}
+        for idx, option in enumerate(options_to_vary):
+            if logaritmic[idx]:
+                cond_metadata_key[option] = np.logspace(
+                    np.log10(min_max_values[idx][0]),
+                    np.log10(min_max_values[idx][1]),
+                    n_steps[idx],
+                )
+            else:
+                cond_metadata_key[option] = np.linspace(
+                    min_max_values[idx][0], min_max_values[idx][1], n_steps[idx]
+                )
 
-        # Calculate voltage values, assuming voltage = Td
+        # Calculate voltage values, assuming voltage is linearly associated with photopic Td
         # Return cond_options -- a dict with all keywords matching visual_stimulus_module.ConstructStimulus
-        # conditions_to_meshgrid = ["contrast", "temporal_frequency"]
-        conditions_to_meshgrid = ["contrast"]
-
+        # and values being a list of values to replace the corresponding keyword in the stimulus
         (
             cond_options,
-            cond_metadata_key,
             cond_names,
-        ) = self._meshgrid_conditions(
-            conditions_to_meshgrid,
-            contrasts,
-        )
+        ) = self._meshgrid_conditions(cond_metadata_key)
 
         # Return a nice list with all conditions to run
         contrast_experiment = {
@@ -153,7 +166,7 @@ class Experiment(VideoBaseClass):
         """ """
         pass
 
-    def _create_dataframe(self, metadata, cond_names, options, video_name_list):
+    def _create_dataframe(self, cond_options, cond_names, options):
         df = pd.DataFrame(index=options.keys(), columns=cond_names)
         n_columns = len(cond_names)
 
@@ -165,30 +178,33 @@ class Experiment(VideoBaseClass):
             else:
                 df.loc[key] = value
 
-        for key, value in metadata.items():
-            if isinstance(value, np.ndarray):
-                value = value.tolist()  # Convert numpy array to list
-
-            df.loc[key] = value
-
-        # Update stimulus_video_name
-        df.loc["stimulus_video_name"] = video_name_list
+        for idx, this_dict in enumerate(cond_options):
+            for key, value in this_dict.items():
+                if isinstance(value, tuple):
+                    repeated_tuple = tuple([value] * n_columns)
+                    df.loc[key][idx] = repeated_tuple
+                else:
+                    df.loc[key][idx] = value
 
         return df
 
-    def run(
+    def build_and_run(
         self,
-        this_experiment,
+        experiment_dict,
         n_trials=1,
     ):
+        this_experiment = self._build(experiment_dict)
+
         """
         Unpack and run all conditions
         """
 
+        # Get parameters to vary in this experiment
         cond_options = this_experiment["cond_options"]
         metadata = this_experiment["cond_metadata_key"]
         cond_names = this_experiment["cond_names"]
 
+        # First check that experiment metadata keys are valid stimulus options
         for this_key in metadata.keys():
             assert (
                 this_key in self.options.keys()
@@ -201,14 +217,15 @@ class Experiment(VideoBaseClass):
         spike_generator_model = self.context.my_run_options["spike_generator_model"]
         simulation_dt = self.context.my_run_options["simulation_dt"]
 
-        video_name_list = []
         data_folder = self.context.output_folder
 
         # Replace with input options
         for idx, input_options in enumerate(cond_options):
+            # Create stimulus video name. Note, this updates the cond_options dict
             stimulus_video_name = "Stim_" + cond_names[idx]
             input_options["stimulus_video_name"] = stimulus_video_name
-            video_name_list.append(stimulus_video_name)
+
+            # Replace options with input_options
             self._replace_options(input_options)
 
             stim = self.stimulate.make_stimulus_video(self.options)
@@ -228,13 +245,11 @@ class Experiment(VideoBaseClass):
                 return_monitor=False,
                 filename=filename,
                 simulation_dt=simulation_dt,
-            )  # spike_generator_model='refractory' or 'poisson'
+            )  # Run simulation
 
         # Write metadata to csv
         self.options["n_trials"] = n_trials
-        result_df = self._create_dataframe(
-            metadata, cond_names, self.options, video_name_list
-        )
+        result_df = self._create_dataframe(cond_options, cond_names, self.options)
         save_path = data_folder / "exp_metadata.csv"
         result_df.to_csv(save_path)
 

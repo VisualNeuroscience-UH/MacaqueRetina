@@ -200,8 +200,8 @@ my_stimulus_options = {
     "image_width": 240,  # 752 for nature1.avi
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
-    "fps": 30,
-    "duration_seconds": 12.0,
+    "fps": 20,
+    "duration_seconds": 2.0,
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
     "pattern": "temporal_sine_pattern",  # Natural video is not supported yet. One of the StimulusPatterns
@@ -398,7 +398,7 @@ if __name__ == "__main__":
 
     # options are defined in my_stimulus_options
     # stimulus video will be saved on output_folder in mp4 format (viewing) and hdf5 format (reloading)
-    PM.stimulate.make_stimulus_video()
+    # PM.stimulate.make_stimulus_video()
 
     # #################################
     # ### Load stimulus to get working retina ###
@@ -460,28 +460,37 @@ if __name__ == "__main__":
     ################################
     ### Run Experiment ###
     ################################
-    # Get all conditions to run
-    contrast_experiment = PM.experiment.contrast_respose(
-        contrast_min=0.90,
-        contrast_max=0.98,
-        contrast_steps=2,
-    )
+    # # Get all conditions to run
+    # contrast_experiment = PM.experiment.contrast_respose(
+    #     contrast_min=0.90,
+    #     contrast_max=0.98,
+    #     contrast_steps=2,
+    # )
 
-    PM.experiment.run(
-        contrast_experiment,
-        n_trials=1,
-    )
+    # PM.experiment.run(
+    #     contrast_experiment,
+    #     n_trials=1,
+    # )
+
+    experiment_dict = {
+        "options_to_vary": ["contrast", "temporal_frequency"],
+        "min_max_values": [[0.2, 0.98], [0.5, 2.0]],
+        "n_steps": [2, 2],
+        "logaritmic": [False, False],
+    }
+
+    PM.experiment.build_and_run(experiment_dict, n_trials=1)
 
     ###############################
     ## Analyze Experiment ###
     ###############################
 
-    my_analysis_options = {
-        "t_start_ana": 0.5,
-        "t_end_ana": 6.5,
-    }
+    # my_analysis_options = {
+    #     "t_start_ana": 0.5,
+    #     "t_end_ana": 6.5,
+    # }
 
-    PM.ana.contrast_respose(my_analysis_options)
+    # PM.ana.contrast_respose(my_analysis_options)
 
     # ################################
     # ### Visualize Experiment ###
@@ -489,7 +498,7 @@ if __name__ == "__main__":
 
     # PM.viz.contrast_response()
 
-    # TÄHÄN JÄIT: HARKITSE FOURIER SPEKTRIN AMPLITUDIRESPONSSIA VASTEENA
+    # TÄHÄN JÄIT/STRATEGIA:
     # viz responssi spatiaali ja temporaali taajuuden vasteena
     # NÄIN SAISI HETKELLISEN TAAJUUDEN EIKÄ KESKIMÄÄRÄISTÄ TAAJUUTTA
     # LEE_1990_JOSA
