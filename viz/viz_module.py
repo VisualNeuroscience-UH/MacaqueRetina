@@ -1855,24 +1855,41 @@ class Viz:
         """
 
         data_folder = self.context.output_folder
-        experiment_df = pd.read_csv(data_folder / "exp_metadata.csv", index_col=0)
+
+        experiment_df = pd.read_csv(
+            data_folder / "exp_metadata_contrast.csv", index_col=0
+        )
         data_df = pd.read_csv(
             data_folder / "contrast_population_means.csv", index_col=0
         )
         data_df_units = pd.read_csv(
             data_folder / "contrast_unit_means.csv", index_col=0
         )
-
+        data_df_freq = pd.read_csv(
+            data_folder / "contrast_amplitude_spectra.csv", index_col=0
+        )
+        long_df_freq = pd.melt(
+            data_df_freq,
+            id_vars=["trial", "F_peak"],
+            value_vars=data_df_freq.columns[:-2],
+            var_name="contrast_names",
+            value_name="responses",
+        )
         contrast_levels_s = experiment_df.loc["contrast", :]
         mean_response_levels_s = data_df.mean()
         contrast_levels_s = pd.to_numeric(contrast_levels_s)
         contrast_levels_s = contrast_levels_s.round(decimals=2)
 
+        # Make new column with contrast levels
+        long_df_freq["contrast_levels"] = long_df_freq["contrast_names"].map(
+            contrast_levels_s
+        )
+
         contrast_response_function_df = pd.DataFrame(
             {"contrast": contrast_levels_s, "response": mean_response_levels_s}
         )
 
-        fig, ax = plt.subplots(1, 2, figsize=(8, 4))
+        fig, ax = plt.subplots(1, 3, figsize=(8, 4))
 
         sns.lineplot(
             data=contrast_response_function_df,
@@ -1882,6 +1899,7 @@ class Viz:
             color="black",
             ax=ax[0],
         )
+
         # Title
         ax[0].set_title("Contrast response function (population mean)")
 
@@ -1890,3 +1908,20 @@ class Viz:
 
         # Title
         ax[1].set_title("Contrast response function (individual units)")
+
+        sns.lineplot(
+            data=long_df_freq,
+            x="contrast_levels",
+            y="responses",
+            hue="F_peak",
+            palette="tab10",
+            ax=ax[2],
+        )
+
+        # Title
+        ax[2].set_title("Amplitude spectra")
+
+        # if np.all(experiment_df.loc["logaritmic", :].values):
+        #     ax[0].set_xscale("log")
+        #     # ax[1].set_xscale("log")
+        #     ax[2].set_xscale("log")

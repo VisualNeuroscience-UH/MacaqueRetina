@@ -200,8 +200,8 @@ my_stimulus_options = {
     "image_width": 240,  # 752 for nature1.avi
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
-    "fps": 20,
-    "duration_seconds": 2.0,
+    "fps": 30,
+    "duration_seconds": 6.0,
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
     "pattern": "temporal_sine_pattern",  # Natural video is not supported yet. One of the StimulusPatterns
@@ -213,7 +213,7 @@ my_stimulus_options = {
     "background": 128,
     "contrast": 0.99,
     "mean": 128,
-    "temporal_frequency": 2,
+    "temporal_frequency": 1.0,
     "spatial_frequency": 1.0,
     "phase_shift": 0,
     "stimulus_video_name": "testi.mp4",
@@ -460,23 +460,12 @@ if __name__ == "__main__":
     ################################
     ### Run Experiment ###
     ################################
-    # # Get all conditions to run
-    # contrast_experiment = PM.experiment.contrast_respose(
-    #     contrast_min=0.90,
-    #     contrast_max=0.98,
-    #     contrast_steps=2,
-    # )
-
-    # PM.experiment.run(
-    #     contrast_experiment,
-    #     n_trials=1,
-    # )
-
+    # Define experiment parameters. List lengths must be equal.
     experiment_dict = {
-        "options_to_vary": ["contrast", "temporal_frequency"],
-        "min_max_values": [[0.2, 0.98], [0.5, 2.0]],
-        "n_steps": [2, 2],
-        "logaritmic": [False, False],
+        "exp_variables": ["contrast"],
+        "min_max_values": [[0.01, 0.98]],
+        "n_steps": [10],
+        "logaritmic": [False],
     }
 
     PM.experiment.build_and_run(experiment_dict, n_trials=1)
@@ -485,18 +474,19 @@ if __name__ == "__main__":
     ## Analyze Experiment ###
     ###############################
 
-    # my_analysis_options = {
-    #     "t_start_ana": 0.5,
-    #     "t_end_ana": 6.5,
-    # }
+    my_analysis_options = {
+        "exp_variables": ["contrast"],
+        "t_start_ana": 0.5,
+        "t_end_ana": 6.5,
+    }
 
-    # PM.ana.contrast_respose(my_analysis_options)
+    PM.ana.analyze_response(my_analysis_options)
 
     # ################################
     # ### Visualize Experiment ###
     # ################################
 
-    # PM.viz.contrast_response()
+    PM.viz.contrast_response()
 
     # TÄHÄN JÄIT/STRATEGIA:
     # viz responssi spatiaali ja temporaali taajuuden vasteena

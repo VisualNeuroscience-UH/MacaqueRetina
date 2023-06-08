@@ -152,27 +152,6 @@ class Analysis(AnalysisBase):
                     np.abs(sp[closest_freq_index]) / len(spike_rate) * 2
                 )
 
-        # Creating subplots
-        fig, axs = plt.subplots(2, 1, figsize=(8, 12))
-
-        # Plotting the raster plot
-        axs[0].plot(times, units, ".b")
-        axs[0].set_ylabel("Units")
-        axs[0].set_xlabel("Time (s)")
-        axs[0].set_title("Spike Raster Plot")
-
-        # Plotting the spectra
-        for spectrum in spectra:
-            axs[1].plot(freq, spectrum, color="gray", alpha=0.5)
-        axs[1].plot(freq, np.mean(spectra, axis=0), color="black")
-        axs[1].set_xlabel("Frequency (Hz)")
-        axs[1].set_ylabel("Amplitude")
-        axs[1].set_title("Fourier Spectra")
-
-        plt.tight_layout()
-        plt.show()
-        pdb.set_trace()
-
         return amplitudes, N_neurons
 
     def _fourier_amplitude_pooled(
@@ -229,41 +208,21 @@ class Analysis(AnalysisBase):
 
         # Get F1 amplitude
         closest_freq_index = np.abs(freq - temp_freq).argmin()
-        amplitude = normalized_spectrum_per_unit[closest_freq_index]
+        ampl_F1 = normalized_spectrum_per_unit[closest_freq_index]
 
-        # Creating subplots
-        fig, axs = plt.subplots(2, 1, figsize=(8, 12))
+        # Get F2 amplitude
+        closest_freq_index = np.abs(freq - 2 * temp_freq).argmin()
+        ampl_F2 = normalized_spectrum_per_unit[closest_freq_index]
 
-        # mask frequencies below 1 Hz
-        freq_mask = freq > 1
-        freq_masked = freq[freq_mask]
-        normalized_spectrum_per_unit_masked = normalized_spectrum_per_unit[freq_mask]
+        return ampl_F1, ampl_F2
 
-        # Plotting the raster plot
-        axs[0].plot(times, units, ".b")
-        axs[0].set_ylabel("Units")
-        axs[0].set_xlabel("Time (s)")
-        axs[0].set_title("Spike Raster Plot")
+    def analyze_response(self, my_analysis_options):
+        """ """
 
-        # Plotting the spectrum
-        axs[1].plot(freq_masked, normalized_spectrum_per_unit_masked, color="black")
-        axs[1].set_xlabel("Frequency (Hz)")
-        axs[1].set_ylabel("Amplitude")
-        axs[1].set_title("Fourier Spectrum")
-
-        plt.tight_layout()
-        plt.show()
-
-        pdb.set_trace()
-
-        return amplitude
-
-    def contrast_respose(self, my_analysis_options):
-        """
-        Contrast response function: Lee_1990_JOSA
-        """
+        cond_names_string = "_".join(my_analysis_options["exp_variables"])
+        filename = f"exp_metadata_{cond_names_string}.csv"
         data_folder = self.context.output_folder
-        experiment_df = self.data_io.get_data(filename="exp_metadata.csv")
+        experiment_df = self.data_io.get_data(filename=filename)
         cond_names = experiment_df.columns.values
         t_start = my_analysis_options["t_start_ana"]
         t_end = my_analysis_options["t_end_ana"]
@@ -275,9 +234,12 @@ class Analysis(AnalysisBase):
         ), "Not equal number of trials, aborting..."
 
         # Make dataframe with columns = conditions and index = trials
-        data_df_population_means = pd.DataFrame(
-            index=range(n_trials_vec[0]), columns=cond_names
-        )
+        popul_data_df = pd.DataFrame(index=range(n_trials_vec[0]), columns=cond_names)
+
+        columns = cond_names.tolist()
+        columns.extend(["trial", "F_peak"])
+        # Make a long format dataframe
+        F_data_df = pd.DataFrame(index=range(n_trials_vec[0] * 2), columns=columns)
 
         # Loop conditions
         for idx, cond_name in enumerate(cond_names):
@@ -291,7 +253,7 @@ class Analysis(AnalysisBase):
             for this_trial in range(n_trials):
                 MeanFR = self._analyze_meanfr(data_dict, this_trial, t_start, t_end)
                 # Set results to dataframe
-                data_df_population_means.loc[this_trial, cond_name] = MeanFR
+                popul_data_df.loc[this_trial, cond_name] = MeanFR
                 FR, N_neurons = self._analyze_fr(data_dict, this_trial, t_start, t_end)
                 # If first trial, initialize FR dataframe
                 if idx == 0 and this_trial == 0:
@@ -299,24 +261,33 @@ class Analysis(AnalysisBase):
                 # Set results to FR_compiled
                 FR_compiled[:, idx, this_trial] = FR
 
-                amplitudes, N_neurons = self._fourier_amplitude(
+                # Amplitude spectra for pooled neurons, mean across units
+                (ampl_F1, ampl_F2) = self._fourier_amplitude_pooled(
                     data_dict, this_trial, t_start, t_end, temp_freq
                 )
-                amplitudes, N_neurons = self._fourier_amplitude_pooled(
-                    data_dict, this_trial, t_start, t_end, temp_freq
-                )
-                pdb.set_trace()
+                F_data_df.loc[this_trial, "trial"] = this_trial
+                F_data_df.loc[this_trial, "F_peak"] = "F1"
+                F_data_df.loc[this_trial, cond_name] = ampl_F1
+                F_data_df.loc[this_trial + n_trials_vec[0], "trial"] = this_trial
+                F_data_df.loc[this_trial + n_trials_vec[0], "F_peak"] = "F2"
+                F_data_df.loc[this_trial + n_trials_vec[0], cond_name] = ampl_F2
 
-        # Set results to dataframe
+        # Set unit results to dataframe
         FR_compiled_mean = np.mean(FR_compiled, axis=2)
-        data_df_units = pd.DataFrame(FR_compiled_mean, columns=cond_names)
+        unit_data_df = pd.DataFrame(FR_compiled_mean, columns=cond_names)
 
         # Save results
-        csv_save_path = data_folder / "contrast_population_means.csv"
-        data_df_population_means.to_csv(csv_save_path)
+        filename_out = f"{cond_names_string}_population_means.csv"
+        csv_save_path = data_folder / filename_out
+        popul_data_df.to_csv(csv_save_path)
 
-        csv_save_path = data_folder / "contrast_unit_means.csv"
-        data_df_units.to_csv(csv_save_path)
+        filename_out = f"{cond_names_string}_unit_means.csv"
+        csv_save_path = data_folder / filename_out
+        unit_data_df.to_csv(csv_save_path)
+
+        filename_out = f"{cond_names_string}_amplitude_spectra.csv"
+        csv_save_path = data_folder / filename_out
+        F_data_df.to_csv(csv_save_path)
 
     def amplitude_sensitivity(self):
         """ """

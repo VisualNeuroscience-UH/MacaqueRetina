@@ -248,6 +248,7 @@ class Experiment(VideoBaseClass):
 
         # Write metadata to csv
         self.options["n_trials"] = n_trials
+        self.options["logaritmic"] = experiment_dict["logaritmic"]
         result_df = self._create_dataframe(cond_options, cond_names, self.options)
         cond_names_string = "_".join(experiment_dict["exp_variables"])
         filename_df = f"exp_metadata_{cond_names_string}.csv"
