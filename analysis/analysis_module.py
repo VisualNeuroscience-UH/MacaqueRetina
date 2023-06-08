@@ -285,7 +285,7 @@ class Analysis(AnalysisBase):
         csv_save_path = data_folder / filename_out
         unit_data_df.to_csv(csv_save_path)
 
-        filename_out = f"{cond_names_string}_amplitude_spectra.csv"
+        filename_out = f"{cond_names_string}_F1F2_amplitude.csv"
         csv_save_path = data_folder / filename_out
         F_data_df.to_csv(csv_save_path)
 

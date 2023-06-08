@@ -109,7 +109,7 @@ input_folder = "../in"  # input figs, videos
 Data context for output. 
 """
 
-output_folder = "out"
+output_folder = "contrast_40Hz"
 
 
 """
@@ -200,7 +200,7 @@ my_stimulus_options = {
     "image_width": 240,  # 752 for nature1.avi
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
-    "fps": 30,
+    "fps": 90,
     "duration_seconds": 6.0,
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
@@ -213,7 +213,7 @@ my_stimulus_options = {
     "background": 128,
     "contrast": 0.99,
     "mean": 128,
-    "temporal_frequency": 1.0,
+    "temporal_frequency": 30.0,
     "spatial_frequency": 1.0,
     "phase_shift": 0,
     "stimulus_video_name": "testi.mp4",
@@ -489,15 +489,9 @@ if __name__ == "__main__":
     PM.viz.contrast_response()
 
     # TÄHÄN JÄIT/STRATEGIA:
-    # viz responssi spatiaali ja temporaali taajuuden vasteena
-    # NÄIN SAISI HETKELLISEN TAAJUUDEN EIKÄ KESKIMÄÄRÄISTÄ TAAJUUTTA
-    # LEE_1990_JOSA
-    # Huomaa myös parasol solujen epälineaarinen contrasti responssifunktio, a.k.a. kontrastiadaptaatio, malli:
-    # CRF FIT R(c) - 2 = Rm c/(c + b), missä Rm on maksimivaste ja b on "contrast evoking a half-maximal response"
-    # "Contrast gain is defined as the slope of the initial section of the contrastresponse
-    # function Rm/b and is expressed as impulses per second/(percent modulation).""
+    # Katso contrasti vaste, vaste spatiaalitaajuudelle ja välketaajuudelle. Vertaa kirjallisuuteen
     #
-    # Implementoi contrast gain control, ks
+    # Implementoi contrast gain control?, ks
     # parametrit kattavasti ks Benardete_1999_VisNeurosci, ks myös Chichilnisky_2002_JNeurosci jossa vastaava malli kuin meillä.
     # fysiologiset mekanismit katsaus Demb_2008_JPhysiol ja Beaudoin_2007_JNeurosci
 

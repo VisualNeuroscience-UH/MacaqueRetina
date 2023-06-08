@@ -1845,8 +1845,6 @@ class Viz:
         axs[1].set_title("RF adjusted values")
         axs[1].grid(True)
 
-        plt.show()
-
     # Results visualization
 
     def contrast_response(self):
@@ -1866,7 +1864,7 @@ class Viz:
             data_folder / "contrast_unit_means.csv", index_col=0
         )
         data_df_freq = pd.read_csv(
-            data_folder / "contrast_amplitude_spectra.csv", index_col=0
+            data_folder / "contrast_F1F2_amplitude.csv", index_col=0
         )
         long_df_freq = pd.melt(
             data_df_freq,
@@ -1920,8 +1918,3 @@ class Viz:
 
         # Title
         ax[2].set_title("Amplitude spectra")
-
-        # if np.all(experiment_df.loc["logaritmic", :].values):
-        #     ax[0].set_xscale("log")
-        #     # ax[1].set_xscale("log")
-        #     ax[2].set_xscale("log")
