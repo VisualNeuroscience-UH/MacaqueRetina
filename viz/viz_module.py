@@ -1971,7 +1971,7 @@ class Viz:
         # Title
         ax.set_title("Amplitude spectra")
 
-    def F1F2_amplitude_response(self, exp_variables):
+    def F1F2_amplitude_response(self, exp_variables, xlog=False, ylog=False):
         """
         Plot one contrast response curve for each temporal frequency.
         """
@@ -2016,6 +2016,10 @@ class Viz:
                 ax=ax,
             )
             ax.set_title("Amplitude spectra for " + exp_variables[0])
+            if xlog:
+                ax.set_xscale("log")
+            if ylog:
+                ax.set_yscale("log")
 
         else:
             for i, cond in enumerate(exp_variables):
@@ -2030,3 +2034,7 @@ class Viz:
 
                 # Title
                 ax[i].set_title("Amplitude spectra for " + cond)
+                if xlog:
+                    ax[i].set_xscale("log")
+                if ylog:
+                    ax[i].set_yscale("log")
