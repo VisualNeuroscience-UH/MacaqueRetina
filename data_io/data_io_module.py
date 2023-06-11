@@ -225,6 +225,8 @@ class DataIO(DataIOBase):
                 data = np.float32(image)  # 16 bit to save space and memory
         elif filename_extension in [".avi", ".mp4"]:
             data = cv2.VideoCapture(str(data_fullpath_filename))
+        elif "npy" in filename_extension:
+            data = np.load(data_fullpath_filename)
         else:
             raise TypeError("U r trying to input unknown filetype, aborting...")
 
@@ -670,28 +672,3 @@ class DataIO(DataIOBase):
         np.save(
             stack_filename, img_stack
         )  # or pickle.dump(img_stack, open(stack_filename, "wb"))
-
-    def load_generated_rfs(self, input_path, filename_stem="rf_values"):
-        """
-        Loads receptive field file into a 3D image stack.
-
-        Parameters
-        ----------
-        input_path : str or Path
-            The path to the folder containing the image files.
-        filename_stem : str, optional
-            The filename stem of the image files, by default "rf_values".
-
-        Returns
-        -------
-        img_stack : numpy.ndarray
-            The 3D image stack, with shape (M, N, N).
-        """
-        if isinstance(input_path, str):
-            input_path = Path(input_path)
-
-        # Load the numpy stack
-        stack_path = input_path / f"{filename_stem}.npy"
-        img_stack = np.load(stack_path)
-
-        return img_stack

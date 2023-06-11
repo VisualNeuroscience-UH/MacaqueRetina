@@ -92,7 +92,7 @@ class WorkingRetina(RetinaMath):
 
         # Read fitted parameters from file
         gc_dataframe = self.data_io.get_data(
-            filename=self.context.my_retina["mosaic_file"] + ".csv"
+            filename=self.context.my_retina["mosaic_file"]
         )
         self.gc_type = self.context.my_retina["gc_type"]
         self.response_type = self.context.my_retina["response_type"]
@@ -166,10 +166,8 @@ class WorkingRetina(RetinaMath):
         self.model_type = self.context.my_retina["model_type"]
 
         if self.model_type == "VAE":
-            # Load generated spatial RF:s as numpy arrays, shape (n_cells, s, s)
-            self.spat_rf = self.data_io.load_generated_rfs(
-                self.context.output_folder,
-                filename_stem=self.context.my_retina["spatial_rfs_file"],
+            self.spat_rf = self.data_io.get_data(
+                filename=self.context.my_retina["spatial_rfs_file"],
             )
 
         self.initialized = True
