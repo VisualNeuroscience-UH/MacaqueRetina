@@ -1918,3 +1918,55 @@ class Viz:
 
         # Title
         ax[2].set_title("Amplitude spectra")
+
+    def contrast_temporal_frequency_response(self):
+        """
+        Plot one contrast response curve for each temporal frequency.
+        """
+
+        data_folder = self.context.output_folder
+
+        experiment_df = pd.read_csv(
+            data_folder / "exp_metadata_contrast_temporal_frequency.csv", index_col=0
+        )
+        data_df_freq = pd.read_csv(
+            data_folder / "contrast_temporal_frequency_F1F2_amplitude.csv", index_col=0
+        )
+        long_df_freq = pd.melt(
+            data_df_freq,
+            id_vars=["trial", "F_peak"],
+            value_vars=data_df_freq.columns[:-2],
+            var_name="contrast_temporal_frequency_names",
+            value_name="responses",
+        )
+        contrast_levels_s = experiment_df.loc["contrast", :]
+        contrast_levels_s = pd.to_numeric(contrast_levels_s)
+        contrast_levels_s = contrast_levels_s.round(decimals=2)
+
+        # Make new column with contrast levels
+        long_df_freq["contrast"] = long_df_freq[
+            "contrast_temporal_frequency_names"
+        ].map(contrast_levels_s)
+
+        temporal_frequency_s = experiment_df.loc["temporal_frequency", :]
+        temporal_frequency_s = pd.to_numeric(temporal_frequency_s)
+        temporal_frequency_s = temporal_frequency_s.round(decimals=2)
+
+        long_df_freq["temporal_frequency"] = long_df_freq[
+            "contrast_temporal_frequency_names"
+        ].map(temporal_frequency_s)
+
+        fig, ax = plt.subplots(1, 1, figsize=(8, 4))
+
+        sns.lineplot(
+            data=long_df_freq,
+            x="contrast",
+            y="responses",
+            hue="temporal_frequency",
+            style="F_peak",
+            palette="tab10",
+            ax=ax,
+        )
+
+        # Title
+        ax.set_title("Amplitude spectra")
