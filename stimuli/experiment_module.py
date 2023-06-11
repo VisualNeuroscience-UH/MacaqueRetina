@@ -191,6 +191,7 @@ class Experiment(VideoBaseClass):
         self,
         experiment_dict,
         n_trials=1,
+        build_without_run=False,
     ):
         conditions_dict = self._build(experiment_dict)
 
@@ -218,37 +219,41 @@ class Experiment(VideoBaseClass):
 
         data_folder = self.context.output_folder
 
-        # Replace with input options
-        for idx, input_options in enumerate(cond_options):
-            # Create stimulus video name. Note, this updates the cond_options dict
-            stimulus_video_name = "Stim_" + cond_names[idx]
-            input_options["stimulus_video_name"] = stimulus_video_name
+        if not build_without_run:
+            # Replace with input options
+            for idx, input_options in enumerate(cond_options):
+                # Create stimulus video name. Note, this updates the cond_options dict
+                stimulus_video_name = "Stim_" + cond_names[idx]
+                input_options["stimulus_video_name"] = stimulus_video_name
 
-            # Replace options with input_options
-            self._replace_options(input_options)
+                # Replace options with input_options
+                self._replace_options(input_options)
 
-            stim = self.stimulate.make_stimulus_video(self.options)
-            # Raw intensity is stimulus specific
-            self.options["raw_intensity"] = stim.options["raw_intensity"]
-            self.working_retina.load_stimulus(stim)
+                stim = self.stimulate.make_stimulus_video(self.options)
+                # Raw intensity is stimulus specific
+                self.options["raw_intensity"] = stim.options["raw_intensity"]
+                self.working_retina.load_stimulus(stim)
 
-            example_gc = None  # int or 'None'
+                example_gc = None  # int or 'None'
 
-            filename = Path(data_folder) / ("Response_" + cond_names[idx])
+                filename = Path(data_folder) / ("Response_" + cond_names[idx])
 
-            self.working_retina.run_cells(
-                cell_index=example_gc,
-                n_trials=n_trials,
-                save_data=True,
-                spike_generator_model=spike_generator_model,
-                return_monitor=False,
-                filename=filename,
-                simulation_dt=simulation_dt,
-            )  # Run simulation
+                self.working_retina.run_cells(
+                    cell_index=example_gc,
+                    n_trials=n_trials,
+                    save_data=True,
+                    spike_generator_model=spike_generator_model,
+                    return_monitor=False,
+                    filename=filename,
+                    simulation_dt=simulation_dt,
+                )  # Run simulation
 
         # Write metadata to csv
         self.options["n_trials"] = n_trials
-        self.options["logaritmic"] = experiment_dict["logaritmic"]
+        if len(cond_options[0].keys()) > 1:
+            self.options["logaritmic"] = tuple(experiment_dict["logaritmic"])
+        else:
+            self.options["logaritmic"] = experiment_dict["logaritmic"]
         result_df = self._create_dataframe(cond_options, cond_names, self.options)
         cond_names_string = "_".join(experiment_dict["exp_variables"])
         filename_df = f"exp_metadata_{cond_names_string}.csv"
