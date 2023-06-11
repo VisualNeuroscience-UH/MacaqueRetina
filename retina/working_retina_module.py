@@ -6,6 +6,7 @@ from scipy.signal import convolve
 from scipy.interpolate import interp1d
 import scipy.optimize as opt
 from skimage.transform import resize
+import torch
 
 # Data IO
 import cv2
@@ -26,6 +27,7 @@ from retina.retina_math_module import RetinaMath
 from pathlib import Path
 from copy import deepcopy
 import pdb
+import sys
 
 b2.prefs["logging.display_brian_error_message"] = False
 
@@ -655,11 +657,39 @@ class WorkingRetina(RetinaMath):
         # Get cropped stimulus
         stimulus_cropped = self._get_cropped_video(cell_index, reshape=True)
 
-        # Run convolution. NOTE: expensive computation
-        generator_potential = convolve(
-            stimulus_cropped, spatiotemporal_filter, mode="valid"
-        )
-        generator_potential = generator_potential[0, :]
+        # Move to GPU if possible
+        if "torch" in sys.modules:
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+            # Reshape to 4D (adding batch_size and num_channels dimensions)
+            stimulus_cropped = (
+                torch.tensor(stimulus_cropped)
+                .unsqueeze(0)
+                .unsqueeze(0)
+                .float()
+                .to(device)
+            )
+            spatiotemporal_filter = (
+                torch.tensor(spatiotemporal_filter)
+                .unsqueeze(0)
+                .unsqueeze(0)
+                .float()
+                .to(device)
+            )
+
+            # Run convolution
+            generator_potential = torch.nn.functional.conv2d(
+                stimulus_cropped, spatiotemporal_filter
+            )
+
+            # Move back to CPU and convert to numpy
+            generator_potential = generator_potential.cpu().squeeze().numpy()
+        else:
+            # Run convolution. NOTE: expensive computation. Solution without torch.
+            generator_potential = convolve(
+                stimulus_cropped, spatiotemporal_filter, mode="valid"
+            )
+            generator_potential = generator_potential[0, :]
 
         # Add some padding to the beginning so that stimulus time and generator potential time match
         # (First time steps of stimulus are not convolved)
