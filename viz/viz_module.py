@@ -1970,3 +1970,63 @@ class Viz:
 
         # Title
         ax.set_title("Amplitude spectra")
+
+    def F1F2_amplitude_response(self, exp_variables):
+        """
+        Plot one contrast response curve for each temporal frequency.
+        """
+
+        data_folder = self.context.output_folder
+        cond_names_string = "_".join(exp_variables)
+        n_variables = len(exp_variables)
+
+        experiment_df = pd.read_csv(
+            data_folder / f"exp_metadata_{cond_names_string}.csv", index_col=0
+        )
+        data_df_freq = pd.read_csv(
+            data_folder / f"{cond_names_string}_F1F2_amplitude.csv", index_col=0
+        )
+        long_df_freq = pd.melt(
+            data_df_freq,
+            id_vars=["trial", "F_peak"],
+            value_vars=data_df_freq.columns[:-2],
+            var_name=f"{cond_names_string}_names",
+            value_name="responses",
+        )
+
+        # Make new columns with conditions' levels
+        for cond in exp_variables:
+            levels_s = experiment_df.loc[cond, :]
+            levels_s = pd.to_numeric(levels_s)
+            levels_s = levels_s.round(decimals=2)
+            # pdb.set_trace()
+            long_df_freq[cond] = long_df_freq[f"{cond_names_string}_names"].map(
+                levels_s
+            )
+
+        fig, ax = plt.subplots(1, n_variables, figsize=(8, 4))
+
+        if n_variables == 1:
+            sns.lineplot(
+                data=long_df_freq,
+                x=exp_variables[0],
+                y="responses",
+                hue="F_peak",
+                palette="tab10",
+                ax=ax,
+            )
+            ax.set_title("Amplitude spectra for " + exp_variables[0])
+
+        else:
+            for i, cond in enumerate(exp_variables):
+                sns.lineplot(
+                    data=long_df_freq,
+                    x=cond,
+                    y="responses",
+                    hue="F_peak",
+                    palette="tab10",
+                    ax=ax[i],
+                )
+
+                # Title
+                ax[i].set_title("Amplitude spectra for " + cond)
