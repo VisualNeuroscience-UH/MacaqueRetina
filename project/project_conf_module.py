@@ -109,7 +109,7 @@ input_folder = "../in"  # input figs, videos
 Data context for output. 
 """
 
-output_folder = "contrast_40Hz"
+output_folder = "spatial_frequency_response_5Hz_30trials"
 
 
 """
@@ -204,7 +204,7 @@ my_stimulus_options = {
     "duration_seconds": 6.0,
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
-    "pattern": "temporal_sine_pattern",  # Natural video is not supported yet. One of the StimulusPatterns
+    "pattern": "sine_grating",  # Natural video is not supported yet. One of the StimulusPatterns
     "stimulus_form": "rectangular",
     "size_inner": None,  # Applies to annulus only
     "size_outer": None,  # Applies to annulus only
@@ -213,7 +213,7 @@ my_stimulus_options = {
     "background": 128,
     "contrast": 0.99,
     "mean": 128,
-    "temporal_frequency": 30.0,
+    "temporal_frequency": 5,
     "spatial_frequency": 1.0,
     "phase_shift": 0,
     "stimulus_video_name": "testi.mp4",
@@ -267,8 +267,8 @@ cone_sensitivity_min = 5e2
 cone_sensitivity_max = 1e4
 
 my_retina_append = {
-    "mosaic_file": gc_type + "_" + response_type + "_mosaic",
-    "spatial_rfs_file": gc_type + "_" + response_type + "_spatial_rfs",
+    "mosaic_file": gc_type + "_" + response_type + "_mosaic.csv",
+    "spatial_rfs_file": gc_type + "_" + response_type + "_spatial_rfs.npy",
     "proportion_of_parasol_gc_type": proportion_of_parasol_gc_type,
     "proportion_of_midget_gc_type": proportion_of_midget_gc_type,
     "proportion_of_ON_response_type": proportion_of_ON_response_type,
@@ -460,36 +460,41 @@ if __name__ == "__main__":
     ################################
     ### Run Experiment ###
     ################################
+    exp_variables = ["spatial_frequency"]
     # Define experiment parameters. List lengths must be equal.
-    experiment_dict = {
-        "exp_variables": ["contrast"],
-        "min_max_values": [[0.01, 0.98]],
-        "n_steps": [10],
-        "logaritmic": [False],
-    }
+    # experiment_dict = {
+    #     "exp_variables": exp_variables,
+    #     "min_max_values": [[1, 16.0]],
+    #     "n_steps": [31],
+    #     "logaritmic": [True],
+    # }
 
-    PM.experiment.build_and_run(experiment_dict, n_trials=1)
+    # PM.experiment.build_and_run(experiment_dict, n_trials=30, build_without_run=False)
 
     ###############################
     ## Analyze Experiment ###
     ###############################
 
-    my_analysis_options = {
-        "exp_variables": ["contrast"],
-        "t_start_ana": 0.5,
-        "t_end_ana": 6.5,
-    }
+    # my_analysis_options = {
+    #     "exp_variables": exp_variables,
+    #     "t_start_ana": 0.5,
+    #     "t_end_ana": 6.5,
+    # }
 
-    PM.ana.analyze_response(my_analysis_options)
+    # PM.ana.analyze_response(my_analysis_options)
 
     # ################################
     # ### Visualize Experiment ###
     # ################################
 
-    PM.viz.contrast_response()
+    # PM.viz.contrast_response()
+    # PM.viz.contrast_temporal_frequency_response()
+    PM.viz.F1F2_amplitude_response(exp_variables, xlog=True)
 
     # TÄHÄN JÄIT/STRATEGIA:
     # Katso contrasti vaste, vaste spatiaalitaajuudelle ja välketaajuudelle. Vertaa kirjallisuuteen
+    # Vertaa refractory, poisson ja coverage 1 tai ei.
+    # Biomedicumissa laske midget functiot, implementoi OFF kääntö.
     #
     # Implementoi contrast gain control?, ks
     # parametrit kattavasti ks Benardete_1999_VisNeurosci, ks myös Chichilnisky_2002_JNeurosci jossa vastaava malli kuin meillä.
