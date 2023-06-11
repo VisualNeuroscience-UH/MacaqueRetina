@@ -213,6 +213,10 @@ class Experiment(VideoBaseClass):
         # Update options to match my_stimulus_options in conf file
         self._replace_options(self.context.my_stimulus_options)
 
+        # Replace filename with None. If don't want to save the stimulus, None is valid,
+        # but if want to save, then filename will be generated in the loop below
+        self.options["stimulus_video_name"] = None
+
         # Update simulation options
         spike_generator_model = self.context.my_run_options["spike_generator_model"]
         simulation_dt = self.context.my_run_options["simulation_dt"]
@@ -258,6 +262,8 @@ class Experiment(VideoBaseClass):
         cond_names_string = "_".join(experiment_dict["exp_variables"])
         filename_df = f"exp_metadata_{cond_names_string}.csv"
         save_path = data_folder / filename_df
+        # Check if path exists, create parents if not
+        save_path.parent.mkdir(parents=True, exist_ok=True)
         result_df.to_csv(save_path)
 
 
