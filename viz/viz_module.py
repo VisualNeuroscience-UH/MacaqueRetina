@@ -1847,50 +1847,40 @@ class Viz:
 
     # Results visualization
 
-    def contrast_response(self):
+    def fr_response(self, exp_variables, xlog=False, ylog=False):
         """
-        Plot the contrast response curve.
+        Plot the mean firing rate response curve.
         """
 
         data_folder = self.context.output_folder
+        cond_names_string = "_".join(exp_variables)
+        assert (
+            len(exp_variables) == 1
+        ), "Only one variable can be plotted at a time, aborting..."
 
         experiment_df = pd.read_csv(
             data_folder / "exp_metadata_contrast.csv", index_col=0
         )
         data_df = pd.read_csv(
-            data_folder / "contrast_population_means.csv", index_col=0
+            data_folder / f"{cond_names_string}_population_means.csv", index_col=0
         )
         data_df_units = pd.read_csv(
-            data_folder / "contrast_unit_means.csv", index_col=0
+            data_folder / f"{cond_names_string}_unit_means.csv", index_col=0
         )
-        data_df_freq = pd.read_csv(
-            data_folder / "contrast_F1F2_amplitude.csv", index_col=0
-        )
-        long_df_freq = pd.melt(
-            data_df_freq,
-            id_vars=["trial", "F_peak"],
-            value_vars=data_df_freq.columns[:-2],
-            var_name="contrast_names",
-            value_name="responses",
-        )
-        contrast_levels_s = experiment_df.loc["contrast", :]
+
+        response_levels_s = experiment_df.loc["contrast", :]
         mean_response_levels_s = data_df.mean()
-        contrast_levels_s = pd.to_numeric(contrast_levels_s)
-        contrast_levels_s = contrast_levels_s.round(decimals=2)
+        response_levels_s = pd.to_numeric(response_levels_s)
+        response_levels_s = response_levels_s.round(decimals=2)
 
-        # Make new column with contrast levels
-        long_df_freq["contrast_levels"] = long_df_freq["contrast_names"].map(
-            contrast_levels_s
-        )
-
-        contrast_response_function_df = pd.DataFrame(
-            {"contrast": contrast_levels_s, "response": mean_response_levels_s}
+        response_function_df = pd.DataFrame(
+            {"contrast": response_levels_s, "response": mean_response_levels_s}
         )
 
         fig, ax = plt.subplots(1, 3, figsize=(8, 4))
 
         sns.lineplot(
-            data=contrast_response_function_df,
+            data=response_function_df,
             x="contrast",
             y="response",
             marker="o",
@@ -1899,81 +1889,18 @@ class Viz:
         )
 
         # Title
-        ax[0].set_title("Contrast response function (population mean)")
+        ax[0].set_title(f"{cond_names_string} response function (population mean)")
 
         sns.boxplot(data=data_df_units, color="white", linewidth=2, whis=100, ax=ax[1])
         sns.swarmplot(data=data_df_units, color="black", size=3, ax=ax[1])
 
         # Title
-        ax[1].set_title("Contrast response function (individual units)")
+        ax[1].set_title(f"{cond_names_string} response function (individual units)")
 
-        sns.lineplot(
-            data=long_df_freq,
-            x="contrast_levels",
-            y="responses",
-            hue="F_peak",
-            palette="tab10",
-            ax=ax[2],
-        )
-
-        # Title
-        ax[2].set_title("Amplitude spectra")
-
-    def contrast_temporal_frequency_response(self):
+    def F1F2_popul_response(self, exp_variables, xlog=False, ylog=False):
         """
-        Plot one contrast response curve for each temporal frequency.
-        """
-
-        data_folder = self.context.output_folder
-
-        experiment_df = pd.read_csv(
-            data_folder / "exp_metadata_contrast_temporal_frequency.csv", index_col=0
-        )
-        data_df_freq = pd.read_csv(
-            data_folder / "contrast_temporal_frequency_F1F2_amplitude.csv", index_col=0
-        )
-        long_df_freq = pd.melt(
-            data_df_freq,
-            id_vars=["trial", "F_peak"],
-            value_vars=data_df_freq.columns[:-2],
-            var_name="contrast_temporal_frequency_names",
-            value_name="responses",
-        )
-        contrast_levels_s = experiment_df.loc["contrast", :]
-        contrast_levels_s = pd.to_numeric(contrast_levels_s)
-        contrast_levels_s = contrast_levels_s.round(decimals=2)
-
-        # Make new column with contrast levels
-        long_df_freq["contrast"] = long_df_freq[
-            "contrast_temporal_frequency_names"
-        ].map(contrast_levels_s)
-
-        temporal_frequency_s = experiment_df.loc["temporal_frequency", :]
-        temporal_frequency_s = pd.to_numeric(temporal_frequency_s)
-        temporal_frequency_s = temporal_frequency_s.round(decimals=2)
-
-        long_df_freq["temporal_frequency"] = long_df_freq[
-            "contrast_temporal_frequency_names"
-        ].map(temporal_frequency_s)
-
-        fig, ax = plt.subplots(1, 1, figsize=(8, 4))
-
-        sns.lineplot(
-            data=long_df_freq,
-            x="contrast",
-            y="responses",
-            hue="temporal_frequency",
-            style="F_peak",
-            palette="tab10",
-            ax=ax,
-        )
-
-        # Title
-        ax.set_title("Amplitude spectra")
-
-    def F1F2_amplitude_response(self, exp_variables, xlog=False, ylog=False):
-        """
-        Plot one contrast response curve for each temporal frequency.
+        Plot oF1 and  F2 frequency response curves for all conditions.
+        Population response, i.e. mean across units.
         """
 
         data_folder = self.context.output_folder
@@ -1983,13 +1910,14 @@ class Viz:
         experiment_df = pd.read_csv(
             data_folder / f"exp_metadata_{cond_names_string}.csv", index_col=0
         )
-        data_df_freq = pd.read_csv(
-            data_folder / f"{cond_names_string}_F1F2_amplitude.csv", index_col=0
+        F_popul_df = pd.read_csv(
+            data_folder / f"{cond_names_string}_F1F2_population_means.csv", index_col=0
         )
-        long_df_freq = pd.melt(
-            data_df_freq,
+
+        F_popul_long_df = pd.melt(
+            F_popul_df,
             id_vars=["trial", "F_peak"],
-            value_vars=data_df_freq.columns[:-2],
+            value_vars=F_popul_df.columns[:-2],
             var_name=f"{cond_names_string}_names",
             value_name="responses",
         )
@@ -1999,8 +1927,7 @@ class Viz:
             levels_s = experiment_df.loc[cond, :]
             levels_s = pd.to_numeric(levels_s)
             levels_s = levels_s.round(decimals=2)
-            # pdb.set_trace()
-            long_df_freq[cond] = long_df_freq[f"{cond_names_string}_names"].map(
+            F_popul_long_df[cond] = F_popul_long_df[f"{cond_names_string}_names"].map(
                 levels_s
             )
 
@@ -2008,14 +1935,14 @@ class Viz:
 
         if n_variables == 1:
             sns.lineplot(
-                data=long_df_freq,
+                data=F_popul_long_df,
                 x=exp_variables[0],
                 y="responses",
                 hue="F_peak",
                 palette="tab10",
                 ax=ax,
             )
-            ax.set_title("Amplitude spectra for " + exp_variables[0])
+            ax.set_title("Population amplitude spectra for " + exp_variables[0])
             if xlog:
                 ax.set_xscale("log")
             if ylog:
@@ -2024,7 +1951,7 @@ class Viz:
         else:
             for i, cond in enumerate(exp_variables):
                 sns.lineplot(
-                    data=long_df_freq,
+                    data=F_popul_long_df,
                     x=cond,
                     y="responses",
                     hue="F_peak",
@@ -2033,7 +1960,76 @@ class Viz:
                 )
 
                 # Title
-                ax[i].set_title("Amplitude spectra for " + cond)
+                ax[i].set_title("Population amplitude spectra for " + cond)
+                if xlog:
+                    ax[i].set_xscale("log")
+                if ylog:
+                    ax[i].set_yscale("log")
+
+    def F1F2_unit_response(self, exp_variables, xlog=False, ylog=False):
+        """
+        Plot F1 and  F2 frequency response curves for all conditions.
+        Unit response, i.e. mean across trials.
+        """
+
+        data_folder = self.context.output_folder
+        cond_names_string = "_".join(exp_variables)
+        n_variables = len(exp_variables)
+
+        experiment_df = pd.read_csv(
+            data_folder / f"exp_metadata_{cond_names_string}.csv", index_col=0
+        )
+
+        F_unit_df = pd.read_csv(
+            data_folder / f"{cond_names_string}_F1F2_unit_means.csv", index_col=0
+        )
+        F_unit_long_df = pd.melt(
+            F_unit_df,
+            id_vars=["unit", "F_peak"],
+            value_vars=F_unit_df.columns[:-2],
+            var_name=f"{cond_names_string}_names",
+            value_name="responses",
+        )
+
+        # Make new columns with conditions' levels
+        for cond in exp_variables:
+            levels_s = experiment_df.loc[cond, :]
+            levels_s = pd.to_numeric(levels_s)
+            levels_s = levels_s.round(decimals=2)
+            F_unit_long_df[cond] = F_unit_long_df[f"{cond_names_string}_names"].map(
+                levels_s
+            )
+
+        fig, ax = plt.subplots(1, n_variables, figsize=(8, 4))
+
+        if n_variables == 1:
+            sns.lineplot(
+                data=F_unit_long_df,
+                x=exp_variables[0],
+                y="responses",
+                hue="F_peak",
+                palette="tab10",
+                ax=ax,
+            )
+            ax.set_title("Unit amplitude spectra for " + exp_variables[0])
+            if xlog:
+                ax.set_xscale("log")
+            if ylog:
+                ax.set_yscale("log")
+
+        else:
+            for i, cond in enumerate(exp_variables):
+                sns.lineplot(
+                    data=F_unit_long_df,
+                    x=cond,
+                    y="responses",
+                    hue="F_peak",
+                    palette="tab10",
+                    ax=ax[i],
+                )
+
+                # Title
+                ax[i].set_title("Unit amplitude spectra for " + cond)
                 if xlog:
                     ax[i].set_xscale("log")
                 if ylog:

@@ -69,28 +69,28 @@ class Analysis(AnalysisBase):
     def _analyze_meanfr(self, data, trial, t_start, t_end):
         units, times = self._get_spikes_by_interval(data, trial, t_start, t_end)
         N_neurons = data["n_units"]
-        MeanFR = times.size / (N_neurons * (t_end - t_start))
+        mean_fr = times.size / (N_neurons * (t_end - t_start))
 
-        return MeanFR
+        return mean_fr
 
-    def _analyze_fr(self, data, trial, t_start, t_end):
+    def _analyze_unit_fr(self, data, trial, t_start, t_end):
         units, times = self._get_spikes_by_interval(data, trial, t_start, t_end)
         N_neurons = data["n_units"]
 
         # Get firing rate for each neuron
-        FR = np.zeros(N_neurons)
+        fr = np.zeros(N_neurons)
         for this_unit in range(N_neurons):
             unit_mask = units == this_unit
             times_unit = times[unit_mask]
-            FR[this_unit] = times_unit.size / (t_end - t_start)
+            fr[this_unit] = times_unit.size / (t_end - t_start)
 
-        return FR, N_neurons
+        return fr, N_neurons
 
     def _fourier_amplitude(
         self, data, trial, t_start, t_end, temp_freq, bins_per_cycle=32
     ):
         """
-        Calculate the F1 amplitude (amplitude at the stimulus frequency) of spike rates.
+        Calculate the F1 and F2 amplitude (amplitude at the stimulus frequency and twice the stimulus frequency) of spike rates.
 
         Parameters
         ----------
@@ -109,8 +109,8 @@ class Analysis(AnalysisBase):
 
         Returns
         -------
-        tuple of (numpy.ndarray, int)
-            The F1 amplitudes for each neuron, and the total number of neurons.
+        tuple of (numpy.ndarray, numpy.ndarray, int)
+            The F1 and F2 amplitudes for each neuron, and the total number of neurons.
 
         """
 
@@ -121,7 +121,8 @@ class Analysis(AnalysisBase):
         spectra = []
 
         # Get firing rate for each neuron
-        amplitudes = np.zeros(N_neurons)
+        amplitudes_F1 = np.zeros(N_neurons)
+        amplitudes_F2 = np.zeros(N_neurons)  # Added to calculate F2
         cycle_length = 1 / temp_freq  # in seconds
         bins = np.arange(t_start, t_end, cycle_length / bins_per_cycle)
         for this_unit in range(N_neurons):
@@ -148,11 +149,23 @@ class Analysis(AnalysisBase):
 
                 # Get F1 amplitude
                 closest_freq_index = np.abs(freq - temp_freq).argmin()
-                amplitudes[this_unit] = (
+                amplitudes_F1[this_unit] = (
                     np.abs(sp[closest_freq_index]) / len(spike_rate) * 2
                 )
 
-        return amplitudes, N_neurons
+                # Get F2 amplitude
+                closest_freq_index = np.abs(
+                    freq - (2 * temp_freq)
+                ).argmin()  # Change frequency to 2*temp_freq for F2
+                amplitudes_F2[this_unit] = (
+                    np.abs(sp[closest_freq_index]) / len(spike_rate) * 2
+                )  # Store F2 amplitude in a different array
+
+        return (
+            amplitudes_F1,
+            amplitudes_F2,
+            N_neurons,
+        )  # Return both F1 and F2 amplitudes
 
     def _fourier_amplitude_pooled(
         self, data, trial, t_start, t_end, temp_freq, bins_per_cycle=32
@@ -211,13 +224,16 @@ class Analysis(AnalysisBase):
         ampl_F1 = normalized_spectrum_per_unit[closest_freq_index]
 
         # Get F2 amplitude
-        closest_freq_index = np.abs(freq - 2 * temp_freq).argmin()
+        closest_freq_index = np.abs(freq - (2 * temp_freq)).argmin()
         ampl_F2 = normalized_spectrum_per_unit[closest_freq_index]
 
         return ampl_F1, ampl_F2
 
     def analyze_response(self, my_analysis_options):
-        """ """
+        """
+        R for firing rate
+        F for Fourier amplitude
+        """
 
         cond_names_string = "_".join(my_analysis_options["exp_variables"])
         filename = f"exp_metadata_{cond_names_string}.csv"
@@ -234,12 +250,12 @@ class Analysis(AnalysisBase):
         ), "Not equal number of trials, aborting..."
 
         # Make dataframe with columns = conditions and index = trials
-        popul_data_df = pd.DataFrame(index=range(n_trials_vec[0]), columns=cond_names)
+        R_popul_df = pd.DataFrame(index=range(n_trials_vec[0]), columns=cond_names)
 
         columns = cond_names.tolist()
         columns.extend(["trial", "F_peak"])
-        # Make a long format dataframe
-        F_data_df = pd.DataFrame(index=range(n_trials_vec[0] * 2), columns=columns)
+        # Make F1 and F2 dataframe
+        F_popul_df = pd.DataFrame(index=range(n_trials_vec[0] * 2), columns=columns)
 
         # Loop conditions
         for idx, cond_name in enumerate(cond_names):
@@ -251,43 +267,79 @@ class Analysis(AnalysisBase):
             )
 
             for this_trial in range(n_trials):
-                MeanFR = self._analyze_meanfr(data_dict, this_trial, t_start, t_end)
-                # Set results to dataframe
-                popul_data_df.loc[this_trial, cond_name] = MeanFR
-                FR, N_neurons = self._analyze_fr(data_dict, this_trial, t_start, t_end)
-                # If first trial, initialize FR dataframe
+                mean_fr = self._analyze_meanfr(data_dict, this_trial, t_start, t_end)
+                R_popul_df.loc[this_trial, cond_name] = mean_fr
+
+                fr, N_neurons = self._analyze_unit_fr(
+                    data_dict, this_trial, t_start, t_end
+                )
+                # If first trial, initialize R_unit_compiled and F_unit_compiled
                 if idx == 0 and this_trial == 0:
-                    FR_compiled = np.zeros((N_neurons, len(cond_names), n_trials))
-                # Set results to FR_compiled
-                FR_compiled[:, idx, this_trial] = FR
+                    R_unit_compiled = np.zeros((N_neurons, len(cond_names), n_trials))
+                    F_unit_compiled = np.zeros(
+                        (N_neurons, len(cond_names), n_trials, 2)
+                    )
+                R_unit_compiled[:, idx, this_trial] = fr
 
                 # Amplitude spectra for pooled neurons, mean across units
                 (ampl_F1, ampl_F2) = self._fourier_amplitude_pooled(
                     data_dict, this_trial, t_start, t_end, temp_freq
                 )
-                F_data_df.loc[this_trial, "trial"] = this_trial
-                F_data_df.loc[this_trial, "F_peak"] = "F1"
-                F_data_df.loc[this_trial, cond_name] = ampl_F1
-                F_data_df.loc[this_trial + n_trials_vec[0], "trial"] = this_trial
-                F_data_df.loc[this_trial + n_trials_vec[0], "F_peak"] = "F2"
-                F_data_df.loc[this_trial + n_trials_vec[0], cond_name] = ampl_F2
+                F_popul_df.loc[this_trial, "trial"] = this_trial
+                F_popul_df.loc[this_trial, "F_peak"] = "F1"
+                F_popul_df.loc[this_trial, cond_name] = ampl_F1
+                F_popul_df.loc[this_trial + n_trials_vec[0], "trial"] = this_trial
+                F_popul_df.loc[this_trial + n_trials_vec[0], "F_peak"] = "F2"
+                F_popul_df.loc[this_trial + n_trials_vec[0], cond_name] = ampl_F2
 
-        # Set unit results to dataframe
-        FR_compiled_mean = np.mean(FR_compiled, axis=2)
-        unit_data_df = pd.DataFrame(FR_compiled_mean, columns=cond_names)
+                # Amplitude spectra for units
+                (ampl_F1, ampl_F2, N_neurons) = self._fourier_amplitude(
+                    data_dict, this_trial, t_start, t_end, temp_freq
+                )
+
+                F_unit_compiled[:, idx, this_trial, 0] = ampl_F1
+                F_unit_compiled[:, idx, this_trial, 1] = ampl_F2
+
+        # Set unit fr to dataframe, mean over trials
+        R_unit_mean = np.mean(R_unit_compiled, axis=2)
+        R_unit_df = pd.DataFrame(R_unit_mean, columns=cond_names)
+
+        def create_dummy_variable(shape):
+            dummy_var = np.empty(shape, dtype="<U12")
+            for i in range(shape[0]):
+                for j in range(shape[1]):
+                    for k in range(shape[2]):
+                        dummy_var[i, j, k] = f"n{i},c{j},f{k}"
+            return dummy_var
+
+        # Set unit F1 and F2 to dataframe, mean over trials
+        F_unit_mean = np.mean(F_unit_compiled, axis=2)
+        F_unit_mean_reshaped = np.concatenate(
+            (F_unit_mean[:, :, 0], F_unit_mean[:, :, 1]), axis=0
+        )
+
+        F_peak = ["F1"] * N_neurons + ["F2"] * N_neurons
+        unit = np.tile(np.arange(N_neurons), 2)
+        F_unit_df = pd.DataFrame(F_unit_mean_reshaped, columns=cond_names.tolist())
+        F_unit_df["unit"] = unit
+        F_unit_df["F_peak"] = F_peak
 
         # Save results
         filename_out = f"{cond_names_string}_population_means.csv"
         csv_save_path = data_folder / filename_out
-        popul_data_df.to_csv(csv_save_path)
+        R_popul_df.to_csv(csv_save_path)
 
         filename_out = f"{cond_names_string}_unit_means.csv"
         csv_save_path = data_folder / filename_out
-        unit_data_df.to_csv(csv_save_path)
+        R_unit_df.to_csv(csv_save_path)
 
-        filename_out = f"{cond_names_string}_F1F2_amplitude.csv"
+        filename_out = f"{cond_names_string}_F1F2_population_means.csv"
         csv_save_path = data_folder / filename_out
-        F_data_df.to_csv(csv_save_path)
+        F_popul_df.to_csv(csv_save_path)
+
+        filename_out = f"{cond_names_string}_F1F2_unit_means.csv"
+        csv_save_path = data_folder / filename_out
+        F_unit_df.to_csv(csv_save_path)
 
     def amplitude_sensitivity(self):
         """ """

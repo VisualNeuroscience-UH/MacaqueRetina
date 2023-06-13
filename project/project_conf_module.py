@@ -109,7 +109,9 @@ input_folder = "../in"  # input figs, videos
 Data context for output. 
 """
 
-output_folder = "testi"  # temporal_frequency_response_5Hz_30trials
+output_folder = (
+    "temporal_frequency_response_30trials"  # temporal_frequency_response_5Hz_30trials
+)
 
 
 """
@@ -229,7 +231,7 @@ my_run_options = {
     "spike_generator_model": "refractory",  # poisson or refractory
     "save_data": True,
     "gc_response_filenames": [f"gc_response_{x:02}" for x in range(n_files)],
-    "simulation_dt": 0.001,  # 1 ms
+    "simulation_dt": 0.001,  # in sec 0.001 = 1 ms
 }
 
 
@@ -472,27 +474,27 @@ if __name__ == "__main__":
     ### Run Experiment ###
     ################################
     exp_variables = ["temporal_frequency"]  # from my_stimulus_options
-    # Define experiment parameters. List lengths must be equal.
-    experiment_dict = {
-        "exp_variables": exp_variables,
-        "min_max_values": [[0.5, 0.5]],  # needs two values for each variable
-        "n_steps": [1],
-        "logaritmic": [True],
-    }
+    # # Define experiment parameters. List lengths must be equal.
+    # experiment_dict = {
+    #     "exp_variables": exp_variables,
+    #     "min_max_values": [[0.5, 0.5]],  # needs two values for each variable
+    #     "n_steps": [1],
+    #     "logaritmic": [True],
+    # }
 
-    PM.experiment.build_and_run(experiment_dict, n_trials=30, build_without_run=False)
+    # PM.experiment.build_and_run(experiment_dict, n_trials=30, build_without_run=False)
 
     ###############################
     ## Analyze Experiment ###
     ###############################
 
-    my_analysis_options = {
-        "exp_variables": exp_variables,
-        "t_start_ana": 0.5,
-        "t_end_ana": 6.5,
-    }
+    # my_analysis_options = {
+    #     "exp_variables": exp_variables,
+    #     "t_start_ana": 0.5,
+    #     "t_end_ana": 6.5,
+    # }
 
-    PM.ana.analyze_response(my_analysis_options)
+    # PM.ana.analyze_response(my_analysis_options)
 
     # ################################
     # ### Visualize Experiment ###
@@ -500,7 +502,8 @@ if __name__ == "__main__":
 
     # PM.viz.contrast_response()
     # PM.viz.contrast_temporal_frequency_response()
-    PM.viz.F1F2_amplitude_response(exp_variables, xlog=True)
+    # PM.viz.F1F2_popul_response(exp_variables, xlog=True)
+    PM.viz.F1F2_unit_response(exp_variables, xlog=True)
 
     # TÄHÄN JÄIT/STRATEGIA:
     # Katso contrasti vaste, vaste spatiaalitaajuudelle ja välketaajuudelle. Vertaa kirjallisuuteen
