@@ -109,9 +109,7 @@ input_folder = "../in"  # input figs, videos
 Data context for output. 
 """
 
-output_folder = (
-    "temporal_frequency_response_30trials"  # temporal_frequency_response_5Hz_30trials
-)
+output_folder = "contrast_response_5Hz_30trials"
 
 
 """
@@ -473,12 +471,12 @@ if __name__ == "__main__":
     ################################
     ### Run Experiment ###
     ################################
-    exp_variables = ["temporal_frequency"]  # from my_stimulus_options
-    # # Define experiment parameters. List lengths must be equal.
+    exp_variables = ["contrast"]  # from my_stimulus_options
+    # Define experiment parameters. List lengths must be equal.
     # experiment_dict = {
     #     "exp_variables": exp_variables,
-    #     "min_max_values": [[0.5, 0.5]],  # needs two values for each variable
-    #     "n_steps": [1],
+    #     "min_max_values": [[0.5, 32]],  # needs two values for each variable
+    #     "n_steps": [31],
     #     "logaritmic": [True],
     # }
 
@@ -488,13 +486,13 @@ if __name__ == "__main__":
     ## Analyze Experiment ###
     ###############################
 
-    # my_analysis_options = {
-    #     "exp_variables": exp_variables,
-    #     "t_start_ana": 0.5,
-    #     "t_end_ana": 6.5,
-    # }
+    my_analysis_options = {
+        "exp_variables": exp_variables,
+        "t_start_ana": 0.5,
+        "t_end_ana": 6.5,
+    }
 
-    # PM.ana.analyze_response(my_analysis_options)
+    PM.ana.analyze_response(my_analysis_options)
 
     # ################################
     # ### Visualize Experiment ###
