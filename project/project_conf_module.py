@@ -109,7 +109,7 @@ input_folder = "../in"  # input figs, videos
 Data context for output. 
 """
 
-output_folder = "spatial_frequency_response_5Hz_30trials"
+output_folder = "testi"  # temporal_frequency_response_5Hz_30trials
 
 
 """
@@ -204,7 +204,7 @@ my_stimulus_options = {
     "duration_seconds": 6.0,
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
-    "pattern": "sine_grating",  # Natural video is not supported yet. One of the StimulusPatterns
+    "pattern": "temporal_sine_pattern",  # Natural video is not supported yet. One of the StimulusPatterns
     "stimulus_form": "rectangular",
     "size_inner": None,  # Applies to annulus only
     "size_outer": None,  # Applies to annulus only
@@ -261,10 +261,23 @@ deg_per_mm = 1 / 0.223
 
 # Compressing cone nonlinearity. Parameters are manually scaled to give dynamic cone ouput.
 # Equation, data from Baylor_1987_JPhysiol
-rm_param = 25  # pA
-k_param = 2.77e-4  # at 500 nm
-cone_sensitivity_min = 5e2
-cone_sensitivity_max = 1e4
+cone_params = {
+    "rm": 25,  # pA
+    "k": 2.77e-4,  # at 500 nm
+    "sensitivity_min": 5e2,
+    "sensitivity_max": 1e4,
+}
+
+# Recovery function from Berry_1998_JNeurosci, Uzzell_2004_JNeurophysiol
+# abs and rel refractory estimated from Uzzell_2004_JNeurophysiol,
+# Fig 7B, bottom row, inset. Parasol ON cell
+refractory_params = {
+    "abs_refractory": 1,
+    "rel_refractory": 3,
+    "p_exp": 4,
+    "clip_start": 0,
+    "clip_end": 100,
+}
 
 my_retina_append = {
     "mosaic_file": gc_type + "_" + response_type + "_mosaic.csv",
@@ -275,10 +288,8 @@ my_retina_append = {
     "proportion_of_OFF_response_type": proportion_of_OFF_response_type,
     "deg_per_mm": deg_per_mm,
     "optical_aberration": 2 / 60,  # unit is degree
-    "cone_sensitivity_min": cone_sensitivity_min,
-    "cone_sensitivity_max": cone_sensitivity_max,
-    "rm": rm_param,
-    "k": k_param,
+    "cone_params": cone_params,
+    "refractory_params": refractory_params,
 }
 
 my_retina.update(my_retina_append)
@@ -460,28 +471,28 @@ if __name__ == "__main__":
     ################################
     ### Run Experiment ###
     ################################
-    exp_variables = ["spatial_frequency"]
+    exp_variables = ["temporal_frequency"]  # from my_stimulus_options
     # Define experiment parameters. List lengths must be equal.
-    # experiment_dict = {
-    #     "exp_variables": exp_variables,
-    #     "min_max_values": [[1, 16.0]],
-    #     "n_steps": [31],
-    #     "logaritmic": [True],
-    # }
+    experiment_dict = {
+        "exp_variables": exp_variables,
+        "min_max_values": [[0.5, 0.5]],  # needs two values for each variable
+        "n_steps": [1],
+        "logaritmic": [True],
+    }
 
-    # PM.experiment.build_and_run(experiment_dict, n_trials=30, build_without_run=False)
+    PM.experiment.build_and_run(experiment_dict, n_trials=30, build_without_run=False)
 
     ###############################
     ## Analyze Experiment ###
     ###############################
 
-    # my_analysis_options = {
-    #     "exp_variables": exp_variables,
-    #     "t_start_ana": 0.5,
-    #     "t_end_ana": 6.5,
-    # }
+    my_analysis_options = {
+        "exp_variables": exp_variables,
+        "t_start_ana": 0.5,
+        "t_end_ana": 6.5,
+    }
 
-    # PM.ana.analyze_response(my_analysis_options)
+    PM.ana.analyze_response(my_analysis_options)
 
     # ################################
     # ### Visualize Experiment ###
@@ -504,7 +515,7 @@ if __name__ == "__main__":
     ### Create analog stimulus ###
     ##############################
 
-    # # If you need current injection to the soma, use this method.
+    # # For current injection, use this method.
     # N_tp = 20000
     # dt = 0.1  # ms
 

@@ -798,14 +798,18 @@ class WorkingRetina(RetinaMath):
             # calculate probability of firing for current timebin (eg .1 ms)
             # draw spike/nonspike from random distribution
 
-            # Recovery function from Berry_1998_JNeurosci, Uzzell_2004_JNeurophysiol
-            # abs and rel refractory estimated from Uzzell_2004_JNeurophysiol,
-            # Fig 7B, bottom row, inset. Parasol ON cell
-            abs_refractory = 1 * b2u.ms
-            rel_refractory = 3 * b2u.ms
-            p_exp = 4
-            clip_start = 0 * b2u.ms
-            clip_end = 100 * b2u.ms
+            abs_refractory = (
+                self.context.my_retina["refractory_params"]["abs_refractory"] * b2u.ms
+            )
+            rel_refractory = (
+                self.context.my_retina["refractory_params"]["rel_refractory"] * b2u.ms
+            )
+            p_exp = self.context.my_retina["refractory_params"]["p_exp"]
+            clip_start = (
+                self.context.my_retina["refractory_params"]["clip_start"] * b2u.ms
+            )
+            clip_end = self.context.my_retina["refractory_params"]["clip_end"] * b2u.ms
+
             neuron_group = b2.NeuronGroup(
                 n_cells,
                 model="""
@@ -1016,10 +1020,14 @@ class PhotoReceptor:
         self._data_io = data_io
 
         self.optical_aberration = self.context.my_retina["optical_aberration"]
-        self.rm = self.context.my_retina["rm"]
-        self.k = self.context.my_retina["k"]
-        self.cone_sensitivity_min = self.context.my_retina["cone_sensitivity_min"]
-        self.cone_sensitivity_max = self.context.my_retina["cone_sensitivity_max"]
+        self.rm = self.context.my_retina["cone_params"]["rm"]
+        self.k = self.context.my_retina["cone_params"]["k"]
+        self.cone_sensitivity_min = self.context.my_retina["cone_params"][
+            "sensitivity_min"
+        ]
+        self.cone_sensitivity_max = self.context.my_retina["cone_params"][
+            "sensitivity_max"
+        ]
 
     @property
     def context(self):
