@@ -88,6 +88,7 @@ class Fit(ApricotData, RetinaMath):
                 (
                     self.all_data_fits_df,
                     self.gen_spat_filt_to_viz,
+                    self.good_idx_generated,
                 ) = self._fit_generated_data(spatial_data)
 
     def _fit_temporal_filters(self, good_idx, normalize_before_fit=False):
@@ -190,6 +191,25 @@ class Fit(ApricotData, RetinaMath):
         error_df = pd.DataFrame(error_array, columns=["temporalfit_mse"])
 
         return pd.concat([parameters_df, error_df], axis=1), exp_temp_filt_to_viz
+
+    def _get_semi_outliers(self, fits_df, bad_idx_for_spatial_fit):
+        """
+        Finds the outliers in the semi-major and semi-minor axes of the spatial filters.
+        """
+
+        out_data = np.concatenate((fits_df.semi_xc.values, fits_df.semi_yc.values))
+        mean = np.mean(out_data)
+        std_dev = np.std(out_data)
+        threshold = 3 * std_dev
+        mask_semi_xc = np.abs(fits_df.semi_xc.values - mean) > threshold
+        mask_semi_yc = np.abs(fits_df.semi_yc.values - mean) > threshold
+        idx_x = np.where(mask_semi_xc)[0]
+        idx_y = np.where(mask_semi_yc)[0]
+        bad_idx_for_spatial_fit += idx_x.tolist()
+        bad_idx_for_spatial_fit += idx_y.tolist()
+        bad_idx_for_spatial_fit.sort()
+
+        return bad_idx_for_spatial_fit
 
     def _fit_spatial_filters(
         self,
@@ -508,6 +528,11 @@ class Fit(ApricotData, RetinaMath):
         error_df = pd.DataFrame(error_all_viable_cells, columns=["spatialfit_mse"])
         good_mask = np.ones(len(data_all_viable_cells))
 
+        # identify semi outliers (xc or yc > 3SD from mean) and mark them bad
+        bad_idx_for_spatial_fit = self._get_semi_outliers(
+            fits_df, bad_idx_for_spatial_fit
+        )
+
         for i in bad_idx_for_spatial_fit:
             good_mask[i] = 0
         good_mask_df = pd.DataFrame(good_mask, columns=["good_filter_data"])
@@ -565,12 +590,9 @@ class Fit(ApricotData, RetinaMath):
             semi_x_always_major=True,
         )
 
-        good_idx = np.where(good_mask == 1)[0]
-
-        # Note that this ignores only manually picked bad data indices,
-        # if remove_bad_data_idx=True.
         spatial_filter_sums = self.compute_spatial_filter_sums()
 
+        good_idx = np.where(good_mask == 1)[0]
         temporal_fits, temp_filt_to_viz = self._fit_temporal_filters(good_idx)
 
         # Note that this ignores only manually picked bad data indices,
@@ -590,6 +612,9 @@ class Fit(ApricotData, RetinaMath):
             ],
             axis=1,
         )
+
+        # Set all_data_fits_df rows which are not part of good_idx to zero
+        all_data_fits_df.loc[~all_data_fits_df.index.isin(good_idx)] = 0.0
 
         return (
             all_data_fits_df,
@@ -618,7 +643,7 @@ class Fit(ApricotData, RetinaMath):
 
         cen_rot_rad_all = np.zeros(spatial_data.shape[0])
 
-        spatial_fits, spat_filt_to_viz, _ = self._fit_spatial_filters(
+        spatial_fits, spat_filt_to_viz, good_mask = self._fit_spatial_filters(
             spat_data_array=spatial_data,
             cen_rot_rad_all=cen_rot_rad_all,
             bad_idx_for_spatial_fit=[],
@@ -629,7 +654,11 @@ class Fit(ApricotData, RetinaMath):
         # Collect everything into one big dataframe
         all_data_fits_df = pd.concat([spatial_fits], axis=1)
 
-        return all_data_fits_df, spat_filt_to_viz
+        good_idx = np.where(good_mask == 1)[0]
+        # Set all_data_fits_df rows which are not part of good_idx to zero
+        all_data_fits_df.loc[~all_data_fits_df.index.isin(good_idx)] = 0.0
+
+        return all_data_fits_df, spat_filt_to_viz, good_idx
 
     def _fit_spatial_statistics(self, good_idx):
         """
