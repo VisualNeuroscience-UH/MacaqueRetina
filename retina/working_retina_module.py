@@ -461,7 +461,7 @@ class WorkingRetina(RetinaMath):
         # self.video_fps = self.stimulus_video.fps
         self.temporal_filter_len = int(self.data_filter_duration / (1000 / self.fps))
 
-    def _get_cropped_video(self, cell_index, contrast=True, reshape=False):
+    def _get_spatially_cropped_video(self, cell_index, contrast=True, reshape=False):
         """
         Crops the video to RGC surroundings
 
@@ -655,49 +655,79 @@ class WorkingRetina(RetinaMath):
         )
 
         # Get cropped stimulus
-        stimulus_cropped = self._get_cropped_video(cell_index, reshape=True)
+        stimulus_cropped = self._get_spatially_cropped_video(cell_index, reshape=True)
+        stimulus_duration_tp = stimulus_cropped.shape[-1]
+        video_dt = (1 / self.stimulus_video.fps) * b2u.second
 
         # Move to GPU if possible
-        if "torch" in sys.modules:
+        # if "torch" in sys.modules:
+        if 0:
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            pad_value = stimulus_cropped.mean(axis=0)[0]
+
+            # # TEMP dummy filter
+            # spatiotemporal_filter = np.zeros_like(spatiotemporal_filter)
+            # spatiotemporal_filter[:, 0] = 1
 
             # Reshape to 4D (adding batch_size and num_channels dimensions)
             stimulus_cropped = (
-                torch.tensor(stimulus_cropped)
-                .unsqueeze(0)
-                .unsqueeze(0)
-                .float()
-                .to(device)
+                torch.tensor(stimulus_cropped).unsqueeze(0).float().to(device)
             )
             spatiotemporal_filter = (
-                torch.tensor(spatiotemporal_filter)
-                .unsqueeze(0)
-                .unsqueeze(0)
-                .float()
-                .to(device)
+                torch.tensor(spatiotemporal_filter).unsqueeze(0).float().to(device)
             )
 
-            # Run convolution
-            generator_potential = torch.nn.functional.conv2d(
-                stimulus_cropped, spatiotemporal_filter
+            # Convolving two signals involves "flipping" one signal and then sliding it
+            # across the other signal. PyTorch, however, does not flip the kernel, so we
+            # need to do it manually.
+            spatiotemporal_filter_flipped = torch.flip(spatiotemporal_filter, dims=[2])
+
+            # Calculate padding size
+            filter_length = spatiotemporal_filter_flipped.shape[2]
+            padding_size = filter_length - 1
+
+            # Pad the stimulus
+            stimulus_padded = torch.nn.functional.pad(
+                stimulus_cropped, (padding_size, 0), value=pad_value
+            )
+
+            # Run the convolution.
+            # NOTE: Crops the output by filter_length - 1 for unknown reasons.
+            generator_potential = torch.nn.functional.conv1d(
+                stimulus_padded,
+                spatiotemporal_filter_flipped,
+                padding=0,
             )
 
             # Move back to CPU and convert to numpy
             generator_potential = generator_potential.cpu().squeeze().numpy()
+
         else:
             # Run convolution. NOTE: expensive computation. Solution without torch.
+            # if mode is "valid", the output consists only of those elements that do not rely on the zero-padding
+            # if baseline is shorter than filter, the output is truncated
+            filter_length = spatiotemporal_filter.shape[-1]
+            assert (
+                self.context.my_stimulus_options["baseline_start_seconds"]
+                > filter_length * 1 / self.stimulus_video.fps
+            ), f"baseline_start_seconds must be longer than filter length ({filter_length * video_dt}), aborting..."
             generator_potential = convolve(
                 stimulus_cropped, spatiotemporal_filter, mode="valid"
             )
             generator_potential = generator_potential[0, :]
 
-        # Add some padding to the beginning so that stimulus time and generator potential time match
-        # (First time steps of stimulus are not convolved)
-        video_dt = (1 / self.stimulus_video.fps) * b2u.second
-        n_padding = int(self.data_filter_duration * b2u.ms / video_dt - 1)
-        generator_potential = np.pad(
-            generator_potential, (n_padding, 0), mode="constant", constant_values=0
-        )
+            # Add some padding to the beginning so that stimulus time and generator potential time match
+            # (First time steps of stimulus are not convolved)
+            n_padding = int(self.data_filter_duration * b2u.ms / video_dt - 1)
+            generator_potential = np.pad(
+                generator_potential, (n_padding, 0), mode="constant", constant_values=0
+            )
+
+        # Internal test for convolution operation
+        generator_potential_duration_tp = generator_potential.shape[-1]
+        assert (
+            stimulus_duration_tp == generator_potential_duration_tp
+        ), "Duration mismatch, check convolution operation, aborting..."
 
         tonic_drive = self.gc_df.iloc[cell_index].tonicdrive
 
