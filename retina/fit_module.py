@@ -1023,8 +1023,7 @@ class Fit(ApricotData, RetinaMath):
             Dictionary with spatial filter statistics and distributions
         """
 
-        # For generated data, all data indeces are good
-        good_idx = range(len(self.all_data_fits_df))
+        good_idx = self.good_idx_generated
 
         # Get statistics for spatial filters
         gen_spat_stat_df, gen_spat_stat_to_viz = self._fit_spatial_statistics(good_idx)
@@ -1045,6 +1044,7 @@ class Fit(ApricotData, RetinaMath):
             self.gen_spat_filt_to_viz,
             gen_spat_stat_to_viz,
             self.all_data_fits_df,
+            good_idx,
         )
 
 
