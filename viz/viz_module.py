@@ -1523,7 +1523,7 @@ class Viz:
         :param cell_index:
         :return:
         """
-        stimulus_cropped = retina._get_cropped_video(cell_index)
+        stimulus_cropped = retina._get_spatially_cropped_video(cell_index)
         spatial_filter_sidelen = retina.spatial_filter_sidelen
         stimulus_video = retina.stimulus_video
 
@@ -1548,7 +1548,9 @@ class Viz:
         :return:
         """
         # get stimulus intensities
-        stimulus_cropped = retina._get_cropped_video(cell_index, contrast=False)
+        stimulus_cropped = retina._get_spatially_cropped_video(
+            cell_index, contrast=False
+        )
         stimulus_video = retina.stimulus_video
         spatial_filter_sidelen = retina.spatial_filter_sidelen
 
@@ -1579,7 +1581,9 @@ class Viz:
         :return:
         """
         # get stimulus intensities
-        stimulus_cropped = retina._get_cropped_video(cell_index, contrast=False)
+        stimulus_cropped = retina._get_spatially_cropped_video(
+            cell_index, contrast=False
+        )
         stimulus_video = retina.stimulus_video
 
         n_frames = stimulus_video.video_n_frames
@@ -1847,6 +1851,20 @@ class Viz:
 
     # Results visualization
 
+    def _string_on_plot(
+        self, ax, variable_name=None, variable_value=None, variable_unit=None
+    ):
+        plot_str = f"{variable_name} = {variable_value:6.2f} {variable_unit}"
+        ax.text(
+            0.05,
+            0.95,
+            plot_str,
+            fontsize=8,
+            verticalalignment="top",
+            transform=ax.transAxes,
+            bbox=dict(boxstyle="Square,pad=0.2", fc="white", ec="white", lw=1),
+        )
+
     def fr_response(self, exp_variables, xlog=False, ylog=False):
         """
         Plot the mean firing rate response curve.
@@ -1859,7 +1877,7 @@ class Viz:
         ), "Only one variable can be plotted at a time, aborting..."
 
         experiment_df = pd.read_csv(
-            data_folder / "exp_metadata_contrast.csv", index_col=0
+            data_folder / f"exp_metadata_{cond_names_string}.csv", index_col=0
         )
         data_df = pd.read_csv(
             data_folder / f"{cond_names_string}_population_means.csv", index_col=0
@@ -1874,14 +1892,14 @@ class Viz:
         response_levels_s = response_levels_s.round(decimals=2)
 
         response_function_df = pd.DataFrame(
-            {"contrast": response_levels_s, "response": mean_response_levels_s}
+            {cond_names_string: response_levels_s, "response": mean_response_levels_s}
         )
 
-        fig, ax = plt.subplots(1, 3, figsize=(8, 4))
+        fig, ax = plt.subplots(1, 2, figsize=(8, 4))
 
         sns.lineplot(
             data=response_function_df,
-            x="contrast",
+            x=cond_names_string,
             y="response",
             marker="o",
             color="black",
@@ -1890,6 +1908,11 @@ class Viz:
 
         # Title
         ax[0].set_title(f"{cond_names_string} response function (population mean)")
+
+        if xlog:
+            ax[0].set_xscale("log")
+        if ylog:
+            ax[0].set_yscale("log")
 
         sns.boxplot(data=data_df_units, color="white", linewidth=2, whis=100, ax=ax[1])
         sns.swarmplot(data=data_df_units, color="black", size=3, ax=ax[1])
@@ -2034,3 +2057,59 @@ class Viz:
                     ax[i].set_xscale("log")
                 if ylog:
                     ax[i].set_yscale("log")
+
+    def spike_raster_response(self, exp_variables, trial=0, savefigname=None):
+        """
+        Show spikes from a results file.
+
+        Parameters
+        ----------
+        results_filename : str or None
+            This name is searched from current directory, input_folder and output_folder (defined in config file). If None, the latest results file is used.
+        savefigname : str or None
+            If not empty, the figure is saved to this filename.
+
+        Returns
+        -------
+        None
+        """
+        cond_names_string = "_".join(exp_variables)
+        filename = f"exp_metadata_{cond_names_string}.csv"
+        experiment_df = self.data_io.get_data(filename=filename)
+        cond_names = experiment_df.columns.values
+        n_trials_vec = pd.to_numeric(experiment_df.loc["n_trials", :].values)
+        assert trial < np.min(n_trials_vec), "Trial id too high, aborting..."
+
+        # Visualize
+
+        fig, ax = plt.subplots(len(experiment_df.columns), 1, figsize=(8, 4))
+
+        # Loop conditions
+        for idx, cond_name in enumerate(cond_names):
+            filename = f"Response_{cond_name}.gz"
+            data_dict = self.data_io.get_data(filename)
+
+            units, times = self.ana._get_spikes_by_interval(data_dict, trial, 0, np.inf)
+
+            ax[idx].plot(
+                times,
+                units,
+                ".",
+            )
+
+            this_contrast = pd.to_numeric(experiment_df.loc["contrast", cond_name])
+            ax[idx].set_title(
+                f"{cond_name}, contrast {this_contrast:.2f}",
+                fontsize=10,
+            )
+
+            MeanFR = self.ana._analyze_meanfr(data_dict, trial, 0, np.inf)
+            self._string_on_plot(
+                ax[idx],
+                variable_name="Mean FR",
+                variable_value=MeanFR,
+                variable_unit="Hz",
+            )
+
+        if savefigname:
+            self.figsave(figurename=savefigname)
