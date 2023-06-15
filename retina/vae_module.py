@@ -889,7 +889,7 @@ class RetinaVAE(RetinaMath):
 
         self.batch_size = 256  # None will take the batch size from test_split size.
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
-        self.train_by = [["parasol"], ["off"]]  # Train by these factors
+        self.train_by = [["parasol"], ["on"]]  # Train by these factors
         # self.train_by = [["midget"], ["off"]]  # Train by these factors
 
         self.kernel_stride = "k7s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
@@ -908,8 +908,7 @@ class RetinaVAE(RetinaMath):
             "flip": 0.5,  # flip probability, both horizontal and vertical
             "data_multiplier": 4,  # how many times to get the data w/ augmentation
         }
-        self.augmentation_dict = augmentation_dict
-        # self.augmentation_dict = None
+        self.augmentation_dict = augmentation_dict # None
 
         ####################
         # Utility parameters
