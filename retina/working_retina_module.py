@@ -642,13 +642,14 @@ class WorkingRetina(RetinaMath):
         ----------
         cell_index : int
             Index of the cell to convolve the stimulus with
+        called_from_loop : bool, optional
+            Whether the method is called from a loop, by default False
 
         Returns
         -------
-        generator_potential : np.ndarray
-            Generator potential of the cell, array of length (stimulus timesteps)
+        np.ndarray
+            Generator potential of the cell, array of shape (stimulus timesteps,)
         """
-
         # Get spatiotemporal filter
         spatiotemporal_filter = self.create_spatiotemporal_filter(
             cell_index, called_from_loop=called_from_loop
