@@ -109,13 +109,14 @@ input_folder = "../in"  # input figs, videos
 Data context for output. 
 """
 
-output_folder = "test"
+output_folder = "loc_rand_0p1"
 
 
 """
 Remove random variations by setting the numpy random seed
 """
-numpy_seed = random.randint(0, 1000000)  # 42
+# numpy_seed = random.randint(0, 1000000)  # 42
+numpy_seed = 42  # 42
 
 """
 ### Housekeeping ###. Do not comment out.
@@ -136,12 +137,12 @@ my_retina = {
     "sector_limits": [-5, 5],  # polar angle in degrees
     "model_density": 1.0,
     "dd_regr_model": "cubic",  # linear, quadratic, cubic. Only used if rf_coverage_adjusted_to_1 is "from_literalure"
-    "randomize_position": 0.0,
+    "randomize_position": 0.1,
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "model_type": "VAE",  # "FIT" or "VAE" for variational autoencoder.
-    "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models
+    "rf_coverage_adjusted_to_1": True,  # False or True. Applies both to FIT and VAE models
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
-    "ray_tune_trial_id": "2199e_00029",  # Trial_id for tune, None for loading single run after "train_model". Applies to VAE "load_model" only.
+    "ray_tune_trial_id": None,  # Trial_id for tune, None for loading single run after "train_model". Applies to VAE "load_model" only.
 }
 
 # For external video and image input. See visual_stimulus_module.VideoBaseClass for more options.
@@ -201,10 +202,10 @@ my_stimulus_options = {
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
     "fps": 90,
-    "duration_seconds": 0.1,  # actual frames = floor(duration_seconds * fps)
-    "baseline_start_seconds": 0.2,  # Total duration is duration + both baselines
-    "baseline_end_seconds": 0.6,
-    "pattern": "temporal_square_pattern",  # Natural video is not supported yet. One of the StimulusPatterns
+    "duration_seconds": 6.0,  # actual frames = floor(duration_seconds * fps)
+    "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
+    "baseline_end_seconds": 0.5,
+    "pattern": "sine_grating",  # Natural video is not supported yet. One of the StimulusPatterns
     "stimulus_form": "rectangular",
     "size_inner": None,  # Applies to annulus only
     "size_outer": None,  # Applies to annulus only
@@ -213,8 +214,8 @@ my_stimulus_options = {
     "background": 128,
     "contrast": 0.6,
     "mean": 128,
-    "temporal_frequency": 1,
-    "spatial_frequency": 0.1,
+    "temporal_frequency": 5,
+    "spatial_frequency": 1,
     "phase_shift": 0,
     "stimulus_video_name": "testi.mp4",
 }
@@ -375,7 +376,7 @@ if __name__ == "__main__":
     """
 
     # Main retina construction method. This method calls all other methods in the retina construction process.
-    # PM.construct_retina.build()
+    PM.construct_retina.build()
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # This is why they are called via the construct_retina attribute. The instance
@@ -386,7 +387,7 @@ if __name__ == "__main__":
     # in the retina mosaic building process.
     # PM.construct_retina.show_exp_build_process(show_all_spatial_fits=False)
 
-    # PM.construct_retina.show_gen_exp_spatial_fit(n_samples=10)
+    PM.construct_retina.show_gen_exp_spatial_fit(n_samples=20)
     # PM.construct_retina.show_gen_exp_spatial_rf(ds_name="test_ds", n_samples=10)
     # PM.construct_retina.show_latent_tsne_space()
     # PM.construct_retina.show_gen_spat_post_hist()
@@ -473,17 +474,16 @@ if __name__ == "__main__":
     ################################
     ### Run Experiment ###
     ################################
-    exp_variables = ["contrast"]  # from my_stimulus_options
+    exp_variables = ["temporal_frequency"]  # from my_stimulus_options
     # Define experiment parameters. List lengths must be equal.
-    experiment_dict = {
-        "exp_variables": exp_variables,
-        # "min_max_values": [[0.01, 0.81]],  # needs two values for each variable
-        "min_max_values": [[0.6, 0.8]],  # needs two values for each variable
-        "n_steps": [2],
-        "logaritmic": [False],
-    }
+    # experiment_dict = {
+    #     "exp_variables": exp_variables,
+    #     "min_max_values": [[0.5, 32]],  # needs two values for each variable
+    #     "n_steps": [31],
+    #     "logaritmic": [True],
+    # }
 
-    PM.experiment.build_and_run(experiment_dict, n_trials=30, build_without_run=False)
+    # PM.experiment.build_and_run(experiment_dict, n_trials=30, build_without_run=False)
 
     ###############################
     ## Analyze Experiment ###
@@ -502,9 +502,9 @@ if __name__ == "__main__":
     # ################################
 
     # PM.viz.F1F2_popul_response(exp_variables, xlog=True)
-    # PM.viz.F1F2_unit_response(exp_variables, xlog=False)
+    # PM.viz.F1F2_unit_response(exp_variables, xlog=True)
     # PM.viz.fr_response(exp_variables, xlog=True)
-    PM.viz.spike_raster_response(exp_variables, savefigname=None)
+    # PM.viz.spike_raster_response(exp_variables, savefigname=None)
 
     # TÄHÄN JÄIT/STRATEGIA:
     # Katso contrasti vaste, vaste spatiaalitaajuudelle ja välketaajuudelle. Vertaa kirjallisuuteen

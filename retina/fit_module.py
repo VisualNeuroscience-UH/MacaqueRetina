@@ -192,21 +192,18 @@ class Fit(ApricotData, RetinaMath):
 
         return pd.concat([parameters_df, error_df], axis=1), exp_temp_filt_to_viz
 
-    def _get_semi_outliers(self, fits_df, bad_idx_for_spatial_fit):
+    def _get_fit_outliers(self, fits_df, bad_idx_for_spatial_fit, columns):
         """
-        Finds the outliers in the semi-major and semi-minor axes of the spatial filters.
+        Finds the outliers of the spatial filters.
         """
-
-        out_data = np.concatenate((fits_df.semi_xc.values, fits_df.semi_yc.values))
-        mean = np.mean(out_data)
-        std_dev = np.std(out_data)
-        threshold = 3 * std_dev
-        mask_semi_xc = np.abs(fits_df.semi_xc.values - mean) > threshold
-        mask_semi_yc = np.abs(fits_df.semi_yc.values - mean) > threshold
-        idx_x = np.where(mask_semi_xc)[0]
-        idx_y = np.where(mask_semi_yc)[0]
-        bad_idx_for_spatial_fit += idx_x.tolist()
-        bad_idx_for_spatial_fit += idx_y.tolist()
+        for col in columns:
+            out_data = fits_df[col].values
+            mean = np.mean(out_data)
+            std_dev = np.std(out_data)
+            threshold = 3 * std_dev
+            mask = np.abs(out_data - mean) > threshold
+            idx = np.where(mask)[0]
+            bad_idx_for_spatial_fit += idx.tolist()
         bad_idx_for_spatial_fit.sort()
 
         return bad_idx_for_spatial_fit
@@ -490,7 +487,7 @@ class Fit(ApricotData, RetinaMath):
             # 0 = perfect fit, infty = bad fit
 
             # MSE
-            fit_error = np.sum(fit_deviations**2) / (13 * 13)
+            fit_error = np.sum(fit_deviations**2) / np.prod(this_rf.shape)
             error_all_viable_cells[cell_idx, 0] = fit_error
 
             # Save DoG fit sums
@@ -528,9 +525,10 @@ class Fit(ApricotData, RetinaMath):
         error_df = pd.DataFrame(error_all_viable_cells, columns=["spatialfit_mse"])
         good_mask = np.ones(len(data_all_viable_cells))
 
-        # identify semi outliers (xc or yc > 3SD from mean) and mark them bad
-        bad_idx_for_spatial_fit = self._get_semi_outliers(
-            fits_df, bad_idx_for_spatial_fit
+        # identify outliers (> 3SD from mean) and mark them bad
+        columns = ["xoc", "yoc", "semi_xc", "semi_yc", "ampl_s", "relat_sur_diam"]
+        bad_idx_for_spatial_fit = self._get_fit_outliers(
+            fits_df, bad_idx_for_spatial_fit, columns=columns
         )
 
         for i in bad_idx_for_spatial_fit:

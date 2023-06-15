@@ -1516,7 +1516,6 @@ class ConstructRetina(RetinaMath):
 
             # Convert retinal positions (ecc, pol angle) to visual space positions in mm (x, y)
             ret_pos_ecc_mm = np.array(self.gc_df.pos_ecc_mm.values)
-            # ret_pos_mm = self.pol2cart_df(self.gc_df)
 
             # Mean fitted dendritic diameter for the original experimental data
             data_dd_um = self.exp_spat_cen_sd_mm * 2 * 1000  # in micrometers
@@ -1537,9 +1536,6 @@ class ConstructRetina(RetinaMath):
             # Save the generated receptive fields
             output_path = self.context.output_folder
             filename_stem = self.context.my_retina["spatial_rfs_file"]
-            self.data_io.save_generated_rfs(
-                img_rfs, output_path, filename_stem=filename_stem
-            )
 
             # Update gc_vae_df to have the same columns as gc_df
             self.gc_vae_df = self._update_gc_vae_df(self.gc_vae_df, new_um_per_pix)
@@ -1570,10 +1566,12 @@ class ConstructRetina(RetinaMath):
                     rf_lu_pix,
                     tolerate_error=0.01,
                 )
+                img_rfs_final = img_rfs_adjusted
 
             else:
                 img_rfs_adjusted = np.zeros_like(img_rfs)
                 img_ret_adjusted = np.zeros_like(img_ret)
+                img_rfs_final = img_rfs
 
             self.gen_rfs_to_viz = {
                 "img_rf": img_rfs,
@@ -1586,6 +1584,10 @@ class ConstructRetina(RetinaMath):
                 "img_ret_masked": img_ret_masked,
                 "img_ret_adjusted": img_ret_adjusted,
             }
+
+            self.data_io.save_generated_rfs(
+                img_rfs_final, output_path, filename_stem=filename_stem
+            )
 
             # Fit elliptical gaussians to the adjusted receptive fields
             (
@@ -1600,7 +1602,7 @@ class ConstructRetina(RetinaMath):
                 self.context.apricot_data_folder,
                 self.gc_type,
                 self.response_type,
-                spatial_data=img_rfs_adjusted,
+                spatial_data=img_rfs,  # Ellipse fit does not tolearate current adjustments
                 fit_type="generated",
                 new_um_per_pix=new_um_per_pix,
             ).get_generated_spatial_fits()

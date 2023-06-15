@@ -598,7 +598,6 @@ class WorkingRetina(RetinaMath):
             The column-dimension is the number of frames in the stimulus
         """
 
-        pdb.set_trace()
         if self.model_type == "FIT":
             spatial_filter = self._create_spatial_filter_FIT(cell_index)
         elif self.model_type == "VAE":
@@ -640,11 +639,9 @@ class WorkingRetina(RetinaMath):
             Generator potential of the cell, array of shape (stimulus timesteps,)
         """
         # Get spatiotemporal filter
-        pdb.set_trace()
         spatiotemporal_filter = self.create_spatiotemporal_filter(
             cell_index, called_from_loop=called_from_loop
         )
-        pdb.set_trace()
 
         # Get cropped stimulus
         stimulus_cropped = self._get_spatially_cropped_video(cell_index, reshape=True)
