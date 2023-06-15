@@ -154,17 +154,6 @@ class WorkingRetina(RetinaMath):
 
         self._initialize_digital_sampling()
 
-        if 0:
-            import matplotlib.pyplot as plt
-
-            # plt.plot(self.gc_df_pixspace.q_pix, self.gc_df_pixspace.r_pix, "r.")
-            print(f"{self.gc_df.x_deg=}")
-            print(f"{self.gc_df.y_deg=}")
-            plt.plot(self.gc_df.x_deg, self.gc_df.y_deg, "b.")
-            plt.axis("equal")
-            plt.show()
-            exit()
-
         self.model_type = self.context.my_retina["model_type"]
 
         if self.model_type == "VAE":
@@ -438,7 +427,6 @@ class WorkingRetina(RetinaMath):
         # Define spatial filter sidelength (based on angular resolution and widest semimajor axis)
         # We use the general rule that the sidelength should be at least 5 times the SD
         # Sidelength always odd number
-
         self.spatial_filter_sidelen = (
             2
             * 3
@@ -454,6 +442,7 @@ class WorkingRetina(RetinaMath):
             )
             + 1
         )
+        pdb.set_trace()
 
         self.microm_per_pix = (1 / self.deg_per_mm) / self.pix_per_deg * 1000
 
@@ -609,13 +598,13 @@ class WorkingRetina(RetinaMath):
             The column-dimension is the number of frames in the stimulus
         """
 
+        pdb.set_trace()
         if self.model_type == "FIT":
             spatial_filter = self._create_spatial_filter_FIT(cell_index)
         elif self.model_type == "VAE":
             spatial_filter = self._create_spatial_filter_VAE(cell_index)
         else:
             raise ValueError("Unknown model type, aborting...")
-
         s = self.spatial_filter_sidelen
         spatial_filter_1d = np.array([np.reshape(spatial_filter, s**2)]).T
 
@@ -651,9 +640,11 @@ class WorkingRetina(RetinaMath):
             Generator potential of the cell, array of shape (stimulus timesteps,)
         """
         # Get spatiotemporal filter
+        pdb.set_trace()
         spatiotemporal_filter = self.create_spatiotemporal_filter(
             cell_index, called_from_loop=called_from_loop
         )
+        pdb.set_trace()
 
         # Get cropped stimulus
         stimulus_cropped = self._get_spatially_cropped_video(cell_index, reshape=True)
