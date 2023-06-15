@@ -2089,7 +2089,17 @@ class Viz:
             filename = f"Response_{cond_name}.gz"
             data_dict = self.data_io.get_data(filename)
 
-            units, times = self.ana._get_spikes_by_interval(data_dict, trial, 0, np.inf)
+            cond_s = experiment_df[cond_name]
+            duration_seconds = pd.to_numeric(cond_s.loc["duration_seconds"])
+            baseline_start_seconds = pd.to_numeric(cond_s.loc["baseline_start_seconds"])
+            baseline_end_seconds = pd.to_numeric(cond_s.loc["baseline_end_seconds"])
+            duration_tot = (
+                duration_seconds + baseline_start_seconds + baseline_end_seconds
+            )
+
+            units, times = self.ana._get_spikes_by_interval(
+                data_dict, trial, 0, duration_tot
+            )
 
             ax[idx].plot(
                 times,
@@ -2103,7 +2113,7 @@ class Viz:
                 fontsize=10,
             )
 
-            MeanFR = self.ana._analyze_meanfr(data_dict, trial, 0, np.inf)
+            MeanFR = self.ana._analyze_meanfr(data_dict, trial, 0, duration_tot)
             self._string_on_plot(
                 ax[idx],
                 variable_name="Mean FR",

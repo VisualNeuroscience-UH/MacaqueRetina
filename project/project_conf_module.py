@@ -109,7 +109,7 @@ input_folder = "../in"  # input figs, videos
 Data context for output. 
 """
 
-output_folder = "contrast_response_5Hz_30trials"
+output_folder = "test"
 
 
 """
@@ -201,20 +201,20 @@ my_stimulus_options = {
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
     "fps": 90,
-    "duration_seconds": 6.0,
-    "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
-    "baseline_end_seconds": 0.5,
-    "pattern": "temporal_sine_pattern",  # Natural video is not supported yet. One of the StimulusPatterns
+    "duration_seconds": 0.1,  # actual frames = floor(duration_seconds * fps)
+    "baseline_start_seconds": 0.2,  # Total duration is duration + both baselines
+    "baseline_end_seconds": 0.6,
+    "pattern": "temporal_square_pattern",  # Natural video is not supported yet. One of the StimulusPatterns
     "stimulus_form": "rectangular",
     "size_inner": None,  # Applies to annulus only
     "size_outer": None,  # Applies to annulus only
     "stimulus_position": (0, 0),
     "stimulus_size": 1.5,  # 4.6 deg in Lee_1990_JOSA
     "background": 128,
-    "contrast": 0.99,
+    "contrast": 0.6,
     "mean": 128,
-    "temporal_frequency": 5,
-    "spatial_frequency": 1.0,
+    "temporal_frequency": 1,
+    "spatial_frequency": 0.1,
     "phase_shift": 0,
     "stimulus_video_name": "testi.mp4",
 }
@@ -427,7 +427,7 @@ if __name__ == "__main__":
     # example_gc = 2  # int or 'None'
     # PM.working_retina.convolve_stimulus(example_gc)
 
-    # PM.viz.show_spatiotemporal_filter(PM.working_retina)
+    # # PM.viz.show_spatiotemporal_filter(PM.working_retina)
     # PM.viz.show_convolved_stimulus(PM.working_retina)
 
     #################################
@@ -441,11 +441,13 @@ if __name__ == "__main__":
     # PM.viz.show_stimulus_with_gcs(
     #     PM.working_retina,
     #     example_gc=my_run_options["cell_index"],
-    #     frame_number=51,
-    #     show_rf_id=True,
+    #     frame_number=10,
+    #     show_rf_id=False,
     # )
 
-    # PM.viz.show_single_gc_view(PM.working_retina, cell_index=example_gc, frame_number=21)
+    # PM.viz.show_single_gc_view(
+    #     PM.working_retina, cell_index=example_gc, frame_number=21
+    # )
 
     # PM.viz.plot_tf_amplitude_response(PM.working_retina, example_gc)
 
@@ -473,35 +475,36 @@ if __name__ == "__main__":
     ################################
     exp_variables = ["contrast"]  # from my_stimulus_options
     # Define experiment parameters. List lengths must be equal.
-    # experiment_dict = {
-    #     "exp_variables": exp_variables,
-    #     "min_max_values": [[0.5, 32]],  # needs two values for each variable
-    #     "n_steps": [31],
-    #     "logaritmic": [True],
-    # }
+    experiment_dict = {
+        "exp_variables": exp_variables,
+        # "min_max_values": [[0.01, 0.81]],  # needs two values for each variable
+        "min_max_values": [[0.6, 0.8]],  # needs two values for each variable
+        "n_steps": [2],
+        "logaritmic": [False],
+    }
 
-    # PM.experiment.build_and_run(experiment_dict, n_trials=30, build_without_run=False)
+    PM.experiment.build_and_run(experiment_dict, n_trials=30, build_without_run=False)
 
     ###############################
     ## Analyze Experiment ###
     ###############################
 
-    my_analysis_options = {
-        "exp_variables": exp_variables,
-        "t_start_ana": 0.5,
-        "t_end_ana": 6.5,
-    }
+    # my_analysis_options = {
+    #     "exp_variables": exp_variables,
+    #     "t_start_ana": 0.5,
+    #     "t_end_ana": 6.5,
+    # }
 
-    PM.ana.analyze_response(my_analysis_options)
+    # PM.ana.analyze_response(my_analysis_options)
 
     # ################################
     # ### Visualize Experiment ###
     # ################################
 
-    # PM.viz.contrast_response()
-    # PM.viz.contrast_temporal_frequency_response()
     # PM.viz.F1F2_popul_response(exp_variables, xlog=True)
-    PM.viz.F1F2_unit_response(exp_variables, xlog=True)
+    # PM.viz.F1F2_unit_response(exp_variables, xlog=False)
+    # PM.viz.fr_response(exp_variables, xlog=True)
+    PM.viz.spike_raster_response(exp_variables, savefigname=None)
 
     # TÄHÄN JÄIT/STRATEGIA:
     # Katso contrasti vaste, vaste spatiaalitaajuudelle ja välketaajuudelle. Vertaa kirjallisuuteen
@@ -511,6 +514,7 @@ if __name__ == "__main__":
     # Implementoi contrast gain control?, ks
     # parametrit kattavasti ks Benardete_1999_VisNeurosci, ks myös Chichilnisky_2002_JNeurosci jossa vastaava malli kuin meillä.
     # fysiologiset mekanismit katsaus Demb_2008_JPhysiol ja Beaudoin_2007_JNeurosci
+    # spike raster sorting for binary noise voisi auttaa näkemään refractory (tai IF) mallin vaikutusta lähellä saturaatiota; Pillow_2005_JNeurosci
 
     ##############################
     ### Create analog stimulus ###
