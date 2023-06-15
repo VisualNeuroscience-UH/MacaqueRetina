@@ -661,14 +661,9 @@ class WorkingRetina(RetinaMath):
         video_dt = (1 / self.stimulus_video.fps) * b2u.second
 
         # Move to GPU if possible
-        # if "torch" in sys.modules:
-        if 0:
+        if "torch" in sys.modules:
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             pad_value = stimulus_cropped.mean(axis=0)[0]
-
-            # # TEMP dummy filter
-            # spatiotemporal_filter = np.zeros_like(spatiotemporal_filter)
-            # spatiotemporal_filter[:, 0] = 1
 
             # Reshape to 4D (adding batch_size and num_channels dimensions)
             stimulus_cropped = (
