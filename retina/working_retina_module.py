@@ -480,7 +480,7 @@ class WorkingRetina(RetinaMath):
             Cropped video
         """
 
-        # TODO - RGCs that are near the border of the stimulus will fail (no problem if stim is large enough)
+        # NOTE: RGCs that are near the border of the stimulus will fail (no problem if stim is large enough)
 
         qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
         stimulus_cropped = self.stimulus_video.frames[
