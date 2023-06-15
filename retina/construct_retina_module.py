@@ -1630,9 +1630,7 @@ class ConstructRetina(RetinaMath):
             Path.mkdir(output_folder, mode=0o771, parents=True, exist_ok=False)
 
         if filename is None:
-            filepath = output_folder.joinpath(
-                self.context.my_retina["mosaic_file"] + ".csv"
-            )
+            filepath = output_folder.joinpath(self.context.my_retina["mosaic_file"])
         else:
             filepath = output_folder.joinpath(filename)
 
