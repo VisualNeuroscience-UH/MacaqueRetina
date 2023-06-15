@@ -667,7 +667,7 @@ class DataIO(DataIOBase):
 
         # Save the original img_stack as numpy or pickle format
         stack_filename = (
-            output_path / f"{filename_stem}.npy"
+            output_path / f"{filename_stem}"
         )  # or "rf_values.pkl" for pickle format
         np.save(
             stack_filename, img_stack
