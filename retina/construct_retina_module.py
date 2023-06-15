@@ -828,7 +828,7 @@ class ConstructRetina(RetinaMath):
                 shape, loc, scale, len(self.gc_df), distribution
             )
 
-    def _get_generated_spatial_data(self, retina_vae, nsamples=10):
+    def _get_generated_spatial_data(self, retina_vae, n_samples=10):
         # --- 1. make a probability density function of the latent space
         retina_vae = self.retina_vae
 
@@ -841,8 +841,6 @@ class ConstructRetina(RetinaMath):
         latent_pdf = stats.gaussian_kde(latent_data.T)
 
         # --- 2. sample from the pdf
-        n_samples = len(self.gc_df)
-        # n_samples = 1000
         latent_samples = torch.tensor(latent_pdf.resample(n_samples).T).to(
             retina_vae.device
         )
@@ -1386,6 +1384,66 @@ class ConstructRetina(RetinaMath):
 
         return rfs_adjusted, img_ret_adjusted
 
+    def _get_rfs_from_vae(self, nsamples):
+        """
+        Get spatial receptive fields from the VAE. Discard any RFs that are not included in the good_idx.
+
+        Parameters
+        ----------
+        nsamples : int
+            Number of samples to generate from the VAE.
+
+        Returns
+        -------
+        img_processed : np.ndarray
+            Processed image of the generated RFs.
+        img_raw : np.ndarray
+            Raw image of the generated RFs.
+        gc_vae_df: pd.DataFrame
+            Dataframe containing the FITs for accepted rfs.
+        """
+        nsamples_extra = int(nsamples * 1.5)  # 50% extra to account for outliers
+        img_processed, img_raw = self._get_generated_spatial_data(
+            self.retina_vae, n_samples=nsamples_extra
+        )
+        data_um_per_pix = self.context.apricot_metadata["data_microm_per_pix"]
+
+        # Fit elliptical gaussians to the generated receptive fields
+        # If fit fails, or semi major or minor axis is >3 std from the mean,
+        # replace with reserve RF
+        (
+            _,
+            _,
+            _,
+            _,
+            _,
+            gc_vae_df,
+            good_idx,
+        ) = Fit(
+            self.context.apricot_data_folder,
+            self.gc_type,
+            self.response_type,
+            spatial_data=img_processed,
+            fit_type="generated",
+            new_um_per_pix=data_um_per_pix,
+        ).get_generated_spatial_fits()
+
+        # Replace bad rfs with the reserve rfs
+        missing_indices = np.setdiff1d(np.arange(nsamples), good_idx)
+        available_indices = good_idx > nsamples
+        for idx, this_miss in enumerate(missing_indices):
+            this_replace = np.where(available_indices)[0][idx]
+            img_processed[this_miss, :, :] = img_processed[this_replace, :, :]
+            img_raw[this_miss, :, :] = img_raw[this_replace, :, :]
+            gc_vae_df.loc[this_miss, :] = gc_vae_df.loc[this_replace, :]
+
+        # Discard extra samples
+        img_processed = img_processed[:nsamples, :, :]
+        img_raw = img_raw[:nsamples, :, :]
+        gc_vae_df = gc_vae_df.iloc[:nsamples, :]
+
+        return img_processed, img_raw, gc_vae_df
+
     def build(self):
         """
         Builds the receptive field mosaic. This is the main method to call.
@@ -1448,9 +1506,7 @@ class ConstructRetina(RetinaMath):
 
             # -- Second, endow cells with spatial receptive fields using the generative variational autoencoder model
             nsamples = len(self.gc_df)
-            img_processed, img_raw = self._get_generated_spatial_data(
-                self.retina_vae, nsamples=nsamples
-            )
+            img_processed, img_raw, self.gc_vae_df = self._get_rfs_from_vae(nsamples)
 
             # Set self attribute for later visualization of image histograms
             self.gen_spat_img_to_viz = {
@@ -1485,32 +1541,8 @@ class ConstructRetina(RetinaMath):
                 img_rfs, output_path, filename_stem=filename_stem
             )
 
-            # Fit elliptical gaussians to the generated receptive fields
-            (
-                self.gen_stat_df,
-                self.gen_spat_cen_sd,
-                self.gen_spat_sur_sd,
-                self.gen_spat_filt_to_viz,
-                self.gen_spat_stat_to_viz,
-                self.gc_vae_df,
-            ) = Fit(
-                self.context.apricot_data_folder,
-                self.gc_type,
-                self.response_type,
-                spatial_data=img_rfs,
-                fit_type="generated",
-                new_um_per_pix=new_um_per_pix,
-            ).get_generated_spatial_fits()
-
             # Update gc_vae_df to have the same columns as gc_df
             self.gc_vae_df = self._update_gc_vae_df(self.gc_vae_df, new_um_per_pix)
-
-            # Add fitted VAE dendritic diameter for visualization
-            (
-                self.gc_vae_df,
-                self.dd_vs_ecc_to_viz["dd_vae_x"],
-                self.dd_vs_ecc_to_viz["dd_vae_y"],
-            ) = self._get_dd_fit_for_viz(self.gc_vae_df)
 
             # Sum separate rf images onto one retina
             img_ret, rf_lu_pix = self._get_full_retina_with_rf_images(
@@ -1539,33 +1571,6 @@ class ConstructRetina(RetinaMath):
                     tolerate_error=0.01,
                 )
 
-                # Fit elliptical gaussians to the adjusted receptive fields
-                (
-                    self.gen_stat_df,
-                    self.gen_spat_cen_sd,
-                    self.gen_spat_sur_sd,
-                    self.gen_spat_filt_to_viz,
-                    self.gen_spat_stat_to_viz,
-                    self.gc_vae_df,
-                ) = Fit(
-                    self.context.apricot_data_folder,
-                    self.gc_type,
-                    self.response_type,
-                    spatial_data=img_rfs_adjusted,
-                    fit_type="generated",
-                    new_um_per_pix=new_um_per_pix,
-                ).get_generated_spatial_fits()
-
-                # Update gc_vae_df to have the same columns as gc_df
-                self.gc_vae_df = self._update_gc_vae_df(self.gc_vae_df, new_um_per_pix)
-
-                # Add fitted VAE dendritic diameter for visualization
-                (
-                    self.gc_vae_df,
-                    self.dd_vs_ecc_to_viz["dd_vae_x"],
-                    self.dd_vs_ecc_to_viz["dd_vae_y"],
-                ) = self._get_dd_fit_for_viz(self.gc_vae_df)
-
             else:
                 img_rfs_adjusted = np.zeros_like(img_rfs)
                 img_ret_adjusted = np.zeros_like(img_ret)
@@ -1581,6 +1586,34 @@ class ConstructRetina(RetinaMath):
                 "img_ret_masked": img_ret_masked,
                 "img_ret_adjusted": img_ret_adjusted,
             }
+
+            # Fit elliptical gaussians to the adjusted receptive fields
+            (
+                self.gen_stat_df,
+                self.gen_spat_cen_sd,
+                self.gen_spat_sur_sd,
+                self.gen_spat_filt_to_viz,
+                self.gen_spat_stat_to_viz,
+                self.gc_vae_df,
+                good_idx,
+            ) = Fit(
+                self.context.apricot_data_folder,
+                self.gc_type,
+                self.response_type,
+                spatial_data=img_rfs_adjusted,
+                fit_type="generated",
+                new_um_per_pix=new_um_per_pix,
+            ).get_generated_spatial_fits()
+
+            # Update gc_vae_df to have the same columns as gc_df
+            self.gc_vae_df = self._update_gc_vae_df(self.gc_vae_df, new_um_per_pix)
+
+            # Add fitted VAE dendritic diameter for visualization
+            (
+                self.gc_vae_df,
+                self.dd_vs_ecc_to_viz["dd_vae_x"],
+                self.dd_vs_ecc_to_viz["dd_vae_y"],
+            ) = self._get_dd_fit_for_viz(self.gc_vae_df)
 
             # Apply the spatial VAE model to df
             self.gc_df = self.gc_vae_df
