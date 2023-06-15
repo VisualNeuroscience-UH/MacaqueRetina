@@ -1551,7 +1551,7 @@ class ConstructRetina(RetinaMath):
                     self.context.apricot_data_folder,
                     self.gc_type,
                     self.response_type,
-                    spatial_data=img_rfs,
+                    spatial_data=img_rfs_adjusted,
                     fit_type="generated",
                     new_um_per_pix=new_um_per_pix,
                 ).get_generated_spatial_fits()
