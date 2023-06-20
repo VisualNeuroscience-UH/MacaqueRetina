@@ -442,7 +442,6 @@ class WorkingRetina(RetinaMath):
             )
             + 1
         )
-        pdb.set_trace()
 
         self.microm_per_pix = (1 / self.deg_per_mm) / self.pix_per_deg * 1000
 
