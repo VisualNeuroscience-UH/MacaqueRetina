@@ -889,11 +889,6 @@ class RetinaVAE(RetinaMath):
 
         self.batch_size = 256  # None will take the batch size from test_split size.
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
-<<<<<<< HEAD
-        self.train_by = [["parasol"], ["on"]]  # Train by these factors
-        # self.train_by = [["midget"], ["off"]]  # Train by these factors
-=======
->>>>>>> a3571d1e1c4b7dfa42375d986f127f54f1444b66
 
         self.kernel_stride = "k7s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
         self.conv_layers = 2  # 1 - 5 for s1, 1 - 3 for k3s2 and k5s2
@@ -911,7 +906,7 @@ class RetinaVAE(RetinaMath):
             "flip": 0.5,  # flip probability, both horizontal and vertical
             "data_multiplier": 4,  # how many times to get the data w/ augmentation
         }
-        self.augmentation_dict = augmentation_dict # None
+        self.augmentation_dict = augmentation_dict  # None
 
         ####################
         # Utility parameters
@@ -1003,7 +998,7 @@ class RetinaVAE(RetinaMath):
                 # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
                 self.search_space = {
                     "lr": [0.0005],
-                    "latent_dim": [4, 8, 16, 32],  # 32 best # 4, 8, 16, 32 search space
+                    "latent_dim": [32],  # 32 best # 4, 8, 16, 32 search space
                     "resolution_hw": [13],  # Both x and y, 13 or 28
                     # k3s2,k3s1,k5s2,k5s1,k7s1, k9s1 Kernel-stride-padding for conv layers. NOTE you cannot use >3 conv layers with stride 2
                     "kernel_stride": ["k7s1"],  # "k3s1", "k5s1", "k7s1", "k9s1"
@@ -1012,9 +1007,9 @@ class RetinaVAE(RetinaMath):
                     "conv_layers": [2],  # 1, 2, 3, 4
                     "batch_norm": [True],  # False, True
                     "latent_distribution": ["uniform"],  # "normal", "uniform"
-                    "rotation": [0, 15],  # Augment: max rotation in degrees
+                    "rotation": [0],  # Augment: max rotation in degrees
                     # Augment: fract of im, max in (x, y)/[xy] dir
-                    "translation": [0, 0.077],  # 1/13 pixels
+                    "translation": [0],  # 1/13 pixels
                     # Augment: noise added, btw [0., 1.]
                     "noise": [0],  # 0, 0.025, 0.05, 0.1
                     "flip": [0.5],  # Augment: flip prob, both horiz and vert
