@@ -872,9 +872,9 @@ class RetinaVAE(RetinaMath):
         self.resolution_hw = 13  # Both x and y. Images will be sampled to this space.
 
         # For ray tune only
-        # If grid_search is True, time_budget is ignored
-        self.time_budget = 60 * 60 * 24 * 4  # in seconds
+        # If grid_search is True, time_budget and grace_period are ignored
         self.grid_search = True  # False for tune by Optuna, True for grid search
+        self.time_budget = 60 * 60 * 24 * 4  # in seconds
         self.grace_period = 50  # epochs. ASHA stops earliest at grace period.
 
         #######################
@@ -889,8 +889,6 @@ class RetinaVAE(RetinaMath):
 
         self.batch_size = 256  # None will take the batch size from test_split size.
         self.test_split = 0.2  # Split data for validation and testing (both will take this fraction of data)
-        self.train_by = [["parasol"], ["off"]]  # Train by these factors
-        # self.train_by = [["midget"], ["off"]]  # Train by these factors
 
         self.kernel_stride = "k7s1"  # "k3s1", "k3s2" # "k5s2" # "k5s1"
         self.conv_layers = 2  # 1 - 5 for s1, 1 - 3 for k3s2 and k5s2
@@ -914,6 +912,7 @@ class RetinaVAE(RetinaMath):
         ####################
         # Utility parameters
         ####################
+        self.train_by = [[gc_type], [response_type]]  # Train by these factors
 
         # Set the random seed for reproducible results for both torch and numpy
         self.random_seed = context.numpy_seed
@@ -1000,7 +999,7 @@ class RetinaVAE(RetinaMath):
                 # Sampling: https://docs.ray.io/en/latest/tune/api_docs/search_space.html#tune-sample-docs
                 self.search_space = {
                     "lr": [0.0005],
-                    "latent_dim": [32],  # 4, 8, 16, 32
+                    "latent_dim": [4, 8, 16, 32],  # 32 best # 4, 8, 16, 32 search space
                     "resolution_hw": [13],  # Both x and y, 13 or 28
                     # k3s2,k3s1,k5s2,k5s1,k7s1, k9s1 Kernel-stride-padding for conv layers. NOTE you cannot use >3 conv layers with stride 2
                     "kernel_stride": ["k7s1"],  # "k3s1", "k5s1", "k7s1", "k9s1"
