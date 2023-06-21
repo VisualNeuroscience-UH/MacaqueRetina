@@ -203,9 +203,11 @@ class WorkingRetina(RetinaMath):
         :param cell_index: int
         :return:
         """
+        if isinstance(cell_index, int) or isinstance(cell_index, np.int32):
+            cell_index = np.array([cell_index])
         gc = self.gc_df_pixspace.iloc[cell_index]
-        q_center = int(gc.q_pix)
-        r_center = int(gc.r_pix)
+        q_center = np.round(gc.q_pix).astype(int).values
+        r_center = np.round(gc.r_pix).astype(int).values
 
         side_halflen = (
             self.spatial_filter_sidelen - 1
@@ -512,43 +514,93 @@ class WorkingRetina(RetinaMath):
 
     def _get_spatially_cropped_video(self, cell_index, contrast=True, reshape=False):
         """
-        Crops the video to RGC surroundings
+        Crops the video to the surroundings of the specified Retinal Ganglion Cells (RGCs).
+
+        The function works by first determining the pixel range to be cropped for each cell
+        in cell_index, and then selecting those pixels from the original video. The cropping
+        is done for each frame of the video. If the contrast option is set to True, the video
+        is also rescaled to have pixel values between -1 and 1.
 
         Parameters
         ----------
-        cell_index : int
-            Index of the RGC
-        contrast : bool
-            If True, the video is scaled to [-1, 1] (default: True)
-        reshape : bool
-            If True, the video is reshaped to (n_frames, n_pixels, n_pixels, n_channels) (default: False)
+        cell_index : array of ints
+            Indices for the RGCs. The function will crop the video around each cell
+            specified in this array.
+
+        contrast : bool, optional
+            If True, the video is rescaled to have pixel values between -1 and 1.
+            By default, this option is set to True.
+
+        reshape : bool, optional
+            If True, the function will reshape the output array to have dimensions
+            (number_of_cells, number_of_pixels, number_of_time_points).
+            By default, this option is set to False.
 
         Returns
         -------
         stimulus_cropped : np.ndarray
-            Cropped video
+            The cropped video. The dimensions of the array are
+            (number_of_cells, number_of_pixels_w, number_of_pixels_h, number_of_time_points)
+            if reshape is False, and
+            (number_of_cells, number_of_pixels, number_of_time_points)
+            if reshape is True.
         """
 
-        # NOTE: RGCs that are near the border of the stimulus will fail (no problem if stim is large enough)
-
         qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
-        stimulus_cropped = self.stimulus_video.frames[
-            rmin : rmax + 1, qmin : qmax + 1, :
-        ].copy()
+        # video_copy = self.stimulus_video.frames.copy()
+        video_copy = np.tile(
+            self.stimulus_video.frames.copy(), (len(cell_index), 1, 1, 1)
+        )
 
-        # Scale stimulus pixel values from [0, 255] to [-1.0, 1.0]
-        # TODO - This is brutal and unphysiological, at least for natural movies
+        sidelen = self.spatial_filter_sidelen
+
+        # Create the r and q indices for each cell, ensure they're integer type
+        r_indices = (
+            (np.arange(sidelen) + rmin[:, np.newaxis])
+            .astype(int)
+            .reshape(-1, 1, sidelen, 1)
+        )
+        q_indices = (
+            (np.arange(sidelen) + qmin[:, np.newaxis])
+            .astype(int)
+            .reshape(-1, sidelen, 1, 1)
+        )
+
+        # Create r_matrix and q_matrix by broadcasting r_indices and q_indices
+        r_matrix, q_matrix = np.broadcast_arrays(r_indices, q_indices)
+
+        # create a cell index array and a time_points index array
+        cell_indices = (
+            np.arange(len(cell_index)).astype(np.int32).reshape(-1, 1, 1, 1)
+        )  # shape: (len(cell_index), 1, 1, 1)
+        time_points_indices = np.arange(video_copy.shape[-1]).astype(
+            np.int32
+        )  # shape: (n_time_points,)
+
+        # expand the indices arrays to the shape of r_matrix and q_matrix using broadcasting
+        cell_indices = cell_indices + np.zeros_like(
+            r_matrix, dtype=np.int32
+        )  # shape: (len(cell_index), sidelen, sidelen)
+        time_points_indices = time_points_indices + np.zeros(
+            (1, 1, 1, video_copy.shape[-1]), dtype=np.int32
+        )  # shape: (1, 1, 1, n_time_points)
+
+        # use the index arrays to select the elements from video_copy
+        stimulus_cropped = video_copy[
+            cell_indices, r_matrix, q_matrix, time_points_indices
+        ]
+
         if contrast is True:
             stimulus_cropped = stimulus_cropped / 127.5 - 1.0
         else:
-            # unsigned int will overflow when frame_max + frame_min >= 256
             stimulus_cropped = stimulus_cropped.astype(np.uint16)
 
         if reshape is True:
-            sidelen = self.spatial_filter_sidelen
-            n_frames = np.shape(self.stimulus_video.frames)[2]
-
-            stimulus_cropped = np.reshape(stimulus_cropped, (sidelen**2, n_frames))
+            n_frames = np.shape(self.stimulus_video.frames)[-1]
+            # reshape the video
+            stimulus_cropped = stimulus_cropped.reshape(
+                (len(cell_index), sidelen**2, n_frames)
+            )
 
         return stimulus_cropped
 
@@ -682,7 +734,7 @@ class WorkingRetina(RetinaMath):
 
         return spatiotemporal_filter
 
-    def convolve_stimulus(self, cell_index, called_from_loop=False):
+    def convolve_stimulus(self, cell_index, stimulus_cropped, called_from_loop=False):
         """
         Convolves the stimulus with the stimulus filter
 
@@ -699,17 +751,11 @@ class WorkingRetina(RetinaMath):
             Generator potential of the cell, array of shape (stimulus timesteps,)
         """
 
-        # Get cropped stimulus
-        stimulus_cropped = self._get_spatially_cropped_video(cell_index, reshape=True)
+        # # Get cropped stimulus
+        # stimulus_cropped = self._get_spatially_cropped_video(cell_index, reshape=True)
 
         stimulus_duration_tp = stimulus_cropped.shape[-1]
         video_dt = (1 / self.stimulus_video.fps) * b2u.second
-
-        # Get spatiotemporal filter.
-        # TODO Extract this to independent method, vecotrized across units.
-        spatiotemporal_filter = self.create_spatiotemporal_filter(
-            cell_index, called_from_loop=called_from_loop
-        )
 
         # Move to GPU if possible
         if "torch" in sys.modules:
@@ -833,21 +879,29 @@ class WorkingRetina(RetinaMath):
         # Run all cells
         if cell_index is None:
             n_cells = len(self.gc_df.index)  # all cells
-            cell_index = np.arange(n_cells)
+            cell_indices = np.arange(n_cells)
         # Run one cell
         else:
             n_cells = 1
-            cell_index = np.array(cell_index)
+            cell_indices = np.array(cell_index)
 
-        cell_index = np.atleast_1d(cell_index)  # python is not always so simple...
+        cell_indices = np.atleast_1d(cell_indices)  # python is not always so simple...
+
+        # Get cropped stimulus, vectorized
+        stimulus_cropped = self._get_spatially_cropped_video(cell_indices, reshape=True)
+
+        # Get spatiotemporal filter, vectorized
+        spatiotemporal_filter = self.create_spatiotemporal_filter(cell_indices)
+        pdb.set_trace()
 
         # Get instantaneous firing rate. TODO: computational efficiency
         print("Preparing generator potential...")
         generator_potential = np.zeros([self.stimulus_video.video_n_frames, n_cells])
-        for idx, this_cell in enumerate(cell_index):
-            generator_potential[:, idx] = self.convolve_stimulus(
-                this_cell, called_from_loop=True
-            )
+        # for idx, this_cell in enumerate(cell_indices):
+        #     generator_potential[:, idx] = self.convolve_stimulus(
+        #         this_cell, called_from_loop=True
+        #     )
+        generator_potential = self.convolve_stimulus(cell_indices, stimulus_cropped)
 
         exp_generator_potential = self._generator_to_firing_rate(generator_potential)
 
