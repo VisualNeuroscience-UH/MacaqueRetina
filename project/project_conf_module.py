@@ -109,7 +109,7 @@ input_folder = "../in"  # input figs, videos
 Data context for output. 
 """
 
-output_folder = "loc_rand_0p1"
+output_folder = "test_1"
 
 
 """
@@ -202,20 +202,20 @@ my_stimulus_options = {
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
     "fps": 90,
-    "duration_seconds": 6.0,  # actual frames = floor(duration_seconds * fps)
-    "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
-    "baseline_end_seconds": 0.5,
-    "pattern": "sine_grating",  # Natural video is not supported yet. One of the StimulusPatterns
+    "duration_seconds": 1.0,  # actual frames = floor(duration_seconds * fps)
+    "baseline_start_seconds": 0.1,  # Total duration is duration + both baselines
+    "baseline_end_seconds": 0.1,
+    "pattern": "temporal_square_pattern",  # Natural video is not supported yet. One of the StimulusPatterns
     "stimulus_form": "rectangular",
     "size_inner": None,  # Applies to annulus only
     "size_outer": None,  # Applies to annulus only
     "stimulus_position": (0, 0),
     "stimulus_size": 1.5,  # 4.6 deg in Lee_1990_JOSA
     "background": 128,
-    "contrast": 0.6,
+    "contrast": 0.8,
     "mean": 128,
-    "temporal_frequency": 5,
-    "spatial_frequency": 1,
+    "temporal_frequency": 2,
+    "spatial_frequency": 2,
     "phase_shift": 0,
     "stimulus_video_name": "testi.mp4",
 }
@@ -376,7 +376,7 @@ if __name__ == "__main__":
     """
 
     # Main retina construction method. This method calls all other methods in the retina construction process.
-    PM.construct_retina.build()
+    # PM.construct_retina.build()
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # This is why they are called via the construct_retina attribute. The instance
@@ -387,7 +387,7 @@ if __name__ == "__main__":
     # in the retina mosaic building process.
     # PM.construct_retina.show_exp_build_process(show_all_spatial_fits=False)
 
-    PM.construct_retina.show_gen_exp_spatial_fit(n_samples=20)
+    # PM.construct_retina.show_gen_exp_spatial_fit(n_samples=20)
     # PM.construct_retina.show_gen_exp_spatial_rf(ds_name="test_ds", n_samples=10)
     # PM.construct_retina.show_latent_tsne_space()
     # PM.construct_retina.show_gen_spat_post_hist()
@@ -410,13 +410,13 @@ if __name__ == "__main__":
 
     # options are defined in my_stimulus_options
     # stimulus video will be saved on output_folder in mp4 format (viewing) and hdf5 format (reloading)
-    # PM.stimulate.make_stimulus_video()
+    PM.stimulate.make_stimulus_video()
 
     # #################################
     # ### Load stimulus to get working retina ###
     # #################################
 
-    # PM.working_retina.load_stimulus()
+    PM.working_retina.load_stimulus()
 
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
     # ret.load_stimulus(movie)# => METADATA
@@ -425,7 +425,7 @@ if __name__ == "__main__":
     ### Show single ganglion cell response ###
     #################################
 
-    # example_gc = 2  # int or 'None'
+    example_gc = 2  # int or 'None'
     # PM.working_retina.convolve_stimulus(example_gc)
 
     # # PM.viz.show_spatiotemporal_filter(PM.working_retina)
@@ -435,16 +435,16 @@ if __name__ == "__main__":
     ### Run multiple trials for single cell ###
     #################################
 
-    # PM.working_retina.run_with_my_run_options()
+    PM.working_retina.run_with_my_run_options()
 
-    # PM.viz.show_gc_responses(PM.working_retina)
+    PM.viz.show_gc_responses(PM.working_retina)
 
-    # PM.viz.show_stimulus_with_gcs(
-    #     PM.working_retina,
-    #     example_gc=my_run_options["cell_index"],
-    #     frame_number=10,
-    #     show_rf_id=False,
-    # )
+    PM.viz.show_stimulus_with_gcs(
+        PM.working_retina,
+        example_gc=my_run_options["cell_index"],
+        frame_number=10,
+        show_rf_id=False,
+    )
 
     # PM.viz.show_single_gc_view(
     #     PM.working_retina, cell_index=example_gc, frame_number=21
@@ -507,9 +507,8 @@ if __name__ == "__main__":
     # PM.viz.spike_raster_response(exp_variables, savefigname=None)
 
     # TÄHÄN JÄIT/STRATEGIA:
-    # Katso contrasti vaste, vaste spatiaalitaajuudelle ja välketaajuudelle. Vertaa kirjallisuuteen
-    # Vertaa refractory, poisson ja coverage 1 tai ei.
-    # Biomedicumissa laske midget functiot, implementoi OFF kääntö.
+    # Biomedicumissa laske midget functiot,
+    # implementoi OFF kääntö.
     #
     # Implementoi contrast gain control?, ks
     # parametrit kattavasti ks Benardete_1999_VisNeurosci, ks myös Chichilnisky_2002_JNeurosci jossa vastaava malli kuin meillä.

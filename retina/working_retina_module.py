@@ -28,6 +28,7 @@ from pathlib import Path
 from copy import deepcopy
 import pdb
 import sys
+import time
 
 b2.prefs["logging.display_brian_error_message"] = False
 
@@ -330,6 +331,66 @@ class WorkingRetina(RetinaMath):
         # TODO - how should you scale the kernel??
         max_gain = np.max(np.abs(np.fft.fft(temporal_filter)))
         temporal_filter = (1 / max_gain) * temporal_filter
+
+        return temporal_filter
+
+    def _create_temporal_filter_cg(self, cell_index):
+        """
+        Creates the temporal component of the spatiotemporal filter with contrast gain control
+        Refs: Benardete_1999_VisNeurosci and Victor_1987_JPhysiol
+
+        Victor_1987_JPhysiol: "...we posit a neural measure of contrast, which is sensitive to fractional
+        deviations of luminance from its mean over some region of space and time. This neural
+        measure of contrast acts to tune the centre dynamics." i.e. c = Weber fraction
+
+        Parameters
+        ----------
+        cell_index : int
+            Index of the cell in the gc_df
+
+        Returns
+        -------
+        temporal_filter : np.ndarray
+            Temporal filter for the given cell
+        """
+
+        # TÄHÄN JÄIT: RAKENNA TEMPORAL FILTER VICTORIN MUKAAN
+        # TÄYTYY SIIRTÄÄ CONVOLVE STIM TASOLLE, KOSKA TARVITAAN MVEC
+
+        def low_pass_filter(L0, tvec, mvec, TL, NL):
+            """
+            L0: mean luminance of the unit's receptive field
+            tvec: time vector
+            mvec: contrast vector
+            TL: time constant of the low-pass filter
+            NL: number of low-pass filter stages
+            """
+
+            s_t = L0 * (1 + mvec / 2)
+            x_t = sum(
+                (s_t / np.math.factorial(NL))
+                * (tvec / TL) ** (NL - 1)
+                * np.exp(-tvec / TL)
+            )
+            return x_t
+
+        def dynamic_contrast():
+            pass
+
+        Tc = 15 * b2u.ms  # Time constant for dynamical variable c(t)
+        # filter_params = self.gc_df.iloc[cell_index][["n", "p1", "p2", "tau1", "tau2"]]
+        filter_params = []
+        if self.response_type == "off":
+            filter_params[1] = (-1) * filter_params[1]
+            filter_params[2] = (-1) * filter_params[2]
+
+        tvec = np.linspace(0, self.data_filter_duration, self.temporal_filter_len)
+        # temporal_filter = self.diff_of_lowpass_filters(tvec, *filter_params)
+
+        # # Scale the temporal filter so that its maximal gain is 1
+        # # TODO - how should you scale the kernel??
+        # max_gain = np.max(np.abs(np.fft.fft(temporal_filter)))
+        # temporal_filter = (1 / max_gain) * temporal_filter
 
         return temporal_filter
 
@@ -637,15 +698,18 @@ class WorkingRetina(RetinaMath):
         np.ndarray
             Generator potential of the cell, array of shape (stimulus timesteps,)
         """
-        # Get spatiotemporal filter
-        spatiotemporal_filter = self.create_spatiotemporal_filter(
-            cell_index, called_from_loop=called_from_loop
-        )
 
         # Get cropped stimulus
         stimulus_cropped = self._get_spatially_cropped_video(cell_index, reshape=True)
+
         stimulus_duration_tp = stimulus_cropped.shape[-1]
         video_dt = (1 / self.stimulus_video.fps) * b2u.second
+
+        # Get spatiotemporal filter.
+        # TODO Extract this to independent method, vecotrized across units.
+        spatiotemporal_filter = self.create_spatiotemporal_filter(
+            cell_index, called_from_loop=called_from_loop
+        )
 
         # Move to GPU if possible
         if "torch" in sys.modules:
@@ -777,7 +841,7 @@ class WorkingRetina(RetinaMath):
 
         cell_index = np.atleast_1d(cell_index)  # python is not always so simple...
 
-        # Get instantaneous firing rate
+        # Get instantaneous firing rate. TODO: computational efficiency
         print("Preparing generator potential...")
         generator_potential = np.zeros([self.stimulus_video.video_n_frames, n_cells])
         for idx, this_cell in enumerate(cell_index):
