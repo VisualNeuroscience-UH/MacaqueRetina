@@ -1625,7 +1625,7 @@ class Viz:
         elif n_trials == 1 and n_cells > 1:
             for_eventplot = all_spiketrains
             for_histogram = np.concatenate(all_spiketrains)
-            for_generatorplot = np.mean(exp_generator_potential, axis=1)
+            for_generatorplot = np.mean(exp_generator_potential, axis=0)
             n_samples = n_cells
             sample_name = "Cell #"
         else:
@@ -1643,8 +1643,8 @@ class Viz:
 
         plt.subplot(212)
         # Plot the generator and the average firing rate
-        tvec = np.arange(0, len(generator_potential), 1) * video_dt
-        # plt.plot(tvec, exp_generator_potential.flatten(), label='Generator')
+        tvec = np.arange(0, generator_potential.shape[-1], 1) * video_dt
+        # pdb.set_trace()
         plt.plot(tvec, for_generatorplot, label="Generator")
         plt.xlim([0, duration / b2u.second])
 

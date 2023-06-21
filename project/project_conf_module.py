@@ -139,6 +139,7 @@ my_retina = {
     "dd_regr_model": "cubic",  # linear, quadratic, cubic. Only used if rf_coverage_adjusted_to_1 is "from_literalure"
     "randomize_position": 0.1,
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
+    "gain_control": False,  # Gain control for parasol cells only
     "model_type": "VAE",  # "FIT" or "VAE" for variational autoencoder.
     "rf_coverage_adjusted_to_1": True,  # False or True. Applies both to FIT and VAE models
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
@@ -203,7 +204,7 @@ my_stimulus_options = {
     "pix_per_deg": 60,
     "fps": 90,
     "duration_seconds": 1.0,  # actual frames = floor(duration_seconds * fps)
-    "baseline_start_seconds": 0.1,  # Total duration is duration + both baselines
+    "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.1,
     "pattern": "temporal_square_pattern",  # Natural video is not supported yet. One of the StimulusPatterns
     "stimulus_form": "rectangular",
@@ -439,12 +440,12 @@ if __name__ == "__main__":
 
     PM.viz.show_gc_responses(PM.working_retina)
 
-    PM.viz.show_stimulus_with_gcs(
-        PM.working_retina,
-        example_gc=my_run_options["cell_index"],
-        frame_number=10,
-        show_rf_id=False,
-    )
+    # PM.viz.show_stimulus_with_gcs(
+    #     PM.working_retina,
+    #     example_gc=my_run_options["cell_index"],
+    #     frame_number=10,
+    #     show_rf_id=False,
+    # )
 
     # PM.viz.show_single_gc_view(
     #     PM.working_retina, cell_index=example_gc, frame_number=21
