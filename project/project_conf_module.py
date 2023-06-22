@@ -204,7 +204,7 @@ my_stimulus_options = {
     "pix_per_deg": 60,
     "fps": 90,
     "duration_seconds": 1.0,  # actual frames = floor(duration_seconds * fps)
-    "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
+    "baseline_start_seconds": 0.1,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.1,
     "pattern": "temporal_square_pattern",  # Natural video is not supported yet. One of the StimulusPatterns
     "stimulus_form": "rectangular",
