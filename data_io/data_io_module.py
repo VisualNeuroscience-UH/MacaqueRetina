@@ -669,6 +669,10 @@ class DataIO(DataIOBase):
         stack_filename = (
             output_path / f"{filename_stem}"
         )  # or "rf_values.pkl" for pickle format
+
+        # If extension is not npy, add it
+        if not stack_filename.suffix == ".npy":
+            stack_filename = stack_filename.with_suffix(".npy")
         np.save(
             stack_filename, img_stack
         )  # or pickle.dump(img_stack, open(stack_filename, "wb"))
