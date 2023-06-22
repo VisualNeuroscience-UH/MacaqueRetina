@@ -892,7 +892,7 @@ class WorkingRetina(RetinaMath):
         tonic_drive_expanded = np.expand_dims(tonic_drive, axis=1)
         return generator_potential + tonic_drive_expanded
 
-    def _create_temporal_filter_cg(self, cell_index, tvec, svec, dt):
+    def _create_temporal_signal_cg(self, cell_index, tvec, svec, dt):
         """ """
 
         Tc = 15  # Time constant for dynamical variable c(t), ms
@@ -940,16 +940,12 @@ class WorkingRetina(RetinaMath):
 
         # time shift rvec by delay D
         D_tp = int(D / dt)
-        temporal_filter = np.concatenate((np.zeros(len(tvec)), np.zeros(D_tp)))
+        temporal_signal = np.concatenate((np.zeros(len(tvec)), np.zeros(D_tp)))
         zero_vec = np.zeros(len(tvec))
-        temporal_filter[D_tp:] = np.max([A * yvec, zero_vec], axis=0)
-        temporal_filter = temporal_filter[: len(tvec)]
+        temporal_signal[D_tp:] = np.max([A * yvec, zero_vec], axis=0)
+        temporal_signal = temporal_signal[: len(tvec)]
 
-        # Scale the temporal filter so that its maximal gain is 1
-        max_gain = np.max(np.abs(np.fft.fft(temporal_filter)))
-        temporal_filter = (1 / max_gain) * temporal_filter
-
-        return temporal_filter
+        return temporal_signal
 
     def _create_dynamic_contrast(
         self, cell_indices, stimulus_cropped, spatial_filters, stim_len_tp
@@ -1034,31 +1030,44 @@ class WorkingRetina(RetinaMath):
         # Get spatiotemporal filters
         spatial_filters = self.get_spatial_filters(cell_indices)
 
-        if self.gain_control == True:
+        if self.gain_control == True and self.gc_type == "parasol":
+            # Contrast gain control depends dynamically on center contrast
             num_cells = len(cell_indices)
             tvec = range(stim_len_tp) * video_dt
+
+            # Get center contrast vector
             svecs = self._create_dynamic_contrast(
                 cell_indices, stimulus_cropped, spatial_filters, stim_len_tp
             )
-            temporal_filters = np.empty((num_cells, stim_len_tp))
+            temporal_signals = np.empty((num_cells, stim_len_tp))
 
             for idx in range(num_cells):
-                temporal_filters[idx, :] = self._create_temporal_filter_cg(
+                temporal_signals[idx, :] = self._create_temporal_signal_cg(
                     cell_indices[idx], tvec, svecs[idx, :], video_dt
                 )
 
+            # Assuming spatial_filters.shape = (U, N) and temporal_signals.shape = (U, T)
+            spatiotemporal_signals = (
+                spatial_filters[:, :, None] * temporal_signals[:, None, :]
+            )
+
+            generator_potentials = np.sum(
+                spatiotemporal_signals * stimulus_cropped, axis=1
+            ).squeeze()
+            # TÄHÄN JÄIT: CG generator_potentials DIMENSIOT, SKAALAUS JA BASELINE
+
         else:
             temporal_filters = self.get_temporal_filters(cell_indices)
-            # assuming spatial_filters.shape = (U, N) and temporal_filters.shape = (U, T)
 
-        spatiotemporal_filters = (
-            spatial_filters[:, :, None] * temporal_filters[:, None, :]
-        )
+            # Assuming spatial_filters.shape = (U, N) and temporal_filters.shape = (U, T)
+            spatiotemporal_filters = (
+                spatial_filters[:, :, None] * temporal_filters[:, None, :]
+            )
 
-        print("Preparing generator potential...")
-        generator_potentials = self.convolve_stimulus_batched(
-            cell_indices, stimulus_cropped, spatiotemporal_filters
-        )
+            print("Preparing generator potential...")
+            generator_potentials = self.convolve_stimulus_batched(
+                cell_indices, stimulus_cropped, spatiotemporal_filters
+            )
 
         exp_generator_potentials = self._generator_to_firing_rate(generator_potentials)
 
