@@ -1588,6 +1588,13 @@ class ConstructRetina(RetinaMath):
             self.data_io.save_generated_rfs(
                 img_rfs_final, output_path, filename_stem=filename_stem
             )
+            # Save masked retina to indicate center regions
+            maskname_stem = Path(filename_stem).stem + "_center_mask.npy"
+            self.data_io.save_generated_rfs(
+                img_ret_masked,
+                output_path,
+                filename_stem=maskname_stem,
+            )
 
             # Fit elliptical gaussians to the adjusted receptive fields
             (
