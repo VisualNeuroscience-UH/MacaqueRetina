@@ -139,7 +139,7 @@ my_retina = {
     "dd_regr_model": "cubic",  # linear, quadratic, cubic. Only used if rf_coverage_adjusted_to_1 is "from_literalure"
     "randomize_position": 0.1,
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
-    "gain_control": False,  # Gain control for parasol cells only
+    "gain_control": True,  # Gain control for parasol cells only
     "model_type": "VAE",  # "FIT" or "VAE" for variational autoencoder.
     "rf_coverage_adjusted_to_1": True,  # False or True. Applies both to FIT and VAE models
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
@@ -213,7 +213,7 @@ my_stimulus_options = {
     "stimulus_position": (0, 0),
     "stimulus_size": 1.5,  # 4.6 deg in Lee_1990_JOSA
     "background": 128,
-    "contrast": 0.8,
+    "contrast": 0.8,  # Weber constrast
     "mean": 128,
     "temporal_frequency": 2,
     "spatial_frequency": 2,
@@ -411,7 +411,7 @@ if __name__ == "__main__":
 
     # options are defined in my_stimulus_options
     # stimulus video will be saved on output_folder in mp4 format (viewing) and hdf5 format (reloading)
-    PM.stimulate.make_stimulus_video()
+    # PM.stimulate.make_stimulus_video()
 
     # #################################
     # ### Load stimulus to get working retina ###
@@ -426,7 +426,7 @@ if __name__ == "__main__":
     ### Show single ganglion cell response ###
     #################################
 
-    example_gc = 2  # int or 'None'
+    # example_gc = 2  # int or 'None'
     # PM.working_retina.convolve_stimulus(example_gc)
 
     # # PM.viz.show_spatiotemporal_filter(PM.working_retina)

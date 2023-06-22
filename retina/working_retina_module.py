@@ -163,6 +163,16 @@ class WorkingRetina(RetinaMath):
                 filename=self.context.my_retina["spatial_rfs_file"],
             )
 
+            mask_filename = "_".join(
+                [
+                    Path(self.context.my_retina["spatial_rfs_file"]).stem,
+                    "center_mask.npy",
+                ]
+            )
+            self.spat_rf_center_mask = self.data_io.get_data(
+                filename=mask_filename,
+            )
+
         self.initialized = True
 
     def _vspace_to_pixspace(self, x, y):
@@ -270,7 +280,7 @@ class WorkingRetina(RetinaMath):
 
         return spatial_kernel
 
-    def _create_spatial_filter_VAE(self, cell_index):
+    def _create_spatial_filter_VAE(self, cell_index, get_masks=False):
         """
         Creates the spatial component of the spatiotemporal filter
 
@@ -296,14 +306,20 @@ class WorkingRetina(RetinaMath):
 
         orient_cen = gc.orient_cen * (np.pi / 180)
 
-        spatial_kernel = resize(
-            self.spat_rf[cell_index, :, :], (s, s), anti_aliasing=True
-        )
+        if get_masks == True:
+            spatial_kernel = resize(
+                self.spat_rf_center_mask[cell_index, :, :], (s, s), anti_aliasing=False
+            )
 
-        # Scale the spatial filter so that its maximal gain is something reasonable
-        max_gain = np.max(np.abs(np.fft.fft2(spatial_kernel)))
-        # The 18 is arbitrary, to give reasonable firing rates
-        spatial_kernel = (18 / max_gain) * spatial_kernel
+        else:
+            spatial_kernel = resize(
+                self.spat_rf[cell_index, :, :], (s, s), anti_aliasing=True
+            )
+
+            # Scale the spatial filter so that its maximal gain is something reasonable
+            max_gain = np.max(np.abs(np.fft.fft2(spatial_kernel)))
+            # The 18 is arbitrary, to give reasonable firing rates
+            spatial_kernel = (18 / max_gain) * spatial_kernel
 
         return spatial_kernel
 
@@ -334,66 +350,6 @@ class WorkingRetina(RetinaMath):
         # TODO - how should you scale the kernel??
         max_gain = np.max(np.abs(np.fft.fft(temporal_filter)))
         temporal_filter = (1 / max_gain) * temporal_filter
-
-        return temporal_filter
-
-    def _create_temporal_filter_cg(self, cell_index):
-        """
-        Creates the temporal component of the spatiotemporal filter with contrast gain control
-        Refs: Benardete_1999_VisNeurosci and Victor_1987_JPhysiol
-
-        Victor_1987_JPhysiol: "...we posit a neural measure of contrast, which is sensitive to fractional
-        deviations of luminance from its mean over some region of space and time. This neural
-        measure of contrast acts to tune the centre dynamics." i.e. c = Weber fraction
-
-        Parameters
-        ----------
-        cell_index : int
-            Index of the cell in the gc_df
-
-        Returns
-        -------
-        temporal_filter : np.ndarray
-            Temporal filter for the given cell
-        """
-
-        # TÄHÄN JÄIT: RAKENNA TEMPORAL FILTER VICTORIN MUKAAN
-        # TÄYTYY SIIRTÄÄ CONVOLVE STIM TASOLLE, KOSKA TARVITAAN MVEC
-
-        def low_pass_filter(L0, tvec, mvec, TL, NL):
-            """
-            L0: mean luminance of the unit's receptive field
-            tvec: time vector
-            mvec: contrast vector
-            TL: time constant of the low-pass filter
-            NL: number of low-pass filter stages
-            """
-
-            s_t = L0 * (1 + mvec / 2)
-            x_t = sum(
-                (s_t / np.math.factorial(NL))
-                * (tvec / TL) ** (NL - 1)
-                * np.exp(-tvec / TL)
-            )
-            return x_t
-
-        def dynamic_contrast():
-            pass
-
-        Tc = 15 * b2u.ms  # Time constant for dynamical variable c(t)
-        # filter_params = self.gc_df.iloc[cell_index][["n", "p1", "p2", "tau1", "tau2"]]
-        filter_params = []
-        if self.response_type == "off":
-            filter_params[1] = (-1) * filter_params[1]
-            filter_params[2] = (-1) * filter_params[2]
-
-        tvec = np.linspace(0, self.data_filter_duration, self.temporal_filter_len)
-        # temporal_filter = self.diff_of_lowpass_filters(tvec, *filter_params)
-
-        # # Scale the temporal filter so that its maximal gain is 1
-        # # TODO - how should you scale the kernel??
-        # max_gain = np.max(np.abs(np.fft.fft(temporal_filter)))
-        # temporal_filter = (1 / max_gain) * temporal_filter
 
         return temporal_filter
 
@@ -530,6 +486,7 @@ class WorkingRetina(RetinaMath):
 
         contrast : bool, optional
             If True, the video is rescaled to have pixel values between -1 and 1.
+            This is the Weber constrast ratio, set for the stimulus.
             By default, this option is set to True.
 
         reshape : bool, optional
@@ -592,6 +549,7 @@ class WorkingRetina(RetinaMath):
         ]
 
         if contrast is True:
+            # Returns Weber constrast
             stimulus_cropped = stimulus_cropped / 127.5 - 1.0
         else:
             stimulus_cropped = stimulus_cropped.astype(np.uint16)
@@ -767,7 +725,7 @@ class WorkingRetina(RetinaMath):
 
         return temporal_filters
 
-    def get_spatial_filters(self, cell_indices):
+    def get_spatial_filters(self, cell_indices, get_masks=False):
         """
         Generate spatial filters for given cell indices.
 
@@ -780,11 +738,14 @@ class WorkingRetina(RetinaMath):
         ----------
         cell_indices : array_like
             List or 1-D array of cell indices for which to generate spatial filters.
+        get_masks : bool, optional
+            If True, return center masks instead of spatial filters. The default is False.
 
         Returns
         -------
         spatial_filters : ndarray
-            2-D array where each row corresponds to a 1-D spatial filter of a cell. The shape is (len(cell_indices), s**2), where s is the side length of a spatial filter.
+            2-D array where each row corresponds to a 1-D spatial filter or mask of a cell.
+            The shape is (len(cell_indices), s**2), where s is the side length of a spatial filter.
 
         Raises
         ------
@@ -803,7 +764,9 @@ class WorkingRetina(RetinaMath):
             if self.model_type == "FIT":
                 spatial_filter = self._create_spatial_filter_FIT(cell_index)
             elif self.model_type == "VAE":
-                spatial_filter = self._create_spatial_filter_VAE(cell_index)
+                spatial_filter = self._create_spatial_filter_VAE(
+                    cell_index, get_masks=get_masks
+                )
             else:
                 raise ValueError("Unknown model type, aborting...")
             spatial_filter_1d = np.array([np.reshape(spatial_filter, s**2)]).T
@@ -850,7 +813,7 @@ class WorkingRetina(RetinaMath):
         The `num_pixels` and `time_steps` should be the same for `stimulus_cropped` and `spatiotemporal_filter`.
         """
 
-        stimulus_duration_tp = stimulus_cropped.shape[-1]
+        stim_len_tp = stimulus_cropped.shape[-1]
         # stimulus_size_pix = stimulus_cropped.shape[1]
         num_cells = len(cell_index)
         video_dt = (1 / self.stimulus_video.fps) * b2u.second
@@ -880,7 +843,7 @@ class WorkingRetina(RetinaMath):
             )
 
             output = torch.empty(
-                (num_cells, stimulus_duration_tp),
+                (num_cells, stim_len_tp),
                 device=device,
             )
             for i in range(num_cells):
@@ -902,9 +865,7 @@ class WorkingRetina(RetinaMath):
                 >= filter_length * 1 / self.stimulus_video.fps
             ), f"baseline_start_seconds must be longer than filter length ({filter_length * video_dt}), aborting..."
 
-            generator_potential = np.empty(
-                (num_cells, stimulus_duration_tp - filter_length + 1)
-            )
+            generator_potential = np.empty((num_cells, stim_len_tp - filter_length + 1))
             for idx in range(num_cells):
                 generator_potential[idx, :] = convolve(
                     stimulus_cropped[idx], spatiotemporal_filter[idx], mode="valid"
@@ -922,10 +883,214 @@ class WorkingRetina(RetinaMath):
         # Internal test for convolution operation
         generator_potential_duration_tp = generator_potential.shape[-1]
         assert (
-            stimulus_duration_tp == generator_potential_duration_tp
+            stim_len_tp == generator_potential_duration_tp
         ), "Duration mismatch, check convolution operation, aborting..."
 
         tonic_drive = self.gc_df.iloc[cell_index].tonicdrive
+
+        # Return the generator potential
+        tonic_drive_expanded = np.expand_dims(tonic_drive, axis=1)
+        return generator_potential + tonic_drive_expanded
+
+    def _create_temporal_filter_cg(self, cell_indices, tvec, svec, dt):
+        """ """
+
+        Tc = 15 * b2u.ms  # Time constant for dynamical variable c(t)
+        A = 567
+        NLTL = 40.3
+        NL = 30
+        tau_L = 1.44  # ms
+        Hs = 1.00
+        T0 = 37.34
+        Chalf = 0.051
+        D = 2
+        Mean_fr = 37.37
+
+        dt = dt / b2u.ms
+
+        # def low_pass_filter(tvec, mvec, tau_L, NL):
+        #     """
+        #     L0: mean luminance of the unit's receptive field
+        #     tvec: time vector
+        #     mvec: contrast vector
+        #     TL: time constant of the low-pass filter
+        #     NL: number of low-pass filter stages
+        #     """
+        #     # pdb.set_trace()
+        #     s_t = mvec
+        #     tvec = tvec / b2u.ms
+        #     x_t = (
+        #         (s_t / np.math.factorial(NL))
+        #         * (tvec / tau_L) ** (NL - 1)
+        #         * np.exp(-tvec / tau_L)
+        #     )
+
+        #     return x_t
+
+        def low_pass_filter(i, tvec, svec, tau_L, NL):
+            """
+            i: index corresponding to time
+            tvec: time vector
+            svec: stimulus vector at time tvec
+            tau_L: time constant of the low-pass filter
+            NL: number of low-pass filter stages
+            """
+            # Calculate s and h up to t_index
+            s = svec[:i]
+            t_slice = tvec[:i]
+            h = (
+                (1 / np.math.factorial(NL))
+                * (t_slice / tau_L) ** (NL - 1)
+                * np.exp(-t_slice / tau_L)
+            )
+
+            # Calculate the output at time t as the integral of s * h (calculated as a sum)
+            x_t = np.trapz(s * h, dx=dt)
+
+            return x_t
+
+        # Calculate the output of the filter at each point in time
+        tvec = tvec / b2u.ms
+        x_t_vec = np.empty_like(tvec)
+        for t_index, t in enumerate(tvec):
+            x_t_vec[t_index] = low_pass_filter(t_index, tvec, svec, tau_L, NL)
+
+        pdb.set_trace()
+        x_t = low_pass_filter(tvec, mvec, tau_L, NL)
+        # filter_params = self.gc_df.iloc[cell_index][["n", "p1", "p2", "tau1", "tau2"]]
+        filter_params = []
+        if self.response_type == "off":
+            filter_params[1] = (-1) * filter_params[1]
+            filter_params[2] = (-1) * filter_params[2]
+
+        # temporal_filter = self.diff_of_lowpass_filters(tvec, *filter_params)
+
+        # # Scale the temporal filter so that its maximal gain is 1
+        # # TODO - how should you scale the kernel??
+        # max_gain = np.max(np.abs(np.fft.fft(temporal_filter)))
+        # temporal_filter = (1 / max_gain) * temporal_filter
+
+        return temporal_filter
+
+    def _create_dynamic_contrast(
+        self, cell_indices, stimulus_cropped, spatial_filters, stim_len_tp
+    ):
+        """ """
+
+        center_masks = self.get_spatial_filters(cell_indices, get_masks=True)
+
+        # Reshape center_masks and spatial_filters to match the dimensions of stimulus_cropped
+        center_masks_reshaped = np.expand_dims(center_masks, axis=2)
+        spatial_filters_reshaped = np.expand_dims(spatial_filters, axis=2)
+
+        # Multiply the arrays using broadcasting
+        center_filters = (
+            center_masks_reshaped * spatial_filters_reshaped * stimulus_cropped
+        )
+
+        # Create a boolean mask for non-zero values
+        non_zero_mask = center_filters != 0
+        center_filters[~non_zero_mask] = np.nan
+        # Sum over the spatial dimensions
+        center_filters_mean = np.nanmean(center_filters, axis=1)
+
+        # victor_1987_JPhysiol: input to model is s(t)), the signed Weber contrast at the centre.
+        mvecs = center_filters_mean  # First approximation: mvecs = center_filters_mean
+
+        return mvecs
+
+    def convolve_stimulus_cg(self, cell_indices, stimulus_cropped, spatial_filters):
+        """
+        Convolves the stimulus with contrast gain model.
+        """
+
+        stim_len_tp = stimulus_cropped.shape[-1]
+        # stimulus_size_pix = stimulus_cropped.shape[1]
+        num_cells = len(cell_indices)
+        video_dt = (1 / self.stimulus_video.fps) * b2u.second
+
+        tvec = range(stim_len_tp) * video_dt
+
+        svecs = self._create_dynamic_contrast(
+            cell_indices, stimulus_cropped, spatial_filters, stim_len_tp
+        )
+        generator_potential = np.empty((num_cells, stim_len_tp))
+
+        for idx in range(num_cells):
+            generator_potential[idx, :] = self._create_temporal_filter_cg(
+                cell_indices[idx], tvec, svecs[idx, :], video_dt
+            )
+        pdb.set_trace()
+
+        # # Move to GPU if possible
+        # if "torch" in sys.modules:
+        #     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        #     # Dimensions are [batch_size, num_channels, time_steps]. We use pixels as channels.
+        #     stimulus_cropped = torch.tensor(stimulus_cropped).float().to(device)
+        #     spatiotemporal_filter = (
+        #         torch.tensor(spatiotemporal_filter).float().to(device)
+        #     )
+
+        #     # Convolving two signals involves "flipping" one signal and then sliding it
+        #     # across the other signal. PyTorch, however, does not flip the kernel, so we
+        #     # need to do it manually.
+        #     spatiotemporal_filter_flipped = torch.flip(spatiotemporal_filter, dims=[2])
+
+        #     # Calculate padding size
+        #     filter_length = spatiotemporal_filter_flipped.shape[2]
+        #     padding_size = filter_length - 1
+
+        #     # Pad the stimulus
+        #     stimulus_padded = torch.nn.functional.pad(
+        #         stimulus_cropped, (padding_size, 0), mode="replicate"
+        #     )
+
+        #     output = torch.empty(
+        #         (num_cells, stim_len_tp),
+        #         device=device,
+        #     )
+        #     for i in range(num_cells):
+        #         output[i] = torch.nn.functional.conv1d(
+        #             stimulus_padded[i].unsqueeze(0),
+        #             spatiotemporal_filter_flipped[i].unsqueeze(0),
+        #             padding=0,
+        #         )
+
+        #     # Move back to CPU and convert to numpy
+        #     generator_potential = output.cpu().squeeze().numpy()
+        # else:
+        #     # Run convolution. NOTE: expensive computation. Solution without torch.
+        #     # if mode is "valid", the output consists only of those elements that do not rely on the zero-padding
+        #     # if baseline is shorter than filter, the output is truncated
+        #     filter_length = spatiotemporal_filter.shape[-1]
+        #     assert (
+        #         self.context.my_stimulus_options["baseline_start_seconds"]
+        #         >= filter_length * 1 / self.stimulus_video.fps
+        #     ), f"baseline_start_seconds must be longer than filter length ({filter_length * video_dt}), aborting..."
+
+        #     generator_potential = np.empty((num_cells, stim_len_tp - filter_length + 1))
+        #     for idx in range(num_cells):
+        #         generator_potential[idx, :] = convolve(
+        #             stimulus_cropped[idx], spatiotemporal_filter[idx], mode="valid"
+        #         )
+
+        #     # Add some padding to the beginning so that stimulus time and generator potential time match
+        #     # (First time steps of stimulus are not convolved)
+        #     n_padding = int(self.data_filter_duration * b2u.ms / video_dt - 1)
+        #     generator_potential = np.pad(
+        #         generator_potential,
+        #         ((0, 0), (n_padding, 0)),
+        #         mode="edge",
+        #     )
+
+        # Internal test for convolution operation
+        generator_potential_duration_tp = generator_potential.shape[-1]
+        assert (
+            stim_len_tp == generator_potential_duration_tp
+        ), "Duration mismatch, check convolution operation, aborting..."
+
+        tonic_drive = self.gc_df.iloc[cell_indices].tonicdrive
 
         # Return the generator potential
         tonic_drive_expanded = np.expand_dims(tonic_drive, axis=1)
@@ -965,9 +1130,9 @@ class WorkingRetina(RetinaMath):
         # Save spike generation model
         self.spike_generator_model = spike_generator_model
 
-        video_dt = (1 / self.stimulus_video.fps) * b2u.second
+        video_dt = (1 / self.stimulus_video.fps) * b2u.second  # input
         duration = self.stimulus_video.video_n_frames * video_dt
-        simulation_dt = simulation_dt * b2u.second
+        simulation_dt = simulation_dt * b2u.second  # output
 
         # Run all cells
         if cell_index is None:
@@ -985,16 +1150,28 @@ class WorkingRetina(RetinaMath):
 
         # Get spatiotemporal filters
         spatial_filters = self.get_spatial_filters(cell_indices)
-        temporal_filters = self.get_temporal_filters(cell_indices)
-        # assuming spatial_filters.shape = (U, N) and temporal_filters.shape = (U, T)
-        spatiotemporal_filters = (
-            spatial_filters[:, :, None] * temporal_filters[:, None, :]
-        )
 
-        print("Preparing generator potential...")
-        generator_potentials = self.convolve_stimulus_batched(
-            cell_indices, stimulus_cropped, spatiotemporal_filters
-        )
+        if self.gain_control == True:
+            print("Preparing generator potential...")
+            generator_potentials = self.convolve_stimulus_cg(
+                cell_indices, stimulus_cropped, spatial_filters
+            )
+            pdb.set_trace()
+
+            # TÄHÄN JÄIT: IMPLEMENTOI GAIN CONTROL. KS _create_temporal_filter_cg JOSSA ALKUA.
+            # KS Victor_1987_JPhysiol
+
+        else:
+            temporal_filters = self.get_temporal_filters(cell_indices)
+            # assuming spatial_filters.shape = (U, N) and temporal_filters.shape = (U, T)
+            spatiotemporal_filters = (
+                spatial_filters[:, :, None] * temporal_filters[:, None, :]
+            )
+
+            print("Preparing generator potential...")
+            generator_potentials = self.convolve_stimulus_batched(
+                cell_indices, stimulus_cropped, spatiotemporal_filters
+            )
 
         exp_generator_potentials = self._generator_to_firing_rate(generator_potentials)
 
