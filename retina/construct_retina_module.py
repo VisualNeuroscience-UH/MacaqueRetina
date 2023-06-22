@@ -1591,7 +1591,7 @@ class ConstructRetina(RetinaMath):
             # Save masked retina to indicate center regions
             maskname_stem = Path(filename_stem).stem + "_center_mask.npy"
             self.data_io.save_generated_rfs(
-                img_ret_masked,
+                img_rfs_mask,
                 output_path,
                 filename_stem=maskname_stem,
             )
