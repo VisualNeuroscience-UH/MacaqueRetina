@@ -272,11 +272,12 @@ class WorkingRetina(RetinaMath):
         )
         spatial_kernel = np.reshape(spatial_kernel, (s, s))
 
-        # Scale the spatial filter so that its maximal gain is something reasonable
-        # TODO - how should you scale the kernel??
-        max_gain = np.max(np.abs(np.fft.fft2(spatial_kernel)))
-        # 5.3 here just to give exp(5.3) = 200 Hz max firing rate to sinusoids
-        spatial_kernel = (5.3 / max_gain) * spatial_kernel
+        # Skip scaling for now
+        # # Scale the spatial filter so that its maximal gain is something reasonable
+        # # TODO - how should you scale the kernel??
+        # max_gain = np.max(np.abs(np.fft.fft2(spatial_kernel)))
+        # # 5.3 here just to give exp(5.3) = 200 Hz max firing rate to sinusoids
+        # spatial_kernel = (5.3 / max_gain) * spatial_kernel
 
         return spatial_kernel
 
@@ -316,10 +317,11 @@ class WorkingRetina(RetinaMath):
                 self.spat_rf[cell_index, :, :], (s, s), anti_aliasing=True
             )
 
-            # Scale the spatial filter so that its maximal gain is something reasonable
-            max_gain = np.max(np.abs(np.fft.fft2(spatial_kernel)))
-            # The 18 is arbitrary, to give reasonable firing rates
-            spatial_kernel = (18 / max_gain) * spatial_kernel
+            # Skip scaling for now
+            # # Scale the spatial filter so that its maximal gain is something reasonable
+            # max_gain = np.max(np.abs(np.fft.fft2(spatial_kernel)))
+            # # The 18 is arbitrary, to give reasonable firing rates
+            # spatial_kernel = (18 / max_gain) * spatial_kernel
 
         return spatial_kernel
 
@@ -893,20 +895,22 @@ class WorkingRetina(RetinaMath):
         return generator_potential + tonic_drive_expanded
 
     def _create_temporal_signal_cg(self, cell_index, tvec, svec, dt):
-        """ """
+        """
+        Contrast gain control implemented in temporal domain according to Victor_1987_JPhysiol
+        """
 
-        Tc = 15  # Time constant for dynamical variable c(t), ms
+        Tc = 15  # 15  # Time constant for dynamical variable c(t), ms. Victor_1987_JPhysiol
         A = 567
         NLTL = 40.3
         NL = 30  # 30
-        tau_L = 1.44  # ms
+        tau_L = 1.44  # 1.44  # ms
         Hs = 1.00
         T0 = 37.34
         Chalf = 0.051
         Mean_fr = 37.37
         D = 2  # ms
 
-        dt = dt / b2u.ms
+        dt = dt / b2u.ms  # sampling period in ms
 
         # Convert time vector to appropriate units
         tvec = tvec / b2u.ms
@@ -920,23 +924,51 @@ class WorkingRetina(RetinaMath):
             * np.exp(-tvec / tau_L)
         )
 
+        # # Dummy kernel for testing time shift
+        # h = np.zeros(len(tvec))
+        # h[0] = 1
+
         # Define the shifted impulse response
-        h_shifted = np.concatenate((np.zeros(len(tvec) // 2), h[: len(tvec) // 2]))
+        timeshift = len(tvec) // 2
+        h_shifted = np.concatenate((np.zeros(timeshift), h[:timeshift]))
+        # Scale the impulse response to have unit area
+        h_shifted = h_shifted / np.sum(h_shifted)
 
         # Compute the convolution with the shifted impulse response
-        x_t_vec = np.convolve(svec, h_shifted, mode="same") * dt
+        x_t_vec = np.convolve(svec, h_shifted, mode="same")  # * dt
+        # plt.plot(tvec, svec)
+        # plt.plot(tvec, h_shifted)
+        # plt.plot(tvec, x_t_vec)
+        # # Legend
+        # plt.legend(["s(t)", "h(t)", "x(t)"])
+        # plt.show()
+        # pdb.set_trace()
 
         if self.response_type == "off":
             x_t_vec = -x_t_vec
 
         ### High pass stages ###
         c_t = y_t = 0
+        Ts_t = T0
         yvec = np.zeros(len(tvec))
+        Ts_vec = np.ones(len(tvec)) * T0
+        c_t_vec = np.zeros(len(tvec))
         for idx, this_time in enumerate(tvec[1:]):
-            c_t = (np.abs(y_t) - c_t) / Tc
+            y_t = y_t + dt * (
+                (-y_t / Ts_t)
+                + (x_t_vec[idx + 1] - x_t_vec[idx]) / dt
+                # + x_t_vec[idx]
+                + (((1 - Hs) * x_t_vec[idx]) / Ts_t)
+            )
+            # print(f"{idx=}, {y_t=:.5f}, {Ts_t=:.5f}, {c_t=:.5f}, {x_t_vec[idx]=:.5f}")
+
             Ts_t = T0 / (1 + c_t / Chalf)
-            y_t = -y_t / Ts_t + x_t_vec[idx] + (1 - Hs) * x_t_vec[idx]
+            c_t = c_t + dt * ((np.abs(y_t) - c_t) / Tc)
+
+            c_t_vec[idx] = c_t
+            Ts_vec[idx] = Ts_t
             yvec[idx] = y_t
+        # pdb.set_trace()
 
         # time shift rvec by delay D
         D_tp = int(D / dt)
@@ -945,14 +977,22 @@ class WorkingRetina(RetinaMath):
         temporal_signal[D_tp:] = np.max([A * yvec, zero_vec], axis=0)
         temporal_signal = temporal_signal[: len(tvec)]
 
+        # plt.plot(tvec, svec)
+        # plt.plot(tvec, x_t_vec)
+        # plt.plot(tvec, c_t_vec)
+        # plt.plot(tvec, yvec)
+        # plt.plot(tvec, Ts_vec)
+        # # Legend
+        # plt.legend(["s(t)", "x(t)", "c(t)", "y(t)", "Ts(t)"])
+        # plt.show()
+        # pdb.set_trace()
+
         return temporal_signal
 
     def _create_dynamic_contrast(
-        self, cell_indices, stimulus_cropped, spatial_filters, stim_len_tp
+        self, cell_indices, stimulus_cropped, spatial_filters, center_masks
     ):
         """ """
-
-        center_masks = self.get_spatial_filters(cell_indices, get_masks=True)
 
         # Reshape center_masks and spatial_filters to match the dimensions of stimulus_cropped
         center_masks_reshaped = np.expand_dims(center_masks, axis=2)
@@ -966,13 +1006,13 @@ class WorkingRetina(RetinaMath):
         # Create a boolean mask for non-zero values
         non_zero_mask = center_filters != 0
         center_filters[~non_zero_mask] = np.nan
-        # Sum over the spatial dimensions
-        center_filters_mean = np.nanmean(center_filters, axis=1)
+        # Sum over the spatial dimension, ie pixels
+        center_filters_sum = np.nansum(center_filters, axis=1)
 
         # victor_1987_JPhysiol: input to model is s(t)), the signed Weber contrast at the centre.
-        mvecs = center_filters_mean  # First approximation: mvecs = center_filters_mean
+        svecs = center_filters_sum  # First approximation: svecs = center_filters_mean
 
-        return mvecs
+        return svecs
 
     def run_cells(
         self,
@@ -1027,8 +1067,16 @@ class WorkingRetina(RetinaMath):
         # Get cropped stimulus, vectorized
         stimulus_cropped = self._get_spatially_cropped_video(cell_indices, reshape=True)
 
+        # Get center masks
+        center_masks = self.get_spatial_filters(cell_indices, get_masks=True)
+
         # Get spatiotemporal filters
         spatial_filters = self.get_spatial_filters(cell_indices)
+
+        # Scale spatial filter centers to sum one for each unit to get veridical max contrast
+        spatial_filters = (
+            spatial_filters / np.sum(spatial_filters * center_masks, axis=1)[:, None]
+        )
 
         if self.gain_control == True and self.gc_type == "parasol":
             # Contrast gain control depends dynamically on center contrast
@@ -1037,7 +1085,7 @@ class WorkingRetina(RetinaMath):
 
             # Get center contrast vector
             svecs = self._create_dynamic_contrast(
-                cell_indices, stimulus_cropped, spatial_filters, stim_len_tp
+                cell_indices, stimulus_cropped, spatial_filters, center_masks
             )
             temporal_signals = np.empty((num_cells, stim_len_tp))
 
@@ -1054,7 +1102,6 @@ class WorkingRetina(RetinaMath):
             generator_potentials = np.sum(
                 spatiotemporal_signals * stimulus_cropped, axis=1
             ).squeeze()
-            # TÄHÄN JÄIT: CG generator_potentials DIMENSIOT, SKAALAUS JA BASELINE
 
         else:
             temporal_filters = self.get_temporal_filters(cell_indices)

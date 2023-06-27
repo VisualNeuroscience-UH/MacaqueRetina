@@ -109,7 +109,7 @@ input_folder = "../in"  # input figs, videos
 Data context for output. 
 """
 
-output_folder = "test_1"
+output_folder = "test_2"
 
 
 """
@@ -202,20 +202,20 @@ my_stimulus_options = {
     "image_width": 240,  # 752 for nature1.avi
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
-    "fps": 90,
-    "duration_seconds": 1.0,  # actual frames = floor(duration_seconds * fps)
-    "baseline_start_seconds": 0.1,  # Total duration is duration + both baselines
-    "baseline_end_seconds": 0.1,
-    "pattern": "temporal_square_pattern",  # Natural video is not supported yet. One of the StimulusPatterns
+    "fps": 180,
+    "duration_seconds": 6.0,  # actual frames = floor(duration_seconds * fps)
+    "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
+    "baseline_end_seconds": 0.5,
+    "pattern": "temporal_sine_pattern",  # Natural video is not supported yet. One of the StimulusPatterns
     "stimulus_form": "rectangular",
     "size_inner": None,  # Applies to annulus only
     "size_outer": None,  # Applies to annulus only
     "stimulus_position": (0, 0),
     "stimulus_size": 1.5,  # 4.6 deg in Lee_1990_JOSA
     "background": 128,
-    "contrast": 0.8,  # Weber constrast
+    "contrast": 0.025,  # Weber constrast
     "mean": 128,
-    "temporal_frequency": 2,
+    "temporal_frequency": 1,
     "spatial_frequency": 2,
     "phase_shift": 0,
     "stimulus_video_name": "testi.mp4",
@@ -369,14 +369,16 @@ if __name__ == "__main__":
     # TODO take raw hdf5 image through cone response to working retina
 
     #################################
+    #################################
     ### Build retina ###
+    #################################
     #################################
 
     """
     Build and test your retina here, one gc type at a time. Temporal hemiretina of macaques.
     """
 
-    # Main retina construction method. This method calls all other methods in the retina construction process.
+    # # Main retina construction method. This method calls all other methods in the retina construction process.
     # PM.construct_retina.build()
 
     # The following visualizations are dependent on the ConstructRetina instance.
@@ -405,26 +407,32 @@ if __name__ == "__main__":
     #     ray_exp_name, this_dep_var, highlight_trial=highlight_trial
     # )
 
-    #################################
+    ###################################
+    ###################################
+    ###         Single Trial        ###
+    ###################################
+    ###################################
+
+    ########################
     ### Create stimulus ###
-    #################################
+    ########################
 
     # options are defined in my_stimulus_options
     # stimulus video will be saved on output_folder in mp4 format (viewing) and hdf5 format (reloading)
     # PM.stimulate.make_stimulus_video()
 
-    # #################################
+    # ###########################################
     # ### Load stimulus to get working retina ###
-    # #################################
+    # ###########################################
 
-    PM.working_retina.load_stimulus()
+    # PM.working_retina.load_stimulus()
 
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
     # ret.load_stimulus(movie)# => METADATA
 
-    #################################
+    ##########################################
     ### Show single ganglion cell response ###
-    #################################
+    ##########################################
 
     # example_gc = 2  # int or 'None'
     # PM.working_retina.convolve_stimulus(example_gc)
@@ -432,13 +440,13 @@ if __name__ == "__main__":
     # # PM.viz.show_spatiotemporal_filter(PM.working_retina)
     # PM.viz.show_convolved_stimulus(PM.working_retina)
 
-    #################################
+    ###########################################
     ### Run multiple trials for single cell ###
-    #################################
+    ###########################################
 
-    PM.working_retina.run_with_my_run_options()
+    # PM.working_retina.run_with_my_run_options()
 
-    PM.viz.show_gc_responses(PM.working_retina)
+    # PM.viz.show_gc_responses(PM.working_retina)
 
     # PM.viz.show_stimulus_with_gcs(
     #     PM.working_retina,
@@ -462,9 +470,9 @@ if __name__ == "__main__":
     # PM.viz.plot_local_michelson_contrast(PM.working_retina, example_gc)
     # plt.show(block=False)
 
-    #################################
+    #####################
     ### Run all cells ###
-    #################################
+    #####################
 
     # PM.working_retina.run_all_cells(spike_generator_model="poisson", save_data=False)
     # PM.viz.show_gc_responses(PM.working_retina)
@@ -472,38 +480,41 @@ if __name__ == "__main__":
     # PM.working_retina.save_spikes_csv(filename='testi_spikes.csv') # => METADATA
     # PM.working_retina.save_structure_csv(filename='testi_structure.csv') # => METADATA
 
-    ################################
-    ### Run Experiment ###
-    ################################
+    ###############################################
+    ###############################################
+    ###     Experiment with multiple trials     ###
+    ###############################################
+    ###############################################
+
     exp_variables = ["temporal_frequency"]  # from my_stimulus_options
     # Define experiment parameters. List lengths must be equal.
-    # experiment_dict = {
-    #     "exp_variables": exp_variables,
-    #     "min_max_values": [[0.5, 32]],  # needs two values for each variable
-    #     "n_steps": [31],
-    #     "logaritmic": [True],
-    # }
+    experiment_dict = {
+        "exp_variables": exp_variables,
+        "min_max_values": [[0.5, 32]],  # needs two values for each variable
+        "n_steps": [31],
+        "logaritmic": [True],
+    }
 
-    # PM.experiment.build_and_run(experiment_dict, n_trials=30, build_without_run=False)
+    PM.experiment.build_and_run(experiment_dict, n_trials=30, build_without_run=False)
 
     ###############################
     ## Analyze Experiment ###
     ###############################
 
-    # my_analysis_options = {
-    #     "exp_variables": exp_variables,
-    #     "t_start_ana": 0.5,
-    #     "t_end_ana": 6.5,
-    # }
+    my_analysis_options = {
+        "exp_variables": exp_variables,
+        "t_start_ana": 0.5,
+        "t_end_ana": 6.5,
+    }
 
-    # PM.ana.analyze_response(my_analysis_options)
+    PM.ana.analyze_response(my_analysis_options)
 
     # ################################
     # ### Visualize Experiment ###
     # ################################
 
     # PM.viz.F1F2_popul_response(exp_variables, xlog=True)
-    # PM.viz.F1F2_unit_response(exp_variables, xlog=True)
+    PM.viz.F1F2_unit_response(exp_variables, xlog=True)
     # PM.viz.fr_response(exp_variables, xlog=True)
     # PM.viz.spike_raster_response(exp_variables, savefigname=None)
 
@@ -516,11 +527,18 @@ if __name__ == "__main__":
     # fysiologiset mekanismit katsaus Demb_2008_JPhysiol ja Beaudoin_2007_JNeurosci
     # spike raster sorting for binary noise voisi auttaa näkemään refractory (tai IF) mallin vaikutusta lähellä saturaatiota; Pillow_2005_JNeurosci
 
+    ###############################
+    ###############################
+    ###     Analog stimulus     ###
+    ###############################
+    ###############################
+
+    # # For current injection, use this method.
+
     ##############################
     ### Create analog stimulus ###
     ##############################
 
-    # # For current injection, use this method.
     # N_tp = 20000
     # dt = 0.1  # ms
 
