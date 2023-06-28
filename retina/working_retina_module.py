@@ -894,58 +894,154 @@ class WorkingRetina(RetinaMath):
         tonic_drive_expanded = np.expand_dims(tonic_drive, axis=1)
         return generator_potential + tonic_drive_expanded
 
+    # def _create_temporal_signal_cg(self, cell_index, tvec, svec, dt):
+    #     """
+    #     Contrast gain control implemented in temporal domain according to Victor_1987_JPhysiol
+    #     """
+
+    #     Tc = 15  # 15  # Time constant for dynamical variable c(t), ms. Victor_1987_JPhysiol
+    #     A = 440
+    #     NLTL = 40.3
+    #     NL = 16  # 30
+    #     tau_L = 1.94  # 1.44  # ms Low-pass fr_cutoff = 1 / (2pi * tau_L) = 110 Hz
+    #     Hs = 0.806
+    #     T0 = 193  # 37.34  # ms High-pass fr_cutoff = 1 / (2pi * T0) = 2.12 Hz
+    #     Chalf = 0.054  # 0.051 # 0.015 dummy for testing
+    #     Mean_fr = 37.37
+    #     D = 3  # ms
+
+    #     dt = dt / b2u.ms  # sampling period in ms
+
+    #     # Convert time vector to appropriate units
+    #     tvec = tvec / b2u.ms
+
+    #     # # Dummy kernel for testing time shift
+    #     # h = np.zeros(len(tvec))
+    #     # h[0] = 1
+
+    #     ### Low pass filter ###
+
+    #     # Calculate the impulse response function. Causes major time shift.
+    #     h = (
+    #         (1 / np.math.factorial(NL))
+    #         * (tvec / tau_L) ** (NL - 1)
+    #         * np.exp(-tvec / tau_L)
+    #     )
+
+    #     # Define the shifted impulse response
+    #     timeshift = len(tvec) // 2
+    #     h_shifted = np.concatenate((np.zeros(timeshift), h[:timeshift]))
+
+    #     # Scale the impulse response to have unit area
+    #     h_shifted = h_shifted / np.sum(h_shifted)
+
+    #     # Compute the convolution with the shifted impulse response
+    #     # contrast is accumulated over time, thus * dt
+    #     x_t_vec = np.convolve(svec, h_shifted, mode="same") * dt
+
+    #     if self.response_type == "off":
+    #         x_t_vec = -x_t_vec
+
+    #     ### High pass stages ###
+    #     c_t = y_t = 0
+    #     Ts_t = T0
+    #     yvec = np.zeros(len(tvec))
+    #     for idx, this_time in enumerate(tvec[1:]):
+    #         y_t = y_t + dt * (
+    #             (-y_t / Ts_t)
+    #             + (x_t_vec[idx] - x_t_vec[idx - 1]) / dt
+    #             + (((1 - Hs) * x_t_vec[idx]) / Ts_t)
+    #         )
+    #         Ts_t = T0 / (1 + c_t / Chalf)
+    #         c_t = c_t + dt * ((np.abs(y_t) - c_t) / Tc)
+
+    #         yvec[idx] = y_t
+
+    #     # time shift rvec by delay D
+    #     D_tp = int(D / dt)
+    #     temporal_signal = np.concatenate((np.zeros(len(tvec)), np.zeros(D_tp)))
+    #     zero_vec = np.zeros(len(tvec))
+    #     temporal_signal[D_tp:] = np.max([A * yvec, zero_vec], axis=0)
+    #     temporal_signal = temporal_signal[: len(tvec)]
+
+    #     return temporal_signal
+
     def _create_temporal_signal_cg(self, cell_index, tvec, svec, dt):
         """
         Contrast gain control implemented in temporal domain according to Victor_1987_JPhysiol
         """
 
-        Tc = 15  # 15  # Time constant for dynamical variable c(t), ms. Victor_1987_JPhysiol
-        A = 440
-        NLTL = 40.3
-        NL = 16  # 30
-        tau_L = 1.94  # 1.44  # ms Low-pass fr_cutoff = 1 / (2pi * tau_L) = 110 Hz
-        Hs = 0.806
-        T0 = 193  # 37.34  # ms High-pass fr_cutoff = 1 / (2pi * T0) = 2.12 Hz
-        Chalf = 0.054  # 0.051 # 0.015 dummy for testing
-        Mean_fr = 37.37
-        D = 3  # ms
-
+        # Convert to appropriate units
         dt = dt / b2u.ms  # sampling period in ms
-
-        # Convert time vector to appropriate units
         tvec = tvec / b2u.ms
 
-        # # Dummy kernel for testing time shift
-        # h = np.zeros(len(tvec))
-        # h[0] = 1
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # move input arguments to GPU
+        tvec = torch.tensor(tvec, device=device)
+        svec = torch.tensor(svec, device=device)
+        dt = torch.tensor(dt, device=device)
+
+        Tc = torch.tensor(
+            15.0, device=device
+        )  # 15  # Time constant for dynamical variable c(t), ms. Victor_1987_JPhysiol
+        A = 440.0
+        NLTL = torch.tensor(40.3, device=device)
+        NL = torch.tensor(16, device=device)  # 30
+        tau_L = torch.tensor(
+            1.94, device=device
+        )  # 1.44  # ms Low-pass fr_cutoff = 1 / (2pi * tau_L) = 110 Hz
+        Hs = torch.tensor(0.806, device=device)
+        T0 = torch.tensor(
+            193.0, device=device
+        )  # 37.34  # ms High-pass fr_cutoff = 1 / (2pi * T0) = 2.12 Hz
+        Chalf = torch.tensor(0.054, device=device)  # 0.051 # 0.015 dummy for testing
+        Mean_fr = torch.tensor(37.37, device=device)
+        D = 3.0  # ms
 
         ### Low pass filter ###
 
         # Calculate the impulse response function. Causes major time shift.
         h = (
-            (1 / np.math.factorial(NL))
+            (1 / torch.math.factorial(NL))
             * (tvec / tau_L) ** (NL - 1)
-            * np.exp(-tvec / tau_L)
+            * torch.exp(-tvec / tau_L)
         )
+
+        # # Dummy kernel for testing
+        # h0 = torch.zeros(len(tvec), device=device)
+        # h0[100] = 1.0
+        # svec = h0.to(dtype=torch.float64)  # TESTING impulse response
 
         # Define the shifted impulse response
         timeshift = len(tvec) // 2
-        h_shifted = np.concatenate((np.zeros(timeshift), h[:timeshift]))
+        h_shifted = torch.cat((torch.zeros(timeshift, device=device), h[:timeshift]))
 
         # Scale the impulse response to have unit area
-        h_shifted = h_shifted / np.sum(h_shifted)
+        h_shifted = h_shifted / torch.sum(h_shifted)
 
         # Compute the convolution with the shifted impulse response
         # contrast is accumulated over time, thus * dt
-        x_t_vec = np.convolve(svec, h_shifted, mode="same") * dt
+        x_t_vec = (
+            torch.nn.functional.conv1d(
+                svec.unsqueeze(0).unsqueeze(0),
+                h_shifted.view(1, 1, -1),
+                padding=timeshift,
+            ).squeeze()
+            * dt
+        )
+
+        x_t_vec = x_t_vec[:-1]
 
         if self.response_type == "off":
             x_t_vec = -x_t_vec
 
         ### High pass stages ###
-        c_t = y_t = 0
+        c_t = y_t = torch.tensor(0.0, device=device)
         Ts_t = T0
-        yvec = np.zeros(len(tvec))
+        yvec = torch.zeros(len(tvec), device=device)
+        Ts_vec = torch.ones(len(tvec), device=device) * T0
+        c_t_vec = torch.zeros(len(tvec), device=device)
         for idx, this_time in enumerate(tvec[1:]):
             y_t = y_t + dt * (
                 (-y_t / Ts_t)
@@ -953,9 +1049,25 @@ class WorkingRetina(RetinaMath):
                 + (((1 - Hs) * x_t_vec[idx]) / Ts_t)
             )
             Ts_t = T0 / (1 + c_t / Chalf)
-            c_t = c_t + dt * ((np.abs(y_t) - c_t) / Tc)
-
+            c_t = c_t + dt * ((torch.abs(y_t) - c_t) / Tc)
             yvec[idx] = y_t
+            Ts_vec[idx] = Ts_t
+            c_t_vec[idx] = c_t
+
+        # End of pytorch loop
+        yvec = yvec.cpu().numpy()
+        tvec = tvec.cpu().numpy()
+        dt = dt.cpu().numpy()
+
+        # Ts_vec = Ts_vec.cpu().numpy()
+        # c_t_vec = c_t_vec.cpu().numpy()
+        # x_t_vec = x_t_vec.cpu().numpy()
+        # plt.plot(tvec, yvec)
+        # plt.plot(tvec, Ts_vec)
+        # plt.plot(tvec, c_t_vec)
+        # plt.plot(tvec, x_t_vec)
+        # legend = ["y", "Ts", "c", "x"]
+        # plt.legend(legend)
 
         # time shift rvec by delay D
         D_tp = int(D / dt)
@@ -966,70 +1078,21 @@ class WorkingRetina(RetinaMath):
 
         return temporal_signal
 
-    def _create_temporal_signal_cg_freq_domain(self, cell_index, tvec, svec, dt):
-        """
-        Contrast gain control implemented in frequency domain according to Victor_1987_JPhysiol
-        and Benardette_1999_VisNeurosci
-        """
-
-        Tc = 15  # 15  # Time constant for dynamical variable c(t), ms. Victor_1987_JPhysiol
-        A = 567
-        NLTL = 40.3
-        NL = 30  # 30
-        tau_L = 1.44  # 1.44  # ms
-        Hs = 1.00
-        T0 = 37.34
-        Chalf = 0.051
-        Mean_fr = 37.37
-        D = 2  # ms
-
-        # base_freqs = np.array([2.71, 5.34, 8.91, 14.85, 18.67, 24.74, 32.40, 41.24])
-        base_freqs = np.linspace(0, 100, 1000)
-
-        Ts = T0 / (1 + (svec / Chalf) ** 2)
-
-        K = (
-            A
-            * np.exp(-1j * base_freqs * D)
-            * (1 - (Hs / (1 + 1j * base_freqs * Ts)))
-            * (1 / (1 + 1j * base_freqs * tau_L) ** NL)
-        )
-        pdb.set_trace()
-
-        dt = dt / b2u.ms  # sampling period in ms
-
-        # Convert time vector to appropriate units
-        tvec = tvec / b2u.ms
-
-        ### Low pass filter ###
-
-        if self.response_type == "off":
-            x_t_vec = -x_t_vec
-
-        return temporal_signal
-
-    def _create_dynamic_contrast(
-        self, cell_indices, stimulus_cropped, spatial_filters, center_masks
-    ):
+    def _create_dynamic_contrast(self, stimulus_cropped, spatial_filters):
         """ """
 
         # Reshape center_masks and spatial_filters to match the dimensions of stimulus_cropped
-        center_masks_reshaped = np.expand_dims(center_masks, axis=2)
         spatial_filters_reshaped = np.expand_dims(spatial_filters, axis=2)
 
         # Multiply the arrays using broadcasting
-        center_filters = (
-            center_masks_reshaped * spatial_filters_reshaped * stimulus_cropped
-        )
+        center_surround_filters = spatial_filters_reshaped * stimulus_cropped
 
-        # Create a boolean mask for non-zero values
-        non_zero_mask = center_filters != 0
-        center_filters[~non_zero_mask] = np.nan
-        # Sum over the spatial dimension, ie pixels
-        center_filters_sum = np.nansum(center_filters, axis=1)
+        center_surround_filters_sum = np.nansum(center_surround_filters, axis=1)
 
         # victor_1987_JPhysiol: input to model is s(t)), the signed Weber contrast at the centre.
-        svecs = center_filters_sum  # First approximation: svecs = center_filters_mean
+        # However, we assume that the surround suppression is early (horizontal cells) and linear,
+        # so we approximate s(t) = RF * stimulus
+        svecs = center_surround_filters_sum
 
         return svecs
 
@@ -1083,7 +1146,7 @@ class WorkingRetina(RetinaMath):
 
         cell_indices = np.atleast_1d(cell_indices)  # make sure it's an array
 
-        # Get cropped stimulus, vectorized
+        # Get cropped stimulus, vectorized. Time to crop:  7.05 seconds
         stimulus_cropped = self._get_spatially_cropped_video(cell_indices, reshape=True)
 
         # Get center masks
@@ -1102,31 +1165,32 @@ class WorkingRetina(RetinaMath):
             num_cells = len(cell_indices)
             tvec = range(stim_len_tp) * video_dt
 
-            # Get center contrast vector
-            svecs = self._create_dynamic_contrast(
-                cell_indices, stimulus_cropped, spatial_filters, center_masks
-            )
+            # Get stimulus contrast vector Time to get stimulus contrast:  4.34 seconds
+            svecs = self._create_dynamic_contrast(stimulus_cropped, spatial_filters)
             temporal_signals = np.empty((num_cells, stim_len_tp))
 
+            # Time to get temporal signals:  19.6 seconds
             for idx in range(num_cells):
                 temporal_signals[idx, :] = self._create_temporal_signal_cg(
                     cell_indices[idx], tvec, svecs[idx, :], video_dt
                 )
 
-            # NOTE jokaiselle solulle, jokaiselle aikapisteelle oma temporaalinen kerneli
-            # for idx in range(num_cells):
-            #     temporal_signals[idx, :] = self._create_temporal_signal_cg_freq_domain(
-            #         cell_indices[idx], tvec, svecs[idx, :], video_dt
-            #     )
+            # # NOTE jokaiselle solulle, jokaiselle aikapisteelle oma temporaalinen kerneli
+            # # for idx in range(num_cells):
+            # #     temporal_signals[idx, :] = self._create_temporal_signal_cg_freq_domain(
+            # #         cell_indices[idx], tvec, svecs[idx, :], video_dt
+            # #     )
+            # # Assuming spatial_filters.shape = (U, N) and temporal_signals.shape = (U, T)
+            # spatiotemporal_signals = (
+            #     spatial_filters[:, :, None] * temporal_signals[:, None, :]
+            # )
 
-            # Assuming spatial_filters.shape = (U, N) and temporal_signals.shape = (U, T)
-            spatiotemporal_signals = (
-                spatial_filters[:, :, None] * temporal_signals[:, None, :]
-            )
-
-            generator_potentials = np.sum(
-                spatiotemporal_signals * stimulus_cropped, axis=1
-            ).squeeze()
+            # # TÄHÄN JÄIT: SCALING
+            # pdb.set_trace()
+            # generator_potentials = np.sum(
+            #     spatiotemporal_signals * stimulus_cropped, axis=1
+            # ).squeeze()
+            exp_generator_potentials = temporal_signals
 
         else:
             temporal_filters = self.get_temporal_filters(cell_indices)
@@ -1141,7 +1205,9 @@ class WorkingRetina(RetinaMath):
                 cell_indices, stimulus_cropped, spatiotemporal_filters
             )
 
-        exp_generator_potentials = self._generator_to_firing_rate(generator_potentials)
+            exp_generator_potentials = self._generator_to_firing_rate(
+                generator_potentials
+            )
 
         # Let's interpolate the rate to video_dt intervals
         tvec_original = np.arange(1, self.stimulus_video.video_n_frames + 1) * video_dt
@@ -1250,7 +1316,7 @@ class WorkingRetina(RetinaMath):
             "all_spiketrains": all_spiketrains,
             "exp_generator_potential": exp_generator_potentials,
             "duration": duration,
-            "generator_potential": generator_potentials,
+            "generator_potential": exp_generator_potentials,
             "video_dt": video_dt,
             "tvec_new": tvec_new,
         }
