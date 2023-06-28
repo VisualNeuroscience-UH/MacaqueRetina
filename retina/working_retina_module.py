@@ -900,6 +900,79 @@ class WorkingRetina(RetinaMath):
         """
 
         Tc = 15  # 15  # Time constant for dynamical variable c(t), ms. Victor_1987_JPhysiol
+        A = 440
+        NLTL = 40.3
+        NL = 16  # 30
+        tau_L = 1.94  # 1.44  # ms Low-pass fr_cutoff = 1 / (2pi * tau_L) = 110 Hz
+        Hs = 0.806
+        T0 = 193  # 37.34  # ms High-pass fr_cutoff = 1 / (2pi * T0) = 2.12 Hz
+        Chalf = 0.054  # 0.051 # 0.015 dummy for testing
+        Mean_fr = 37.37
+        D = 3  # ms
+
+        dt = dt / b2u.ms  # sampling period in ms
+
+        # Convert time vector to appropriate units
+        tvec = tvec / b2u.ms
+
+        # # Dummy kernel for testing time shift
+        # h = np.zeros(len(tvec))
+        # h[0] = 1
+
+        ### Low pass filter ###
+
+        # Calculate the impulse response function. Causes major time shift.
+        h = (
+            (1 / np.math.factorial(NL))
+            * (tvec / tau_L) ** (NL - 1)
+            * np.exp(-tvec / tau_L)
+        )
+
+        # Define the shifted impulse response
+        timeshift = len(tvec) // 2
+        h_shifted = np.concatenate((np.zeros(timeshift), h[:timeshift]))
+
+        # Scale the impulse response to have unit area
+        h_shifted = h_shifted / np.sum(h_shifted)
+
+        # Compute the convolution with the shifted impulse response
+        # contrast is accumulated over time, thus * dt
+        x_t_vec = np.convolve(svec, h_shifted, mode="same") * dt
+
+        if self.response_type == "off":
+            x_t_vec = -x_t_vec
+
+        ### High pass stages ###
+        c_t = y_t = 0
+        Ts_t = T0
+        yvec = np.zeros(len(tvec))
+        for idx, this_time in enumerate(tvec[1:]):
+            y_t = y_t + dt * (
+                (-y_t / Ts_t)
+                + (x_t_vec[idx] - x_t_vec[idx - 1]) / dt
+                + (((1 - Hs) * x_t_vec[idx]) / Ts_t)
+            )
+            Ts_t = T0 / (1 + c_t / Chalf)
+            c_t = c_t + dt * ((np.abs(y_t) - c_t) / Tc)
+
+            yvec[idx] = y_t
+
+        # time shift rvec by delay D
+        D_tp = int(D / dt)
+        temporal_signal = np.concatenate((np.zeros(len(tvec)), np.zeros(D_tp)))
+        zero_vec = np.zeros(len(tvec))
+        temporal_signal[D_tp:] = np.max([A * yvec, zero_vec], axis=0)
+        temporal_signal = temporal_signal[: len(tvec)]
+
+        return temporal_signal
+
+    def _create_temporal_signal_cg_freq_domain(self, cell_index, tvec, svec, dt):
+        """
+        Contrast gain control implemented in frequency domain according to Victor_1987_JPhysiol
+        and Benardette_1999_VisNeurosci
+        """
+
+        Tc = 15  # 15  # Time constant for dynamical variable c(t), ms. Victor_1987_JPhysiol
         A = 567
         NLTL = 40.3
         NL = 30  # 30
@@ -910,6 +983,19 @@ class WorkingRetina(RetinaMath):
         Mean_fr = 37.37
         D = 2  # ms
 
+        # base_freqs = np.array([2.71, 5.34, 8.91, 14.85, 18.67, 24.74, 32.40, 41.24])
+        base_freqs = np.linspace(0, 100, 1000)
+
+        Ts = T0 / (1 + (svec / Chalf) ** 2)
+
+        K = (
+            A
+            * np.exp(-1j * base_freqs * D)
+            * (1 - (Hs / (1 + 1j * base_freqs * Ts)))
+            * (1 / (1 + 1j * base_freqs * tau_L) ** NL)
+        )
+        pdb.set_trace()
+
         dt = dt / b2u.ms  # sampling period in ms
 
         # Convert time vector to appropriate units
@@ -917,75 +1003,8 @@ class WorkingRetina(RetinaMath):
 
         ### Low pass filter ###
 
-        # Calculate the impulse response function
-        h = (
-            (1 / np.math.factorial(NL))
-            * (tvec / tau_L) ** (NL - 1)
-            * np.exp(-tvec / tau_L)
-        )
-
-        # # Dummy kernel for testing time shift
-        # h = np.zeros(len(tvec))
-        # h[0] = 1
-
-        # Define the shifted impulse response
-        timeshift = len(tvec) // 2
-        h_shifted = np.concatenate((np.zeros(timeshift), h[:timeshift]))
-        # Scale the impulse response to have unit area
-        h_shifted = h_shifted / np.sum(h_shifted)
-
-        # Compute the convolution with the shifted impulse response
-        x_t_vec = np.convolve(svec, h_shifted, mode="same")  # * dt
-        # plt.plot(tvec, svec)
-        # plt.plot(tvec, h_shifted)
-        # plt.plot(tvec, x_t_vec)
-        # # Legend
-        # plt.legend(["s(t)", "h(t)", "x(t)"])
-        # plt.show()
-        # pdb.set_trace()
-
         if self.response_type == "off":
             x_t_vec = -x_t_vec
-
-        ### High pass stages ###
-        c_t = y_t = 0
-        Ts_t = T0
-        yvec = np.zeros(len(tvec))
-        Ts_vec = np.ones(len(tvec)) * T0
-        c_t_vec = np.zeros(len(tvec))
-        for idx, this_time in enumerate(tvec[1:]):
-            y_t = y_t + dt * (
-                (-y_t / Ts_t)
-                + (x_t_vec[idx + 1] - x_t_vec[idx]) / dt
-                # + x_t_vec[idx]
-                + (((1 - Hs) * x_t_vec[idx]) / Ts_t)
-            )
-            # print(f"{idx=}, {y_t=:.5f}, {Ts_t=:.5f}, {c_t=:.5f}, {x_t_vec[idx]=:.5f}")
-
-            Ts_t = T0 / (1 + c_t / Chalf)
-            c_t = c_t + dt * ((np.abs(y_t) - c_t) / Tc)
-
-            c_t_vec[idx] = c_t
-            Ts_vec[idx] = Ts_t
-            yvec[idx] = y_t
-        # pdb.set_trace()
-
-        # time shift rvec by delay D
-        D_tp = int(D / dt)
-        temporal_signal = np.concatenate((np.zeros(len(tvec)), np.zeros(D_tp)))
-        zero_vec = np.zeros(len(tvec))
-        temporal_signal[D_tp:] = np.max([A * yvec, zero_vec], axis=0)
-        temporal_signal = temporal_signal[: len(tvec)]
-
-        # plt.plot(tvec, svec)
-        # plt.plot(tvec, x_t_vec)
-        # plt.plot(tvec, c_t_vec)
-        # plt.plot(tvec, yvec)
-        # plt.plot(tvec, Ts_vec)
-        # # Legend
-        # plt.legend(["s(t)", "x(t)", "c(t)", "y(t)", "Ts(t)"])
-        # plt.show()
-        # pdb.set_trace()
 
         return temporal_signal
 
@@ -1093,6 +1112,12 @@ class WorkingRetina(RetinaMath):
                 temporal_signals[idx, :] = self._create_temporal_signal_cg(
                     cell_indices[idx], tvec, svecs[idx, :], video_dt
                 )
+
+            # NOTE jokaiselle solulle, jokaiselle aikapisteelle oma temporaalinen kerneli
+            # for idx in range(num_cells):
+            #     temporal_signals[idx, :] = self._create_temporal_signal_cg_freq_domain(
+            #         cell_indices[idx], tvec, svecs[idx, :], video_dt
+            #     )
 
             # Assuming spatial_filters.shape = (U, N) and temporal_signals.shape = (U, T)
             spatiotemporal_signals = (

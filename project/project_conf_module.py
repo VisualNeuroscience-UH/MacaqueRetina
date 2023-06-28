@@ -8,6 +8,7 @@ import pdb
 import time
 import warnings
 import random
+import math
 
 # sys.path.append(Path(__file__).resolve().parent.parent)
 # Start measuring time
@@ -202,22 +203,22 @@ my_stimulus_options = {
     "image_width": 240,  # 752 for nature1.avi
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
-    "fps": 180,
-    "duration_seconds": 6.0,  # actual frames = floor(duration_seconds * fps)
+    "fps": 2000,
+    "duration_seconds": 2.0,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
-    "pattern": "temporal_sine_pattern",  # Natural video is not supported yet. One of the StimulusPatterns
+    "pattern": "temporal_square_pattern",  # Natural video is not supported yet. One of the StimulusPatterns
     "stimulus_form": "rectangular",
     "size_inner": None,  # Applies to annulus only
     "size_outer": None,  # Applies to annulus only
     "stimulus_position": (0, 0),
     "stimulus_size": 1.5,  # 4.6 deg in Lee_1990_JOSA
     "background": 128,
-    "contrast": 0.025,  # Weber constrast
+    "contrast": 0.8,  # Weber constrast
     "mean": 128,
     "temporal_frequency": 1,
-    "spatial_frequency": 2,
-    "phase_shift": 0,
+    "spatial_frequency": 1,
+    "phase_shift": math.pi,  # radians
     "stimulus_video_name": "testi.mp4",
 }
 
@@ -419,13 +420,13 @@ if __name__ == "__main__":
 
     # options are defined in my_stimulus_options
     # stimulus video will be saved on output_folder in mp4 format (viewing) and hdf5 format (reloading)
-    # PM.stimulate.make_stimulus_video()
+    PM.stimulate.make_stimulus_video()
 
     # ###########################################
     # ### Load stimulus to get working retina ###
     # ###########################################
 
-    # PM.working_retina.load_stimulus()
+    PM.working_retina.load_stimulus()
 
     # movie = vs.NaturalMovie(r'C:\Users\Simo\Laskenta\Stimuli\videoita\naturevids\nature1.avi', fps=100, pix_per_deg=60)# => METADATA
     # ret.load_stimulus(movie)# => METADATA
@@ -444,7 +445,7 @@ if __name__ == "__main__":
     ### Run multiple trials for single cell ###
     ###########################################
 
-    # PM.working_retina.run_with_my_run_options()
+    PM.working_retina.run_with_my_run_options()
 
     # PM.viz.show_gc_responses(PM.working_retina)
 
@@ -486,43 +487,41 @@ if __name__ == "__main__":
     ###############################################
     ###############################################
 
-    exp_variables = ["temporal_frequency"]  # from my_stimulus_options
+    exp_variables = ["contrast"]  # from my_stimulus_options
     # Define experiment parameters. List lengths must be equal.
-    experiment_dict = {
-        "exp_variables": exp_variables,
-        "min_max_values": [[0.5, 32]],  # needs two values for each variable
-        "n_steps": [31],
-        "logaritmic": [True],
-    }
+    # experiment_dict = {
+    #     "exp_variables": exp_variables,
+    #     "min_max_values": [[0.02, 0.98]],  # needs two values for each variable
+    #     "n_steps": [31],
+    #     "logaritmic": [True],
+    # }
 
-    PM.experiment.build_and_run(experiment_dict, n_trials=30, build_without_run=False)
+    # PM.experiment.build_and_run(experiment_dict, n_trials=30, build_without_run=False)
 
     ###############################
     ## Analyze Experiment ###
     ###############################
 
-    my_analysis_options = {
-        "exp_variables": exp_variables,
-        "t_start_ana": 0.5,
-        "t_end_ana": 6.5,
-    }
+    # my_analysis_options = {
+    #     "exp_variables": exp_variables,
+    #     "t_start_ana": 0.5,
+    #     "t_end_ana": 6.5,
+    # }
 
-    PM.ana.analyze_response(my_analysis_options)
+    # PM.ana.analyze_response(my_analysis_options)
 
     # ################################
     # ### Visualize Experiment ###
     # ################################
 
     # PM.viz.F1F2_popul_response(exp_variables, xlog=True)
-    PM.viz.F1F2_unit_response(exp_variables, xlog=True)
+    # PM.viz.F1F2_unit_response(exp_variables, xlog=False)
     # PM.viz.fr_response(exp_variables, xlog=True)
     # PM.viz.spike_raster_response(exp_variables, savefigname=None)
 
     # TÄHÄN JÄIT/STRATEGIA:
-    # Biomedicumissa laske midget functiot,
-    # implementoi OFF kääntö.
     #
-    # Implementoi contrast gain control?, ks
+    # Implementoi contrast gain control
     # parametrit kattavasti ks Benardete_1999_VisNeurosci, ks myös Chichilnisky_2002_JNeurosci jossa vastaava malli kuin meillä.
     # fysiologiset mekanismit katsaus Demb_2008_JPhysiol ja Beaudoin_2007_JNeurosci
     # spike raster sorting for binary noise voisi auttaa näkemään refractory (tai IF) mallin vaikutusta lähellä saturaatiota; Pillow_2005_JNeurosci
