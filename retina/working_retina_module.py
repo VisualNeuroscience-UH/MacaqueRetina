@@ -231,7 +231,7 @@ class WorkingRetina(RetinaMath):
 
         return qmin, qmax, rmin, rmax
 
-    def _create_spatial_filter_FIT(self, cell_index):
+    def _create_spatial_filter_FIT(self, cell_index, get_masks=False):
         """
         Creates the spatial component of the spatiotemporal filter
 
@@ -278,6 +278,12 @@ class WorkingRetina(RetinaMath):
         # max_gain = np.max(np.abs(np.fft.fft2(spatial_kernel)))
         # # 5.3 here just to give exp(5.3) = 200 Hz max firing rate to sinusoids
         # spatial_kernel = (5.3 / max_gain) * spatial_kernel
+
+        if get_masks:
+            # Create center mask
+            center_mask = np.zeros((s, s))
+            center_mask[spatial_kernel > 0] = 1
+            spatial_kernel = center_mask.astype(bool)
 
         return spatial_kernel
 
@@ -358,7 +364,7 @@ class WorkingRetina(RetinaMath):
     def _generator_to_firing_rate(self, cell_indices, generator_potential):
         tonic_drive = self.gc_df.iloc[cell_indices].tonicdrive
         A = 440
-
+        pdb.set_trace()
         # Return the generator potential
         tonic_drive_expanded = np.expand_dims(tonic_drive, axis=1)
 
@@ -772,7 +778,9 @@ class WorkingRetina(RetinaMath):
         spatial_filters = np.zeros((len(cell_indices), s**2))
         for idx, cell_index in enumerate(cell_indices):
             if self.model_type == "FIT":
-                spatial_filter = self._create_spatial_filter_FIT(cell_index)
+                spatial_filter = self._create_spatial_filter_FIT(
+                    cell_index, get_masks=get_masks
+                )
             elif self.model_type == "VAE":
                 spatial_filter = self._create_spatial_filter_VAE(
                     cell_index, get_masks=get_masks
@@ -828,8 +836,8 @@ class WorkingRetina(RetinaMath):
         num_cells = len(cell_indices)
         video_dt = (1 / self.stimulus_video.fps) * b2u.second
 
-        # Move to GPU if possible
-        if "torch" in sys.modules:
+        # Move to GPU if possible. Both give the same result, but PyTorch@GPU is faster.
+        if "torch" in sys.modules:  # 0:  #
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
             # Dimensions are [batch_size, num_channels, time_steps]. We use pixels as channels.
@@ -917,23 +925,22 @@ class WorkingRetina(RetinaMath):
         Tc = torch.tensor(
             15.0, device=device
         )  # 15  # Time constant for dynamical variable c(t), ms. Victor_1987_JPhysiol
-        A = 440.0
-        NLTL = torch.tensor(40.3, device=device)
-        NL = torch.tensor(16, device=device)  # 30
+        A = 499.0
+        NL = torch.tensor(30, device=device)  # 30
         tau_L = torch.tensor(
-            1.94, device=device
+            1.41, device=device
         )  # 1.44  # ms Low-pass fr_cutoff = 1 / (2pi * tau_L) = 110 Hz
-        Hs = torch.tensor(0.806, device=device)
+        Hs = torch.tensor(0.98, device=device)
         T0 = torch.tensor(
-            193.0, device=device
+            54.6, device=device
         )  # 37.34  # ms High-pass fr_cutoff = 1 / (2pi * T0) = 2.12 Hz
-        Chalf = torch.tensor(0.054, device=device)  # 0.051 # 0.015 dummy for testing
+        Chalf = torch.tensor(0.056, device=device)  # 0.051 # 0.015 dummy for testing
         Mean_fr = torch.tensor(37.37, device=device)
-        D = 3.0  # ms
+        D = 2.2  # ms
 
         ### Low pass filter ###
 
-        # Calculate the impulse response function. Causes major time shift.
+        # Calculate the impulse response function.
         h = (
             (1 / torch.math.factorial(NL))
             * (tvec / tau_L) ** (NL - 1)
@@ -1021,9 +1028,11 @@ class WorkingRetina(RetinaMath):
         # Reshape center_masks and spatial_filters to match the dimensions of stimulus_cropped
         spatial_filters_reshaped = np.expand_dims(spatial_filters, axis=2)
 
-        # Multiply the arrays using broadcasting
+        # Multiply the arrays using broadcasting.
+        # This is the stimulus contrast viewed through spatial rf filter
         center_surround_filters = spatial_filters_reshaped * stimulus_cropped
 
+        # Sum over spatial dimension. Collapses the filter into one temporal signal.
         center_surround_filters_sum = np.nansum(center_surround_filters, axis=1)
 
         # victor_1987_JPhysiol: input to model is s(t)), the signed Weber contrast at the centre.
@@ -1096,11 +1105,11 @@ class WorkingRetina(RetinaMath):
         spatial_filters = (
             spatial_filters / np.sum(spatial_filters * center_masks, axis=1)[:, None]
         )
+        tvec = range(stim_len_tp) * video_dt
 
         if self.gain_control == True:
             # Contrast gain control depends dynamically on contrast
             num_cells = len(cell_indices)
-            tvec = range(stim_len_tp) * video_dt
 
             # Get stimulus contrast vector Time to get stimulus contrast:  4.34 seconds
             svecs = self._create_dynamic_contrast(stimulus_cropped, spatial_filters)
@@ -1113,6 +1122,7 @@ class WorkingRetina(RetinaMath):
                 )
 
         else:  # Linear model
+            # Amplitude will be scaled by first (positive) lowpass filter.
             temporal_filters = self.get_temporal_filters(cell_indices)
 
             # Assuming spatial_filters.shape = (U, N) and temporal_filters.shape = (U, T)
@@ -1126,6 +1136,7 @@ class WorkingRetina(RetinaMath):
             )
 
         # Scales to power of 2 of linear impulse firing rates to get veridical firing
+        pdb.set_trace()
         firing_rates = self._generator_to_firing_rate(
             cell_indices, generator_potentials
         )
