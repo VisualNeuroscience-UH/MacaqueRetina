@@ -348,15 +348,23 @@ class WorkingRetina(RetinaMath):
         tvec = np.linspace(0, self.data_filter_duration, self.temporal_filter_len)
         temporal_filter = self.diff_of_lowpass_filters(tvec, *filter_params)
 
-        # Scale the temporal filter so that its maximal gain is 1
-        # TODO - how should you scale the kernel??
-        max_gain = np.max(np.abs(np.fft.fft(temporal_filter)))
-        temporal_filter = (1 / max_gain) * temporal_filter
+        # Scale to sum of 1 for the low-pass filters. This is comparable to gain control model.
+        scaling_params = self.gc_df.iloc[cell_index][["n", "p1", "tau1"]]
+        scaling_filter = self.lowpass(tvec, *scaling_params)
+        temporal_filter = temporal_filter / np.sum(scaling_filter)
 
         return temporal_filter
 
-    def _generator_to_firing_rate(self, generator_potential):
-        firing_rate = np.power(generator_potential, 2)
+    def _generator_to_firing_rate(self, cell_indices, generator_potential):
+        tonic_drive = self.gc_df.iloc[cell_indices].tonicdrive
+        A = 440
+
+        # Return the generator potential
+        tonic_drive_expanded = np.expand_dims(tonic_drive, axis=1)
+
+        generator_potential_scaled = A * (generator_potential) + tonic_drive_expanded
+
+        firing_rate = np.power(generator_potential_scaled, 2)
 
         return firing_rate
 
@@ -777,7 +785,7 @@ class WorkingRetina(RetinaMath):
         return spatial_filters
 
     def convolve_stimulus_batched(
-        self, cell_index, stimulus_cropped, spatiotemporal_filter
+        self, cell_indices, stimulus_cropped, spatiotemporal_filter
     ):
         """
         Convolves the stimulus with the spatiotemporal filter for a given set of cells.
@@ -789,7 +797,7 @@ class WorkingRetina(RetinaMath):
 
         Parameters
         ----------
-        cell_index : array_like
+        cell_indices : array_like
             Indices of the cells to convolve the stimulus with.
         stimulus_cropped : ndarray
             Cropped stimulus to be convolved with the spatiotemporal filter, shape should be
@@ -811,13 +819,13 @@ class WorkingRetina(RetinaMath):
 
         Notes
         -----
-        The `num_cells` should be the same for `cell_index`, `stimulus_cropped`, and `spatiotemporal_filter`.
+        The `num_cells` should be the same for `cell_indices`, `stimulus_cropped`, and `spatiotemporal_filter`.
         The `num_pixels` and `time_steps` should be the same for `stimulus_cropped` and `spatiotemporal_filter`.
         """
 
         stim_len_tp = stimulus_cropped.shape[-1]
         # stimulus_size_pix = stimulus_cropped.shape[1]
-        num_cells = len(cell_index)
+        num_cells = len(cell_indices)
         video_dt = (1 / self.stimulus_video.fps) * b2u.second
 
         # Move to GPU if possible
@@ -888,85 +896,9 @@ class WorkingRetina(RetinaMath):
             stim_len_tp == generator_potential_duration_tp
         ), "Duration mismatch, check convolution operation, aborting..."
 
-        tonic_drive = self.gc_df.iloc[cell_index].tonicdrive
+        return generator_potential
 
-        # Return the generator potential
-        tonic_drive_expanded = np.expand_dims(tonic_drive, axis=1)
-        return generator_potential + tonic_drive_expanded
-
-    # def _create_temporal_signal_cg(self, cell_index, tvec, svec, dt):
-    #     """
-    #     Contrast gain control implemented in temporal domain according to Victor_1987_JPhysiol
-    #     """
-
-    #     Tc = 15  # 15  # Time constant for dynamical variable c(t), ms. Victor_1987_JPhysiol
-    #     A = 440
-    #     NLTL = 40.3
-    #     NL = 16  # 30
-    #     tau_L = 1.94  # 1.44  # ms Low-pass fr_cutoff = 1 / (2pi * tau_L) = 110 Hz
-    #     Hs = 0.806
-    #     T0 = 193  # 37.34  # ms High-pass fr_cutoff = 1 / (2pi * T0) = 2.12 Hz
-    #     Chalf = 0.054  # 0.051 # 0.015 dummy for testing
-    #     Mean_fr = 37.37
-    #     D = 3  # ms
-
-    #     dt = dt / b2u.ms  # sampling period in ms
-
-    #     # Convert time vector to appropriate units
-    #     tvec = tvec / b2u.ms
-
-    #     # # Dummy kernel for testing time shift
-    #     # h = np.zeros(len(tvec))
-    #     # h[0] = 1
-
-    #     ### Low pass filter ###
-
-    #     # Calculate the impulse response function. Causes major time shift.
-    #     h = (
-    #         (1 / np.math.factorial(NL))
-    #         * (tvec / tau_L) ** (NL - 1)
-    #         * np.exp(-tvec / tau_L)
-    #     )
-
-    #     # Define the shifted impulse response
-    #     timeshift = len(tvec) // 2
-    #     h_shifted = np.concatenate((np.zeros(timeshift), h[:timeshift]))
-
-    #     # Scale the impulse response to have unit area
-    #     h_shifted = h_shifted / np.sum(h_shifted)
-
-    #     # Compute the convolution with the shifted impulse response
-    #     # contrast is accumulated over time, thus * dt
-    #     x_t_vec = np.convolve(svec, h_shifted, mode="same") * dt
-
-    #     if self.response_type == "off":
-    #         x_t_vec = -x_t_vec
-
-    #     ### High pass stages ###
-    #     c_t = y_t = 0
-    #     Ts_t = T0
-    #     yvec = np.zeros(len(tvec))
-    #     for idx, this_time in enumerate(tvec[1:]):
-    #         y_t = y_t + dt * (
-    #             (-y_t / Ts_t)
-    #             + (x_t_vec[idx] - x_t_vec[idx - 1]) / dt
-    #             + (((1 - Hs) * x_t_vec[idx]) / Ts_t)
-    #         )
-    #         Ts_t = T0 / (1 + c_t / Chalf)
-    #         c_t = c_t + dt * ((np.abs(y_t) - c_t) / Tc)
-
-    #         yvec[idx] = y_t
-
-    #     # time shift rvec by delay D
-    #     D_tp = int(D / dt)
-    #     temporal_signal = np.concatenate((np.zeros(len(tvec)), np.zeros(D_tp)))
-    #     zero_vec = np.zeros(len(tvec))
-    #     temporal_signal[D_tp:] = np.max([A * yvec, zero_vec], axis=0)
-    #     temporal_signal = temporal_signal[: len(tvec)]
-
-    #     return temporal_signal
-
-    def _create_temporal_signal_cg(self, cell_index, tvec, svec, dt):
+    def _create_temporal_signal_cg(self, cell_indices, tvec, svec, dt):
         """
         Contrast gain control implemented in temporal domain according to Victor_1987_JPhysiol
         """
@@ -1008,30 +940,36 @@ class WorkingRetina(RetinaMath):
             * torch.exp(-tvec / tau_L)
         )
 
-        # # Dummy kernel for testing
+        # # Dummy kernel for testing impulse response
         # h0 = torch.zeros(len(tvec), device=device)
         # h0[100] = 1.0
-        # svec = h0.to(dtype=torch.float64)  # TESTING impulse response
+        # svec = h0.to(dtype=torch.float64)
 
-        # Define the shifted impulse response
-        timeshift = len(tvec) // 2
-        h_shifted = torch.cat((torch.zeros(timeshift, device=device), h[:timeshift]))
+        # Convolving two signals involves "flipping" one signal and then sliding it
+        # across the other signal. PyTorch, however, does not flip the kernel, so we
+        # need to do it manually.
+        h_flipped = torch.flip(h, dims=[0])
 
         # Scale the impulse response to have unit area
-        h_shifted = h_shifted / torch.sum(h_shifted)
+        h_flipped = h_flipped / torch.sum(h_flipped)
 
-        # Compute the convolution with the shifted impulse response
-        # contrast is accumulated over time, thus * dt
+        # Calculate padding size
+        padding_size = len(tvec) - 1
+
+        # Pad the stimulus
+        svec_padded = torch.nn.functional.pad(
+            svec.unsqueeze(0).unsqueeze(0), (padding_size, 0), mode="replicate"
+        )
+
+        # Convolve the stimulus with the flipped kernel
         x_t_vec = (
             torch.nn.functional.conv1d(
-                svec.unsqueeze(0).unsqueeze(0),
-                h_shifted.view(1, 1, -1),
-                padding=timeshift,
+                svec_padded,
+                h_flipped.view(1, 1, -1),
+                padding=0,
             ).squeeze()
             * dt
         )
-
-        x_t_vec = x_t_vec[:-1]
 
         if self.response_type == "off":
             x_t_vec = -x_t_vec
@@ -1072,8 +1010,7 @@ class WorkingRetina(RetinaMath):
         # time shift rvec by delay D
         D_tp = int(D / dt)
         temporal_signal = np.concatenate((np.zeros(len(tvec)), np.zeros(D_tp)))
-        zero_vec = np.zeros(len(tvec))
-        temporal_signal[D_tp:] = np.max([A * yvec, zero_vec], axis=0)
+        temporal_signal[D_tp:] = yvec
         temporal_signal = temporal_signal[: len(tvec)]
 
         return temporal_signal
@@ -1160,39 +1097,22 @@ class WorkingRetina(RetinaMath):
             spatial_filters / np.sum(spatial_filters * center_masks, axis=1)[:, None]
         )
 
-        if self.gain_control == True and self.gc_type == "parasol":
-            # Contrast gain control depends dynamically on center contrast
+        if self.gain_control == True:
+            # Contrast gain control depends dynamically on contrast
             num_cells = len(cell_indices)
             tvec = range(stim_len_tp) * video_dt
 
             # Get stimulus contrast vector Time to get stimulus contrast:  4.34 seconds
             svecs = self._create_dynamic_contrast(stimulus_cropped, spatial_filters)
-            temporal_signals = np.empty((num_cells, stim_len_tp))
+            generator_potentials = np.empty((num_cells, stim_len_tp))
 
-            # Time to get temporal signals:  19.6 seconds
+            # Time to get generator potentials:  19.6 seconds
             for idx in range(num_cells):
-                temporal_signals[idx, :] = self._create_temporal_signal_cg(
-                    cell_indices[idx], tvec, svecs[idx, :], video_dt
+                generator_potentials[idx, :] = self._create_temporal_signal_cg(
+                    cell_indices, tvec, svecs[idx, :], video_dt
                 )
 
-            # # NOTE jokaiselle solulle, jokaiselle aikapisteelle oma temporaalinen kerneli
-            # # for idx in range(num_cells):
-            # #     temporal_signals[idx, :] = self._create_temporal_signal_cg_freq_domain(
-            # #         cell_indices[idx], tvec, svecs[idx, :], video_dt
-            # #     )
-            # # Assuming spatial_filters.shape = (U, N) and temporal_signals.shape = (U, T)
-            # spatiotemporal_signals = (
-            #     spatial_filters[:, :, None] * temporal_signals[:, None, :]
-            # )
-
-            # # TÄHÄN JÄIT: SCALING
-            # pdb.set_trace()
-            # generator_potentials = np.sum(
-            #     spatiotemporal_signals * stimulus_cropped, axis=1
-            # ).squeeze()
-            exp_generator_potentials = temporal_signals
-
-        else:
+        else:  # Linear model
             temporal_filters = self.get_temporal_filters(cell_indices)
 
             # Assuming spatial_filters.shape = (U, N) and temporal_filters.shape = (U, T)
@@ -1205,15 +1125,17 @@ class WorkingRetina(RetinaMath):
                 cell_indices, stimulus_cropped, spatiotemporal_filters
             )
 
-            exp_generator_potentials = self._generator_to_firing_rate(
-                generator_potentials
-            )
+        # Scales to power of 2 of linear impulse firing rates to get veridical firing
+        firing_rates = self._generator_to_firing_rate(
+            cell_indices, generator_potentials
+        )
+        pdb.set_trace()
 
         # Let's interpolate the rate to video_dt intervals
         tvec_original = np.arange(1, self.stimulus_video.video_n_frames + 1) * video_dt
         rates_func = interp1d(
             tvec_original,
-            exp_generator_potentials,
+            firing_rates,
             axis=1,
             fill_value=0,
             bounds_error=False,
@@ -1314,9 +1236,9 @@ class WorkingRetina(RetinaMath):
             "n_trials": n_trials,
             "n_cells": n_cells,
             "all_spiketrains": all_spiketrains,
-            "exp_generator_potential": exp_generator_potentials,
+            "exp_generator_potential": firing_rates,
             "duration": duration,
-            "generator_potential": exp_generator_potentials,
+            "generator_potential": firing_rates,
             "video_dt": video_dt,
             "tvec_new": tvec_new,
         }
