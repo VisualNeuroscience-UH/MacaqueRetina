@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from scipy.signal import convolve
 from scipy.interpolate import interp1d
-import scipy.optimize as opt
+from scipy.optimize import fsolve
 from skimage.transform import resize
 import torch
 
@@ -362,17 +362,37 @@ class WorkingRetina(RetinaMath):
         return temporal_filter
 
     def _generator_to_firing_rate(self, cell_indices, generator_potential):
-        tonic_drive = self.gc_df.iloc[cell_indices].tonicdrive
-        A = 440
-        pdb.set_trace()
-        # Return the generator potential
-        tonic_drive_expanded = np.expand_dims(tonic_drive, axis=1)
+        """ """
+        A = 440  # TODO take this from the Benardette data
+        # tonic_drive = 3.0
 
-        generator_potential_scaled = A * (generator_potential) + tonic_drive_expanded
+        def logistic_function(x, max_fr=1, k=1, x0=1):
+            """
+            Logistic Function
 
-        firing_rate = np.power(generator_potential_scaled, 2)
+            :param x: input value
+            :param max_fr: the maximum value of the curve
+            :param k: steepness of the curve
+            :param x0: the sigmoid's midpoint
+            :return: output value
+            """
+            return max_fr / (1 + np.exp(-k * (x - x0)))
 
-        return firing_rate
+        def equation(k, fr, td):
+            return logistic_function(0, max_fr=fr, k=k, x0=1) - td
+
+        tonic_drives = self.gc_df.iloc[cell_indices].tonicdrive
+        firing_rates = np.zeros((len(cell_indices), generator_potential.shape[1]))
+
+        for idx, cell_idx in enumerate(cell_indices):
+            tonic_drive = tonic_drives.iloc[idx]
+            # Find the value of k that makes the logistic function output tonic_drive at x=0
+            k = fsolve(equation, 1, args=(A, tonic_drive))[0]
+            firing_rates[idx] = logistic_function(
+                generator_potential[0, :], max_fr=A, k=k, x0=1
+            )
+
+        return firing_rates
 
     def _save_for_cxsystem(
         self, spike_mons, n_units, filename=None, analog_signal=None, dt=None
@@ -1135,8 +1155,10 @@ class WorkingRetina(RetinaMath):
                 cell_indices, stimulus_cropped, spatiotemporal_filters
             )
 
+            # Experimental scaling to match approximately contrast gain model values
+            generator_potentials = generator_potentials * 8.0
+
         # Scales to power of 2 of linear impulse firing rates to get veridical firing
-        pdb.set_trace()
         firing_rates = self._generator_to_firing_rate(
             cell_indices, generator_potentials
         )
