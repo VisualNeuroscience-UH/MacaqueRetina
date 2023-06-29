@@ -16,7 +16,6 @@ class ProjectUtilities:
     """
 
     def round_to_n_significant(self, value_in, significant_digits=3):
-
         boolean_test = value_in != 0
 
         if boolean_test and not np.isnan(value_in):
@@ -112,7 +111,6 @@ class ProjectUtilities:
             print(df)
 
     def end2idx(self, t_idx_end, n_samples):
-
         if t_idx_end is None:
             t_idx_end = n_samples
         elif t_idx_end < 0:
@@ -175,13 +173,11 @@ class ProjectUtilities:
         print(f"\nObject size is {sys.getsizeof(obj)} bytes")
 
     def get_added_attributes(self, obj1, obj2):
-
         XOR_attributes = set(dir(obj1)).symmetric_difference(dir(obj2))
         unique_attributes_list = [n for n in XOR_attributes if not n.startswith("_")]
         return unique_attributes_list
 
     def pp_attribute_types(self, obj, attribute_list=[]):
-
         if not attribute_list:
             attribute_list = dir(obj)
 
@@ -189,18 +185,18 @@ class ProjectUtilities:
             attribute_type = eval(f"type(obj.{this_attribute})")
             print(f"{this_attribute}: {attribute_type}")
 
-    def countlines(self, start, lines=0, header=True, begin_start=None):
+    def countlines(self, startpath, lines=0, header=True, begin_start=None):
         # Counts lines in folder .py files.
         # From https://stackoverflow.com/questions/38543709/count-lines-of-code-in-directory-using-python
 
-        start = Path(start)
+        startpath = Path(startpath)
 
         if header:
             print("{:>10} |{:>10} | {:<20}".format("ADDED", "TOTAL", "FILE"))
             print("{:->11}|{:->11}|{:->20}".format("", "", ""))
 
-        for thing in Path.iterdir(start):
-            thing = Path.joinpath(start, thing)
+        for thing in Path.iterdir(startpath):
+            thing = Path.joinpath(startpath, thing)
             if thing.is_file():
                 if str(thing).endswith(".py"):
                     with open(thing, "r") as f:
@@ -213,7 +209,9 @@ class ProjectUtilities:
                                 str(begin_start), ""
                             )
                         else:
-                            reldir_of_thing = "." + str(thing).replace(str(start), "")
+                            reldir_of_thing = "." + str(thing).replace(
+                                str(startpath), ""
+                            )
 
                         print(
                             "{:>10} |{:>10} | {:<20}".format(
@@ -221,9 +219,11 @@ class ProjectUtilities:
                             )
                         )
 
-        for thing in Path.iterdir(start):
-            thing = Path.joinpath(start, thing)
+        for thing in Path.iterdir(startpath):
+            thing = Path.joinpath(startpath, thing)
             if Path.is_dir(thing):
-                lines = self.countlines(thing, lines, header=False, begin_start=start)
+                lines = self.countlines(
+                    thing, lines, header=False, begin_start=startpath
+                )
 
         return lines
