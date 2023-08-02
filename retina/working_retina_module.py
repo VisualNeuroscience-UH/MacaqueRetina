@@ -1162,7 +1162,6 @@ class WorkingRetina(RetinaMath):
         firing_rates = self._generator_to_firing_rate(
             cell_indices, generator_potentials
         )
-        pdb.set_trace()
 
         # Let's interpolate the rate to video_dt intervals
         tvec_original = np.arange(1, self.stimulus_video.video_n_frames + 1) * video_dt

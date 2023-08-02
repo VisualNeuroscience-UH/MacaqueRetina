@@ -529,8 +529,8 @@ if __name__ == "__main__":
 
     # TÄHÄN JÄIT/STRATEGIA:
     #
-    # surround contrast estimate gc malliin
     # Luo Benardete parametrien rakennus Construct moduliin ja ota A käyttöön working retina _generator_to_firing_rate metodissa
+    # surround contrast estimate gc malliin
     # Comp efficiency
 
     ###############################
