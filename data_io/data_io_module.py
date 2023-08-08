@@ -227,6 +227,8 @@ class DataIO(DataIOBase):
             data = cv2.VideoCapture(str(data_fullpath_filename))
         elif "npy" in filename_extension:
             data = np.load(data_fullpath_filename)
+        elif filename_extension in ["h5", "hdf5"]:
+            data = self.load_dict_from_hdf5(data_fullpath_filename)
         else:
             raise TypeError("U r trying to input unknown filetype, aborting...")
 
