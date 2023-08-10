@@ -65,7 +65,8 @@ model_type FIT : Fit ellipse to center and surround
 model_type : VAE : Variational autoencoder. The model reconstructs the full receptive field and generates new samples from the latent space.
     
 Contrast gain control (CGC) is implemented according to Victor_1987_JPhysiol using numerical integration in discretized temporal domain.
-The unit parameters are drwan from Benardete_1999_VisNeurosci for parasol cells and Benardete_1999_JPhysiol for midget cells.
+The unit parameters are drawn from Benardete_1999_VisNeurosci for parasol cells and Benardete_1997_VisNeurosci_a for midget cells.
+We are sampling from Benardete Kaplan data assuming triangular distribution of the reported tables of statistics (original data points not shown).
 For a review of physiological mechanisms, see Demb_2008_JPhysiol and Beaudoin_2007_JNeurosci
 """
 
@@ -310,6 +311,8 @@ literature_data_folder = git_repo_root.joinpath(r"retina/literature_data")
 
 # Define digitized literature data files for gc density and dendritic diameters.
 # Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
+# Define literature data files for linear temporal models.
+# Data from Benardete_1999_VisNeurosci and Benardete_1997_VisNeurosci
 
 gc_density_file = literature_data_folder / "Perry_1984_Neurosci_GCdensity_c.mat"
 if my_retina["gc_type"] == "parasol":
@@ -319,12 +322,18 @@ if my_retina["gc_type"] == "parasol":
     dendr_diam2_file = (
         literature_data_folder / "Watanabe_1989_JCompNeurol_GCDendrDiam_parasol_c.mat"
     )
+    temporal_BK_model_file = (
+        literature_data_folder / "Benardete_1999_VisNeurosci_parasol.csv"
+    )
 elif my_retina["gc_type"] == "midget":
     dendr_diam1_file = (
         literature_data_folder / "Perry_1984_Neurosci_MidgetDendrDiam_c.mat"
     )
     dendr_diam2_file = (
         literature_data_folder / "Watanabe_1989_JCompNeurol_GCDendrDiam_midget_c.mat"
+    )
+    temporal_BK_model_file = (
+        literature_data_folder / "Benardete_1997_VisNeurosci_midget.csv"
     )
 
 
@@ -359,6 +368,7 @@ if __name__ == "__main__":
         dendr_diam1_file=dendr_diam1_file,
         dendr_diam2_file=dendr_diam2_file,
         gc_density_file=gc_density_file,
+        temporal_BK_model_file=temporal_BK_model_file,
         apricot_metadata=apricot_metadata,
         numpy_seed=numpy_seed,
     )
@@ -388,7 +398,7 @@ if __name__ == "__main__":
     """
 
     # # Main retina construction method. This method calls all other methods in the retina construction process.
-    # PM.construct_retina.build()
+    PM.construct_retina.build()
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # This is why they are called via the construct_retina attribute. The instance
