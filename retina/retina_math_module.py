@@ -214,6 +214,78 @@ class RetinaMath:
         y = p * (t / tau) ** (n) * np.exp(-n * (t / tau - 1))
         return y
 
+    def get_triangular_parameters(self, minimum, maximum, median, mean, sd, sem):
+        """
+        Estimate the parameters for a triangular distribution based on the provided
+        statistics: minimum, maximum, median, mean, and standard deviation.
+
+        Parameters
+        ----------
+        minimum : float
+            The smallest value of the data.
+        maximum : float
+            The largest value of the data.
+        median : float
+            The median of the data.
+        mean : float
+            The mean of the data.
+        sd : float
+            The standard deviation of the data.
+
+        Returns
+        -------
+        c : float
+            The shape parameter of the triangular distribution, representing the mode.
+        loc : float
+            The location parameter, equivalent to the minimum.
+        scale : float
+            The scale parameter, equivalent to the difference between the maximum and minimum.
+
+        Raises
+        ------
+        ValueError:
+            If the provided mean and standard deviation don't closely match the expected
+            values for the triangular distribution.
+
+        Notes
+        -----
+        The returned parameters can be used with scipy's triang function to represent
+        a triangular distribution and perform further sampling or analysis.
+        """
+        # The location is simply the minimum.
+        loc = minimum
+
+        # The scale is the difference between maximum and minimum.
+        scale = maximum - minimum
+
+        # Estimating c (shape parameter) based on the position of median within the range.
+        c = (median - minimum) / scale
+
+        # Validate the given mean and SD against expected values for triangular distribution
+        expected_mean = (minimum + maximum + median) / 3
+        expected_sd = np.sqrt(
+            (
+                minimum**2
+                + maximum**2
+                + median**2
+                - minimum * maximum
+                - minimum * median
+                - maximum * median
+            )
+            / 18
+        )
+
+        tolerance = 3 * sem
+        if not (
+            np.abs(expected_mean - mean) < tolerance
+            and np.abs(expected_sd - sd) < tolerance
+        ):
+            raise ValueError(
+                f"The provided mean ({mean}) and SD ({sd}) don't match the expected values for a triangular distribution with the given min, max, and median. Expected mean: {expected_mean}, Expected SD: {expected_sd}"
+            )
+
+        return c, loc, scale
+
     # Fit & RetinaVAE method
 
     def flip_negative_spatial_rf(self, spatial_rf_unflipped):

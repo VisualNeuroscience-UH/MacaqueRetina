@@ -260,7 +260,7 @@ class ConstructRetina(RetinaMath):
         n_cells : int
             The number of cells to generate samples for.
         distribution : str
-            The distribution to sample from. Supported distributions: "gamma", "vonmises", "skewnorm".
+            The distribution to sample from. Supported distributions: "gamma", "vonmises", "skewnorm", "triang".
 
         Returns
         -------
@@ -276,19 +276,28 @@ class ConstructRetina(RetinaMath):
             "gamma",
             "vonmises",
             "skewnorm",
-        ], "Distribution not supported"
+            "triang",
+        ], "Distribution not supported, aborting..."
 
+        # Waiting times between events are relevant for gamma distribution
         if distribution == "gamma":
             distribution_parameters = stats.gamma.rvs(
                 a=shape, loc=loc, scale=scale, size=n_cells, random_state=None
             )  # random_state is the seed
+        # Continuous probability distribution on the circle
         elif distribution == "vonmises":
             distribution_parameters = stats.vonmises.rvs(
                 kappa=shape, loc=loc, scale=scale, size=n_cells, random_state=None
             )
+        # Skewed normal distribution
         elif distribution == "skewnorm":
             distribution_parameters = stats.skewnorm.rvs(
                 a=shape, loc=loc, scale=scale, size=n_cells, random_state=None
+            )
+        # Triangular distribution when min max mean median and sd is available in literature
+        elif distribution == "triang":
+            distribution_parameters = stats.triang.rvs(
+                c=shape, loc=loc, scale=scale, size=n_cells, random_state=None
             )
 
         return distribution_parameters
@@ -782,10 +791,105 @@ class ConstructRetina(RetinaMath):
         # Pass the GC object to self, because the Viz class is not inherited
         self.gc_density_func_params = gc_density_func_params
 
-    def _create_temporal_receptive_fields(self):
+    def _create_fixed_temporal_rfs(self):
         n_cells = len(self.gc_df)
         temporal_df = self.exp_stat_df[self.exp_stat_df["domain"] == "temporal"]
         for param_name, row in temporal_df.iterrows():
+            shape, loc, scale, distribution, _ = row
+            self.gc_df[param_name] = self._get_random_samples(
+                shape, loc, scale, n_cells, distribution
+            )
+
+    def _read_temporal_statistics_benardete_kaplan(self):
+        """
+        Fit temporal statistics of the temporal parameters using the triangular distribution.
+        Data from Benardete & Kaplan Visual Neuroscience 16 (1999) 355-368 (parasol cells), and
+        Benardete & Kaplan Visual Neuroscience 14 (1997) 169-185 (midget cells).
+
+        Parameters
+        ----------
+        good_idx : ndarray
+            Boolean index array indicating which rows of `self.all_data_fits_df` to use for fitting.
+
+        Returns
+        -------
+        temporal_exp_stat_df : pd.DataFrame
+            A DataFrame containing the temporal statistics of the temporal filter parameters, including the shape, loc,
+            and scale parameters of the fitted gamma distribution, as well as the name of the distribution and the domain.
+
+        temp_stat_to_viz : dict
+            A dictionary containing information needed for visualization, including the temporal filter parameters, the
+            fitted distribution parameters, the super title of the plot, `self.gc_type`, `self.response_type`, the
+            `self.all_data_fits_df` DataFrame, and the `good_idx` Boolean index array.
+        """
+
+        temporal_model_parameters = [
+            "A",
+            "NLTL",
+            "NL",
+            "TL",
+            "HS",
+            "T0",
+            "Chalf",
+            "TS",
+            "D",
+            "deltaNLTL",
+        ]
+        cell_type = self.gc_type
+        response_type = self.response_type.upper()
+
+        distrib_params = np.zeros((len(temporal_model_parameters), 3))
+
+        temp_params_df = pd.read_csv(self.context.temporal_BK_model_file)
+
+        for i, param_name in enumerate(temporal_model_parameters):
+            condition = (temp_params_df["Parameter"] == param_name) & (
+                temp_params_df["Type"] == response_type
+            )
+            # param_array = np.array(self.all_data_fits_df.iloc[good_idx][param_name])
+            param_df = temp_params_df[condition].loc[
+                :, ["Minimum", "Maximum", "Median", "Mean", "SD", "SEM"]
+            ]
+
+            if param_df.empty:
+                print(
+                    f"INFO: No literature value for parameter {param_name} for {cell_type} cells."
+                )
+                continue
+
+            minimum, maximum, median, mean, sd, sem = param_df.values[0]
+
+            c, loc, scale = self.get_triangular_parameters(
+                minimum, maximum, median, mean, sd, sem
+            )
+            distrib_params[i, :] = [c, loc, scale]
+
+        temporal_exp_stat_df = pd.DataFrame(
+            distrib_params,
+            index=temporal_model_parameters,
+            columns=["shape", "loc", "scale"],
+        )
+        temporal_exp_stat_df["distribution"] = "triang"
+        temporal_exp_stat_df["domain"] = "temporal_BK"
+        all_data_fits_df = pd.concat([self.exp_stat_df, temporal_exp_stat_df], axis=0)
+
+        temp_stat_to_viz = {
+            "temporal_model_parameters": temporal_model_parameters,
+            "distrib_params": distrib_params,
+            "suptitle": self.gc_type + " " + self.response_type,
+            "all_data_fits_df": all_data_fits_df,
+        }
+        self.exp_stat_df = all_data_fits_df
+        self.exp_temp_BK_model_to_viz = temp_stat_to_viz
+
+        return temporal_exp_stat_df
+
+    def _create_dynamic_temporal_rfs(self):
+        n_cells = len(self.gc_df)
+
+        temporal_bk_stat_df = self._read_temporal_statistics_benardete_kaplan()
+
+        for param_name, row in temporal_bk_stat_df.iterrows():
             shape, loc, scale, distribution, _ = row
             self.gc_df[param_name] = self._get_random_samples(
                 shape, loc, scale, n_cells, distribution
@@ -1444,20 +1548,9 @@ class ConstructRetina(RetinaMath):
 
         return img_processed, img_raw, gc_vae_df
 
-    def build(self):
-        """
-        Builds the receptive field mosaic. This is the main method to call.
-        """
-
-        if self.initialized is False:
-            self._initialize()
-
-        # -- First, place the ganglion cell midpoints (units mm)
-        # Run GC density fit to data, get func_params. Data from Perry_1984_Neurosci
-        gc_density_func_params = self._fit_gc_density_data()
-
-        # Place ganglion cells to desired retina.
-        self._place_gc_units(gc_density_func_params)
+    def _create_spatial_rfs(self):
+        ##########################################################
+        ### Generation of spatial receptive fields starts here ###
 
         # Get fit parameters for dendritic field diameter (um) with respect to eccentricity (mm).
         # Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
@@ -1471,7 +1564,7 @@ class ConstructRetina(RetinaMath):
         # data_ecc_mm = self._get_ecc_from_dd(dd_ecc_params_full, dd_regr_model, dd)
         # data_ecc_deg = data_ecc_mm * self.deg_per_mm  # 38.4 deg
 
-        # -- Second, endow cells with spatial receptive fields (units mm)
+        # endow cells with spatial elliptical receptive fields (units mm)
         if self.rf_coverage_adjusted_to_1 == True:
             # Assumes that the dendritic field diameter is proportional to the coverage
             self._create_spatial_rfs_coverage()
@@ -1504,7 +1597,7 @@ class ConstructRetina(RetinaMath):
                 save_tuned_models=True,
             )
 
-            # -- Second, endow cells with spatial receptive fields using the generative variational autoencoder model
+            # endow cells with spatial receptive fields using the generative variational autoencoder model
             nsamples = len(self.gc_df)
             img_processed, img_raw, self.gc_vae_df = self._get_rfs_from_vae(nsamples)
 
@@ -1573,6 +1666,7 @@ class ConstructRetina(RetinaMath):
                 img_ret_adjusted = np.zeros_like(img_ret)
                 img_rfs_final = img_rfs
 
+            # Set self attributes for later visualization
             self.gen_rfs_to_viz = {
                 "img_rf": img_rfs,
                 "img_rf_mask": img_rfs_mask,
@@ -1585,6 +1679,7 @@ class ConstructRetina(RetinaMath):
                 "img_ret_adjusted": img_ret_adjusted,
             }
 
+            # Save generated receptive fields
             self.data_io.save_generated_rfs(
                 img_rfs_final, output_path, filename_stem=filename_stem
             )
@@ -1627,8 +1722,30 @@ class ConstructRetina(RetinaMath):
             # Apply the spatial VAE model to df
             self.gc_df = self.gc_vae_df
 
+        ### Generation of spatial receptive fields ends here ###
+        #########################################################
+
+    def build(self):
+        """
+        Builds the receptive field mosaic. This is the main method to call.
+        """
+
+        if self.initialized is False:
+            self._initialize()
+
+        # -- First, place the ganglion cell midpoints (units mm)
+        # Run GC density fit to data, get func_params. Data from Perry_1984_Neurosci
+        gc_density_func_params = self._fit_gc_density_data()
+
+        # Place ganglion cells to desired retina.
+        self._place_gc_units(gc_density_func_params)
+
+        # -- Second, endow cells with spatial receptive fields
+        self._create_spatial_rfs()
+
         # -- Third, endow cells with temporal receptive fields
-        self._create_temporal_receptive_fields()
+        self._create_fixed_temporal_rfs()  # Chichilnisky data
+        self._create_dynamic_temporal_rfs()  # Benardete & Kaplan data
 
         # -- Fourth, endow cells with tonic drive
         self._create_tonic_drive()

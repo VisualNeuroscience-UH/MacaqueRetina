@@ -926,7 +926,7 @@ class WorkingRetina(RetinaMath):
 
         return generator_potential
 
-    def _create_temporal_signal_cg(self, cell_indices, tvec, svec, dt):
+    def _create_temporal_signal_gc(self, cell_indices, tvec, svec, dt):
         """
         Contrast gain control implemented in temporal domain according to Victor_1987_JPhysiol
         """
@@ -941,6 +941,11 @@ class WorkingRetina(RetinaMath):
         tvec = torch.tensor(tvec, device=device)
         svec = torch.tensor(svec, device=device)
         dt = torch.tensor(dt, device=device)
+
+        # TODO : Assign values, sampled from Benardete statistics
+        # Tc, A, NL, tau_L, Hs, T0, Chalf, Mean_fr, D = self._get_temporal_parameters(
+        #     self.gc_type
+        # )
 
         Tc = torch.tensor(
             15.0, device=device
@@ -1131,17 +1136,19 @@ class WorkingRetina(RetinaMath):
             # Contrast gain control depends dynamically on contrast
             num_cells = len(cell_indices)
 
-            # Get stimulus contrast vector Time to get stimulus contrast:  4.34 seconds
+            # Get stimulus contrast vector:  Time to get stimulus contrast:  4.34 seconds
             svecs = self._create_dynamic_contrast(stimulus_cropped, spatial_filters)
             generator_potentials = np.empty((num_cells, stim_len_tp))
 
             # Time to get generator potentials:  19.6 seconds
             for idx in range(num_cells):
-                generator_potentials[idx, :] = self._create_temporal_signal_cg(
+                generator_potentials[idx, :] = self._create_temporal_signal_gc(
                     cell_indices, tvec, svecs[idx, :], video_dt
                 )
 
         else:  # Linear model
+            # TODO For midget cells, get a constant temporal kernel
+
             # Amplitude will be scaled by first (positive) lowpass filter.
             temporal_filters = self.get_temporal_filters(cell_indices)
 
@@ -1158,7 +1165,7 @@ class WorkingRetina(RetinaMath):
             # Experimental scaling to match approximately contrast gain model values
             generator_potentials = generator_potentials * 8.0
 
-        # Scales to power of 2 of linear impulse firing rates to get veridical firing
+        # Aplies scaling and logistic function to linear impulse firing rates to get veridical firing
         firing_rates = self._generator_to_firing_rate(
             cell_indices, generator_potentials
         )
