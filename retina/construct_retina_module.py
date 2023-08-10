@@ -823,22 +823,39 @@ class ConstructRetina(RetinaMath):
             `self.all_data_fits_df` DataFrame, and the `good_idx` Boolean index array.
         """
 
-        temporal_model_parameters = [
-            "A",
-            "NLTL",
-            "NL",
-            "TL",
-            "HS",
-            "T0",
-            "Chalf",
-            "TS",
-            "D",
-            "deltaNLTL",
-        ]
         cell_type = self.gc_type
-        response_type = self.response_type.upper()
 
+        if cell_type == "parasol":
+            temporal_model_parameters = [
+                "A",
+                "NLTL",
+                "NL",
+                "TL",
+                "HS",
+                "T0",
+                "Chalf",
+                "D",
+            ]
+
+        elif cell_type == "midget":
+            temporal_model_parameters = [
+                "A_cen",
+                "NLTL_cen",
+                "NL_cen",
+                "HS_cen",
+                "TS_cen",
+                "D_cen",
+                "A_sur",
+                "NLTL_sur",
+                "NL_sur",
+                "HS_sur",
+                "TS_sur",
+                "deltaNLTL_sur",
+            ]
+
+        col_names = ["Minimum", "Maximum", "Median", "Mean", "SD", "SEM"]
         distrib_params = np.zeros((len(temporal_model_parameters), 3))
+        response_type = self.response_type.upper()
 
         temp_params_df = pd.read_csv(self.context.temporal_BK_model_file)
 
@@ -846,15 +863,11 @@ class ConstructRetina(RetinaMath):
             condition = (temp_params_df["Parameter"] == param_name) & (
                 temp_params_df["Type"] == response_type
             )
-            # param_array = np.array(self.all_data_fits_df.iloc[good_idx][param_name])
-            param_df = temp_params_df[condition].loc[
-                :, ["Minimum", "Maximum", "Median", "Mean", "SD", "SEM"]
-            ]
+
+            param_df = temp_params_df[condition].loc[:, col_names]
 
             if param_df.empty:
-                print(
-                    f"INFO: No literature value for parameter {param_name} for {cell_type} cells."
-                )
+                print("\nkukkuu\n")
                 continue
 
             minimum, maximum, median, mean, sd, sem = param_df.values[0]

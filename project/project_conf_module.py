@@ -137,7 +137,7 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 # When training or tuning generative models, multiple hyperparameters are set at the RetinaVAE class.
 # For training, see __init__ method. For tuning, the __init__ contains search space and
 # _set_ray_tuner contains the starting point.
-gc_type = "parasol"
+gc_type = "midget"
 response_type = "on"
 
 my_retina = {

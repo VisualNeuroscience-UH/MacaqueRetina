@@ -1041,15 +1041,151 @@ class WorkingRetina(RetinaMath):
 
         return temporal_signal
 
-    def _create_dynamic_contrast(self, stimulus_cropped, spatial_filters):
-        """ """
+    def _create_temporal_signal(self, tvec, svec, dt, params, region):
+        """
+        Dynamic temporal signal for midget cells
+        """
+
+        # Convert to appropriate units
+        dt = dt / b2u.ms  # sampling period in ms
+        tvec = tvec / b2u.ms
+
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # move input arguments to GPU
+        tvec = torch.tensor(tvec, device=device)
+        svec = torch.tensor(svec, device=device)
+        dt = torch.tensor(dt, device=device)
+
+        # Get D value for surround by summing D_cen and deltaNLTL_sur
+        if region == "sur":
+            params["D_sur"] = params["D_cen"] + params["deltaNLTL_sur"]
+
+        # Manipulate the index labels and D value for surround
+        selected_params = params[params.index.str.contains(region)]
+
+        # Substring to remove
+        substring_to_remove = "_" + region
+
+        # Create new index labels by removing the substring
+        new_index_labels = [
+            label.replace(substring_to_remove, "") for label in selected_params.index
+        ]
+
+        # Assign the new index labels to the DataFrame
+        selected_params.index = new_index_labels
+        params = selected_params
+        # parameter_names for midget gain control ["NL", "NLTL", "TS", "HS", "D"]
+        NL = torch.tensor(int(np.round(params["NL"])), device=device)  # 30
+        TL = torch.tensor(params["NLTL"] / params["NL"], device=device)
+        HS = torch.tensor(params["HS"], device=device)
+        TS = torch.tensor(params["TS"], device=device)
+        D = params["D"]
+
+        ### Low pass filter ###
+        # Calculate the impulse response function.
+        h = (
+            (1 / torch.math.factorial(NL))
+            * (tvec / TL) ** (NL - 1)
+            * torch.exp(-tvec / TL)
+        )
+
+        # With large values of NL, the impulse response function runs out of humour (becomes inf or nan)
+        # at later latencies. We can avoid this by setting these inf and nan values of h to zero.
+        h[torch.isinf(h)] = 0
+        h[torch.isnan(h)] = 0
+
+        # Convolving two signals involves "flipping" one signal and then sliding it
+        # across the other signal. PyTorch, however, does not flip the kernel, so we
+        # need to do it manually.
+        h_flipped = torch.flip(h, dims=[0])
+
+        # Scale the impulse response to have unit area
+        h_flipped = h_flipped / torch.sum(h_flipped)
+
+        # Calculate padding size
+        padding_size = len(tvec) - 1
+
+        # Pad the stimulus
+        svec_padded = torch.nn.functional.pad(
+            svec.unsqueeze(0).unsqueeze(0), (padding_size, 0), mode="replicate"
+        )
+
+        # Convolve the stimulus with the flipped kernel
+        x_t_vec = (
+            torch.nn.functional.conv1d(
+                svec_padded,
+                h_flipped.view(1, 1, -1),
+                padding=0,
+            ).squeeze()
+            * dt
+        )
+
+        if self.response_type == "off":
+            x_t_vec = -x_t_vec
+
+        ### High pass stages ###
+        y_t = torch.tensor(0.0, device=device)
+        yvec = torch.zeros(len(tvec), device=device)
+        for idx, this_time in enumerate(tvec[1:]):
+            y_t = y_t + dt * (
+                (-y_t / TS)
+                + (x_t_vec[idx] - x_t_vec[idx - 1]) / dt
+                + (((1 - HS) * x_t_vec[idx]) / TS)
+            )
+            yvec[idx] = y_t
+
+        # End of pytorch loop
+        yvec = yvec.cpu().numpy()
+        tvec = tvec.cpu().numpy()
+        dt = dt.cpu().numpy()
+
+        # time shift rvec by delay D
+        D_tp = int(D / dt)
+        temporal_signal = np.concatenate((np.zeros(len(tvec)), np.zeros(D_tp)))
+        temporal_signal[D_tp:] = yvec
+        temporal_signal = temporal_signal[: len(tvec)]
+
+        return temporal_signal
+
+    def _create_dynamic_contrast(
+        self, stimulus_cropped, spatial_filters, center_masks=None, surround=False
+    ):
+        """
+        Create dynamic contrast signal by multiplying the stimulus with the spatial filter
+        center_masks is used for midget cells, where center and surround have distinct dynamics.
+
+        Parameters
+        ----------
+        stimulus_cropped : array
+            Stimulus cropped to the size of the spatial filter
+        spatial_filters : array
+            Spatial filter
+        center_masks : array
+            Mask for center (ones) and surround (zeros)
+
+        Returns
+        -------
+        center_surround_filters_sum : array
+            Dynamic contrast signal
+        """
 
         # Reshape center_masks and spatial_filters to match the dimensions of stimulus_cropped
         spatial_filters_reshaped = np.expand_dims(spatial_filters, axis=2)
 
+        if center_masks is None:
+            center_masks = np.ones_like(spatial_filters_reshaped)
+        else:
+            center_masks = np.expand_dims(center_masks, axis=2)
+            if surround is True:
+                # Surround is the inverse of the center
+                center_masks = 1 - center_masks
+
         # Multiply the arrays using broadcasting.
         # This is the stimulus contrast viewed through spatial rf filter
-        center_surround_filters = spatial_filters_reshaped * stimulus_cropped
+        center_surround_filters = (
+            spatial_filters_reshaped * stimulus_cropped * center_masks
+        )
 
         # Sum over spatial dimension. Collapses the filter into one temporal signal.
         center_surround_filters_sum = np.nansum(center_surround_filters, axis=1)
@@ -1119,8 +1255,8 @@ class WorkingRetina(RetinaMath):
 
         # Get spatiotemporal filters
         spatial_filters = self.get_spatial_filters(cell_indices)
-
-        # Scale spatial filter centers to sum one for each unit to get veridical max contrast
+        # pdb.set_trace()
+        # Scale spatial filters to sum one of centers for each unit to get veridical max contrast
         spatial_filters = (
             spatial_filters / np.sum(spatial_filters * center_masks, axis=1)[:, None]
         )
@@ -1131,18 +1267,37 @@ class WorkingRetina(RetinaMath):
             num_cells = len(cell_indices)
 
             # Get stimulus contrast vector:  Time to get stimulus contrast:  4.34 seconds
-            svecs = self._create_dynamic_contrast(stimulus_cropped, spatial_filters)
+            if self.gc_type == "parasol":
+                svecs = self._create_dynamic_contrast(
+                    stimulus_cropped, spatial_filters, center_masks=None, surround=False
+                )
+            elif self.gc_type == "midget":
+                svecs_cen = self._create_dynamic_contrast(
+                    stimulus_cropped, spatial_filters, center_masks, surround=False
+                )
+                svecs_sur = self._create_dynamic_contrast(
+                    stimulus_cropped, spatial_filters, center_masks, surround=True
+                )
             generator_potentials = np.empty((num_cells, stim_len_tp))
 
             # Time to get generator potentials:  19.6 seconds
             for idx in range(num_cells):
                 params = self.gc_df.loc[cell_indices[idx]]
-                generator_potentials[idx, :] = self._create_temporal_signal_gc(
-                    tvec, svecs[idx, :], video_dt, params
-                )
+                if self.gc_type == "parasol":
+                    generator_potentials[idx, :] = self._create_temporal_signal_gc(
+                        tvec, svecs[idx, :], video_dt, params
+                    )
+                elif self.gc_type == "midget":
+                    gen_pot_cen = self._create_temporal_signal(
+                        tvec, svecs_cen[idx, :], video_dt, params, "cen"
+                    )
+                    gen_pot_sur = self._create_temporal_signal(
+                        tvec, svecs_sur[idx, :], video_dt, params, "sur"
+                    )
+                    generator_potentials[idx, :] = gen_pot_cen + gen_pot_sur
 
+                # pdb.set_trace()
         elif self.temporal_model == "fixed":  # Linear model
-
             # Amplitude will be scaled by first (positive) lowpass filter.
             temporal_filters = self.get_temporal_filters(cell_indices)
 
