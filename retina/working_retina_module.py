@@ -108,7 +108,7 @@ class WorkingRetina(RetinaMath):
         fps = self.context.my_stimulus_options["fps"]
 
         self.model_type = self.context.my_retina["model_type"]
-        self.gain_control = self.context.my_retina["gain_control"]
+        self.temporal_model = self.context.my_retina["temporal_model"]
 
         # Metadata for Apricot dataset.
         self.data_microm_per_pixel = self.context.apricot_metadata[
@@ -926,7 +926,7 @@ class WorkingRetina(RetinaMath):
 
         return generator_potential
 
-    def _create_temporal_signal_gc(self, cell_indices, tvec, svec, dt):
+    def _create_temporal_signal_gc(self, tvec, svec, dt, params):
         """
         Contrast gain control implemented in temporal domain according to Victor_1987_JPhysiol
         """
@@ -942,34 +942,28 @@ class WorkingRetina(RetinaMath):
         svec = torch.tensor(svec, device=device)
         dt = torch.tensor(dt, device=device)
 
-        # TODO : Assign values, sampled from Benardete statistics
-        # Tc, A, NL, tau_L, Hs, T0, Chalf, Mean_fr, D = self._get_temporal_parameters(
-        #     self.gc_type
-        # )
-
         Tc = torch.tensor(
             15.0, device=device
         )  # 15  # Time constant for dynamical variable c(t), ms. Victor_1987_JPhysiol
-        A = 499.0
-        NL = torch.tensor(30, device=device)  # 30
-        tau_L = torch.tensor(
-            1.41, device=device
-        )  # 1.44  # ms Low-pass fr_cutoff = 1 / (2pi * tau_L) = 110 Hz
-        Hs = torch.tensor(0.98, device=device)
-        T0 = torch.tensor(
-            54.6, device=device
-        )  # 37.34  # ms High-pass fr_cutoff = 1 / (2pi * T0) = 2.12 Hz
-        Chalf = torch.tensor(0.056, device=device)  # 0.051 # 0.015 dummy for testing
-        Mean_fr = torch.tensor(37.37, device=device)
-        D = 2.2  # ms
+
+        # parameter_names for parasol gain control ["NL", "TL", "HS", "T0", "Chalf", "D"]
+        NL = torch.tensor(int(np.round(params["NL"])), device=device)  # 30
+        # 1.44  # ms Low-pass fr_cutoff = 1 / (2pi * TL) = 110 Hz
+        TL = torch.tensor(params["TL"], device=device)
+        HS = torch.tensor(params["HS"], device=device)
+        # 37.34  # ms High-pass fr_cutoff = 1 / (2pi * T0) = 2.12 Hz
+        T0 = torch.tensor(params["T0"], device=device)
+        # 0.015 dummy for testing
+        Chalf = torch.tensor(params["Chalf"], device=device)
+        D = params["D"]
 
         ### Low pass filter ###
 
         # Calculate the impulse response function.
         h = (
             (1 / torch.math.factorial(NL))
-            * (tvec / tau_L) ** (NL - 1)
-            * torch.exp(-tvec / tau_L)
+            * (tvec / TL) ** (NL - 1)
+            * torch.exp(-tvec / TL)
         )
 
         # # Dummy kernel for testing impulse response
@@ -1016,7 +1010,7 @@ class WorkingRetina(RetinaMath):
             y_t = y_t + dt * (
                 (-y_t / Ts_t)
                 + (x_t_vec[idx] - x_t_vec[idx - 1]) / dt
-                + (((1 - Hs) * x_t_vec[idx]) / Ts_t)
+                + (((1 - HS) * x_t_vec[idx]) / Ts_t)
             )
             Ts_t = T0 / (1 + c_t / Chalf)
             c_t = c_t + dt * ((torch.abs(y_t) - c_t) / Tc)
@@ -1132,7 +1126,7 @@ class WorkingRetina(RetinaMath):
         )
         tvec = range(stim_len_tp) * video_dt
 
-        if self.gain_control == True:
+        if self.temporal_model == "dynamic":
             # Contrast gain control depends dynamically on contrast
             num_cells = len(cell_indices)
 
@@ -1142,12 +1136,12 @@ class WorkingRetina(RetinaMath):
 
             # Time to get generator potentials:  19.6 seconds
             for idx in range(num_cells):
+                params = self.gc_df.loc[cell_indices[idx]]
                 generator_potentials[idx, :] = self._create_temporal_signal_gc(
-                    cell_indices, tvec, svecs[idx, :], video_dt
+                    tvec, svecs[idx, :], video_dt, params
                 )
 
-        else:  # Linear model
-            # TODO For midget cells, get a constant temporal kernel
+        elif self.temporal_model == "fixed":  # Linear model
 
             # Amplitude will be scaled by first (positive) lowpass filter.
             temporal_filters = self.get_temporal_filters(cell_indices)
