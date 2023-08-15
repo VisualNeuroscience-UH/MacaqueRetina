@@ -944,12 +944,12 @@ class RetinaVAE(RetinaMath):
         )
 
         # # Visualize the augmentation effects and exit
-        # self._visualize_augmentation()
+        # self._visualize_augmentation_and_exit()
 
         # # Create model and set optimizer and learning rate scheduler
         self._get_and_split_apricot_data()
 
-        # # KID comparison btw real and fake images
+        # # KID comparison btw real and fake images and exit
         # self.check_kid_and_exit()
 
         match training_mode:
@@ -1544,7 +1544,7 @@ class RetinaVAE(RetinaMath):
 
         return vae_model
 
-    def _visualize_augmentation(self):
+    def _visualize_augmentation_and_exit(self):
         """
         Visualize the augmentation effects and exit
         """
