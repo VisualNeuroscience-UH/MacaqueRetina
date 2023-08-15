@@ -1200,8 +1200,8 @@ class WorkingRetina(RetinaMath):
         spatial_filters_reshaped = np.expand_dims(spatial_filters, axis=2)
 
         if gc_type is "parasol":
-            masks = np.ones_like(spatial_filters_reshaped)
-        else:
+            masks = np.ones_like(spatial_filters_reshaped)  # mask with all ones
+        elif gc_type is "midget":
             if surround is True:
                 # Surround is always negative at this stage
                 masks = spatial_filters < 0
@@ -1211,9 +1211,9 @@ class WorkingRetina(RetinaMath):
         # This is the stimulus contrast viewed through spatial rf filter
         center_surround_filters = spatial_filters_reshaped * stimulus_cropped * masks
 
-        # Activate to show surround and exit, QA
-        if surround is True:
-            self._show_surround_and_exit(center_surround_filters, spatial_filters)
+        # # Activate to show surround and exit, QA
+        # if surround is True:
+        #     self._show_surround_and_exit(center_surround_filters, spatial_filters)
 
         # Sum over spatial dimension. Collapses the filter into one temporal signal.
         center_surround_filters_sum = np.nansum(center_surround_filters, axis=1)
@@ -1282,7 +1282,7 @@ class WorkingRetina(RetinaMath):
 
         # Get spatiotemporal filters
         spatial_filters = self.get_spatial_filters(cell_indices)
-        # pdb.set_trace()
+
         # Scale spatial filters to sum one of centers for each unit to get veridical max contrast
         spatial_filters = (
             spatial_filters / np.sum(spatial_filters * center_masks, axis=1)[:, None]
@@ -1317,10 +1317,9 @@ class WorkingRetina(RetinaMath):
                     None,
                     surround=True,
                 )
+            
+            # Get generator potentials:  Time to get generator potentials:  19.6 seconds
             generator_potentials = np.empty((num_cells, stim_len_tp))
-            pdb.set_trace()
-
-            # Time to get generator potentials:  19.6 seconds
             for idx in range(num_cells):
                 params = self.gc_df.loc[cell_indices[idx]]
                 if self.gc_type == "parasol":
@@ -1336,8 +1335,6 @@ class WorkingRetina(RetinaMath):
                     )
                     generator_potentials[idx, :] = gen_pot_cen + gen_pot_sur
 
-                # TÄHÄN JÄIT: SURROUND GEN PITÄISI OLLA VASTAKKAISELLA POLARITEETILLA, MUTTA ON SAMALLA.
-                # DEBUG
         elif self.temporal_model == "fixed":  # Linear model
             # Amplitude will be scaled by first (positive) lowpass filter.
             temporal_filters = self.get_temporal_filters(cell_indices)
