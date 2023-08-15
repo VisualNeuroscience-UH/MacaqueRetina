@@ -119,7 +119,7 @@ input_folder = "../in"  # input figs, videos
 Data context for output. 
 """
 
-output_folder = "test_2"
+output_folder = "test_3"
 
 
 """
@@ -143,8 +143,8 @@ response_type = "on"
 my_retina = {
     "gc_type": gc_type,
     "response_type": response_type,
-    "ecc_limits": [4, 6],  # degrees
-    "sector_limits": [-5, 5],  # polar angle in degrees
+    "ecc_limits": [4.5, 5.5],  # degrees
+    "sector_limits": [-1.0, 1.0],  # polar angle in degrees
     "model_density": 1.0,
     "dd_regr_model": "cubic",  # linear, quadratic, cubic. Only used if rf_coverage_adjusted_to_1 is "from_literalure"
     "randomize_position": 0.1,
@@ -438,7 +438,7 @@ if __name__ == "__main__":
 
     # options are defined in my_stimulus_options
     # stimulus video will be saved on output_folder in mp4 format (viewing) and hdf5 format (reloading)
-    PM.stimulate.make_stimulus_video()
+    # PM.stimulate.make_stimulus_video()
 
     # ###########################################
     # ### Load stimulus to get working retina ###
@@ -467,12 +467,12 @@ if __name__ == "__main__":
 
     PM.viz.show_gc_responses(PM.working_retina)
 
-    # PM.viz.show_stimulus_with_gcs(
-    #     PM.working_retina,
-    #     example_gc=my_run_options["cell_index"],
-    #     frame_number=10,
-    #     show_rf_id=False,
-    # )
+    PM.viz.show_stimulus_with_gcs(
+        PM.working_retina,
+        example_gc=my_run_options["cell_index"],
+        frame_number=300,
+        show_rf_id=False,
+    )
 
     # PM.viz.show_single_gc_view(
     #     PM.working_retina, cell_index=example_gc, frame_number=21

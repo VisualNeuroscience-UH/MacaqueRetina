@@ -1222,8 +1222,9 @@ class WorkingRetina(RetinaMath):
             spatial_filters_reshaped * stimulus_cropped * center_masks
         )
 
-        if surround is True:
-            self._show_surround_and_exit(center_surround_filters, spatial_filters)
+        # Activate to show surround and exit, QA
+        # if surround is True:
+        #     self._show_surround_and_exit(center_surround_filters, spatial_filters)
 
         # Sum over spatial dimension. Collapses the filter into one temporal signal.
         center_surround_filters_sum = np.nansum(center_surround_filters, axis=1)

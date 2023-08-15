@@ -1436,7 +1436,7 @@ class ConstructRetina(RetinaMath):
         error = np.inf
         iteration = 0
         img_ret_adjusted = img_ret
-        min_rf_value = np.zeros((100, rfs.shape[0]))
+        min_rf_value = np.zeros((200, rfs.shape[0]))
 
         while error > tolerate_error and iteration < max_iters:
             iteration += 1
