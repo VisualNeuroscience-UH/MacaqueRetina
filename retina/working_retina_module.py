@@ -1151,6 +1151,11 @@ class WorkingRetina(RetinaMath):
     def _show_surround_and_exit(self, center_surround_filters, spatial_filters):
         """
         Internal QA image for surrounds. Call by activating at _create_dynamic_contrast
+
+        center_surround_filters : array
+            Arrays with not-surrounds masked to zero
+        spatial_filters : array
+            Original spatial receptive fields
         """
         n_img = center_surround_filters.shape[0]
         side_img = self.spatial_filter_sidelen
@@ -1158,37 +1163,23 @@ class WorkingRetina(RetinaMath):
         center_surround_filters_rs = np.reshape(
             center_surround_filters, (n_img, side_img, side_img, -1)
         )
-        th = 0
-        from copy import deepcopy
+        spatial_filters_rs = np.reshape(spatial_filters, (n_img, side_img, side_img))
 
-        for xx in range(n_img):
-            fig, axs = plt.subplots(1, 3)
-            img_orig = np.reshape(spatial_filters, (n_img, side_img, side_img))[
-                xx, :, :
-            ]
-            img_idx = center_surround_filters_rs[xx, :, :, tp_img] > th
-            img = deepcopy(center_surround_filters_rs[xx, :, :, tp_img])
-            img_censur = deepcopy(center_surround_filters_rs[xx, :, :, tp_img])
-            img[img_idx] = 0
-            img_censur[~img_idx] = 0
-            # Original RF
-            axs[0].imshow(img_orig)
+        for this_img in range(n_img):
+            fig, axs = plt.subplots(1, 2)
+            axs[0].imshow(spatial_filters_rs[this_img, :, :])
             axs[0].set_title("Original RF")
-            # Surround
-            axs[1].imshow(img)
-            axs[1].set_title("Surround")
-            # Center mask set to zero
-            axs[2].imshow(img_censur)
-            axs[2].set_title("Pix btw cen and sur masks")
+            axs[1].imshow(center_surround_filters_rs[this_img, :, :, tp_img])
+            axs[1].set_title("Surround (dark)")
             plt.show()
         sys.exit()
 
     def _create_dynamic_contrast(
-        self, stimulus_cropped, spatial_filters, center_masks=None, surround=False
+        self, stimulus_cropped, spatial_filters, gc_type, masks, surround=False
     ):
         """
         Create dynamic contrast signal by multiplying the stimulus with the spatial filter
-        center_masks is used for midget cells, where center and surround have distinct dynamics.
+        masks are used for midget cells, where center and surround have distinct dynamics.
 
         Parameters
         ----------
@@ -1196,8 +1187,8 @@ class WorkingRetina(RetinaMath):
             Stimulus cropped to the size of the spatial filter
         spatial_filters : array
             Spatial filter
-        center_masks : array
-            Mask for center (ones) and surround (zeros)
+        masks : array
+            Mask for center (ones), None for parasols
 
         Returns
         -------
@@ -1205,26 +1196,24 @@ class WorkingRetina(RetinaMath):
             Dynamic contrast signal
         """
 
-        # Reshape center_masks and spatial_filters to match the dimensions of stimulus_cropped
+        # Reshape masks and spatial_filters to match the dimensions of stimulus_cropped
         spatial_filters_reshaped = np.expand_dims(spatial_filters, axis=2)
 
-        if center_masks is None:
-            center_masks = np.ones_like(spatial_filters_reshaped)
+        if gc_type is "parasol":
+            masks = np.ones_like(spatial_filters_reshaped)
         else:
-            center_masks = np.expand_dims(center_masks, axis=2)
             if surround is True:
-                # Surround is the inverse of the center
-                center_masks = 1 - center_masks
+                # Surround is always negative at this stage
+                masks = spatial_filters < 0
+            masks = np.expand_dims(masks, axis=2)
 
         # Multiply the arrays using broadcasting.
         # This is the stimulus contrast viewed through spatial rf filter
-        center_surround_filters = (
-            spatial_filters_reshaped * stimulus_cropped * center_masks
-        )
+        center_surround_filters = spatial_filters_reshaped * stimulus_cropped * masks
 
         # Activate to show surround and exit, QA
-        # if surround is True:
-        #     self._show_surround_and_exit(center_surround_filters, spatial_filters)
+        if surround is True:
+            self._show_surround_and_exit(center_surround_filters, spatial_filters)
 
         # Sum over spatial dimension. Collapses the filter into one temporal signal.
         center_surround_filters_sum = np.nansum(center_surround_filters, axis=1)
@@ -1233,7 +1222,6 @@ class WorkingRetina(RetinaMath):
         # However, we assume that the surround suppression is early (horizontal cells) and linear,
         # so we approximate s(t) = RF * stimulus
         svecs = center_surround_filters_sum
-
         return svecs
 
     def run_cells(
@@ -1308,14 +1296,26 @@ class WorkingRetina(RetinaMath):
             # Get stimulus contrast vector:  Time to get stimulus contrast:  4.34 seconds
             if self.gc_type == "parasol":
                 svecs = self._create_dynamic_contrast(
-                    stimulus_cropped, spatial_filters, center_masks=None, surround=False
+                    stimulus_cropped,
+                    spatial_filters,
+                    self.gc_type,
+                    None,
+                    surround=False,
                 )
             elif self.gc_type == "midget":
                 svecs_cen = self._create_dynamic_contrast(
-                    stimulus_cropped, spatial_filters, center_masks, surround=False
+                    stimulus_cropped,
+                    spatial_filters,
+                    self.gc_type,
+                    center_masks,
+                    surround=False,
                 )
                 svecs_sur = self._create_dynamic_contrast(
-                    stimulus_cropped, spatial_filters, center_masks, surround=True
+                    stimulus_cropped,
+                    spatial_filters,
+                    self.gc_type,
+                    None,
+                    surround=True,
                 )
             generator_potentials = np.empty((num_cells, stim_len_tp))
             pdb.set_trace()
