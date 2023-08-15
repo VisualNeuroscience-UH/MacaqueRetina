@@ -1148,6 +1148,41 @@ class WorkingRetina(RetinaMath):
 
         return temporal_signal
 
+    def _show_surround_and_exit(self, center_surround_filters, spatial_filters):
+        """
+        Internal QA image for surrounds. Call by activating at _create_dynamic_contrast
+        """
+        n_img = center_surround_filters.shape[0]
+        side_img = self.spatial_filter_sidelen
+        tp_img = center_surround_filters.shape[-1] // 2
+        center_surround_filters_rs = np.reshape(
+            center_surround_filters, (n_img, side_img, side_img, -1)
+        )
+        th = 0
+        from copy import deepcopy
+
+        for xx in range(n_img):
+            fig, axs = plt.subplots(1, 3)
+            img_orig = np.reshape(spatial_filters, (n_img, side_img, side_img))[
+                xx, :, :
+            ]
+            img_idx = center_surround_filters_rs[xx, :, :, tp_img] > th
+            img = deepcopy(center_surround_filters_rs[xx, :, :, tp_img])
+            img_censur = deepcopy(center_surround_filters_rs[xx, :, :, tp_img])
+            img[img_idx] = 0
+            img_censur[~img_idx] = 0
+            # Original RF
+            axs[0].imshow(img_orig)
+            axs[0].set_title("Original RF")
+            # Surround
+            axs[1].imshow(img)
+            axs[1].set_title("Surround")
+            # Center mask set to zero
+            axs[2].imshow(img_censur)
+            axs[2].set_title("Pix btw cen and sur masks")
+            plt.show()
+        sys.exit()
+
     def _create_dynamic_contrast(
         self, stimulus_cropped, spatial_filters, center_masks=None, surround=False
     ):
@@ -1186,6 +1221,9 @@ class WorkingRetina(RetinaMath):
         center_surround_filters = (
             spatial_filters_reshaped * stimulus_cropped * center_masks
         )
+
+        if surround is True:
+            self._show_surround_and_exit(center_surround_filters, spatial_filters)
 
         # Sum over spatial dimension. Collapses the filter into one temporal signal.
         center_surround_filters_sum = np.nansum(center_surround_filters, axis=1)
@@ -1279,6 +1317,7 @@ class WorkingRetina(RetinaMath):
                     stimulus_cropped, spatial_filters, center_masks, surround=True
                 )
             generator_potentials = np.empty((num_cells, stim_len_tp))
+            pdb.set_trace()
 
             # Time to get generator potentials:  19.6 seconds
             for idx in range(num_cells):
@@ -1296,7 +1335,8 @@ class WorkingRetina(RetinaMath):
                     )
                     generator_potentials[idx, :] = gen_pot_cen + gen_pot_sur
 
-                # pdb.set_trace()
+                # TÄHÄN JÄIT: SURROUND GEN PITÄISI OLLA VASTAKKAISELLA POLARITEETILLA, MUTTA ON SAMALLA.
+                # DEBUG
         elif self.temporal_model == "fixed":  # Linear model
             # Amplitude will be scaled by first (positive) lowpass filter.
             temporal_filters = self.get_temporal_filters(cell_indices)
