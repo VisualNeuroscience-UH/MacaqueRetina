@@ -67,7 +67,11 @@ model_type : VAE : Variational autoencoder. The model reconstructs the full rece
 Contrast gain control (CGC) is implemented according to Victor_1987_JPhysiol using numerical integration in discretized temporal domain.
 The unit parameters are drawn from Benardete_1999_VisNeurosci for parasol cells and Benardete_1997_VisNeurosci_a for midget cells.
 We are sampling from Benardete Kaplan data assuming triangular distribution of the reported tables of statistics (original data points not shown).
-For a review of physiological mechanisms, see Demb_2008_JPhysiol and Beaudoin_2007_JNeurosci
+For a review of physiological mechanisms, see Demb_2008_JPhysiol and Beaudoin_2007_JNeurosci.
+
+The max firing rate, parameter "A" in the Victor model, comes from Benardete_1999_VisNeurosci for parasol cells and Benardete_1997_VisNeurosci_a for midget cells.
+To get firing rate from generator potential, we fit a logistic function. The firing_rate = A / (1 + exp(-k*(x-x0))) - tonic_drive, where k is 
+the steepness of the curve and x0 is the sigmoid's midpoint. 
 """
 
 """
@@ -398,7 +402,7 @@ if __name__ == "__main__":
     """
 
     # # Main retina construction method. This method calls all other methods in the retina construction process.
-    # PM.construct_retina.build()
+    PM.construct_retina.build()
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # This is why they are called via the construct_retina attribute. The instance

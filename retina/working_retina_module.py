@@ -361,10 +361,12 @@ class WorkingRetina(RetinaMath):
 
         return temporal_filter
 
-    def _generator_to_firing_rate(self, cell_indices, generator_potential):
-        """ """
-        A = 440  # TODO take this from the Benardette data
-        # tonic_drive = 3.0
+    def _generator_to_firing_rate(self, cell_indices, generator_potential, gc_type):
+        """
+        Turn generator potential to action potential firing rate. A logistic function is used to map the generator potential to firing rate.
+        The function parameters are fitted to the tonic drive and the maximum firing rate (A) of the cell. 
+
+        """
 
         def logistic_function(x, max_fr=1, k=1, x0=1):
             """
@@ -387,9 +389,10 @@ class WorkingRetina(RetinaMath):
         for idx, cell_idx in enumerate(cell_indices):
             tonic_drive = tonic_drives.iloc[idx]
             # Find the value of k that makes the logistic function output tonic_drive at x=0
+            A = self.gc_df["A"].iloc[idx]
             k = fsolve(equation, 1, args=(A, tonic_drive))[0]
             firing_rates[idx] = logistic_function(
-                generator_potential[0, :], max_fr=A, k=k, x0=1
+                generator_potential[idx, :], max_fr=A, k=k, x0=1
             )
 
         return firing_rates
@@ -1317,7 +1320,7 @@ class WorkingRetina(RetinaMath):
                     None,
                     surround=True,
                 )
-            
+
             # Get generator potentials:  Time to get generator potentials:  19.6 seconds
             generator_potentials = np.empty((num_cells, stim_len_tp))
             for idx in range(num_cells):
@@ -1352,9 +1355,9 @@ class WorkingRetina(RetinaMath):
             # Experimental scaling to match approximately contrast gain model values
             generator_potentials = generator_potentials * 8.0
 
-        # Aplies scaling and logistic function to linear impulse firing rates to get veridical firing
+        # Applies scaling and logistic function to instantaneous firing rates to get veridical ap firing
         firing_rates = self._generator_to_firing_rate(
-            cell_indices, generator_potentials
+            cell_indices, generator_potentials, self.gc_type
         )
 
         # Let's interpolate the rate to video_dt intervals

@@ -867,10 +867,17 @@ class ConstructRetina(RetinaMath):
             param_df = temp_params_df[condition].loc[:, col_names]
 
             if param_df.empty:
-                print("\nkukkuu\n")
                 continue
 
             minimum, maximum, median, mean, sd, sem = param_df.values[0]
+
+            # Midget type contains separate A_cen and A_sur parameters
+            # Their relative snr is used to scale A_cen/A_sur at
+            # _create_dynamic_temporal_rfs
+            if param_name == "A_cen":
+                A_cen_snr = mean / sd
+            if param_name == "A_sur":
+                A_sur_snr = mean / sd
 
             c, loc, scale = self.get_triangular_parameters(
                 minimum, maximum, median, mean, sd, sem
@@ -885,6 +892,12 @@ class ConstructRetina(RetinaMath):
         temporal_exp_stat_df["distribution"] = "triang"
         temporal_exp_stat_df["domain"] = "temporal_BK"
         all_data_fits_df = pd.concat([self.exp_stat_df, temporal_exp_stat_df], axis=0)
+
+        # Add snr to scale A_cen/A_sur at _create_dynamic_temporal_rfs
+        if cell_type == "midget":
+            temporal_exp_stat_df["snr"] = np.nan
+            temporal_exp_stat_df.loc["A_cen", "snr"] = A_cen_snr
+            temporal_exp_stat_df.loc["A_sur", "snr"] = A_sur_snr
 
         temp_stat_to_viz = {
             "temporal_model_parameters": temporal_model_parameters,
@@ -901,11 +914,20 @@ class ConstructRetina(RetinaMath):
         n_cells = len(self.gc_df)
 
         temporal_bk_stat_df = self._read_temporal_statistics_benardete_kaplan()
-
         for param_name, row in temporal_bk_stat_df.iterrows():
-            shape, loc, scale, distribution, _ = row
+            shape, loc, scale, distribution, *_ = row
             self.gc_df[param_name] = self._get_random_samples(
                 shape, loc, scale, n_cells, distribution
+            )
+
+        # For midget type, get snr-weighted average of A_cen and A_sur
+        if self.gc_type == "midget":
+            snr_cen = temporal_bk_stat_df.loc["A_cen", "snr"]
+            snr_sur = temporal_bk_stat_df.loc["A_sur", "snr"]
+            weight_cen = snr_cen / (snr_cen + snr_sur)
+            weight_sur = snr_sur / (snr_cen + snr_sur)
+            self.gc_df["A"] = (
+                self.gc_df["A_cen"] * weight_cen + self.gc_df["A_sur"] * weight_sur
             )
 
     def _scale_both_amplitudes(self, gc_df):
