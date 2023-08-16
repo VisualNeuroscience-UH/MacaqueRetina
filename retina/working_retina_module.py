@@ -1389,9 +1389,6 @@ class WorkingRetina(RetinaMath):
                 cell_indices, stimulus_cropped, spatiotemporal_filters
             )
 
-            # Experimental scaling to match approximately contrast gain model values
-            generator_potentials = generator_potentials * 8.0
-
         # Applies scaling and logistic function to instantaneous firing rates to get veridical ap firing
         firing_rates = self._generator_to_firing_rate(
             cell_indices, generator_potentials

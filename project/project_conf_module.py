@@ -153,7 +153,7 @@ my_retina = {
     "dd_regr_model": "cubic",  # linear, quadratic, cubic. Only used if rf_coverage_adjusted_to_1 is "from_literalure"
     "randomize_position": 0.1,
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
-    "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
+    "temporal_model": "fixed",  # fixed, dynamic # Gain control for parasol cells only
     "model_type": "VAE",  # "FIT" or "VAE" for variational autoencoder.
     "rf_coverage_adjusted_to_1": True,  # False or True. Applies both to FIT and VAE models
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
