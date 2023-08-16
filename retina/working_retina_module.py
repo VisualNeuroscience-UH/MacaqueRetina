@@ -361,22 +361,59 @@ class WorkingRetina(RetinaMath):
 
         return temporal_filter
 
-    def _generator_to_firing_rate(self, cell_indices, generator_potential, gc_type):
+    def _generator_to_firing_rate(self, cell_indices, generator_potential):
         """
-        Turn generator potential to action potential firing rate. A logistic function is used to map the generator potential to firing rate.
-        The function parameters are fitted to the tonic drive and the maximum firing rate (A) of the cell. 
+        Turn generator potential to action potential firing rate.
+
+        This function uses a logistic function to map the generator potential to firing rate.
+        The function parameters are fitted to the tonic drive and the maximum firing rate (A) of the cell.
+
+        Parameters
+        ----------
+        cell_indices : array-like
+            Indices of the cells to compute firing rates for.
+        generator_potential : ndarray
+            Array containing generator potential values. Dimension: (number of cells, time).
+
+        Returns
+        -------
+        firing_rates : ndarray
+            Array containing firing rates corresponding to the generator potential values. Dimension: (number of cells, time).
+
+        Notes
+        -----
+        The logistic function used for the transformation is defined as:
+        f(x) = max_fr / (1 + exp(-k * (x - x0)))
+
+        where:
+        - x : input value (generator potential)
+        - max_fr : maximum firing rate
+        - k : steepness of the curve
+        - x0 : midpoint of the sigmoid (defaulted to 1 in this context)
+
+        The parameter `k` is found such that the logistic function outputs `tonic_drive` at x=0.
 
         """
 
         def logistic_function(x, max_fr=1, k=1, x0=1):
             """
-            Logistic Function
+            Logistic Function.
 
-            :param x: input value
-            :param max_fr: the maximum value of the curve
-            :param k: steepness of the curve
-            :param x0: the sigmoid's midpoint
-            :return: output value
+            Parameters
+            ----------
+            x : float
+                Input value.
+            max_fr : float, optional
+                The maximum value of the curve. Default is 1.
+            k : float, optional
+                Steepness of the curve. Default is 1.
+            x0 : float, optional
+                The sigmoid's midpoint. Default is 1.
+
+            Returns
+            -------
+            float
+                Output value.
             """
             return max_fr / (1 + np.exp(-k * (x - x0)))
 
@@ -1357,7 +1394,7 @@ class WorkingRetina(RetinaMath):
 
         # Applies scaling and logistic function to instantaneous firing rates to get veridical ap firing
         firing_rates = self._generator_to_firing_rate(
-            cell_indices, generator_potentials, self.gc_type
+            cell_indices, generator_potentials
         )
 
         # Let's interpolate the rate to video_dt intervals
