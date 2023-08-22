@@ -117,7 +117,7 @@ class Experiment(VideoBaseClass):
                 cond_metadata_key[option] = np.logspace(
                     np.log10(min_max_values[idx][0]),
                     np.log10(min_max_values[idx][1]),
-                    n_steps[idx],
+                    n_steps[idx] + 1,
                 )
             else:
                 cond_metadata_key[option] = np.linspace(

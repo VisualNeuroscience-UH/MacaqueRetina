@@ -352,7 +352,7 @@ elif my_retina["gc_type"] == "midget":
     )
 
 
-profile = True
+profile = False
 
 if __name__ == "__main__":
     if profile is True:
@@ -521,12 +521,12 @@ if __name__ == "__main__":
     exp_variables = ["contrast"]  # from my_stimulus_options
     # exp_variables = ["temporal_frequency"]  # from my_stimulus_options
     # Define experiment parameters. List lengths must be equal.
-    # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [31], logaritmic = [True]
+    # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logaritmic = [True]
     experiment_dict = {
         "exp_variables": exp_variables,
         "min_max_values": [[0.015, 0.98]],  # two vals for each exp_variable # Contrast
         # "min_max_values": [[0.1, 32]],  # Temporal frequency
-        "n_steps": [3],
+        "n_steps": [30],
         "logaritmic": [True],
     }
 
