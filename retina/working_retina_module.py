@@ -996,7 +996,6 @@ class WorkingRetina(RetinaMath):
         T0 = torch.tensor(params["T0"], device=device)
         # 0.015 dummy for testing
         Chalf = torch.tensor(params["Chalf"], device=device)
-        D = params["D"]
 
         ### Low pass filter ###
 
@@ -1082,10 +1081,13 @@ class WorkingRetina(RetinaMath):
         # axs[1].legend(legend)
         # plt.show()
 
-        # time shift rvec by delay D
+        D = params["D"]
+        A = params["A"]
+        tonicdrive = params["tonicdrive"]
         D_tp = int(D / dt)
         temporal_signal = np.concatenate((np.zeros(len(tvec)), np.zeros(D_tp)))
-        temporal_signal[D_tp:] = yvec
+        # time shift rvec by delay D
+        temporal_signal[D_tp:] = np.maximum(A * yvec + tonicdrive, 0)
         temporal_signal = temporal_signal[: len(tvec)]
 
         return temporal_signal
@@ -1189,10 +1191,13 @@ class WorkingRetina(RetinaMath):
         tvec = tvec.cpu().numpy()
         dt = dt.cpu().numpy()
 
-        # time shift rvec by delay D
+        D = params["D"]
+        A = params["A"]
+        tonicdrive = params["tonicdrive"]
         D_tp = int(D / dt)
         temporal_signal = np.concatenate((np.zeros(len(tvec)), np.zeros(D_tp)))
-        temporal_signal[D_tp:] = yvec
+        # time shift rvec by delay D
+        temporal_signal[D_tp:] = np.maximum(A * yvec + tonicdrive, 0)
         temporal_signal = temporal_signal[: len(tvec)]
 
         return temporal_signal
@@ -1384,6 +1389,10 @@ class WorkingRetina(RetinaMath):
                     )
                     generator_potentials[idx, :] = gen_pot_cen + gen_pot_sur
 
+            # Dynamic contrast gain control with linear-nonlinear model
+            # has no separate nonlinearity, so we can use the generator potential directly
+            firing_rates = generator_potentials
+
         elif self.temporal_model == "fixed":  # Linear model
             # Amplitude will be scaled by first (positive) lowpass filter.
             temporal_filters = self.get_temporal_filters(cell_indices)
@@ -1398,12 +1407,11 @@ class WorkingRetina(RetinaMath):
                 cell_indices, stimulus_cropped, spatiotemporal_filters
             )
 
-        # Applies scaling and logistic function to instantaneous firing rates to get veridical ap firing
-        firing_rates = self._generator_to_firing_rate(
-            cell_indices, generator_potentials
-        )
+            # Applies scaling and logistic function to instantaneous firing rates to get veridical ap firing
+            firing_rates = self._generator_to_firing_rate(
+                cell_indices, generator_potentials
+            )
 
-        # pdb.set_trace()
         # Let's interpolate the rate to video_dt intervals
         tvec_original = np.arange(1, self.stimulus_video.video_n_frames + 1) * video_dt
         rates_func = interp1d(
@@ -1417,7 +1425,7 @@ class WorkingRetina(RetinaMath):
         tvec_new = np.arange(0, duration, simulation_dt)
         interpolated_rates_array = rates_func(
             tvec_new
-        )  # This needs to be 2D array for Brian!
+        )  # This needs to be 2D array for Brian
 
         # Identical rates array for every trial; rows=time, columns=cell index
         inst_rates = b2.TimedArray(interpolated_rates_array.T * b2u.Hz, simulation_dt)
@@ -1427,18 +1435,12 @@ class WorkingRetina(RetinaMath):
             # Create Brian NeuronGroup
             # calculate probability of firing for current timebin (eg .1 ms)
             # draw spike/nonspike from random distribution
-
-            abs_refractory = (
-                self.context.my_retina["refractory_params"]["abs_refractory"] * b2u.ms
-            )
-            rel_refractory = (
-                self.context.my_retina["refractory_params"]["rel_refractory"] * b2u.ms
-            )
-            p_exp = self.context.my_retina["refractory_params"]["p_exp"]
-            clip_start = (
-                self.context.my_retina["refractory_params"]["clip_start"] * b2u.ms
-            )
-            clip_end = self.context.my_retina["refractory_params"]["clip_end"] * b2u.ms
+            refractory_params = self.context.my_retina["refractory_params"]
+            abs_refractory = refractory_params["abs_refractory"] * b2u.ms
+            rel_refractory = refractory_params["rel_refractory"] * b2u.ms
+            p_exp = refractory_params["p_exp"]
+            clip_start = refractory_params["clip_start"] * b2u.ms
+            clip_end = refractory_params["clip_end"] * b2u.ms
 
             neuron_group = b2.NeuronGroup(
                 n_cells,
@@ -1477,9 +1479,11 @@ class WorkingRetina(RetinaMath):
         tqdm_desc = "Simulating " + self.response_type + " " + self.gc_type + " mosaic"
         for trial in tqdm(range(n_trials), desc=tqdm_desc):
             net.restore()  # Restore the initial state
-            t_start.append((net.t / b2u.second) * b2u.second)  # pq => b2u
+            # t_start.append((net.t / b2u.second) * b2u.second)  # pq => b2u
+            t_start.append(net.t)  # pq => b2u
             net.run(duration)
-            t_end.append((net.t / b2u.second) * b2u.second)
+            # t_end.append((net.t / b2u.second) * b2u.second)
+            t_end.append(net.t)
 
             spiketrains = list(spike_monitor.spike_trains().values())
             all_spiketrains.extend(spiketrains)

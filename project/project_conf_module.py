@@ -109,7 +109,7 @@ project = "Retina"
 """
 Current experiment. Use distinct folders fo distinct stimuli.
 """
-experiment = "contrast"  # "test"
+experiment = "nl_test_contrast"  # "test"
 
 
 """
@@ -132,7 +132,7 @@ Data context for output.
 
 # output_folder = "test_c0p5_10Hz"
 # output_folder = "VAE_dynamic_poisson_tf3"
-output_folder = "test1"
+output_folder = "contrast_tf3_refractory"
 
 
 """
@@ -243,7 +243,7 @@ my_stimulus_options = {
     "temporal_frequency": 3,  # 40,  # Hz
     "spatial_frequency": 1,
     "phase_shift": 0,  # math.pi,  # radians
-    "stimulus_video_name": "square_pattern_onset.mp4",
+    "stimulus_video_name": "temporal_sine_pattern.mp4",
 }
 
 # Each gc response file contain n_trials
@@ -253,7 +253,7 @@ n_files = 1
 my_run_options = {
     "cell_index": None,  # int or None for all cells
     "n_trials": 1,  # For each of the response files
-    "spike_generator_model": "poisson",  # poisson or refractory
+    "spike_generator_model": "refractory",  # poisson or refractory
     "save_data": True,
     "gc_response_filenames": [f"gc_response_{x:02}" for x in range(n_files)],
     "simulation_dt": 0.0001,  # in sec 0.001 = 1 ms
@@ -547,7 +547,6 @@ if __name__ == "__main__":
     ################################
     ### Visualize Experiment ###
     ################################
-    # TÄHÄN JÄIT: CG EI RIITÄ SATUROIMAAN RESPONSSIA, VRT LEE JOSA 1990 KUVA 1
 
     # PM.viz.F1F2_popul_response(exp_variables, xlog=False)
     PM.viz.F1F2_unit_response(exp_variables, xlog=False)
