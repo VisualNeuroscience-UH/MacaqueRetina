@@ -111,28 +111,48 @@ class DataIO(DataIOBase):
         """
         data_fullpath_filename = None
         path = self.context.path
+        experiment = self.context.experiment
         input_folder = self.context.input_folder
         output_folder = self.context.output_folder
+        stimulus_folder = self.context.stimulus_folder
 
         if output_folder is not None:
-            output_path = Path.joinpath(path, output_folder)
+            # Check if output folder is absolute path
+            if Path(output_folder).is_absolute():
+                output_path = output_folder
+            else:
+                output_path = Path.joinpath(path, output_folder)
         else:
             # Set current path if run separately from project
             output_path = Path.joinpath(path, "./")
         if input_folder is not None:
-            input_path = Path.joinpath(path, input_folder)
+            # Check if input folder is absolute path
+            if Path(input_folder).is_absolute():
+                input_path = input_folder
+            else:
+                input_path = Path.joinpath(path, input_folder)
         else:
             input_path = Path.joinpath(path, "./")
+        if stimulus_folder is not None:
+            # Check if stimulus folder is absolute path
+            if Path(stimulus_folder).is_absolute():
+                stimulus_path = stimulus_folder
+            else:
+                stimulus_path = Path.joinpath(path, Path(experiment), stimulus_folder)
 
         # Check first for direct load in current directory. E.g. for direct ipython testing
         # if isinstance(filename, str) and len(filename > 0):
         if len(str(filename)) > 0:
             data_fullpath_filename = self._check_candidate_file(Path("./"), filename)
 
-            # Next check direct load in output path, input path and project path in this order
+            # Next check direct load in output path, stimulus_path, input path and project path in this order
             if not data_fullpath_filename:
                 data_fullpath_filename = self._check_candidate_file(
                     output_path, filename
+                )
+            if not data_fullpath_filename:
+                data_fullpath_filename = self._check_candidate_file(
+                    stimulus_path, filename
                 )
             if not data_fullpath_filename:
                 data_fullpath_filename = self._check_candidate_file(
@@ -142,11 +162,18 @@ class DataIO(DataIOBase):
                 data_fullpath_filename = self._check_candidate_file(path, filename)
 
         # Parse substring next in project/input and project paths
-        elif substring is not None:
+        elif substring is not None or exclude_substring is not None:
             # Parse output folder for given substring
             data_fullpath_filename = self.most_recent(
                 output_path, substring=substring, exclude_substring=exclude_substring
             )
+            if not data_fullpath_filename:
+                # Check for substring next in stimulus folder
+                data_fullpath_filename = self.most_recent(
+                    stimulus_path,
+                    substring=substring,
+                    exclude_substring=exclude_substring,
+                )
             if not data_fullpath_filename:
                 # Check for substring first in input folder
                 data_fullpath_filename = self.most_recent(
@@ -421,6 +448,17 @@ class DataIO(DataIOBase):
 
         return parent_path
 
+    def _check_stimulus_folder(self):
+        """
+        Create output directory if it does not exist.
+        Return full path to output directory.
+        """
+        parent_path = Path.joinpath(self.context.path, self.context.stimulus_folder)
+        if not Path(parent_path).exists():
+            Path(parent_path).mkdir(parents=True)
+
+        return parent_path
+
     def _get_filename_stem_and_suffix(self, filename):
         """
         Get filename stem and suffix.
@@ -440,7 +478,7 @@ class DataIO(DataIOBase):
         :return: full path to video name
         """
 
-        parent_path = self._check_output_folder()
+        parent_path = self._check_stimulus_folder()
 
         if not isinstance(filename, Path):
             filename = Path(filename)
@@ -513,6 +551,11 @@ class DataIO(DataIOBase):
                 # self.options = options
 
         stimulus = DummyVideoClass(data_dict)
+
+        print(f"Loaded file {fullpath_filename}")
+        # Check for existing loggers (python builtin, called from other modules, such as the run_script.py)
+        if logging.getLogger().hasHandlers():
+            logging.info(f"Loaded file {fullpath_filename}")
 
         return stimulus
 

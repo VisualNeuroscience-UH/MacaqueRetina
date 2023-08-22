@@ -715,6 +715,7 @@ class WorkingRetina(RetinaMath):
             np.min(stimulus_video.frames) >= 0 and np.max(stimulus_video.frames) <= 255
         ), "Stimulus pixel values must be between 0 and 255"
 
+        # TODO Move to calling function?
         # Drop RGCs whose center is not inside the stimulus
         xmin, xmax, ymin, ymax = self._get_extents_deg()
         for index, gc in self.gc_df_pixspace.iterrows():
@@ -1049,10 +1050,12 @@ class WorkingRetina(RetinaMath):
         for idx, this_time in enumerate(tvec[1:]):
             y_t = y_t + dt * (
                 (-y_t / Ts_t)
+                # (-y_t /(1 + Ts_t))
                 + (x_t_vec[idx] - x_t_vec[idx - 1]) / dt
                 + (((1 - HS) * x_t_vec[idx]) / Ts_t)
             )
             Ts_t = T0 / (1 + c_t / Chalf)
+            # Ts_t = T0 / (1 + (c_t / Chalf) ** 2)
             c_t = c_t + dt * ((torch.abs(y_t) - c_t) / Tc)
             yvec[idx] = y_t
             Ts_vec[idx] = Ts_t
@@ -1063,15 +1066,21 @@ class WorkingRetina(RetinaMath):
         tvec = tvec.cpu().numpy()
         dt = dt.cpu().numpy()
 
+        # print(f"NL: {NL}, TL: {TL}, HS: {HS}, T0: {T0}, Chalf: {Chalf}, D: {D}")
+
         # Ts_vec = Ts_vec.cpu().numpy()
         # c_t_vec = c_t_vec.cpu().numpy()
         # x_t_vec = x_t_vec.cpu().numpy()
-        # plt.plot(tvec, yvec)
-        # plt.plot(tvec, Ts_vec)
-        # plt.plot(tvec, c_t_vec)
-        # plt.plot(tvec, x_t_vec)
-        # legend = ["y", "Ts", "c", "x"]
-        # plt.legend(legend)
+        # fig, axs = plt.subplots(1, 2)
+        # axs[0].plot(tvec, yvec)
+        # axs[0].plot(tvec, c_t_vec)
+        # axs[0].plot(tvec, x_t_vec)
+        # legend = ["y", "c", "x"]
+        # axs[0].legend(legend)
+        # axs[1].plot(tvec, Ts_vec)
+        # legend = ["Ts"]
+        # axs[1].legend(legend)
+        # plt.show()
 
         # time shift rvec by delay D
         D_tp = int(D / dt)
@@ -1394,6 +1403,7 @@ class WorkingRetina(RetinaMath):
             cell_indices, generator_potentials
         )
 
+        # pdb.set_trace()
         # Let's interpolate the rate to video_dt intervals
         tvec_original = np.arange(1, self.stimulus_video.video_n_frames + 1) * video_dt
         rates_func = interp1d(

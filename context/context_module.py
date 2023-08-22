@@ -72,8 +72,16 @@ class Context(ContextBase):
         elif path.joinpath(output_folder).is_dir:
             validated_properties["output_folder"] = path.joinpath(output_folder)
 
+        if "stimulus_folder" not in all_properties.keys():
+            raise KeyError('"stimulus_folder" key is missing, aborting...')
+        stimulus_folder = all_properties["stimulus_folder"]
+        if Path(input_folder).is_relative_to(path):
+            validated_properties["stimulus_folder"] = stimulus_folder
+        elif path.joinpath(stimulus_folder).is_dir:
+            validated_properties["stimulus_folder"] = path.joinpath(stimulus_folder)
+
         # Remove validated keys before the loop
-        for k in ["path", "input_folder", "output_folder"]:
+        for k in ["path", "input_folder", "output_folder", "stimulus_folder"]:
             all_properties.pop(k, None)
 
         for attr, val in all_properties.items():
@@ -89,6 +97,9 @@ class Context(ContextBase):
                 validated_properties[attr] = Path(val)
             elif "folder" in attr:
                 validated_properties[attr] = Path(val)
+                # Check if folder exists, if not, create it
+                if not validated_properties[attr].is_dir():
+                    validated_properties[attr].mkdir(parents=True)
             elif "path" in attr:
                 validated_properties[attr] = Path(val)
             elif isinstance(val, str):
