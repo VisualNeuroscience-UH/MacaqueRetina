@@ -175,7 +175,11 @@ class Experiment(VideoBaseClass):
                 repeated_tuple = tuple([value] * n_columns)
                 df.loc[key] = repeated_tuple
             else:
-                df.loc[key] = value
+                try:
+                    df.loc[key] = value
+                except:
+                    print(key, value)
+                    pdb.set_trace()
 
         for idx, this_dict in enumerate(cond_options):
             for key, value in this_dict.items():
@@ -240,9 +244,9 @@ class Experiment(VideoBaseClass):
                     )
                 except:
                     stim = self.stimulate.make_stimulus_video(self.options)
+                    # Raw intensity is stimulus specific
+                    self.options["raw_intensity"] = stim.options["raw_intensity"]
 
-                # Raw intensity is stimulus specific
-                self.options["raw_intensity"] = stim.options["raw_intensity"]
                 self.working_retina.load_stimulus(stim)
 
                 example_gc = None  # int or 'None'
@@ -259,7 +263,7 @@ class Experiment(VideoBaseClass):
                     simulation_dt=simulation_dt,
                 )  # Run simulation
 
-        # Write metadata to csv
+        # Write metadata to csv to log current experiment to its output folder
         self.options["n_trials"] = n_trials
         if len(cond_options[0].keys()) > 1:
             self.options["logaritmic"] = tuple(experiment_dict["logaritmic"])

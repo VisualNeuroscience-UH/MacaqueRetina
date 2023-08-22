@@ -552,6 +552,11 @@ class DataIO(DataIOBase):
 
         stimulus = DummyVideoClass(data_dict)
 
+        # Iterate stimulus.options dict as key, value pairs. If value is numpy array, convert it to tuple
+        for key, value in stimulus.options.items():
+            if isinstance(value, np.ndarray):
+                stimulus.options[key] = tuple(value)
+
         print(f"Loaded file {fullpath_filename}")
         # Check for existing loggers (python builtin, called from other modules, such as the run_script.py)
         if logging.getLogger().hasHandlers():
