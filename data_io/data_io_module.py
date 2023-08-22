@@ -442,22 +442,22 @@ class DataIO(DataIOBase):
         Create output directory if it does not exist.
         Return full path to output directory.
         """
-        parent_path = Path.joinpath(self.context.path, self.context.output_folder)
-        if not Path(parent_path).exists():
-            Path(parent_path).mkdir(parents=True)
+        output_path = Path.joinpath(self.context.path, self.context.output_folder)
+        if not Path(output_path).exists():
+            Path(output_path).mkdir(parents=True)
 
-        return parent_path
+        return output_path
 
     def _check_stimulus_folder(self):
         """
         Create output directory if it does not exist.
         Return full path to output directory.
         """
-        parent_path = Path.joinpath(self.context.path, self.context.stimulus_folder)
-        if not Path(parent_path).exists():
-            Path(parent_path).mkdir(parents=True)
+        stimulus_path = Path.joinpath(self.context.path, self.context.stimulus_folder)
+        if not Path(stimulus_path).exists():
+            Path(stimulus_path).mkdir(parents=True)
 
-        return parent_path
+        return stimulus_path
 
     def _get_filename_stem_and_suffix(self, filename):
         """

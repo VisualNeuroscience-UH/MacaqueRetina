@@ -107,9 +107,9 @@ project = "Retina"
 
 
 """
-Current experiment
+Current experiment. Use distinct folders fo distinct stimuli.
 """
-experiment = "temporal_frequency"  # "test"
+experiment = "contrast"  # "test"
 
 
 """
@@ -131,7 +131,8 @@ Data context for output.
 """
 
 # output_folder = "test_c0p5_10Hz"
-output_folder = "VAE_dynamic_poisson_c02"
+# output_folder = "VAE_dynamic_poisson_tf3"
+output_folder = "test1"
 
 
 """
@@ -239,7 +240,7 @@ my_stimulus_options = {
     "background": 128,
     "contrast": 0.2,  # Weber constrast
     "mean": 128,
-    "temporal_frequency": 10,  # 40,  # Hz
+    "temporal_frequency": 3,  # 40,  # Hz
     "spatial_frequency": 1,
     "phase_shift": 0,  # math.pi,  # radians
     "stimulus_video_name": "square_pattern_onset.mp4",
@@ -517,15 +518,15 @@ if __name__ == "__main__":
     ###############################################
     ###############################################
 
-    # exp_variables = ["contrast"]  # from my_stimulus_options
-    exp_variables = ["temporal_frequency"]  # from my_stimulus_options
+    exp_variables = ["contrast"]  # from my_stimulus_options
+    # exp_variables = ["temporal_frequency"]  # from my_stimulus_options
     # Define experiment parameters. List lengths must be equal.
     # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [31], logaritmic = [True]
     experiment_dict = {
         "exp_variables": exp_variables,
-        # "min_max_values": [[0.015, 0.98]],  # needs two values for each variable # Contrast
-        "min_max_values": [[0.1, 32]],  # Temporal frequency
-        "n_steps": [31],
+        "min_max_values": [[0.015, 0.98]],  # two vals for each exp_variable # Contrast
+        # "min_max_values": [[0.1, 32]],  # Temporal frequency
+        "n_steps": [3],
         "logaritmic": [True],
     }
 
