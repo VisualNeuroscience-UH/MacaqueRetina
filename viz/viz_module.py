@@ -1644,12 +1644,13 @@ class Viz:
         plt.subplot(212)
         # Plot the generator and the average firing rate
         tvec = np.arange(0, generator_potential.shape[-1], 1) * video_dt
-        # pdb.set_trace()
+
         plt.plot(tvec, for_generatorplot, label="Generator")
         plt.xlim([0, duration / b2u.second])
 
         # Compute average firing rate over trials (should approximately follow generator)
-        hist_dt = 1 * b2u.ms
+        # hist_dt = 1 * b2u.ms
+        hist_dt = self.context.my_run_options["simulation_dt"] * b2u.second
         # n_bins = int((duration/hist_dt))
         bin_edges = np.append(
             tvec_new, [duration / b2u.second]
