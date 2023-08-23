@@ -86,8 +86,8 @@ class Analysis(AnalysisBase):
 
         return fr, N_neurons
 
-    def _fourier_amplitude(
-        self, data, trial, t_start, t_end, temp_freq, bins_per_cycle=32
+    def _fourier_amplitude_and_phase(
+        self, data, trial, t_start, t_end, temp_freq, phase_shift=0, bins_per_cycle=16
     ):
         """
         Calculate the F1 and F2 amplitude (amplitude at the stimulus frequency and twice the stimulus frequency) of spike rates.
@@ -104,13 +104,15 @@ class Analysis(AnalysisBase):
             The end time of the interval (in seconds) to analyze.
         temp_freq : float
             The frequency (in Hz) of the stimulus.
+        phase_shift : float, optional
+            The phase shift (in radians) to be applied. Default is 0.
         bins_per_cycle : int, optional
             The number of bins per cycle to use for the spike rate. The default is 32.
 
         Returns
         -------
-        tuple of (numpy.ndarray, numpy.ndarray, int)
-            The F1 and F2 amplitudes for each neuron, and the total number of neurons.
+        tuple of (numpy.ndarray, numpy.ndarray, numpy.ndarray, numpy.ndarray, int)
+            The F1 and F2 amplitudes, F1 and F2 phases for each neuron, and the total number of neurons.
 
         """
 
@@ -121,8 +123,12 @@ class Analysis(AnalysisBase):
         spectra = []
 
         # Get firing rate for each neuron
-        amplitudes_F1 = np.zeros(N_neurons)
-        amplitudes_F2 = np.zeros(N_neurons)  # Added to calculate F2
+        amplitudes_F1 = np.zeros(N_neurons)  # Added to store F1
+        amplitudes_F2 = np.zeros(N_neurons)  # Added to store F2
+
+        phases_F1 = np.zeros(N_neurons)  # Added to store F1 phase
+        phases_F2 = np.zeros(N_neurons)  # Added to store F2 phase
+
         cycle_length = 1 / temp_freq  # in seconds
         bins = np.arange(t_start, t_end, cycle_length / bins_per_cycle)
         for this_unit in range(N_neurons):
@@ -147,25 +153,39 @@ class Analysis(AnalysisBase):
                 normalized_spectrum = np.abs(sp) / len(spike_rate) * 2
                 spectra.append(normalized_spectrum)
 
-                # Get F1 amplitude
+                # Get F1 amplitude and phase
                 closest_freq_index = np.abs(freq - temp_freq).argmin()
                 amplitudes_F1[this_unit] = (
                     np.abs(sp[closest_freq_index]) / len(spike_rate) * 2
                 )
+                phases_F1[this_unit] = np.angle(sp[closest_freq_index]) + phase_shift
 
-                # Get F2 amplitude
-                closest_freq_index = np.abs(
-                    freq - (2 * temp_freq)
-                ).argmin()  # Change frequency to 2*temp_freq for F2
+                # Ensure phase remains in [-π, π]
+                if phases_F1[this_unit] > np.pi:
+                    phases_F1[this_unit] -= 2 * np.pi
+                elif phases_F1[this_unit] < -np.pi:
+                    phases_F1[this_unit] += 2 * np.pi
+
+                # Get F2 amplitude and phase
+                closest_freq_index = np.abs(freq - (2 * temp_freq)).argmin()
                 amplitudes_F2[this_unit] = (
                     np.abs(sp[closest_freq_index]) / len(spike_rate) * 2
-                )  # Store F2 amplitude in a different array
+                )
+                phases_F2[this_unit] = np.angle(sp[closest_freq_index]) + phase_shift
+
+                # Ensure phase remains in [-π, π]
+                if phases_F2[this_unit] > np.pi:
+                    phases_F2[this_unit] -= 2 * np.pi
+                elif phases_F2[this_unit] < -np.pi:
+                    phases_F2[this_unit] += 2 * np.pi
 
         return (
             amplitudes_F1,
             amplitudes_F2,
+            phases_F1,  # Return F1 phase
+            phases_F2,  # Return F2 phase
             N_neurons,
-        )  # Return both F1 and F2 amplitudes
+        )
 
     def _fourier_amplitude_pooled(
         self, data, trial, t_start, t_end, temp_freq, bins_per_cycle=32
@@ -265,6 +285,7 @@ class Analysis(AnalysisBase):
             temp_freq = pd.to_numeric(
                 experiment_df.loc["temporal_frequency", cond_name]
             )
+            phase_shift = pd.to_numeric(experiment_df.loc["phase_shift", cond_name])
 
             for this_trial in range(n_trials):
                 mean_fr = self._analyze_meanfr(data_dict, this_trial, t_start, t_end)
@@ -277,7 +298,7 @@ class Analysis(AnalysisBase):
                 if idx == 0 and this_trial == 0:
                     R_unit_compiled = np.zeros((N_neurons, len(cond_names), n_trials))
                     F_unit_compiled = np.zeros(
-                        (N_neurons, len(cond_names), n_trials, 2)
+                        (N_neurons, len(cond_names), n_trials, 4)
                     )
                 R_unit_compiled[:, idx, this_trial] = fr
 
@@ -293,36 +314,74 @@ class Analysis(AnalysisBase):
                 F_popul_df.loc[this_trial + n_trials_vec[0], cond_name] = ampl_F2
 
                 # Amplitude spectra for units
-                (ampl_F1, ampl_F2, N_neurons) = self._fourier_amplitude(
-                    data_dict, this_trial, t_start, t_end, temp_freq
+                (
+                    ampl_F1,
+                    ampl_F2,
+                    phase_F1,
+                    phase_F2,
+                    N_neurons,
+                ) = self._fourier_amplitude_and_phase(
+                    data_dict, this_trial, t_start, t_end, temp_freq, phase_shift
                 )
 
                 F_unit_compiled[:, idx, this_trial, 0] = ampl_F1
                 F_unit_compiled[:, idx, this_trial, 1] = ampl_F2
+                F_unit_compiled[:, idx, this_trial, 2] = phase_F1
+                F_unit_compiled[:, idx, this_trial, 3] = phase_F2
 
         # Set unit fr to dataframe, mean over trials
         R_unit_mean = np.mean(R_unit_compiled, axis=2)
         R_unit_df = pd.DataFrame(R_unit_mean, columns=cond_names)
 
-        def create_dummy_variable(shape):
-            dummy_var = np.empty(shape, dtype="<U12")
-            for i in range(shape[0]):
-                for j in range(shape[1]):
-                    for k in range(shape[2]):
-                        dummy_var[i, j, k] = f"n{i},c{j},f{k}"
-            return dummy_var
+        # def create_dummy_variable(shape):
+        #     dummy_var = np.empty(shape, dtype="<U12")
+        #     for i in range(shape[0]):
+        #         for j in range(shape[1]):
+        #             for k in range(shape[2]):
+        #                 dummy_var[i, j, k] = f"n{i},c{j},f{k}"
+        #     return dummy_var
+
+        # For each unit (neuron), normalize the phase so that max phase is at 0, sepparately for F1 and F2
+        F_unit_compiled_rotated = np.zeros_like(F_unit_compiled)
+        for this_unit in range(N_neurons):
+            for this_cond in range(len(cond_names)):
+                # Get the phase of F1 and F2
+                phases_F1 = F_unit_compiled[this_unit, this_cond, :, 2]
+                phases_F2 = F_unit_compiled[this_unit, this_cond, :, 3]
+
+                # Rotate the phase so that the max phase is at 0
+                phases_F1_rotated = phases_F1 - np.max(phases_F1)
+                phases_F2_rotated = phases_F2 - np.max(phases_F2)
+                # print(phases_F1_rotated)
+                # pdb.set_trace()
+
+                # Save the rotated phase
+                F_unit_compiled_rotated[this_unit, this_cond, :, 2] = phases_F1_rotated
+                F_unit_compiled_rotated[this_unit, this_cond, :, 3] = phases_F2_rotated
 
         # Set unit F1 and F2 to dataframe, mean over trials
         F_unit_mean = np.mean(F_unit_compiled, axis=2)
-        F_unit_mean_reshaped = np.concatenate(
+        F_unit_mean_ampl_reshaped = np.concatenate(
             (F_unit_mean[:, :, 0], F_unit_mean[:, :, 1]), axis=0
         )
 
         F_peak = ["F1"] * N_neurons + ["F2"] * N_neurons
         unit = np.tile(np.arange(N_neurons), 2)
-        F_unit_df = pd.DataFrame(F_unit_mean_reshaped, columns=cond_names.tolist())
-        F_unit_df["unit"] = unit
-        F_unit_df["F_peak"] = F_peak
+        F_unit_ampl_df = pd.DataFrame(
+            F_unit_mean_ampl_reshaped, columns=cond_names.tolist()
+        )
+        F_unit_ampl_df["unit"] = unit
+        F_unit_ampl_df["F_peak"] = F_peak
+
+        F_unit_mean_phase_reshaped = np.concatenate(
+            (F_unit_mean[:, :, 2], F_unit_mean[:, :, 3]), axis=0
+        )
+
+        F_unit_phase_df = pd.DataFrame(
+            F_unit_mean_phase_reshaped, columns=cond_names.tolist()
+        )
+        F_unit_phase_df["unit"] = unit
+        F_unit_phase_df["F_peak"] = F_peak
 
         # Save results
         filename_out = f"{cond_names_string}_population_means.csv"
@@ -337,9 +396,13 @@ class Analysis(AnalysisBase):
         csv_save_path = data_folder / filename_out
         F_popul_df.to_csv(csv_save_path)
 
-        filename_out = f"{cond_names_string}_F1F2_unit_means.csv"
+        filename_out = f"{cond_names_string}_F1F2_unit_ampl_means.csv"
         csv_save_path = data_folder / filename_out
-        F_unit_df.to_csv(csv_save_path)
+        F_unit_ampl_df.to_csv(csv_save_path)
+
+        filename_out = f"{cond_names_string}_F1F2_unit_phase_means.csv"
+        csv_save_path = data_folder / filename_out
+        F_unit_phase_df.to_csv(csv_save_path)
 
     def amplitude_sensitivity(self):
         """ """

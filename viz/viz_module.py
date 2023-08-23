@@ -1943,7 +1943,7 @@ class Viz:
             id_vars=["trial", "F_peak"],
             value_vars=F_popul_df.columns[:-2],
             var_name=f"{cond_names_string}_names",
-            value_name="responses",
+            value_name="amplitudes",
         )
 
         # Make new columns with conditions' levels
@@ -1961,7 +1961,7 @@ class Viz:
             sns.lineplot(
                 data=F_popul_long_df,
                 x=exp_variables[0],
-                y="responses",
+                y="amplitudes",
                 hue="F_peak",
                 palette="tab10",
                 ax=ax,
@@ -1977,7 +1977,7 @@ class Viz:
                 sns.lineplot(
                     data=F_popul_long_df,
                     x=cond,
-                    y="responses",
+                    y="amplitudes",
                     hue="F_peak",
                     palette="tab10",
                     ax=ax[i],
@@ -2004,15 +2004,15 @@ class Viz:
             data_folder / f"exp_metadata_{cond_names_string}.csv", index_col=0
         )
 
-        F_unit_df = pd.read_csv(
-            data_folder / f"{cond_names_string}_F1F2_unit_means.csv", index_col=0
+        F_unit_ampl_df = pd.read_csv(
+            data_folder / f"{cond_names_string}_F1F2_unit_ampl_means.csv", index_col=0
         )
         F_unit_long_df = pd.melt(
-            F_unit_df,
+            F_unit_ampl_df,
             id_vars=["unit", "F_peak"],
-            value_vars=F_unit_df.columns[:-2],
+            value_vars=F_unit_ampl_df.columns[:-2],
             var_name=f"{cond_names_string}_names",
-            value_name="responses",
+            value_name="amplitudes",
         )
 
         # Make new columns with conditions' levels
@@ -2030,7 +2030,7 @@ class Viz:
             sns.lineplot(
                 data=F_unit_long_df,
                 x=exp_variables[0],
-                y="responses",
+                y="amplitudes",
                 hue="F_peak",
                 palette="tab10",
                 ax=ax,
@@ -2046,7 +2046,7 @@ class Viz:
                 sns.lineplot(
                     data=F_unit_long_df,
                     x=cond,
-                    y="responses",
+                    y="amplitudes",
                     hue="F_peak",
                     palette="tab10",
                     ax=ax[i],
@@ -2124,3 +2124,128 @@ class Viz:
 
         if savefigname:
             self.figsave(figurename=savefigname)
+
+    def tf_vs_fr_cg_ph(self, exp_variables, n_contrasts=None, xlog=False, ylog=False):
+        """
+        Plot F1 frequency response curves for 2D frequency-contrast experiment.
+        Unit response, i.e. mean across trials.
+        Subplot 1: temporal frequency vs firing rate at n_contrasts
+        Subplot 2: temporal frequency vs contrast gain (cg) at n_contrasts. Contrast gain is defined as the F1 response divided by contrast.
+        Subplot 3: temporal frequency vs phase at n_contrasts. Phase is defined as the phase of the F1 component of the Fourier transform of the response.
+
+        Parameters
+        ----------
+        exp_variables : list of str
+            List of experiment variables to be plotted.
+        n_contrasts : int
+            Number of contrasts to be plotted. If None, all contrasts are plotted.
+        xlog : bool
+            If True, x-axis is logarithmic.
+        ylog : bool
+            If True, y-axis is logarithmic.
+        """
+
+        data_folder = self.context.output_folder
+        cond_names_string = "_".join(exp_variables)
+        n_variables = len(exp_variables)
+
+        # Experiment metadata
+        experiment_df = pd.read_csv(
+            data_folder / f"exp_metadata_{cond_names_string}.csv", index_col=0
+        )
+
+        # Results
+        F_unit_ampl_df = pd.read_csv(
+            data_folder / f"{cond_names_string}_F1F2_unit_ampl_means.csv", index_col=0
+        )
+        F_unit_phase_df = pd.read_csv(
+            data_folder / f"{cond_names_string}_F1F2_unit_phase_means.csv", index_col=0
+        )
+
+        F_unit_long_df = pd.melt(
+            F_unit_ampl_df,
+            id_vars=["unit", "F_peak"],
+            value_vars=F_unit_ampl_df.columns[:-2],
+            var_name=f"{cond_names_string}_names",
+            value_name="amplitudes",
+        )
+
+        F_unit_long_df_phase = pd.melt(
+            F_unit_phase_df,
+            id_vars=["unit", "F_peak"],
+            value_vars=F_unit_phase_df.columns[:-2],
+            var_name=f"{cond_names_string}_names",
+            value_name="phase",
+        )
+
+        # Make new columns with conditions' levels
+        for cond in exp_variables:
+            levels_s = experiment_df.loc[cond, :]
+            levels_s = pd.to_numeric(levels_s)
+            levels_s = levels_s.round(decimals=2)
+            F_unit_long_df[cond] = F_unit_long_df[f"{cond_names_string}_names"].map(
+                levels_s
+            )
+
+        # Make new columns cg and phase.
+        F_unit_long_df["cg"] = F_unit_long_df["amplitudes"] / F_unit_long_df["contrast"]
+        F_unit_long_df["phase"] = F_unit_long_df_phase["phase"]
+
+        F_unit_long_df = F_unit_long_df[F_unit_long_df["F_peak"] == "F1"].reset_index(
+            drop=True
+        )
+
+        # Select only the desired number of contrasts at about even intervals, including the lowest and the highest contrast
+        if n_contrasts:
+            contrasts = F_unit_long_df["contrast"].unique()
+            contrasts.sort()
+            contrasts = contrasts[:: int(len(contrasts) / n_contrasts)]
+            contrasts = np.append(contrasts, F_unit_long_df["contrast"].max())
+            F_unit_long_df = F_unit_long_df.loc[
+                F_unit_long_df["contrast"].isin(contrasts)
+            ]
+
+        fig, ax = plt.subplots(3, 1, figsize=(8, 12))
+
+        # Make the three subplots using seaborn lineplot
+        sns.lineplot(
+            data=F_unit_long_df,
+            x="temporal_frequency",
+            y="amplitudes",
+            hue="contrast",
+            palette="tab10",
+            ax=ax[0],
+        )
+        ax[0].set_title("Firing rate vs temporal frequency")
+        if xlog:
+            ax[0].set_xscale("log")
+        if ylog:
+            ax[0].set_yscale("log")
+
+        sns.lineplot(
+            data=F_unit_long_df,
+            x="temporal_frequency",
+            y="cg",
+            hue="contrast",
+            palette="tab10",
+            ax=ax[1],
+        )
+        ax[1].set_title("Contrast gain vs temporal frequency")
+        if xlog:
+            ax[1].set_xscale("log")
+        if ylog:
+            ax[1].set_yscale("log")
+
+        sns.lineplot(
+            data=F_unit_long_df,
+            x="temporal_frequency",
+            y="phase",
+            hue="contrast",
+            palette="tab10",
+            ax=ax[2],
+        )
+        ax[2].set_title("Phase vs temporal frequency")
+        if xlog:
+            ax[2].set_xscale("log")
+        # if ylog:
+        #     ax[2].set_yscale("log")

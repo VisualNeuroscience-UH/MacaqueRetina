@@ -109,7 +109,7 @@ project = "Retina"
 """
 Current experiment. Use distinct folders fo distinct stimuli.
 """
-experiment = "nl_test_contrast"  # "test"
+experiment = "nl_tf_c_BK99_Fig1_and_2"  # "test"
 
 
 """
@@ -132,7 +132,7 @@ Data context for output.
 
 # output_folder = "test_c0p5_10Hz"
 # output_folder = "VAE_dynamic_poisson_tf3"
-output_folder = "contrast_tf3_refractory"
+output_folder = "VAE_dynamic_refractory"
 
 
 """
@@ -518,19 +518,19 @@ if __name__ == "__main__":
     ###############################################
     ###############################################
 
-    exp_variables = ["contrast"]  # from my_stimulus_options
     # exp_variables = ["temporal_frequency"]  # from my_stimulus_options
+    exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
     # Define experiment parameters. List lengths must be equal.
     # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logaritmic = [True]
-    experiment_dict = {
-        "exp_variables": exp_variables,
-        "min_max_values": [[0.015, 0.98]],  # two vals for each exp_variable # Contrast
-        # "min_max_values": [[0.1, 32]],  # Temporal frequency
-        "n_steps": [30],
-        "logaritmic": [True],
-    }
+    # experiment_dict = {
+    #     "exp_variables": exp_variables,
+    #     # "min_max_values": [[0.015, 0.98]],  # two vals for each exp_variable # contrast
+    #     "min_max_values": [[1, 40], [0.01, 0.16]],  # temporal frequency, contrast
+    #     "n_steps": [10, 5],
+    #     "logaritmic": [False, True],
+    # }
 
-    PM.experiment.build_and_run(experiment_dict, n_trials=5, build_without_run=False)
+    # PM.experiment.build_and_run(experiment_dict, n_trials=10, build_without_run=False)
 
     ###############################
     ## Analyze Experiment ###
@@ -549,9 +549,10 @@ if __name__ == "__main__":
     ################################
 
     # PM.viz.F1F2_popul_response(exp_variables, xlog=False)
-    PM.viz.F1F2_unit_response(exp_variables, xlog=False)
+    # PM.viz.F1F2_unit_response(exp_variables, xlog=False)
     # PM.viz.fr_response(exp_variables, xlog=True)
     # PM.viz.spike_raster_response(exp_variables, savefigname=None)
+    PM.viz.tf_vs_fr_cg_ph(exp_variables, n_contrasts=None, xlog=True, ylog=True)
 
     ###############################
     ###############################
