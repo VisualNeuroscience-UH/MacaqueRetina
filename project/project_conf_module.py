@@ -109,7 +109,7 @@ project = "Retina"
 """
 Current experiment. Use distinct folders fo distinct stimuli.
 """
-experiment = "nl_tf_c_BK99_Fig1_and_2"  # "test"
+experiment = "test2"  # "test"
 
 
 """
@@ -176,6 +176,7 @@ my_stimulus_metadata = {
 }
 
 """
+Stimulus video will be saved on output_folder in mp4 format (viewing) and hdf5 format (reloading)
 Valid stimulus_options include (overriding visual_stimulus_module.VideoBaseClass):
 
 image_width: in pixels
@@ -219,7 +220,9 @@ direction: 'increment' or 'decrement'
 stimulus_video_name: name of the stimulus video
 
 With assuming rgb voltage = cd/m2, and average pupil diameter of 3 mm, the mean voltage of 128 in background
-would mean ~ 905 Trolands. Td = lum * pi * (diam/2)^2, resulting in 128 cd/m2 = 128 * pi * (3/2)^2 ~ 905 Td. 
+would mean ~ 905 Trolands. Td = lum * pi * (diam/2)^2, resulting in 128 cd/m2 = 128 * pi * (3/2)^2 ~ 905 Td.
+
+
 """
 
 my_stimulus_options = {
@@ -228,10 +231,10 @@ my_stimulus_options = {
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
     "fps": 300,  # 300 for good cg integration
-    "duration_seconds": 6,  # actual frames = floor(duration_seconds * fps)
-    "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
-    "baseline_end_seconds": 0.5,
-    "pattern": "temporal_sine_pattern",  # Natural video is not supported yet. One of the StimulusPatterns
+    "duration_seconds": 1.0,  # actual frames = floor(duration_seconds * fps)
+    "baseline_start_seconds": 0.0,  # Total duration is duration + both baselines
+    "baseline_end_seconds": 0.0,
+    "pattern": "sine_grating",  # Natural video is not supported yet. One of the StimulusPatterns
     "stimulus_form": "rectangular",
     "size_inner": None,  # Applies to annulus only
     "size_outer": None,  # Applies to annulus only
@@ -243,7 +246,7 @@ my_stimulus_options = {
     "temporal_frequency": 3,  # 40,  # Hz
     "spatial_frequency": 1,
     "phase_shift": 0,  # math.pi,  # radians
-    "stimulus_video_name": "temporal_sine_pattern.mp4",
+    "stimulus_video_name": "sine_grating.mp4",
 }
 
 # Each gc response file contain n_trials
@@ -453,14 +456,13 @@ if __name__ == "__main__":
     ########################
 
     # See my_stimulus_options for valid stimulus_options
-    # Stimulus video will be saved on output_folder in mp4 format (viewing) and hdf5 format (reloading)
-    # PM.stimulate.make_stimulus_video()
+    PM.stimulate.make_stimulus_video()
 
     ###########################################
     ### Load stimulus to get working retina ###
     ###########################################
 
-    # PM.working_retina.load_stimulus()
+    PM.working_retina.load_stimulus()
 
     ##########################################
     ### Show single ganglion cell response ###
@@ -472,13 +474,13 @@ if __name__ == "__main__":
     # # PM.viz.show_spatiotemporal_filter(PM.working_retina)
     # PM.viz.show_convolved_stimulus(PM.working_retina)
 
-    ###########################################
-    ### Run multiple trials for single cell ###
-    ###########################################
+    ####################################
+    ### Run multiple trials or cells ###
+    ####################################
 
-    # PM.working_retina.run_with_my_run_options()
+    PM.working_retina.run_with_my_run_options()
 
-    # PM.viz.show_gc_responses(PM.working_retina)
+    PM.viz.show_gc_responses(PM.working_retina)
 
     # PM.viz.show_stimulus_with_gcs(
     #     PM.working_retina,
@@ -525,9 +527,14 @@ if __name__ == "__main__":
     # experiment_dict = {
     #     "exp_variables": exp_variables,
     #     # "min_max_values": [[0.015, 0.98]],  # two vals for each exp_variable # contrast
-    #     "min_max_values": [[1, 40], [0.01, 0.16]],  # temporal frequency, contrast
-    #     "n_steps": [10, 5],
-    #     "logaritmic": [False, True],
+    #     "min_max_values": [
+    #         [1, 41]
+    #     ],  # two vals for each exp_variable # temporal frequency
+    #     "min_max_values": [[1, 41], [0.02, 0.25]],  # temporal frequency, contrast
+    #     "n_steps": [10, 5],  # temporal frequency, contras
+    #     "logaritmic": [True, True],  # temporal frequency, contras
+    #     # "n_steps": [10],
+    #     # "logaritmic": [False],
     # }
 
     # PM.experiment.build_and_run(experiment_dict, n_trials=10, build_without_run=False)
@@ -536,13 +543,13 @@ if __name__ == "__main__":
     ## Analyze Experiment ###
     ###############################
 
-    my_analysis_options = {
-        "exp_variables": exp_variables,
-        "t_start_ana": 0.5,
-        "t_end_ana": 6.5,
-    }
+    # my_analysis_options = {
+    #     "exp_variables": exp_variables,
+    #     "t_start_ana": 0.5,
+    #     "t_end_ana": 6.5,
+    # }
 
-    PM.ana.analyze_response(my_analysis_options)
+    # PM.ana.analyze_response(my_analysis_options)
 
     ################################
     ### Visualize Experiment ###
@@ -552,7 +559,7 @@ if __name__ == "__main__":
     # PM.viz.F1F2_unit_response(exp_variables, xlog=False)
     # PM.viz.fr_response(exp_variables, xlog=True)
     # PM.viz.spike_raster_response(exp_variables, savefigname=None)
-    PM.viz.tf_vs_fr_cg_ph(exp_variables, n_contrasts=None, xlog=True, ylog=True)
+    # PM.viz.tf_vs_fr_cg_ph(exp_variables, n_contrasts=None, xlog=True, ylog=True)
 
     ###############################
     ###############################

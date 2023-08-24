@@ -967,13 +967,16 @@ class WorkingRetina(RetinaMath):
 
         return generator_potential
 
-    def _create_temporal_signal_gc(self, tvec, svec, dt, params):
+    def _create_temporal_signal_gc(
+        self, tvec, svec, dt, params, impulse=False, impulse_contrast=1.0
+    ):
         """
         Contrast gain control implemented in temporal domain according to Victor_1987_JPhysiol
         """
 
         # Convert to appropriate units
         dt = dt / b2u.ms  # sampling period in ms
+        idx_100_ms = int(np.round(100 / dt))
         tvec = tvec / b2u.ms
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -1006,11 +1009,6 @@ class WorkingRetina(RetinaMath):
             * torch.exp(-tvec / TL)
         )
 
-        # # Dummy kernel for testing impulse response
-        # h0 = torch.zeros(len(tvec), device=device)
-        # h0[100] = 1.0
-        # svec = h0.to(dtype=torch.float64)
-
         # Convolving two signals involves "flipping" one signal and then sliding it
         # across the other signal. PyTorch, however, does not flip the kernel, so we
         # need to do it manually.
@@ -1019,6 +1017,17 @@ class WorkingRetina(RetinaMath):
         # Scale the impulse response to have unit area
         h_flipped = h_flipped / torch.sum(h_flipped)
 
+        c_t = torch.tensor(0.0, device=device)
+        if impulse is True:
+            # Dummy kernel for testing impulse response
+            h0 = torch.zeros(len(tvec), device=device)
+            h0[idx_100_ms] = 1.0
+            svec = h0.to(dtype=torch.float64)
+
+            c_t_imp = torch.tensor(impulse_contrast, device=device)
+            c_t = c_t_imp
+
+        # Padding is necessary for the convolution operation to work properly.
         # Calculate padding size
         padding_size = len(tvec) - 1
 
@@ -1037,25 +1046,26 @@ class WorkingRetina(RetinaMath):
             * dt
         )
 
-        if self.response_type == "off":
-            x_t_vec = -x_t_vec
+        # if self.response_type == "off":
+        #     x_t_vec = -x_t_vec
 
         ### High pass stages ###
-        c_t = y_t = torch.tensor(0.0, device=device)
-        Ts_t = T0
+        y_t = torch.tensor(0.0, device=device)
+        Ts_t = T0 / (1 + c_t / Chalf)
         yvec = torch.zeros(len(tvec), device=device)
         Ts_vec = torch.ones(len(tvec), device=device) * T0
         c_t_vec = torch.zeros(len(tvec), device=device)
         for idx, this_time in enumerate(tvec[1:]):
             y_t = y_t + dt * (
                 (-y_t / Ts_t)
-                # (-y_t /(1 + Ts_t))
                 + (x_t_vec[idx] - x_t_vec[idx - 1]) / dt
                 + (((1 - HS) * x_t_vec[idx]) / Ts_t)
             )
             Ts_t = T0 / (1 + c_t / Chalf)
-            # Ts_t = T0 / (1 + (c_t / Chalf) ** 2)
             c_t = c_t + dt * ((torch.abs(y_t) - c_t) / Tc)
+            if impulse is True:
+                c_t = c_t_imp
+
             yvec[idx] = y_t
             Ts_vec[idx] = Ts_t
             c_t_vec[idx] = c_t
@@ -1065,28 +1075,33 @@ class WorkingRetina(RetinaMath):
         tvec = tvec.cpu().numpy()
         dt = dt.cpu().numpy()
 
-        # print(f"NL: {NL}, TL: {TL}, HS: {HS}, T0: {T0}, Chalf: {Chalf}, D: {D}")
-
         # Ts_vec = Ts_vec.cpu().numpy()
         # c_t_vec = c_t_vec.cpu().numpy()
-        # x_t_vec = x_t_vec.cpu().numpy()
+        # svec = svec.cpu().numpy()
         # fig, axs = plt.subplots(1, 2)
-        # axs[0].plot(tvec, yvec)
-        # axs[0].plot(tvec, c_t_vec)
-        # axs[0].plot(tvec, x_t_vec)
-        # legend = ["y", "c", "x"]
+        # axs[0].plot(tvec[:-1], yvec[:-1])
+        # axs[0].plot(tvec[:-1], svec[:-1])
+        # axs[0].plot(tvec[:-1], c_t_vec[:-1])
+        # legend = ["generation potential", "stimulus", "contrast estimate"]
+        # # legend = ["y"]
+        # # Set y axis limits to -0.2 to 1.1
+        # axs[0].set_ylim([-0.2, 1.1])
         # axs[0].legend(legend)
-        # axs[1].plot(tvec, Ts_vec)
+        # axs[1].plot(tvec[:-1], Ts_vec[:-1])
         # legend = ["Ts"]
         # axs[1].legend(legend)
-        # plt.show()
+        # # Save figure as eps
+        # filename = f"impulse_c_{c_t_imp.cpu().numpy():.3f}.eps"
+        # filename_full = self.context.output_folder / filename
+        # fig.savefig(filename_full, format="eps")
+        # # plt.show()
 
         D = params["D"]
         A = params["A"]
         tonicdrive = params["tonicdrive"]
-        D_tp = int(D / dt)
+        D_tp = int(np.round(D / dt))
         temporal_signal = np.concatenate((np.zeros(len(tvec)), np.zeros(D_tp)))
-        # time shift rvec by delay D
+        # Apply nonlinearity and time shifted yvec by delay D
         temporal_signal[D_tp:] = np.maximum(A * yvec + tonicdrive, 0)
         temporal_signal = temporal_signal[: len(tvec)]
 
@@ -1380,6 +1395,18 @@ class WorkingRetina(RetinaMath):
                     generator_potentials[idx, :] = self._create_temporal_signal_gc(
                         tvec, svecs[idx, :], video_dt, params
                     )
+                    # # Impulse response for parasol cells
+                    # for contrast in [0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64]:
+                    #     generator_potentials[idx, :] = self._create_temporal_signal_gc(
+                    #         tvec,
+                    #         svecs[idx, :],
+                    #         video_dt,
+                    #         params,
+                    #         impulse=True,
+                    #         impulse_contrast=contrast,
+                    #     )
+                    # sys.exit()
+
                 elif self.gc_type == "midget":
                     gen_pot_cen = self._create_temporal_signal(
                         tvec, svecs_cen[idx, :], video_dt, params, "cen"
