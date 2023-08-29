@@ -968,7 +968,7 @@ class WorkingRetina(RetinaMath):
         return generator_potential
 
     def _create_temporal_signal_gc(
-        self, tvec, svec, dt, params, impulse=False, impulse_contrast=1.0
+        self, tvec, svec, dt, params, show_impulse=False, impulse_contrast=1.0
     ):
         """
         Contrast gain control implemented in temporal domain according to Victor_1987_JPhysiol
@@ -976,7 +976,6 @@ class WorkingRetina(RetinaMath):
 
         # Convert to appropriate units
         dt = dt / b2u.ms  # sampling period in ms
-        idx_100_ms = int(np.round(100 / dt))
         tvec = tvec / b2u.ms
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -1002,7 +1001,7 @@ class WorkingRetina(RetinaMath):
 
         ### Low pass filter ###
 
-        # Calculate the impulse response function.
+        # Calculate the show_impulse response function.
         h = (
             (1 / torch.math.factorial(NL))
             * (tvec / TL) ** (NL - 1)
@@ -1014,18 +1013,17 @@ class WorkingRetina(RetinaMath):
         # need to do it manually.
         h_flipped = torch.flip(h, dims=[0])
 
-        # Scale the impulse response to have unit area
+        # Scale the show_impulse response to have unit area
         h_flipped = h_flipped / torch.sum(h_flipped)
 
         c_t = torch.tensor(0.0, device=device)
-        if impulse is True:
-            # Dummy kernel for testing impulse response
-            h0 = torch.zeros(len(tvec), device=device)
-            h0[idx_100_ms] = 1.0
-            svec = h0.to(dtype=torch.float64)
+        if show_impulse is True:
+            svec = svec.to(dtype=torch.float64)
 
             c_t_imp = torch.tensor(impulse_contrast, device=device)
             c_t = c_t_imp
+
+            yvec = torch.zeros(len(tvec), device=device)
 
         # Padding is necessary for the convolution operation to work properly.
         # Calculate padding size
@@ -1046,15 +1044,9 @@ class WorkingRetina(RetinaMath):
             * dt
         )
 
-        # if self.response_type == "off":
-        #     x_t_vec = -x_t_vec
-
         ### High pass stages ###
         y_t = torch.tensor(0.0, device=device)
         Ts_t = T0 / (1 + c_t / Chalf)
-        yvec = torch.zeros(len(tvec), device=device)
-        Ts_vec = torch.ones(len(tvec), device=device) * T0
-        c_t_vec = torch.zeros(len(tvec), device=device)
         for idx, this_time in enumerate(tvec[1:]):
             y_t = y_t + dt * (
                 (-y_t / Ts_t)
@@ -1063,39 +1055,17 @@ class WorkingRetina(RetinaMath):
             )
             Ts_t = T0 / (1 + c_t / Chalf)
             c_t = c_t + dt * ((torch.abs(y_t) - c_t) / Tc)
-            if impulse is True:
-                c_t = c_t_imp
 
-            yvec[idx] = y_t
-            Ts_vec[idx] = Ts_t
-            c_t_vec[idx] = c_t
+            if show_impulse is True:
+                c_t = c_t_imp
+                yvec[idx] = y_t
 
         # End of pytorch loop
-        yvec = yvec.cpu().numpy()
-        tvec = tvec.cpu().numpy()
+
+        if show_impulse is True:
+            return yvec.cpu().numpy()
+
         dt = dt.cpu().numpy()
-
-        # Ts_vec = Ts_vec.cpu().numpy()
-        # c_t_vec = c_t_vec.cpu().numpy()
-        # svec = svec.cpu().numpy()
-        # fig, axs = plt.subplots(1, 2)
-        # axs[0].plot(tvec[:-1], yvec[:-1])
-        # axs[0].plot(tvec[:-1], svec[:-1])
-        # axs[0].plot(tvec[:-1], c_t_vec[:-1])
-        # legend = ["generation potential", "stimulus", "contrast estimate"]
-        # # legend = ["y"]
-        # # Set y axis limits to -0.2 to 1.1
-        # axs[0].set_ylim([-0.2, 1.1])
-        # axs[0].legend(legend)
-        # axs[1].plot(tvec[:-1], Ts_vec[:-1])
-        # legend = ["Ts"]
-        # axs[1].legend(legend)
-        # # Save figure as eps
-        # filename = f"impulse_c_{c_t_imp.cpu().numpy():.3f}.eps"
-        # filename_full = self.context.output_folder / filename
-        # fig.savefig(filename_full, format="eps")
-        # # plt.show()
-
         D = params["D"]
         A = params["A"]
         tonicdrive = params["tonicdrive"]
@@ -1149,14 +1119,14 @@ class WorkingRetina(RetinaMath):
         D = params["D"]
 
         ### Low pass filter ###
-        # Calculate the impulse response function.
+        # Calculate the show_impulse response function.
         h = (
             (1 / torch.math.factorial(NL))
             * (tvec / TL) ** (NL - 1)
             * torch.exp(-tvec / TL)
         )
 
-        # With large values of NL, the impulse response function runs out of humour (becomes inf or nan)
+        # With large values of NL, the show_impulse response function runs out of humour (becomes inf or nan)
         # at later latencies. We can avoid this by setting these inf and nan values of h to zero.
         h[torch.isinf(h)] = 0
         h[torch.isnan(h)] = 0
@@ -1166,7 +1136,7 @@ class WorkingRetina(RetinaMath):
         # need to do it manually.
         h_flipped = torch.flip(h, dims=[0])
 
-        # Scale the impulse response to have unit area
+        # Scale the show_impulse response to have unit area
         h_flipped = h_flipped / torch.sum(h_flipped)
 
         # Calculate padding size
@@ -1302,26 +1272,59 @@ class WorkingRetina(RetinaMath):
         return_monitor=False,
         filename=None,
         simulation_dt=0.001,
+        get_impulse_response=False,
+        contrast_for_impulses=None,
     ):
         """
-        Runs the LNP pipeline for a single ganglion cell (spiking by Brian2)
+        Runs the LNP pipeline for a single ganglion cell (spiking by Brian2).
+        If `get_impulse_response` is True, returns impulse response for parasol cells but
+        does not run the pipeline.
 
         Parameters
         ----------
         cell_index : int or None, optional
-            Index of the cell to run. If None, run all cells. The default is None.
+            Index of the cell to run. If None, run all cells. Default is None.
         n_trials : int, optional
-            Number of trials to run. The default is 1.
+            Number of trials to run. Default is 1.
         save_data : bool, optional
-            Whether to save the data. The default is False.
+            Whether to save the data. Default is False.
         spike_generator_model : str, optional
-            'refractory' or 'poisson'. The default is 'refractory'.
+            Model for spike generation: 'refractory' or 'poisson'. Default is 'refractory'.
         return_monitor : bool, optional
-            Whether to return a raw Brian2 SpikeMonitor. The default is False.
-        filename : str, optional
-            Filename to save the data to. The default is None.
+            Whether to return a raw Brian2 SpikeMonitor. Default is False.
+        filename : str or None, optional
+            Filename to save the data to. Default is None.
         simulation_dt : float, optional
-            Time step of the simulation. The default is 0.001 (1 ms)
+            Time step of the simulation. Default is 0.001 (1 ms).
+        get_impulse_response : bool, optional
+            Whether to compute and return the impulse response for parasol cells.
+            If True, the function will not run the pipeline but instead compute the impulse response.
+            Default is False.
+        contrast_for_impulses : list of floats or None, optional
+            If `get_impulse_response` is True, this should be a list of contrast values
+            for which the impulse responses are computed. Default is None.
+
+        Returns
+        -------
+        spiketrains : list of arrays
+            Each array in the list represents the spike times of a particular cell.
+        interpolated_rates_array : numpy array
+            Array representing the interpolated rates of the cells.
+
+        Raises
+        ------
+        AssertionError
+            If `get_impulse_response` is True but the necessary conditions are not met
+            (e.g. cell_index is not an integer, the cell type is not "parasol", or contrasts
+            are not specified correctly).
+        ValueError
+            If `spike_generator_model` is neither "refractory" nor "poisson".
+
+        Notes
+        -----
+        - If `save_data` is True, the function saves the spike data and possibly
+        the interpolated rates (analog signal) into a file.
+        - If `return_monitor` is True, only the Brian2 SpikeMonitor is returned.
         """
 
         # Save spike generation model
@@ -1331,6 +1334,48 @@ class WorkingRetina(RetinaMath):
         stim_len_tp = self.stimulus_video.video_n_frames
         duration = stim_len_tp * video_dt
         simulation_dt = simulation_dt * b2u.second  # output
+        tvec = range(stim_len_tp) * video_dt
+
+        if get_impulse_response is True:
+            assert isinstance(
+                cell_index, int
+            ), "Impulse response cell_index must be an integer, aborting..."
+            assert (
+                self.gc_type == "parasol"
+            ), "Impulse response only available for parasol cells, aborting..."
+            assert contrast_for_impulses is not None and isinstance(
+                contrast_for_impulses, list
+            ), "Impulse must specify contrasts as list, aborting..."
+
+            # Dummy kernel for show_impulse response
+            svec = np.zeros(len(tvec))
+            dt = video_dt / b2u.ms
+            idx_100_ms = int(np.round(100 / dt))
+            svec[idx_100_ms] = 1.0
+
+            # Impulse response for parasol cells
+            params = self.gc_df.loc[cell_index]
+            impulse_for_viz_dict = {
+                "tvec": tvec / b2u.second,
+                "svec": svec,
+            }
+            impulse_for_viz_dict["Unit idx"] = cell_index
+            # Append to impulse_for_viz_dict a key str(contrast) for each contrast,
+            # holding empty array for impulse response
+
+            for contrast in contrast_for_impulses:
+                yvec = self._create_temporal_signal_gc(
+                    tvec,
+                    svec,
+                    video_dt,
+                    params,
+                    show_impulse=True,
+                    impulse_contrast=contrast,
+                )
+                impulse_for_viz_dict[str(contrast)] = yvec
+
+            self.impulse_for_viz_dict = impulse_for_viz_dict
+            return
 
         # Run all cells
         if cell_index is None:
@@ -1356,7 +1401,6 @@ class WorkingRetina(RetinaMath):
         spatial_filters = (
             spatial_filters / np.sum(spatial_filters * center_masks, axis=1)[:, None]
         )
-        tvec = range(stim_len_tp) * video_dt
 
         if self.temporal_model == "dynamic":
             # Contrast gain control depends dynamically on contrast
@@ -1395,17 +1439,6 @@ class WorkingRetina(RetinaMath):
                     generator_potentials[idx, :] = self._create_temporal_signal_gc(
                         tvec, svecs[idx, :], video_dt, params
                     )
-                    # # Impulse response for parasol cells
-                    # for contrast in [0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64]:
-                    #     generator_potentials[idx, :] = self._create_temporal_signal_gc(
-                    #         tvec,
-                    #         svecs[idx, :],
-                    #         video_dt,
-                    #         params,
-                    #         impulse=True,
-                    #         impulse_contrast=contrast,
-                    #     )
-                    # sys.exit()
 
                 elif self.gc_type == "midget":
                     gen_pot_cen = self._create_temporal_signal(
@@ -1564,6 +1597,7 @@ class WorkingRetina(RetinaMath):
         save_data = self.context.my_run_options["save_data"]
         spike_generator_model = self.context.my_run_options["spike_generator_model"]
         simulation_dt = self.context.my_run_options["simulation_dt"]
+        self.get_impulse_response = self.context.my_run_options["get_impulse_response"]
 
         for filename in filenames:
             self.run_cells(
@@ -1575,30 +1609,6 @@ class WorkingRetina(RetinaMath):
                 filename=filename,
                 simulation_dt=simulation_dt,
             )
-
-    def run_all_cells(
-        self,
-        spike_generator_model="refractory",
-        save_data=False,
-    ):
-        """
-        Runs the LNP pipeline for all ganglion cells (legacy function)
-
-        Parameters
-        ----------
-        spike_generator_model : str
-            'refractory' or 'poisson'
-        save_data : bool
-            Whether to save the data
-
-        """
-
-        self.run_cells(
-            cell_index=None,
-            n_trials=1,
-            spike_generator_model=spike_generator_model,
-            save_data=save_data,
-        )
 
     def save_spikes_csv(self, filename=None):
         """
@@ -1659,7 +1669,7 @@ class WorkingRetina(RetinaMath):
 class PhotoReceptor:
     """
     This class gets one image at a time, and provides the cone response.
-    After instantiation, the RGC group can get one frame at a time, and the system will give an impulse response.
+    After instantiation, the RGC group can get one frame at a time, and the system will give an show_impulse response.
 
     This is not necessary for GC transfer function, it is not used in Chichilnisky_2002_JNeurosci Field_2010_Nature.
     Instead, they focus the pattern directly on isolated cone mosaic.

@@ -254,7 +254,7 @@ n_files = 1
 
 # Either n_trials or n_cells must be 1, and the other > 1
 my_run_options = {
-    "cell_index": None,  # int or None for all cells
+    "cell_index": None,  # int, None for all cells
     "n_trials": 1,  # For each of the response files
     "spike_generator_model": "refractory",  # poisson or refractory
     "save_data": True,
@@ -456,7 +456,7 @@ if __name__ == "__main__":
     ########################
 
     # See my_stimulus_options for valid stimulus_options
-    PM.stimulate.make_stimulus_video()
+    # PM.stimulate.make_stimulus_video()
 
     ###########################################
     ### Load stimulus to get working retina ###
@@ -468,19 +468,31 @@ if __name__ == "__main__":
     ### Show single ganglion cell response ###
     ##########################################
 
-    # example_gc = 2  # int or 'None'
+    example_gc = 0  # int or 'None'
     # PM.working_retina.convolve_stimulus(example_gc)
 
     # # PM.viz.show_spatiotemporal_filter(PM.working_retina)
     # PM.viz.show_convolved_stimulus(PM.working_retina)
 
+    ########################################
+    # Show parasol impulse response and exit
+    ########################################
+    contrast_for_impulses = [0.01, 0.08, 0.64, 1.00]
+    PM.working_retina.run_cells(
+        cell_index=example_gc,  # int
+        get_impulse_response=True,  # Return with impulse response
+        contrast_for_impulses=contrast_for_impulses,  # List of contrasts
+    )
+
+    PM.viz.show_parasol_impulse_response(PM.working_retina, savefigname="testi.eps")
+
     ####################################
     ### Run multiple trials or cells ###
     ####################################
 
-    PM.working_retina.run_with_my_run_options()
+    # PM.working_retina.run_with_my_run_options()
 
-    PM.viz.show_gc_responses(PM.working_retina)
+    # PM.viz.show_gc_responses(PM.working_retina)
 
     # PM.viz.show_stimulus_with_gcs(
     #     PM.working_retina,
@@ -508,7 +520,6 @@ if __name__ == "__main__":
     ### Run all cells ###
     #####################
 
-    # PM.working_retina.run_all_cells(spike_generator_model="poisson", save_data=False)
     # PM.viz.show_gc_responses(PM.working_retina)
 
     # PM.working_retina.save_spikes_csv(filename='testi_spikes.csv') # => METADATA
