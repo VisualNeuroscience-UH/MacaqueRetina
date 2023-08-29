@@ -347,9 +347,6 @@ class WorkingRetina(RetinaMath):
         """
 
         filter_params = self.gc_df.iloc[cell_index][["n", "p1", "p2", "tau1", "tau2"]]
-        if self.response_type == "off":
-            filter_params[1] = (-1) * filter_params[1]
-            filter_params[2] = (-1) * filter_params[2]
 
         tvec = np.linspace(0, self.data_filter_duration, self.temporal_filter_len)
         temporal_filter = self.diff_of_lowpass_filters(tvec, *filter_params)
@@ -1159,9 +1156,6 @@ class WorkingRetina(RetinaMath):
             * dt
         )
 
-        if self.response_type == "off":
-            x_t_vec = -x_t_vec
-
         ### High pass stages ###
         y_t = torch.tensor(0.0, device=device)
         yvec = torch.zeros(len(tvec), device=device)
@@ -1404,6 +1398,11 @@ class WorkingRetina(RetinaMath):
             spatial_filters / np.sum(spatial_filters * center_masks, axis=1)[:, None]
         )
 
+        # Spatial OFF filters have been inverted to max upwards for construction of RFs.
+        # We need to invert them back to max downwards for simulation.
+        if self.response_type == "off":
+            spatial_filters = -spatial_filters
+
         if self.temporal_model == "dynamic":
             # Contrast gain control depends dynamically on contrast
             num_cells = len(cell_indices)
@@ -1599,7 +1598,6 @@ class WorkingRetina(RetinaMath):
         save_data = self.context.my_run_options["save_data"]
         spike_generator_model = self.context.my_run_options["spike_generator_model"]
         simulation_dt = self.context.my_run_options["simulation_dt"]
-        self.get_impulse_response = self.context.my_run_options["get_impulse_response"]
 
         for filename in filenames:
             self.run_cells(
