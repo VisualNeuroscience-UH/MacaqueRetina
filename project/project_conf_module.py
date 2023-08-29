@@ -109,7 +109,7 @@ project = "Retina"
 """
 Current experiment. Use distinct folders fo distinct stimuli.
 """
-experiment = "test2"  # "test"
+experiment = "test3"  # "test"
 
 
 """
@@ -132,7 +132,7 @@ Data context for output.
 
 # output_folder = "test_c0p5_10Hz"
 # output_folder = "VAE_dynamic_poisson_tf3"
-output_folder = "VAE_dynamic_refractory"
+output_folder = "VAE_dynamic_refractory_new_mechanism"
 
 
 """
@@ -462,13 +462,13 @@ if __name__ == "__main__":
     ### Load stimulus to get working retina ###
     ###########################################
 
-    PM.working_retina.load_stimulus()
+    # PM.working_retina.load_stimulus()
 
     ##########################################
     ### Show single ganglion cell response ###
     ##########################################
 
-    example_gc = 0  # int or 'None'
+    # example_gc = 0  # int or 'None'
     # PM.working_retina.convolve_stimulus(example_gc)
 
     # # PM.viz.show_spatiotemporal_filter(PM.working_retina)
@@ -477,14 +477,14 @@ if __name__ == "__main__":
     ########################################
     # Show parasol impulse response and exit
     ########################################
-    contrast_for_impulses = [0.01, 0.08, 0.64, 1.00]
-    PM.working_retina.run_cells(
-        cell_index=example_gc,  # int
-        get_impulse_response=True,  # Return with impulse response
-        contrast_for_impulses=contrast_for_impulses,  # List of contrasts
-    )
+    # contrast_for_impulses = [0.01, 0.02, 1.00]
+    # PM.working_retina.run_cells(
+    #     cell_index=example_gc,  # int
+    #     get_impulse_response=True,  # Return with impulse response
+    #     contrast_for_impulses=contrast_for_impulses,  # List of contrasts
+    # )
 
-    PM.viz.show_parasol_impulse_response(PM.working_retina, savefigname="testi.eps")
+    # PM.viz.show_parasol_impulse_response(PM.working_retina, savefigname="testi.png")
 
     ####################################
     ### Run multiple trials or cells ###
@@ -531,43 +531,41 @@ if __name__ == "__main__":
     ###############################################
     ###############################################
 
-    # exp_variables = ["temporal_frequency"]  # from my_stimulus_options
-    exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
+    exp_variables = ["contrast"]  # from my_stimulus_options
+    # exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
     # Define experiment parameters. List lengths must be equal.
     # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logaritmic = [True]
-    # experiment_dict = {
-    #     "exp_variables": exp_variables,
-    #     # "min_max_values": [[0.015, 0.98]],  # two vals for each exp_variable # contrast
-    #     "min_max_values": [
-    #         [1, 41]
-    #     ],  # two vals for each exp_variable # temporal frequency
-    #     "min_max_values": [[1, 41], [0.02, 0.25]],  # temporal frequency, contrast
-    #     "n_steps": [10, 5],  # temporal frequency, contras
-    #     "logaritmic": [True, True],  # temporal frequency, contras
-    #     # "n_steps": [10],
-    #     # "logaritmic": [False],
-    # }
+    experiment_dict = {
+        "exp_variables": exp_variables,
+        "min_max_values": [[0.015, 0.98]],  # two vals for each exp_variable # contrast
+        # "min_max_values": [[1, 41]],  # two vals # temporal frequency
+        # "min_max_values": [[1, 41], [0.02, 0.25]],  # temporal frequency, contrast
+        # "n_steps": [10, 5],  # temporal frequency, contrast
+        # "logaritmic": [True, True],  # temporal frequency, contras
+        "n_steps": [6],
+        "logaritmic": [False],
+    }
 
-    # PM.experiment.build_and_run(experiment_dict, n_trials=10, build_without_run=False)
+    PM.experiment.build_and_run(experiment_dict, n_trials=5)
 
     ###############################
     ## Analyze Experiment ###
     ###############################
 
-    # my_analysis_options = {
-    #     "exp_variables": exp_variables,
-    #     "t_start_ana": 0.5,
-    #     "t_end_ana": 6.5,
-    # }
+    my_analysis_options = {
+        "exp_variables": exp_variables,
+        "t_start_ana": 0.5,
+        "t_end_ana": 6.5,
+    }
 
-    # PM.ana.analyze_response(my_analysis_options)
+    PM.ana.analyze_response(my_analysis_options)
 
     ################################
     ### Visualize Experiment ###
     ################################
 
     # PM.viz.F1F2_popul_response(exp_variables, xlog=False)
-    # PM.viz.F1F2_unit_response(exp_variables, xlog=False)
+    PM.viz.F1F2_unit_response(exp_variables, xlog=False)
     # PM.viz.fr_response(exp_variables, xlog=True)
     # PM.viz.spike_raster_response(exp_variables, savefigname=None)
     # PM.viz.tf_vs_fr_cg_ph(exp_variables, n_contrasts=None, xlog=True, ylog=True)

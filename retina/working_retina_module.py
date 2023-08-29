@@ -1023,8 +1023,6 @@ class WorkingRetina(RetinaMath):
             c_t_imp = torch.tensor(impulse_contrast, device=device)
             c_t = c_t_imp
 
-            yvec = torch.zeros(len(tvec), device=device)
-
         # Padding is necessary for the convolution operation to work properly.
         # Calculate padding size
         padding_size = len(tvec) - 1
@@ -1046,6 +1044,7 @@ class WorkingRetina(RetinaMath):
 
         ### High pass stages ###
         y_t = torch.tensor(0.0, device=device)
+        yvec = torch.zeros(len(tvec), device=device)
         Ts_t = T0 / (1 + c_t / Chalf)
         for idx, this_time in enumerate(tvec[1:]):
             y_t = y_t + dt * (
@@ -1055,15 +1054,17 @@ class WorkingRetina(RetinaMath):
             )
             Ts_t = T0 / (1 + c_t / Chalf)
             c_t = c_t + dt * ((torch.abs(y_t) - c_t) / Tc)
+            yvec[idx] = y_t
 
             if show_impulse is True:
                 c_t = c_t_imp
-                yvec[idx] = y_t
 
         # End of pytorch loop
 
+        yvec = yvec.cpu().numpy()
+
         if show_impulse is True:
-            return yvec.cpu().numpy()
+            return yvec
 
         dt = dt.cpu().numpy()
         D = params["D"]
@@ -1072,7 +1073,8 @@ class WorkingRetina(RetinaMath):
         D_tp = int(np.round(D / dt))
         temporal_signal = np.concatenate((np.zeros(len(tvec)), np.zeros(D_tp)))
         # Apply nonlinearity and time shifted yvec by delay D
-        temporal_signal[D_tp:] = np.maximum(A * yvec + tonicdrive, 0)
+        # tonicdrive**2 is added to mimick spontaneous firing rates
+        temporal_signal[D_tp:] = np.maximum(A * yvec + tonicdrive**2, 0)
         temporal_signal = temporal_signal[: len(tvec)]
 
         return temporal_signal

@@ -398,16 +398,6 @@ class Analysis(AnalysisBase):
             (F_unit_mean[:, :, 2], F_unit_mean[:, :, 3]), axis=0
         )
 
-        F_unit_mean_phase_reshaped_norm = self._normalize_phase(
-            F_unit_mean_phase_reshaped, experiment_df, exp_variables
-        )
-
-        F_unit_phase_df = pd.DataFrame(
-            F_unit_mean_phase_reshaped_norm, columns=cond_names.tolist()
-        )
-        F_unit_phase_df["unit"] = unit
-        F_unit_phase_df["F_peak"] = F_peak
-
         # Save results
         filename_out = f"{cond_names_string}_population_means.csv"
         csv_save_path = data_folder / filename_out
@@ -425,9 +415,21 @@ class Analysis(AnalysisBase):
         csv_save_path = data_folder / filename_out
         F_unit_ampl_df.to_csv(csv_save_path)
 
-        filename_out = f"{cond_names_string}_F1F2_unit_phase_means.csv"
-        csv_save_path = data_folder / filename_out
-        F_unit_phase_df.to_csv(csv_save_path)
+        if "temporal_frequency" in exp_variables:
+            # Normalize phase -- resets phase to slowest temporal frequency
+            F_unit_mean_phase_reshaped_norm = self._normalize_phase(
+                F_unit_mean_phase_reshaped, experiment_df, exp_variables
+            )
+
+            F_unit_phase_df = pd.DataFrame(
+                F_unit_mean_phase_reshaped_norm, columns=cond_names.tolist()
+            )
+            F_unit_phase_df["unit"] = unit
+            F_unit_phase_df["F_peak"] = F_peak
+
+            filename_out = f"{cond_names_string}_F1F2_unit_phase_means.csv"
+            csv_save_path = data_folder / filename_out
+            F_unit_phase_df.to_csv(csv_save_path)
 
     def amplitude_sensitivity(self):
         """ """
