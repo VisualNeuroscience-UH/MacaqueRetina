@@ -1059,22 +1059,31 @@ class WorkingRetina(RetinaMath):
         # End of pytorch loop
 
         yvec = yvec.cpu().numpy()
-
-        if show_impulse is True:
-            return yvec
-
-        dt = dt.cpu().numpy()
         D = params["D"]
-        A = params["A"]
-        tonicdrive = params["tonicdrive"]
-        D_tp = int(np.round(D / dt))
-        temporal_signal = np.concatenate((np.zeros(len(tvec)), np.zeros(D_tp)))
-        # Apply nonlinearity and time shifted yvec by delay D
-        # tonicdrive**2 is added to mimick spontaneous firing rates
-        temporal_signal[D_tp:] = np.maximum(A * yvec + tonicdrive**2, 0)
-        temporal_signal = temporal_signal[: len(tvec)]
+        D_tp = int(np.round(D / dt.cpu().numpy()))
+        generator_potential = np.concatenate((np.zeros(len(tvec)), np.zeros(D_tp)))
+        generator_potential[D_tp:] = params["A"] * yvec
+        return generator_potential
 
-        return temporal_signal
+    def _generator_to_firing_rate_dynamic(
+        self,
+        params_all,
+        generator_potentials,
+    ):
+        assert (
+            params_all.shape[0] == generator_potentials.shape[0]
+        ), "Number of cells in params_all and generator_potentials must match, aborting..."
+
+        tonicdrive = params_all["tonicdrive"]
+        # Expanding tonicdrive to match the shape of generator_potentials
+        tonicdrive = np.expand_dims(tonicdrive, axis=1)
+        # Apply nonlinearity
+        # tonicdrive**2 is added to mimick spontaneous firing rates
+        firing_rates = np.maximum(generator_potentials + tonicdrive**2, 0)
+        plt.plot(firing_rates.T), plt.show()
+        pdb.set_trace()
+
+        return firing_rates
 
     def _create_temporal_signal(self, tvec, svec, dt, params, region):
         """
@@ -1115,10 +1124,8 @@ class WorkingRetina(RetinaMath):
         TL = torch.tensor(params["NLTL"] / params["NL"], device=device)
         HS = torch.tensor(params["HS"], device=device)
         TS = torch.tensor(params["TS"], device=device)
-        D = params["D"]
 
         ### Low pass filter ###
-        # Calculate the show_impulse response function.
         h = (
             (1 / torch.math.factorial(NL))
             * (tvec / TL) ** (NL - 1)
@@ -1168,20 +1175,13 @@ class WorkingRetina(RetinaMath):
             yvec[idx] = y_t
 
         # End of pytorch loop
+
         yvec = yvec.cpu().numpy()
-        tvec = tvec.cpu().numpy()
-        dt = dt.cpu().numpy()
-
         D = params["D"]
-        A = params["A"]
-        tonicdrive = params["tonicdrive"]
-        D_tp = int(D / dt)
-        temporal_signal = np.concatenate((np.zeros(len(tvec)), np.zeros(D_tp)))
-        # time shift rvec by delay D
-        temporal_signal[D_tp:] = np.maximum(A * yvec + tonicdrive, 0)
-        temporal_signal = temporal_signal[: len(tvec)]
-
-        return temporal_signal
+        D_tp = int(np.round(D / dt.cpu().numpy()))
+        generator_potential = np.concatenate((np.zeros(len(tvec)), np.zeros(D_tp)))
+        generator_potential[D_tp:] = params["A"] * yvec
+        return generator_potential
 
     def _show_surround_and_exit(self, center_surround_filters, spatial_filters):
         """
@@ -1234,9 +1234,9 @@ class WorkingRetina(RetinaMath):
         # Reshape masks and spatial_filters to match the dimensions of stimulus_cropped
         spatial_filters_reshaped = np.expand_dims(spatial_filters, axis=2)
 
-        if gc_type is "parasol":
+        if gc_type == "parasol":
             masks = np.ones_like(spatial_filters_reshaped)  # mask with all ones
-        elif gc_type is "midget":
+        elif gc_type == "midget":
             if surround is True:
                 # Surround is always negative at this stage
                 masks = spatial_filters < 0
@@ -1272,7 +1272,8 @@ class WorkingRetina(RetinaMath):
         contrast_for_impulses=None,
     ):
         """
-        Runs the LNP pipeline for a single ganglion cell (spiking by Brian2).
+        Runs the LN pipeline for a single ganglion cell (spiking by Brian2).
+        Off responses are inverted back to max negative in this method
         If `get_impulse_response` is True, returns impulse response for parasol cells but
         does not run the pipeline.
 
@@ -1433,13 +1434,17 @@ class WorkingRetina(RetinaMath):
                 )
 
             # Get generator potentials:  Time to get generator potentials:  19.6 seconds
+            tqdm_desc = "Preparing dynamic generator potential..."
             generator_potentials = np.empty((num_cells, stim_len_tp))
-            for idx in range(num_cells):
+            for idx in tqdm(range(num_cells), desc=tqdm_desc):
                 params = self.gc_df.loc[cell_indices[idx]]
                 if self.gc_type == "parasol":
-                    generator_potentials[idx, :] = self._create_temporal_signal_gc(
+                    generator_potential = self._create_temporal_signal_gc(
                         tvec, svecs[idx, :], video_dt, params
                     )
+                    # generator_potentials are individually delayed from the beginning of the stimulus
+                    generator_potential = generator_potential[:stim_len_tp]
+                    generator_potentials[idx, :] = generator_potential
 
                 elif self.gc_type == "midget":
                     gen_pot_cen = self._create_temporal_signal(
@@ -1448,11 +1453,27 @@ class WorkingRetina(RetinaMath):
                     gen_pot_sur = self._create_temporal_signal(
                         tvec, svecs_sur[idx, :], video_dt, params, "sur"
                     )
-                    generator_potentials[idx, :] = gen_pot_cen + gen_pot_sur
+                    # generator_potentials are individually delayed from the beginning of the stimulus
+                    # This may result in diffrerent vector lengths, so we need to crop them to the same length
+                    # before summing them
+                    gen_pot_cen = gen_pot_cen[:stim_len_tp]
+                    gen_pot_sur = gen_pot_sur[:stim_len_tp]
 
+                    # TÄHÄN JÄIT: CEN SUR SVEC ON OK, MUTTA GEN POT EI OLE, SUR SKAALAUTUU LIIAN SUUREKSI
+                    # ota Benardete 1997 VisNeurosci taulukosta 7 Ks/Kc mitat BK midget csv taulukkoon
+                    # skaalaa summattu gen pot sur / gen pot cen vastaamaan Ks/Kc suhdetta
+                    # Tämä on surrogaattiarvio surroundin vaikutuksesta.
+                    #
+
+                    pdb.set_trace()
+                    generator_potentials[idx, :] = gen_pot_cen + gen_pot_sur
             # Dynamic contrast gain control with linear-nonlinear model
             # has no separate nonlinearity, so we can use the generator potential directly
-            firing_rates = generator_potentials
+            params_all = self.gc_df.loc[cell_indices]
+
+            firing_rates = self._generator_to_firing_rate_dynamic(
+                params_all, generator_potentials
+            )
 
         elif self.temporal_model == "fixed":  # Linear model
             # Amplitude will be scaled by first (positive) lowpass filter.
@@ -1463,7 +1484,7 @@ class WorkingRetina(RetinaMath):
                 spatial_filters[:, :, None] * temporal_filters[:, None, :]
             )
 
-            print("Preparing generator potential...")
+            print("Preparing fixed generator potential...")
             generator_potentials = self.convolve_stimulus_batched(
                 cell_indices, stimulus_cropped, spatiotemporal_filters
             )
