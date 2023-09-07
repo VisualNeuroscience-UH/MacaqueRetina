@@ -1095,7 +1095,6 @@ class WorkingRetina(RetinaMath):
         # Apply nonlinearity
         # tonicdrive**2 is added to mimick spontaneous firing rates
         firing_rates = np.maximum(generator_potentials + tonicdrive**2, 0)
-        plt.plot(firing_rates.T), plt.show()
 
         return firing_rates
 
