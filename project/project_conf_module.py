@@ -155,8 +155,8 @@ response_type = "on"
 my_retina = {
     "gc_type": gc_type,
     "response_type": response_type,
-    "ecc_limits": [4, 6],  # degrees
-    "sector_limits": [-3.0, 3.0],  # polar angle in degrees
+    "ecc_limits": [4.7, 5.3],  # degrees
+    "sector_limits": [-1.0, 1.0],  # polar angle in degrees
     "model_density": 1.0,
     "dd_regr_model": "cubic",  # linear, quadratic, cubic. Only used if rf_coverage_adjusted_to_1 is "from_literalure"
     "randomize_position": 0.1,
@@ -235,18 +235,18 @@ my_stimulus_options = {
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
     "pattern": "temporal_square_pattern",  # Natural video is not supported yet. One of the StimulusPatterns
-    "stimulus_form": "rectangular",
-    "size_inner": None,  # Applies to annulus only
-    "size_outer": None,  # Applies to annulus only
-    "stimulus_position": (0, 0),
-    "stimulus_size": 1.5,  # 4.6 deg in Lee_1990_JOSA
+    "stimulus_form": "annulus",
+    "size_inner": 0.02,  # Applies to annulus only
+    "size_outer": 2,  # Applies to annulus only
+    "stimulus_position": (-0.02, -0.01),
+    "stimulus_size": 0.02,  # 4.6 deg in Lee_1990_JOSA
     "background": 128,
-    "contrast": 0.2,  # Weber constrast
+    "contrast": 0.4,  # Weber constrast
     "mean": 128,
-    "temporal_frequency": 1,  # 40,  # Hz
-    "spatial_frequency": 1,
+    "temporal_frequency": 0.01,  # 40,  # Hz
+    "spatial_frequency": 8,
     "phase_shift": 0,  # math.pi,  # radians
-    "stimulus_video_name": "temporal_square_pattern.mp4",
+    "stimulus_video_name": "square_grating.mp4",
 }
 
 # Each gc response file contain n_trials
@@ -254,8 +254,8 @@ n_files = 1
 
 # Either n_trials or n_cells must be 1, and the other > 1
 my_run_options = {
-    "cell_index": None,  # int, None for all cells
-    "n_trials": 1,  # For each of the response files
+    "cell_index": 16,  # int, None for all cells
+    "n_trials": 10,  # For each of the response files
     "spike_generator_model": "refractory",  # poisson or refractory
     "save_data": True,
     "gc_response_filenames": [f"gc_response_{x:02}" for x in range(n_files)],
@@ -456,7 +456,7 @@ if __name__ == "__main__":
     ########################
 
     # See my_stimulus_options for valid stimulus_options
-    # PM.stimulate.make_stimulus_video()
+    PM.stimulate.make_stimulus_video()
 
     ###########################################
     ### Load stimulus to get working retina ###
@@ -494,12 +494,12 @@ if __name__ == "__main__":
 
     PM.viz.show_gc_responses(PM.working_retina)
 
-    # PM.viz.show_stimulus_with_gcs(
-    #     PM.working_retina,
-    #     example_gc=my_run_options["cell_index"],
-    #     frame_number=300,
-    #     show_rf_id=False,
-    # )
+    PM.viz.show_stimulus_with_gcs(
+        PM.working_retina,
+        example_gc=my_run_options["cell_index"],
+        frame_number=300,
+        show_rf_id=True,
+    )
 
     # PM.viz.show_single_gc_view(
     #     PM.working_retina, cell_index=example_gc, frame_number=21

@@ -209,12 +209,27 @@ class WorkingRetina(RetinaMath):
 
     def _get_crop_pixels(self, cell_index):
         """
-        Get pixel coordinates for stimulus crop that is the same size as the spatial filter
+        Get pixel coordinates for a stimulus crop matching the spatial filter size.
 
-        :param cell_index: int
-        :return:
+        Parameters
+        ----------
+        cell_index : int or array-like of int
+            Index or indices of the cell(s) for which to retrieve crop coordinates.
+
+        Returns
+        -------
+        qmin, qmax, rmin, rmax : int or tuple of int
+            Pixel coordinates defining the crop's bounding box.
+            qmin and qmax specify the range in the q-dimension (horizontal),
+            and rmin and rmax specify the range in the r-dimension (vertical).
+
+        Notes
+        -----
+        The crop size is determined by the spatial filter's sidelength.
+
         """
-        if isinstance(cell_index, int) or isinstance(cell_index, np.int32):
+
+        if isinstance(cell_index, (int, np.int32, np.int64)):
             cell_index = np.array([cell_index])
         gc = self.gc_df_pixspace.iloc[cell_index]
         q_center = np.round(gc.q_pix).astype(int).values
@@ -1081,7 +1096,6 @@ class WorkingRetina(RetinaMath):
         # tonicdrive**2 is added to mimick spontaneous firing rates
         firing_rates = np.maximum(generator_potentials + tonicdrive**2, 0)
         plt.plot(firing_rates.T), plt.show()
-        pdb.set_trace()
 
         return firing_rates
 
@@ -1465,7 +1479,7 @@ class WorkingRetina(RetinaMath):
                     # Tämä on surrogaattiarvio surroundin vaikutuksesta.
                     #
 
-                    pdb.set_trace()
+                    # pdb.set_trace()
                     generator_potentials[idx, :] = gen_pot_cen + gen_pot_sur
             # Dynamic contrast gain control with linear-nonlinear model
             # has no separate nonlinearity, so we can use the generator potential directly

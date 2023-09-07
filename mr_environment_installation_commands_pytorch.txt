@@ -6,7 +6,9 @@ conda activate ret_pt
 # Windows without cuda/nvidia gpu
 #conda install pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia
 # Linux w/ cuda 11.7 & pytorch stable
-conda install -y pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia
+# conda install -y pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia
+# Windows 11, wsl2, Linux w/ cuda 12.1 & pytorch nigthly
+pip3 install --pre torch torchvision tiporchaudio --index-url https://download.pytorch.org/whl/nightly/cu121
 pip install ipython
 conda config --add channels conda-forge
 conda config --add channels jamespreed
@@ -26,3 +28,20 @@ conda install -y torch-fidelity torchmetrics
 pip install optuna
 pip install torchsummary
 pip install pyshortcuts
+
+# If you use wsl2, the following will apply
+
+# .wslconfig named file. Put this to your home directory in Windows to adjust memory etc.
+# Settings apply across all Linux distros running on WSL 2
+[wsl2]
+
+# Limits VM memory to use no more than 4 GB, this can be set as whole numbers using GB or MB
+memory=20GB 
+
+# Sets the VM to use two virtual processors
+processors=8
+
+# Sets amount of swap storage space to 8GB, default is 25% of available RAM
+swap=8GB
+
+# More examples in https://learn.microsoft.com/en-us/windows/wsl/wsl-config 

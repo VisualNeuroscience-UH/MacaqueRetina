@@ -594,7 +594,7 @@ class VariationalAutoencoder(nn.Module):
 
         # Allowed n_features: 64, 192, 768, 2048
         self.kid = KernelInceptionDistance(
-            n_features=2048,
+            feature=2048,
             reset_real_features=False,
             normalize=True,
             subset_size=16,
@@ -2097,7 +2097,7 @@ class RetinaVAE(RetinaMath):
         def kid_compare(dataloader_real, dataloader_fake, n_features=64):
             # Set evaluation mode for encoder and decoder
             kid = KernelInceptionDistance(
-                n_features=n_features,
+                feature=n_features,
                 reset_real_features=True,
                 normalize=True,
                 subset_size=16,
