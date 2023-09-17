@@ -56,6 +56,22 @@ class Context(ContextBase):
         validated_properties["path"] = path
 
         # Check input and output folders
+        if "output_folder" not in all_properties.keys():
+            raise KeyError('"output_folder" key is missing, aborting...')
+        output_folder = all_properties["output_folder"]
+        if Path(output_folder).is_relative_to(path):
+            validated_properties["output_folder"] = output_folder
+        elif path.joinpath(output_folder).is_dir:
+            validated_properties["output_folder"] = path.joinpath(output_folder)
+
+        if "stimulus_folder" not in all_properties.keys():
+            raise KeyError('"stimulus_folder" key is missing, aborting...')
+        stimulus_folder = all_properties["stimulus_folder"]
+        if Path(stimulus_folder).is_relative_to(path):
+            validated_properties["stimulus_folder"] = stimulus_folder
+        elif path.joinpath(stimulus_folder).is_dir:
+            validated_properties["stimulus_folder"] = path.joinpath(stimulus_folder)
+
         if "input_folder" not in all_properties.keys():
             raise KeyError('"input_folder" key is missing, aborting...')
         input_folder = all_properties["input_folder"]
@@ -64,16 +80,16 @@ class Context(ContextBase):
         elif path.joinpath(input_folder).is_dir:
             validated_properties["input_folder"] = path.joinpath(input_folder)
 
-        if "output_folder" not in all_properties.keys():
-            raise KeyError('"output_folder" key is missing, aborting...')
-        output_folder = all_properties["output_folder"]
-        if Path(input_folder).is_relative_to(path):
-            validated_properties["output_folder"] = output_folder
-        elif path.joinpath(output_folder).is_dir:
-            validated_properties["output_folder"] = path.joinpath(output_folder)
+        # Create the output, stimulus and input folders if they don't exist
+        if not validated_properties["output_folder"].is_dir():
+            validated_properties["output_folder"].mkdir(parents=True)
+        if not validated_properties["stimulus_folder"].is_dir():
+            validated_properties["stimulus_folder"].mkdir(parents=True)
+        if not validated_properties["input_folder"].is_dir():
+            validated_properties["input_folder"].mkdir(parents=True)
 
         # Remove validated keys before the loop
-        for k in ["path", "input_folder", "output_folder"]:
+        for k in ["path", "input_folder", "output_folder", "stimulus_folder"]:
             all_properties.pop(k, None)
 
         for attr, val in all_properties.items():

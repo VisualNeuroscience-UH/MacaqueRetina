@@ -84,6 +84,90 @@ class Viz:
 
         return is_valid
 
+    def _figsave(self, figurename="", myformat="png", subfolderpath="", suffix=""):
+        """
+        Save the current figure to the working directory or a specified subfolder path.
+
+        This method saves the current figure with various customization options for the
+        filename, format, and location. By default, figures are saved as 'MyFigure.png'.
+        The figure's font settings are configured such that fonts are preserved as they are,
+        and not converted into paths.
+
+        Parameters
+        ----------
+        figurename : str, optional
+            The name of the figure file. If it's specified with an extension, the figure
+            is saved with that name. If it's a relative path, the figure is saved to that path.
+            If not provided, the figure is saved as 'MyFigure.png'. Defaults to "".
+        myformat : str, optional
+            The format of the figure (e.g., 'png', 'jpg', 'svg', etc.).
+            If provided with a leading ".", the "." is removed. Defaults to 'png'.
+        subfolderpath : str, optional
+            The subfolder within the working directory to which the figure is saved.
+            If figurename is a path, this value will be overridden by the parent directory
+            of figurename. Defaults to "".
+        suffix : str, optional
+            A suffix that is added to the end of the filename, just before the file extension.
+            Defaults to "".
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        - The fonts in the figure are configured to be saved as fonts, not as paths.
+        - If the specified subfolder doesn't exist, it is created.
+        - If both `figurename` and `subfolderpath` are paths, `figurename` takes precedence,
+        and `subfolderpath` is overridden.
+        """
+
+        plt.rcParams["svg.fonttype"] = "none"  # Fonts as fonts and not as paths
+        plt.rcParams["ps.fonttype"] = "type3"  # Fonts as fonts and not as paths
+
+        # Confirm pathlib type
+        figurename = Path(figurename)
+        subfolderpath = Path(subfolderpath)
+
+        # Check if figurename is a path. If yes, parse the figurename and subfolderpath
+        if str(figurename.parent) != ".":
+            subfolderpath = figurename.parent
+            figurename = Path(figurename.name)
+
+        if myformat[0] == ".":
+            myformat = myformat[1:]
+
+        filename, file_extension = figurename.stem, figurename.suffix
+
+        filename = filename + suffix
+
+        if not file_extension:
+            file_extension = "." + myformat
+
+        if not figurename:
+            figurename = "MyFigure" + file_extension
+        else:
+            figurename = filename + file_extension
+
+        path = self.context.path
+        figurename_fullpath = Path.joinpath(path, subfolderpath, figurename)
+        full_subfolderpath = Path.joinpath(path, subfolderpath)
+        if not Path.is_dir(full_subfolderpath):
+            Path.mkdir(full_subfolderpath)
+        print(f"Saving figure to {figurename_fullpath}")
+        plt.savefig(
+            figurename_fullpath,
+            dpi=None,
+            facecolor="w",
+            edgecolor="w",
+            orientation="portrait",
+            format=file_extension[1:],
+            transparent=False,
+            bbox_inches="tight",
+            pad_inches=0.1,
+            metadata=None,
+        )
+
     # Fit visualization
     def show_temporal_filter_response(
         self,
@@ -1644,12 +1728,13 @@ class Viz:
         plt.subplot(212)
         # Plot the generator and the average firing rate
         tvec = np.arange(0, generator_potential.shape[-1], 1) * video_dt
-        # pdb.set_trace()
+
         plt.plot(tvec, for_generatorplot, label="Generator")
         plt.xlim([0, duration / b2u.second])
 
         # Compute average firing rate over trials (should approximately follow generator)
-        hist_dt = 1 * b2u.ms
+        # hist_dt = 1 * b2u.ms
+        hist_dt = self.context.my_run_options["simulation_dt"] * b2u.second
         # n_bins = int((duration/hist_dt))
         bin_edges = np.append(
             tvec_new, [duration / b2u.second]
@@ -1721,6 +1806,30 @@ class Viz:
         plt.plot(tvec, firing_rate)
         plt.xlabel("Time (s)]")
         plt.ylabel("Firing rate (Hz)]")
+
+    def show_parasol_impulse_response(self, retina, savefigname=None):
+        viz_dict = retina.impulse_for_viz_dict
+        tvec = viz_dict["tvec"]
+        svec = viz_dict["svec"]
+
+        # Get keys which are not "tvec" or "svec"
+        contrasts = [
+            key for key in viz_dict.keys() if key not in ["tvec", "svec", "Unit idx"]
+        ]
+
+        for this_contrast in contrasts:
+            plt.plot(tvec[:-1], viz_dict[this_contrast][:-1])
+
+        # Set vertical dashed line at max (svec) time point, i.e. at the impulse time
+        plt.axvline(x=tvec[np.argmax(svec)], color="k", linestyle="--")
+        plt.legend(contrasts)
+        plt.ylim(-0.2, 1.1)
+        plt.title(
+            f"Parasol impulse response for unit {str(viz_dict['Unit idx'])} at multiple contrasts"
+        )
+
+        if savefigname is not None:
+            self._figsave(figurename=savefigname)
 
     # PhotoReceptor visualization
     def show_cone_response(self, image, image_after_optics, cone_response):
@@ -1942,7 +2051,7 @@ class Viz:
             id_vars=["trial", "F_peak"],
             value_vars=F_popul_df.columns[:-2],
             var_name=f"{cond_names_string}_names",
-            value_name="responses",
+            value_name="amplitudes",
         )
 
         # Make new columns with conditions' levels
@@ -1960,7 +2069,7 @@ class Viz:
             sns.lineplot(
                 data=F_popul_long_df,
                 x=exp_variables[0],
-                y="responses",
+                y="amplitudes",
                 hue="F_peak",
                 palette="tab10",
                 ax=ax,
@@ -1976,7 +2085,7 @@ class Viz:
                 sns.lineplot(
                     data=F_popul_long_df,
                     x=cond,
-                    y="responses",
+                    y="amplitudes",
                     hue="F_peak",
                     palette="tab10",
                     ax=ax[i],
@@ -2003,15 +2112,15 @@ class Viz:
             data_folder / f"exp_metadata_{cond_names_string}.csv", index_col=0
         )
 
-        F_unit_df = pd.read_csv(
-            data_folder / f"{cond_names_string}_F1F2_unit_means.csv", index_col=0
+        F_unit_ampl_df = pd.read_csv(
+            data_folder / f"{cond_names_string}_F1F2_unit_ampl_means.csv", index_col=0
         )
         F_unit_long_df = pd.melt(
-            F_unit_df,
+            F_unit_ampl_df,
             id_vars=["unit", "F_peak"],
-            value_vars=F_unit_df.columns[:-2],
+            value_vars=F_unit_ampl_df.columns[:-2],
             var_name=f"{cond_names_string}_names",
-            value_name="responses",
+            value_name="amplitudes",
         )
 
         # Make new columns with conditions' levels
@@ -2029,7 +2138,7 @@ class Viz:
             sns.lineplot(
                 data=F_unit_long_df,
                 x=exp_variables[0],
-                y="responses",
+                y="amplitudes",
                 hue="F_peak",
                 palette="tab10",
                 ax=ax,
@@ -2045,7 +2154,7 @@ class Viz:
                 sns.lineplot(
                     data=F_unit_long_df,
                     x=cond,
-                    y="responses",
+                    y="amplitudes",
                     hue="F_peak",
                     palette="tab10",
                     ax=ax[i],
@@ -2122,4 +2231,101 @@ class Viz:
             )
 
         if savefigname:
-            self.figsave(figurename=savefigname)
+            self._figsave(figurename=savefigname)
+
+    def tf_vs_fr_cg(self, exp_variables, n_contrasts=None, xlog=False, ylog=False):
+        """
+        Plot F1 frequency response curves for 2D frequency-contrast experiment.
+        Unit response, i.e. mean across trials.
+        Subplot 1: temporal frequency vs firing rate at n_contrasts
+        Subplot 2: temporal frequency vs contrast gain (cg) at n_contrasts. Contrast gain is defined as the F1 response divided by contrast.
+
+        Parameters
+        ----------
+        exp_variables : list of str
+            List of experiment variables to be plotted.
+        n_contrasts : int
+            Number of contrasts to be plotted. If None, all contrasts are plotted.
+        xlog : bool
+            If True, x-axis is logarithmic.
+        ylog : bool
+            If True, y-axis is logarithmic.
+        """
+
+        data_folder = self.context.output_folder
+        cond_names_string = "_".join(exp_variables)
+
+        # Experiment metadata
+        experiment_df = pd.read_csv(
+            data_folder / f"exp_metadata_{cond_names_string}.csv", index_col=0
+        )
+
+        # Results
+        F_unit_ampl_df = pd.read_csv(
+            data_folder / f"{cond_names_string}_F1F2_unit_ampl_means.csv", index_col=0
+        )
+
+        F_unit_long_df = pd.melt(
+            F_unit_ampl_df,
+            id_vars=["unit", "F_peak"],
+            value_vars=F_unit_ampl_df.columns[:-2],
+            var_name=f"{cond_names_string}_names",
+            value_name="amplitudes",
+        )
+
+        # Make new columns with conditions' levels
+        for cond in exp_variables:
+            levels_s = experiment_df.loc[cond, :]
+            levels_s = pd.to_numeric(levels_s)
+            levels_s = levels_s.round(decimals=2)
+            F_unit_long_df[cond] = F_unit_long_df[f"{cond_names_string}_names"].map(
+                levels_s
+            )
+
+        # Make new columns cg and phase.
+        F_unit_long_df["cg"] = F_unit_long_df["amplitudes"] / F_unit_long_df["contrast"]
+
+        F_unit_long_df = F_unit_long_df[F_unit_long_df["F_peak"] == "F1"].reset_index(
+            drop=True
+        )
+
+        # Select only the desired number of contrasts at about even intervals, including the lowest and the highest contrast
+        if n_contrasts:
+            contrasts = F_unit_long_df["contrast"].unique()
+            contrasts.sort()
+            contrasts = contrasts[:: int(len(contrasts) / n_contrasts)]
+            contrasts = np.append(contrasts, F_unit_long_df["contrast"].max())
+            F_unit_long_df = F_unit_long_df.loc[
+                F_unit_long_df["contrast"].isin(contrasts)
+            ]
+
+        fig, ax = plt.subplots(2, 1, figsize=(8, 12))
+
+        # Make the three subplots using seaborn lineplot
+        sns.lineplot(
+            data=F_unit_long_df,
+            x="temporal_frequency",
+            y="amplitudes",
+            hue="contrast",
+            palette="tab10",
+            ax=ax[0],
+        )
+        ax[0].set_title("Firing rate vs temporal frequency")
+        if xlog:
+            ax[0].set_xscale("log")
+        if ylog:
+            ax[0].set_yscale("log")
+
+        sns.lineplot(
+            data=F_unit_long_df,
+            x="temporal_frequency",
+            y="cg",
+            hue="contrast",
+            palette="tab10",
+            ax=ax[1],
+        )
+        ax[1].set_title("Contrast gain vs temporal frequency")
+        if xlog:
+            ax[1].set_xscale("log")
+        if ylog:
+            ax[1].set_yscale("log")
