@@ -1,17 +1,14 @@
 # ret_pt installation--run the following commands and note the notes:
-conda create --name ret_pt python=3.10
+conda create --name ret_pt python=3.11
 conda activate ret_pt
-# Linux w/ cuda 11.7 & pytorch nightly
-#pip3 install numpy --pre torch torchvision torchaudio --force-reinstall --index-url https://download.pytorch.org/whl/nightly/cu117
-# Windows without cuda/nvidia gpu
-#conda install pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia
-# Linux w/ cuda 11.7 & pytorch stable
-conda install -y pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia
 pip install ipython
+# Linux w/ cuda 12.1 & pytorch nightly
+conda install -y pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch-nightly -c nvidia
 conda config --add channels conda-forge
 conda config --add channels jamespreed
-conda install -y brian2=2.5.1
-conda install -y notebook jupyterlab scikit-learn pytest conda-minify scikit-image matplotlib tqdm seaborn
+# conda install -y brian2=2.5.1
+conda install -y brian2
+conda install -y notebook jupyterlab scikit-learn pytest scikit-image matplotlib tqdm seaborn
 # cd to cxsystem2 repo
 pip install -U -e .
 # confirm installation
@@ -20,7 +17,6 @@ pip install opencv-python-headless
 pip install colorednoise
 pip install h5py # does not work with conda 230116 SV
 pip install black
-pip install tensorboard
 pip install "ray[tune]"
 conda install -y torch-fidelity torchmetrics
 pip install optuna
