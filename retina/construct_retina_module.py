@@ -480,7 +480,7 @@ class ConstructRetina(RetinaMath):
             # We use 1 as the initial guess
             return root(equation, 1).x[0]
 
-    def _create_spatial_rfs_coverage(self):
+    def _fit_ellipse_with_rf_coverage_one(self):
         """
         Create spatial receptive fields to model cells using coverage = 1.
         Starting from 2D difference-of-gaussian parameters:
@@ -549,7 +549,7 @@ class ConstructRetina(RetinaMath):
         #     "pos_polar_deg"
         # ]  # plus some noise here TODO. See Watanabe 1989 JCompNeurol section Dendritic field orietation
 
-    def _create_spatial_rfs_ecc(self, dd_ecc_params, dd_regr_model):
+    def _fit_ellipse_with_rf_from_literature(self, dd_ecc_params, dd_regr_model):
         """
         Create spatial receptive fields to model cells according to eccentricity.
         Starting from 2D difference-of-gaussian parameters:
@@ -1328,7 +1328,7 @@ class ConstructRetina(RetinaMath):
 
         return ret_img, rf_lu_pix
 
-    def _adjust_rf_coverage(
+    def _adjust_VAE_center_coverage_to_one(
         self,
         rfs,
         masks,
@@ -1602,10 +1602,10 @@ class ConstructRetina(RetinaMath):
         # endow cells with spatial elliptical receptive fields (units mm)
         if self.rf_coverage_adjusted_to_1 == True:
             # Assumes that the dendritic field diameter is proportional to the coverage
-            self._create_spatial_rfs_coverage()
+            self._fit_ellipse_with_rf_coverage_one()
         elif self.rf_coverage_adjusted_to_1 == False:
             # Read the dendritic field diameter from literature data
-            self._create_spatial_rfs_ecc(dd_ecc_params, dd_regr_model)
+            self._fit_ellipse_with_rf_from_literature(dd_ecc_params, dd_regr_model)
         # Add FIT:ed dendritic diameter for visualization
         (
             self.gc_df,
@@ -1685,8 +1685,8 @@ class ConstructRetina(RetinaMath):
                 new_um_per_pix,
             )
 
-            if self.rf_coverage_adjusted_to_1:
-                img_rfs_adjusted, img_ret_adjusted = self._adjust_rf_coverage(
+            if self.rf_coverage_adjusted_to_1 is True:
+                img_rfs_adjusted, img_ret_adjusted = self._adjust_VAE_center_coverage_to_one(
                     img_rfs,
                     img_rfs_mask,
                     img_ret,
