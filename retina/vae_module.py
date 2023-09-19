@@ -923,11 +923,8 @@ class RetinaVAE(RetinaMath):
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         self.this_folder = self._get_this_folder()
-        self.models_folder = self._set_models_folder(
-            output_folder=context.output_folder
-        )
+        self.models_folder = self._set_models_folder(context)
         self.ray_dir = self._set_ray_folder(context)
-        # self.ray_dir = self.models_folder / "ray_results"
         self.train_log_folder = self.models_folder / "train_logs"
 
         self.dependent_variables = [
@@ -1089,9 +1086,9 @@ class RetinaVAE(RetinaMath):
 
                 elif (
                     context.my_retina["ray_tune_trial_id"] is None
-                ):  # After train_model
+                ):  # After train_model                    
                     self.vae = self._load_model(
-                        model_path=self.models_folder, trial_name=None
+                    model_path=self.models_folder, trial_name=None
                     )
                     # Get datasets for RF generation and vizualization
                     # Original augmentation and data multiplication is applied to train and val ds
@@ -1407,14 +1404,14 @@ class RetinaVAE(RetinaMath):
         this_folder = Path(vv.__file__).parent
         return this_folder
 
-    def _set_models_folder(self, output_folder=None):
+    def _set_models_folder(self, context=None):
         """Set the folder where models are saved"""
 
         # If output_folder is Path instance or string, use it as models_folder
-        if isinstance(output_folder, Path) or isinstance(output_folder, str):
-            models_folder = output_folder
+        if isinstance(context.input_folder, Path) or isinstance(context.input_folder, str):
+            models_folder = context.input_folder
         else:
-            models_folder = self.this_folder / "models"
+            models_folder = context.output_folder / "models"
         Path(models_folder).mkdir(parents=True, exist_ok=True)
 
         return models_folder
@@ -1434,12 +1431,12 @@ class RetinaVAE(RetinaMath):
 
         else:
             # If output_folder is Path instance or string, use it as models_folder
-            if isinstance(context.output_folder, Path) or isinstance(
-                context.output_folder, str
+            if isinstance(context.input_folder, Path) or isinstance(
+                context.input_folder, str
             ):
-                ray_dir = context.output_folder / "ray_results"
+                ray_dir = context.input_folder / "ray_results"
             else:
-                ray_dir = self.this_folder / "ray_results"
+                ray_dir = context.output_folder / "ray_results"
         Path(ray_dir).mkdir(parents=True, exist_ok=True)
 
         return ray_dir
