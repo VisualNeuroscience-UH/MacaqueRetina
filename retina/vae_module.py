@@ -920,9 +920,9 @@ class RetinaVAE(RetinaMath):
 
         self.latent_space_plot_scale = 15.0  # Scale for plotting latent space
 
+        # TODO: JOS LADATAAN MALLI, TIMESTAMP OSOITTAMAAN KYSEISEEN MALLIIN -- NÄIN IN FOLDERISSA VOI OLLA USEITA MALLEJA
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        self.this_folder = self._get_this_folder()
         self.models_folder = self._set_models_folder(context)
         self.ray_dir = self._set_ray_folder(context)
         self.train_log_folder = self.models_folder / "train_logs"
@@ -1396,13 +1396,6 @@ class RetinaVAE(RetinaMath):
         )
 
         return tuner
-
-    def _get_this_folder(self):
-        """Get the folder where this module file is located"""
-        from retina import vae_module as vv
-
-        this_folder = Path(vv.__file__).parent
-        return this_folder
 
     def _set_models_folder(self, context=None):
         """Set the folder where models are saved"""
