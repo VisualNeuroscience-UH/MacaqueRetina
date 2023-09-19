@@ -1114,11 +1114,11 @@ class WorkingRetina(RetinaMath):
         svec = torch.tensor(svec, device=device)
         dt = torch.tensor(dt, device=device)
 
-        # Get D value for surround by summing D_cen and deltaNLTL_sur
-        if region == "sur":
-            params["D_sur"] = params["D_cen"] + params["deltaNLTL_sur"]
+        # Only one D value is necessary. 
+        # The extra delay (deltaNLTL_sur) emerges from the LP filter delay  
+        params["D_sur"] = params["D_cen"] 
 
-        # Manipulate the index labels and D value for surround
+        # Manipulate the index labels 
         selected_params = params[params.index.str.contains(region)]
 
         # Substring to remove
@@ -1472,14 +1472,8 @@ class WorkingRetina(RetinaMath):
                     gen_pot_cen = gen_pot_cen[:stim_len_tp]
                     gen_pot_sur = gen_pot_sur[:stim_len_tp]
 
-                    # TÄHÄN JÄIT: CEN SUR SVEC ON OK, MUTTA GEN POT EI OLE, SUR SKAALAUTUU LIIAN SUUREKSI
-                    # ota Benardete 1997 VisNeurosci taulukosta 7 Ks/Kc mitat BK midget csv taulukkoon
-                    # skaalaa summattu gen pot sur / gen pot cen vastaamaan Ks/Kc suhdetta
-                    # Tämä on surrogaattiarvio surroundin vaikutuksesta.
-                    #
-
-                    # pdb.set_trace()
                     generator_potentials[idx, :] = gen_pot_cen + gen_pot_sur
+                    
             # Dynamic contrast gain control with linear-nonlinear model
             # has no separate nonlinearity, so we can use the generator potential directly
             params_all = self.gc_df.loc[cell_indices]
