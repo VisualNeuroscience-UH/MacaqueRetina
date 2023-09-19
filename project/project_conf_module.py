@@ -91,7 +91,7 @@ viz : visualization
 Main paths in different operating systems
 """
 if sys.platform == "linux":
-    model_root_path = "/opt3/Laskenta/Models"  # pikkuveli
+    model_root_path = "/opt3/Laskenta/Models"  
     git_repo_root = Path(r"/opt2/Git_Repos/MacaqueRetina")
     ray_root_path = None  # if None, ray_results are saved to model_root_path/project/experiment/output_folder/ray_results
 elif sys.platform == "win32":
@@ -109,7 +109,7 @@ project = "Retina"
 """
 Current experiment. Use distinct folders fo distinct stimuli.
 """
-experiment = "temporal_square_pattern"  # "test"
+experiment = "contrast_response_function"  # "test"
 
 
 """
@@ -123,16 +123,14 @@ input_folder = "../in"  # input figs, videos
 Stimulus context
 Stimulus images and videos
 """
-stimulus_folder = "stimulus"  # input figs, videos
+stimulus_folder = "stimulus_ori0deg"  # input figs, videos
 
 
 """
 Data context for output. 
 """
 
-# output_folder = "test_c0p5_10Hz"
-# output_folder = "VAE_dynamic_poisson_tf3"
-output_folder = "midget_on_response"
+output_folder = "SF_mapping_ori0deg"
 
 
 """
@@ -157,12 +155,12 @@ my_retina = {
     "response_type": response_type,
     "ecc_limits": [4.7, 5.3],  # degrees
     "sector_limits": [-1.0, 1.0],  # polar angle in degrees
-    "model_density": 1.0,
-    "dd_regr_model": "cubic",  # linear, quadratic, cubic. Only used if rf_coverage_adjusted_to_1 is "from_literalure"
-    "randomize_position": 0.1,
+    "model_density": 1.0, # 1.0 for 100% of the literature density of ganglion cells
+    "dd_regr_model": "cubic",  # linear, quadratic, cubic. 
+    "randomize_position": 0.1, # between 0 and 1
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
-    "model_type": "VAE",  # "FIT" or "VAE" for variational autoencoder.
+    "model_type": "FIT",  # "FIT" or "VAE" for variational autoencoder.
     "rf_coverage_adjusted_to_1": True,  # False or True. Applies both to FIT and VAE models
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
     "ray_tune_trial_id": None,  # Trial_id for tune, None for loading single run after "train_model". Applies to VAE "load_model" only.
@@ -227,24 +225,25 @@ would mean ~ 905 Trolands. Td = lum * pi * (diam/2)^2, resulting in 128 cd/m2 = 
 
 my_stimulus_options = {
     # Shared btw stimulus and working_retina
-    "image_width": 240,  # 752 for nature1.avi
-    "image_height": 240,  # 432 for nature1.avi
-    "pix_per_deg": 60,
+    "image_width": 180,  # 752 for nature1.avi
+    "image_height": 180,  # 432 for nature1.avi
+    "pix_per_deg": 120,
     "fps": 300,  # 300 for good cg integration
-    "duration_seconds": 1.0,  # actual frames = floor(duration_seconds * fps)
+    "duration_seconds": 6.0,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
-    "pattern": "temporal_square_pattern",  # Natural video is not supported yet. One of the StimulusPatterns
-    "stimulus_form": "annulus",
+    "pattern": "sine_grating",  # Natural video is not supported yet. One of the StimulusPatterns
+    "stimulus_form": "circular",
     "size_inner": 0.02,  # Applies to annulus only
     "size_outer": 2,  # Applies to annulus only
-    "stimulus_position": (-0.02, -0.01),
-    "stimulus_size": 0.02,  # 4.6 deg in Lee_1990_JOSA
+    "stimulus_position": (0, 0),
+    "stimulus_size": 2,  # 4.6 deg in Lee_1990_JOSA
     "background": 128,
-    "contrast": 0.4,  # Weber constrast
+    "contrast": 0.5,  # Weber constrast
     "mean": 128,
-    "temporal_frequency": 0.01,  # 40,  # Hz
-    "spatial_frequency": 8,
+    "temporal_frequency": 8,  # 40,  # Hz
+    "spatial_frequency": .1,
+    "orientation": 0,  # degrees
     "phase_shift": 0,  # math.pi,  # radians
     "stimulus_video_name": "square_grating.mp4",
 }
@@ -417,7 +416,7 @@ if __name__ == "__main__":
     """
 
     # # Main retina construction method. This method calls all other methods in the retina construction process.
-    # PM.construct_retina.build()
+    PM.construct_retina.build()
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # This is why they are called via the construct_retina attribute. The instance
@@ -456,13 +455,13 @@ if __name__ == "__main__":
     ########################
 
     # See my_stimulus_options for valid stimulus_options
-    PM.stimulate.make_stimulus_video()
+    # PM.stimulate.make_stimulus_video()
 
     ###########################################
     ### Load stimulus to get working retina ###
     ###########################################
 
-    PM.working_retina.load_stimulus()
+    # PM.working_retina.load_stimulus()
 
     ##########################################
     ### Show single ganglion cell response ###
@@ -471,7 +470,7 @@ if __name__ == "__main__":
     # example_gc = 0  # int or 'None'
     # PM.working_retina.convolve_stimulus(example_gc)
 
-    # # PM.viz.show_spatiotemporal_filter(PM.working_retina)
+    # # # PM.viz.show_spatiotemporal_filter(PM.working_retina)
     # PM.viz.show_convolved_stimulus(PM.working_retina)
 
     ########################################
@@ -490,16 +489,19 @@ if __name__ == "__main__":
     ### Run multiple trials or cells ###
     ####################################
 
-    PM.working_retina.run_with_my_run_options()
+    # PM.working_retina.run_with_my_run_options()
 
-    PM.viz.show_gc_responses(PM.working_retina)
+    # PM.viz.show_gc_responses(PM.working_retina)
 
-    PM.viz.show_stimulus_with_gcs(
-        PM.working_retina,
-        example_gc=my_run_options["cell_index"],
-        frame_number=300,
-        show_rf_id=True,
-    )
+    # PM.viz.show_stimulus_with_gcs(
+    #     PM.working_retina,
+    #     example_gc=my_run_options["cell_index"],
+    #     frame_number=450,
+    #     show_rf_id=True,
+    # )
+    # TÄHÄN JÄIT: 
+    # VISUALISOI VAE RF ÄRSYKKEEN KANSSA, TARKISTA ETTEI OLE JO YLLÄ KUN RF LUODAAN
+    # VISUALISOI SOLUJEN VASTEET YKSITELLEN HARMAINA KÄPPYRÖINÄ KUN AJETAAN KOKONAINEN KOE
 
     # PM.viz.show_single_gc_view(
     #     PM.working_retina, cell_index=example_gc, frame_number=21
@@ -531,41 +533,41 @@ if __name__ == "__main__":
     ###############################################
     ###############################################
 
-    # exp_variables = ["contrast"]  # from my_stimulus_options
-    # # exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
-    # # Define experiment parameters. List lengths must be equal.
-    # # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logaritmic = [True]
-    # experiment_dict = {
-    #     "exp_variables": exp_variables,
-    #     "min_max_values": [[0.015, 0.98]],  # two vals for each exp_variable # contrast
-    #     # "min_max_values": [[1, 41]],  # two vals # temporal frequency
-    #     # "min_max_values": [[1, 41], [0.02, 0.25]],  # temporal frequency, contrast
-    #     # "n_steps": [10, 5],  # temporal frequency, contrast
-    #     # "logaritmic": [True, True],  # temporal frequency, contras
-    #     "n_steps": [6],
-    #     "logaritmic": [False],
-    # }
+    exp_variables = ["spatial_frequency"]  # from my_stimulus_options
+    # exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
+    # Define experiment parameters. List lengths must be equal.
+    # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logaritmic = [True]
+    experiment_dict = {
+        "exp_variables": exp_variables,
+        "min_max_values": [[0.1, 10]],  # two vals for each exp_variable # contrast
+        # "min_max_values": [[1, 41]],  # two vals # temporal frequency
+        # "min_max_values": [[1, 41], [0.02, 0.25]],  # temporal frequency, contrast
+        # "n_steps": [10, 5],  # temporal frequency, contrast
+        # "logaritmic": [True, True],  # temporal frequency, contras
+        "n_steps": [10],
+        "logaritmic": [True],
+    }
 
-    # PM.experiment.build_and_run(experiment_dict, n_trials=5)
+    PM.experiment.build_and_run(experiment_dict, n_trials=5)
 
-    # ###############################
-    # ## Analyze Experiment ###
-    # ###############################
+    ###############################
+    ## Analyze Experiment ###
+    ###############################
 
-    # my_analysis_options = {
-    #     "exp_variables": exp_variables,
-    #     "t_start_ana": 0.5,
-    #     "t_end_ana": 6.5,
-    # }
+    my_analysis_options = {
+        "exp_variables": exp_variables,
+        "t_start_ana": 0.5,
+        "t_end_ana": 6.5,
+    }
 
-    # PM.ana.analyze_response(my_analysis_options)
+    PM.ana.analyze_response(my_analysis_options)
 
     ################################
     ### Visualize Experiment ###
     ################################
 
     # PM.viz.F1F2_popul_response(exp_variables, xlog=False)
-    # PM.viz.F1F2_unit_response(exp_variables, xlog=False)
+    PM.viz.F1F2_unit_response(exp_variables, xlog=True)
     # PM.viz.fr_response(exp_variables, xlog=True)
     # PM.viz.spike_raster_response(exp_variables, savefigname=None)
     # PM.viz.tf_vs_fr_cg_ph(exp_variables, n_contrasts=None, xlog=True, ylog=True)

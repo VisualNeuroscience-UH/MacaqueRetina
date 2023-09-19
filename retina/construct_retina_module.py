@@ -517,11 +517,12 @@ class ConstructRetina(RetinaMath):
             area_scaling_factors_coverage1[
                 self.gc_df["ecc_group_idx"] == index
             ] = scaling_for_coverage_1
+            print(f"Coverage factor for ecc group {index} is {scaling_for_coverage_1}")
 
         # Apply scaling factors to semi_xc and semi_yc. Units are micrometers.
         # scale_random_distribution = 0.08  # Estimated by eye from Watanabe and Perry data.
         # Normal distribution with scale_random_distribution 0.08 cover about 25% above and below the mean value
-        scale_random_distribution = 0.001
+        scale_random_distribution = 0.08
         random_normal_distribution1 = 1 + np.random.normal(
             scale=scale_random_distribution, size=n_cells
         )
