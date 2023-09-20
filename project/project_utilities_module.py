@@ -304,14 +304,14 @@ class DataSampler:
 
     def to_data_units(self, x, y):
         """Converts image units (pixels) to data units."""
-        data_x_min, data_y_min = self.calibration_points[0]
-        _, data_y_max = self.calibration_points[1]
-        data_x_max, _ = self.calibration_points[2]
-        x_range = data_x_max - data_x_min
-        y_range = self.calibration_points[0][1] - data_y_max # inverted scale 
+        pix_x_min, pix_y_min = self.calibration_points[0]
+        _, pix_y_max = self.calibration_points[1]
+        pix_x_max, _ = self.calibration_points[2]
+        x_range = pix_x_max - pix_x_min
+        y_range = self.calibration_points[0][1] - pix_y_max # inverted scale 
 
-        x_scaled = (x - data_x_min) / x_range * (self.max_X - self.min_X) + self.min_X
-        y_upright = data_y_min - y # From bottom upwards, y min is the largest pixel value
+        x_scaled = (x - pix_x_min) / x_range * (self.max_X - self.min_X) + self.min_X
+        y_upright = pix_y_min - y # From bottom upwards, y min is the largest pixel value
         y_scaled = (y_upright / y_range) * (self.max_Y - self.min_Y) + self.min_Y
         if self.logX:
             x_scaled = np.exp(x_scaled)
@@ -319,18 +319,18 @@ class DataSampler:
 
     def to_image_units(self, x_data, y_data):
         """Converts data units back to image units (pixels)."""
-        data_x_min, data_y_min = self.calibration_points[0]
-        _, data_y_max = self.calibration_points[1]
-        data_x_max, _ = self.calibration_points[2]
-        x_range = data_x_max - data_x_min
-        y_range = data_y_min - data_y_max # inverted scale 
+        pix_x_min, pix_y_min = self.calibration_points[0]
+        _, pix_y_max = self.calibration_points[1]
+        pix_x_max, _ = self.calibration_points[2]
+        x_range = pix_x_max - pix_x_min
+        y_range = pix_y_min - pix_y_max # inverted scale 
 
         if self.logX:
             x_data = np.log(x_data)
-        x = (x_data - self.min_X) / (self.max_X - self.min_X) * x_range + data_x_min
+        x = (x_data - self.min_X) / (self.max_X - self.min_X) * x_range + pix_x_min
         y_offset = y_data - self.min_Y
         y_upright = y_offset / (self.max_Y - self.min_Y) * y_range
-        y = data_y_min - y_upright 
+        y = pix_y_min - y_upright 
 
         return x, y
 

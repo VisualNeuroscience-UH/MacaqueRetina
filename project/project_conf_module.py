@@ -161,7 +161,7 @@ my_retina = {
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
     "model_type": "FIT",  # "FIT" or "VAE" for variational autoencoder.
-    "rf_coverage_adjusted_to_1": True,  # False or True. Applies both to FIT and VAE models
+    "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
     "ray_tune_trial_id": None,  # Trial_id for tune, None for loading single run after "train_model". Applies to VAE "load_model" only.
 }
@@ -331,13 +331,16 @@ literature_data_folder = git_repo_root.joinpath(r"retina/literature_data")
 # Define literature data files for linear temporal models.
 # Data from Benardete_1999_VisNeurosci and Benardete_1997_VisNeurosci
 
-gc_density_file = literature_data_folder / "Perry_1984_Neurosci_GCdensity_c.mat"
+# gc_density_file = literature_data_folder / "Perry_1984_Neurosci_GCdensity_c.mat"
+gc_density_file = literature_data_folder / "Perry_1984_Neurosci_GCdensity_Fig8_c.npz"
 if my_retina["gc_type"] == "parasol":
     dendr_diam1_file = (
-        literature_data_folder / "Perry_1984_Neurosci_ParasolDendrDiam_c.mat"
+        # literature_data_folder / "Perry_1984_Neurosci_ParasolDendrDiam_c.mat"
+        literature_data_folder / "Perry_1984_Neurosci_ParasolDendrDiam_Fig6A_c.npz"
     )
     dendr_diam2_file = (
-        literature_data_folder / "Watanabe_1989_JCompNeurol_GCDendrDiam_parasol_c.mat"
+        # literature_data_folder / "Watanabe_1989_JCompNeurol_GCDendrDiam_parasol_c.mat"
+        literature_data_folder / "Watanabe_1989_JCompNeurol_ParasolDendrDiam_Fig7_c.npz"
     )
     temporal_BK_model_file = (
         literature_data_folder / "Benardete_1999_VisNeurosci_parasol.csv"
@@ -348,7 +351,8 @@ elif my_retina["gc_type"] == "midget":
         literature_data_folder / "Perry_1984_Neurosci_MidgetDendrDiam_Fig6B_c.npz"
     )
     dendr_diam2_file = (
-        literature_data_folder / "Watanabe_1989_JCompNeurol_GCDendrDiam_midget_c.mat"
+        # literature_data_folder / "Watanabe_1989_JCompNeurol_GCDendrDiam_midget_c.mat"
+        literature_data_folder / "Watanabe_1989_JCompNeurol_MidgetDendrDiam_Fig7_c.npz"
     )
     temporal_BK_model_file = (
         literature_data_folder / "Benardete_1997_VisNeurosci_midget.csv"
@@ -410,13 +414,14 @@ if __name__ == "__main__":
     ### Sample image data ###
     #################################
 
-    from project.project_utilities_module import DataSampler
-    filename = "Perry_1984_Neurosci_MidgetDendrDiam_Fig6B.jpg"
-    filename_full = git_repo_root.joinpath(r"retina/literature_data", filename)
-    min_X, max_X, min_Y, max_Y = 0, 14, 0, 150
-    ds = DataSampler(filename_full, min_X, max_X, min_Y, max_Y)
-    ds.collect_and_save_points()
-    ds.quality_control()
+    # # Note: sample only temporal hemiretina
+    # from project.project_utilities_module import DataSampler
+    # filename = "Perry_1984_Neurosci_GCdensity_Fig8.jpg"
+    # filename_full = git_repo_root.joinpath(r"retina/literature_data", filename)
+    # min_X, max_X, min_Y, max_Y = 0, 17, 0, 35 # Fig lowest and highest tick values, use these as calibration points
+    # ds = DataSampler(filename_full, min_X, max_X, min_Y, max_Y)
+    # ds.collect_and_save_points()
+    # ds.quality_control()
 
 
     #################################
@@ -430,7 +435,7 @@ if __name__ == "__main__":
     """
 
     # # Main retina construction method. This method calls all other methods in the retina construction process.
-    # PM.construct_retina.build()
+    PM.construct_retina.build()
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # This is why they are called via the construct_retina attribute. The instance
@@ -439,7 +444,7 @@ if __name__ == "__main__":
     # This function visualizes the spatial and temporal filter responses, ganglion cell positions and density,
     # mosaic layout, spatial and temporal statistics, dendrite diameter versus eccentricity, and tonic drives
     # in the retina mosaic building process.
-    # PM.construct_retina.show_exp_build_process(show_all_spatial_fits=False)
+    PM.construct_retina.show_exp_build_process(show_all_spatial_fits=False)
 
     # PM.construct_retina.show_gen_exp_spatial_fit(n_samples=20)
     # PM.construct_retina.show_gen_exp_spatial_rf(ds_name="test_ds", n_samples=10)
