@@ -344,7 +344,8 @@ if my_retina["gc_type"] == "parasol":
     )
 elif my_retina["gc_type"] == "midget":
     dendr_diam1_file = (
-        literature_data_folder / "Perry_1984_Neurosci_MidgetDendrDiam_c.mat"
+        # literature_data_folder / "Perry_1984_Neurosci_MidgetDendrDiam_c.mat"
+        literature_data_folder / "Perry_1984_Neurosci_MidgetDendrDiam_Fig6B_c.npz"
     )
     dendr_diam2_file = (
         literature_data_folder / "Watanabe_1989_JCompNeurol_GCDendrDiam_midget_c.mat"

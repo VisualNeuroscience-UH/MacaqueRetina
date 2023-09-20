@@ -304,43 +304,43 @@ class DataSampler:
 
     def to_data_units(self, x, y):
         """Converts image units (pixels) to data units."""
-        data_x_min, _ = self.calibration_points[0]
+        data_x_min, data_y_min = self.calibration_points[0]
         _, data_y_max = self.calibration_points[1]
         data_x_max, _ = self.calibration_points[2]
         x_range = data_x_max - data_x_min
-        y_range = data_y_max - self.calibration_points[0][1]
-        
+        y_range = self.calibration_points[0][1] - data_y_max # inverted scale 
+
         x_scaled = (x - data_x_min) / x_range * (self.max_X - self.min_X) + self.min_X
-        y_inverted = self.calibration_points[1][1] - y
-        y_scaled = (y_inverted / y_range) * (self.max_Y - self.min_Y) + self.min_Y
-        
+        y_upright = data_y_min - y # From bottom upwards, y min is the largest pixel value
+        y_scaled = (y_upright / y_range) * (self.max_Y - self.min_Y) + self.min_Y
         if self.logX:
             x_scaled = np.exp(x_scaled)
         return x_scaled, y_scaled
 
     def to_image_units(self, x_data, y_data):
         """Converts data units back to image units (pixels)."""
-        data_x_min, _ = self.calibration_points[0]
+        data_x_min, data_y_min = self.calibration_points[0]
         _, data_y_max = self.calibration_points[1]
         data_x_max, _ = self.calibration_points[2]
         x_range = data_x_max - data_x_min
-        y_range = data_y_max - self.calibration_points[0][1]
+        y_range = data_y_min - data_y_max # inverted scale 
 
         if self.logX:
             x_data = np.log(x_data)
         x = (x_data - self.min_X) / (self.max_X - self.min_X) * x_range + data_x_min
         y_offset = y_data - self.min_Y
-        y_inverted = y_offset / (self.max_Y - self.min_Y) * y_range
-        y = data_y_max - y_inverted
+        y_upright = y_offset / (self.max_Y - self.min_Y) * y_range
+        y = data_y_min - y_upright 
 
         return x, y
 
     def save_data(self):
         """Saves the digitized data to a file."""
         Xdata, Ydata = zip(*[(x,y) for x, y in self.data_points])
-        nameout = Path(self.filename).stem + "_c"
-        np.savez(nameout, Xdata=Xdata, Ydata=Ydata)
-        print(f'Saved data into {nameout}.npz')
+        nameout = self.filename.stem + "_c"
+        filename_full = self.filename.parent / nameout
+        np.savez(filename_full, Xdata=Xdata, Ydata=Ydata)
+        print(f'Saved data into {filename_full}.npz')
 
     def quality_control(self):
         """Displays the original image with calibration and data points."""
