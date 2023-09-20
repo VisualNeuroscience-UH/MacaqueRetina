@@ -9,6 +9,8 @@ import sys
 import numpy as np
 import pandas as pd
 
+# Viz
+import matplotlib.pyplot as plt
 
 class ProjectUtilities:
     """
@@ -227,3 +229,153 @@ class ProjectUtilities:
                 )
 
         return lines
+
+
+class DataSampler:
+    """
+    Class for digitizing data points from published images.
+
+    Attributes
+    ----------
+    filename : str
+        Path to the image file.
+    min_X : float
+        Minimum x-axis value for calibration.
+    max_X : float
+        Maximum x-axis value for calibration.
+    min_Y : float
+        Minimum y-axis value for calibration.
+    max_Y : float
+        Maximum y-axis value for calibration.
+    logX : bool
+        If True, indicates x-axis is logarithmic.
+    calibration_points : list
+        List of calibration points selected from the image.
+    data_points : list
+        List of data points selected from the image.
+
+    Methods
+    -------
+    add_calibration_point(point)
+        Adds a point to the list of calibration points.
+    add_data_point(point)
+        Adds a point to the list of data points.
+    validate_calibration()
+        Validates calibration point input.
+    to_data_units(x, y)
+        Converts image units (pixels) to data units.
+    to_image_units(x_data, y_data)
+        Converts data units back to image units (pixels).
+    save_data()
+        Saves the digitized data to a file.
+    quality_control()
+        Displays the original image with calibration and data points.
+    collect_and_save_points()
+        Interactively collect calibration and data points from the image.
+    """
+    
+    def __init__(self, filename, min_X, max_X, min_Y, max_Y, logX=False):
+        self.filename = filename
+        self.min_X = min_X
+        self.max_X = max_X
+        self.min_Y = min_Y
+        self.max_Y = max_Y
+        self.logX = logX
+
+        self.calibration_points = []
+        self.data_points = []
+
+    def add_calibration_point(self, point):
+        """Adds a point to the list of calibration points."""
+        self.calibration_points.append(point)
+
+    def add_data_point(self, point):
+        """Adds a point to the list of data points."""
+        Xdata, Ydata = self.to_data_units(point[0], point[1])
+        self.data_points.append((Xdata, Ydata))
+
+    def validate_calibration(self):
+        """Validates the calibration point input."""
+        assert len(self.calibration_points) == 3, "Three calibration points are required."
+        x_min, y_min = self.calibration_points[0]
+        _, y_max = self.calibration_points[1]
+        x_max, _ = self.calibration_points[2]
+        assert x_min < x_max and y_min > y_max, 'The calibration set is not valid, 1. origo, 2. y max, 3. x max'
+
+    def to_data_units(self, x, y):
+        """Converts image units (pixels) to data units."""
+        data_x_min, _ = self.calibration_points[0]
+        _, data_y_max = self.calibration_points[1]
+        data_x_max, _ = self.calibration_points[2]
+        x_range = data_x_max - data_x_min
+        y_range = data_y_max - self.calibration_points[0][1]
+        
+        x_scaled = (x - data_x_min) / x_range * (self.max_X - self.min_X) + self.min_X
+        y_inverted = self.calibration_points[1][1] - y
+        y_scaled = (y_inverted / y_range) * (self.max_Y - self.min_Y) + self.min_Y
+        
+        if self.logX:
+            x_scaled = np.exp(x_scaled)
+        return x_scaled, y_scaled
+
+    def to_image_units(self, x_data, y_data):
+        """Converts data units back to image units (pixels)."""
+        data_x_min, _ = self.calibration_points[0]
+        _, data_y_max = self.calibration_points[1]
+        data_x_max, _ = self.calibration_points[2]
+        x_range = data_x_max - data_x_min
+        y_range = data_y_max - self.calibration_points[0][1]
+
+        if self.logX:
+            x_data = np.log(x_data)
+        x = (x_data - self.min_X) / (self.max_X - self.min_X) * x_range + data_x_min
+        y_offset = y_data - self.min_Y
+        y_inverted = y_offset / (self.max_Y - self.min_Y) * y_range
+        y = data_y_max - y_inverted
+
+        return x, y
+
+    def save_data(self):
+        """Saves the digitized data to a file."""
+        Xdata, Ydata = zip(*[(x,y) for x, y in self.data_points])
+        nameout = Path(self.filename).stem + "_c"
+        np.savez(nameout, Xdata=Xdata, Ydata=Ydata)
+        print(f'Saved data into {nameout}.npz')
+
+    def quality_control(self):
+        """Displays the original image with calibration and data points."""
+        imagedata = plt.imread(self.filename)
+
+        fig, ax = plt.subplots()
+        ax.imshow(imagedata, cmap='gray')
+
+        calib_x = [pt[0] for pt in self.calibration_points]
+        calib_y = [pt[1] for pt in self.calibration_points]
+        ax.scatter(calib_x, calib_y, color='red', s=50, label='Calibration Points')
+
+        data_x, data_y = zip(*[self.to_image_units(x, y) for x, y in self.data_points])
+        ax.scatter(data_x, data_y, color='blue', s=30, label='Data Points')
+
+        ax.legend()
+
+    def collect_and_save_points(self):
+        """Interactively collect calibration and data points from the image."""
+        imagedata = plt.imread(self.filename)
+        fig, ax = plt.subplots()
+        ax.imshow(imagedata, cmap='gray')
+        
+        print("Calibrate 1. origo, 2. y max, 3. x max")
+        calib_points = plt.ginput(3, timeout=0)
+        for point in calib_points:
+            self.add_calibration_point(point)
+        
+        self.validate_calibration()
+        
+        print("And now the data points...")
+        data_points = plt.ginput(-1, timeout=0)
+        for point in data_points:
+            self.add_data_point(point)
+        
+        plt.close(fig)
+
+        self.save_data()

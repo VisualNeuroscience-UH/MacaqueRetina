@@ -406,6 +406,19 @@ if __name__ == "__main__":
     # TODO take raw hdf5 image through cone response to working retina
 
     #################################
+    ### Sample image data ###
+    #################################
+
+    from project.project_utilities_module import DataSampler
+    filename = "Perry_1984_Neurosci_MidgetDendrDiam_Fig6B.jpg"
+    filename_full = git_repo_root.joinpath(r"retina/literature_data", filename)
+    min_X, max_X, min_Y, max_Y = 0, 14, 0, 150
+    ds = DataSampler(filename_full, min_X, max_X, min_Y, max_Y)
+    ds.collect_and_save_points()
+    ds.quality_control()
+
+
+    #################################
     #################################
     ### Build retina ###
     #################################
@@ -416,7 +429,7 @@ if __name__ == "__main__":
     """
 
     # # Main retina construction method. This method calls all other methods in the retina construction process.
-    PM.construct_retina.build()
+    # PM.construct_retina.build()
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # This is why they are called via the construct_retina attribute. The instance
@@ -534,40 +547,40 @@ if __name__ == "__main__":
     ###############################################
 
     exp_variables = ["spatial_frequency"]  # from my_stimulus_options
-    # exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
-    # Define experiment parameters. List lengths must be equal.
-    # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logaritmic = [True]
-    experiment_dict = {
-        "exp_variables": exp_variables,
-        "min_max_values": [[0.1, 10]],  # two vals for each exp_variable # contrast
-        # "min_max_values": [[1, 41]],  # two vals # temporal frequency
-        # "min_max_values": [[1, 41], [0.02, 0.25]],  # temporal frequency, contrast
-        # "n_steps": [10, 5],  # temporal frequency, contrast
-        # "logaritmic": [True, True],  # temporal frequency, contras
-        "n_steps": [10],
-        "logaritmic": [True],
-    }
+    # # exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
+    # # Define experiment parameters. List lengths must be equal.
+    # # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logaritmic = [True]
+    # experiment_dict = {
+    #     "exp_variables": exp_variables,
+    #     "min_max_values": [[0.1, 10]],  # two vals for each exp_variable # contrast
+    #     # "min_max_values": [[1, 41]],  # two vals # temporal frequency
+    #     # "min_max_values": [[1, 41], [0.02, 0.25]],  # temporal frequency, contrast
+    #     # "n_steps": [10, 5],  # temporal frequency, contrast
+    #     # "logaritmic": [True, True],  # temporal frequency, contras
+    #     "n_steps": [10],
+    #     "logaritmic": [True],
+    # }
 
-    PM.experiment.build_and_run(experiment_dict, n_trials=5)
+    # PM.experiment.build_and_run(experiment_dict, n_trials=5)
 
-    ###############################
-    ## Analyze Experiment ###
-    ###############################
+    # ###############################
+    # ## Analyze Experiment ###
+    # ###############################
 
-    my_analysis_options = {
-        "exp_variables": exp_variables,
-        "t_start_ana": 0.5,
-        "t_end_ana": 6.5,
-    }
+    # my_analysis_options = {
+    #     "exp_variables": exp_variables,
+    #     "t_start_ana": 0.5,
+    #     "t_end_ana": 6.5,
+    # }
 
-    PM.ana.analyze_response(my_analysis_options)
+    # PM.ana.analyze_response(my_analysis_options)
 
     ################################
     ### Visualize Experiment ###
     ################################
 
     # PM.viz.F1F2_popul_response(exp_variables, xlog=False)
-    PM.viz.F1F2_unit_response(exp_variables, xlog=True)
+    # PM.viz.F1F2_unit_response(exp_variables, xlog=True)
     # PM.viz.fr_response(exp_variables, xlog=True)
     # PM.viz.spike_raster_response(exp_variables, savefigname=None)
     # PM.viz.tf_vs_fr_cg_ph(exp_variables, n_contrasts=None, xlog=True, ylog=True)
