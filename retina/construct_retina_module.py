@@ -56,9 +56,9 @@ class ConstructRetina(RetinaMath):
         Type of response, either "on" or "off"
     eccentricity : list
         List of two floats, the eccentricity limits in degrees
-    eccentricity_in_mm : list
+    ecc_lim_mm : list
         List of two floats, the eccentricity limits in mm
-    theta : list
+    polar_lim_deg : list
         Numpy array two floats, the sector limits in degrees
     randomize_position : bool
         Whether to randomize the position of the ganglion cells
@@ -150,7 +150,7 @@ class ConstructRetina(RetinaMath):
         ), "Wrong type or length of eccentricity, aborting"
         assert (
             isinstance(sector_limits, list) and len(sector_limits) == 2
-        ), "Wrong type or length of theta, aborting"
+        ), "Wrong type or length of sector_limits, aborting"
         assert model_density <= 1.0, "Density should be <=1.0, aborting"
 
         # Calculate self.gc_proportion from GC type specifications
@@ -308,10 +308,7 @@ class ConstructRetina(RetinaMath):
         """
 
         print("Reading density data from:", self.context.gc_density_file)
-        gc_density = sio.loadmat(
-            self.context.gc_density_file,
-            variable_names=["Xdata", "Ydata"],
-        )
+        gc_density = self.data_io.get_data(self.context.gc_density_file)
         cell_eccentricity = np.squeeze(gc_density["Xdata"])
         cell_density = (
             np.squeeze(gc_density["Ydata"]) * 1e3
@@ -356,15 +353,8 @@ class ConstructRetina(RetinaMath):
         # Read dendritic field data and return linear fit with scipy.stats.linregress
         dendr_diam_parameters = {}
 
-        dendr_diam1 = sio.loadmat(
-            self.context.dendr_diam1_file, variable_names=["Xdata", "Ydata"]
-        )
-        dendr_diam2 = sio.loadmat(
-            self.context.dendr_diam2_file, variable_names=["Xdata", "Ydata"]
-        )
-
-        # Parasol fit
-        gc_type = self.gc_type
+        dendr_diam1 = self.data_io.get_data(self.context.dendr_diam1_file)
+        dendr_diam2 = self.data_io.get_data(self.context.dendr_diam2_file)
 
         # Quality control. Datasets separately for visualization
         data_set_1_x = np.squeeze(dendr_diam1["Xdata"])
@@ -419,14 +409,14 @@ class ConstructRetina(RetinaMath):
                 "cube": polynomials[0],
             }
 
-        dataset_name = f"All data {dd_regr_model} fit"
+        dd_model_caption = f"All data {dd_regr_model} fit"
 
         self.dd_vs_ecc_to_viz = {
             "data_all_x": data_all_x,
             "data_all_y": data_all_y,
             "polynomials": polynomials,
-            "dataset_name": dataset_name,
-            "title": f"DF diam wrt ecc for {self.gc_type} type, {dataset_name} dataset",
+            "dd_model_caption": dd_model_caption,
+            "title": f"DF diam wrt ecc for {self.gc_type} type, {dd_model_caption} dataset",
         }
 
         return dendr_diam_parameters
