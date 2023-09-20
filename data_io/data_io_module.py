@@ -223,7 +223,7 @@ class DataIO(DataIOBase):
 
         # Open file by extension type
         filename_extension = data_fullpath_filename.suffix
-        
+
         if filename_extension in [".gz", ".pkl"]:
             try:
                 fi = open(data_fullpath_filename, "rb")
@@ -664,24 +664,32 @@ class DataIO(DataIOBase):
         If `ray_exp` is not provided and `most_recent` is False, a ValueError is raised.
         """
 
-        if self.context.ray_root_path is None:
-            ray_dir = self.context.output_folder / "ray_results"
-        elif self.context.ray_root_path.exists():
-            # Rebuild the path to ray_results
-            ray_dir = (
-                self.context.ray_root_path
-                / Path(self.context.project)
-                / Path(self.context.experiment)
-                / Path(self.context.output_folder.name)
-                / "ray_results"
-            )
-            if not ray_dir.exists():
-                raise ValueError("Ray tune results cannot be found, aborting...")
-        else:
-            raise ValueError(
-                "Ray tune results cannot be found, missing both ray_root_path and ray_results under output_folder, aborting..."
-            )
+        def get_ray_dir():
+            if self.context.ray_root_path is None:
+                ray_dir = self.context.output_folder / "ray_results"
+                # Check if the directory exists
+                if ray_dir.exists():
+                    return ray_dir
 
+                ray_dir = self.context.input_folder / "ray_results"
+                if ray_dir.exists():
+                    return ray_dir
+
+            elif self.context.ray_root_path.exists():
+                # Rebuild the path to ray_results
+                ray_dir = (
+                    self.context.ray_root_path
+                    / Path(self.context.project)
+                    / Path(self.context.experiment)
+                    / Path(self.context.output_folder.name)
+                    / "ray_results"
+                )
+                if ray_dir.exists():
+                    return ray_dir
+            else:
+                raise ValueError("Ray tune results cannot be found, aborting...")
+
+        ray_dir = get_ray_dir()
         if most_recent:
             ray_exp = sorted(os.listdir(ray_dir))[-1]
         else:
