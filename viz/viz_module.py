@@ -370,19 +370,19 @@ class Viz:
         # Density of model cells
         index = np.all(
             [
-                phi > np.min(mosaic.theta),
-                phi < np.max(mosaic.theta),
-                rho > np.min(mosaic.eccentricity_in_mm),
-                rho < np.max(mosaic.eccentricity_in_mm),
+                phi > np.min(mosaic.polar_lim_deg),
+                phi < np.max(mosaic.polar_lim_deg),
+                rho > np.min(mosaic.ecc_lim_mm),
+                rho < np.max(mosaic.ecc_lim_mm),
             ],
             axis=0,
-        )  # Index only cells within original requested theta
+        )  # Index only cells within original requested polar_lim_deg
         hist, bin_edges = np.histogram(rho[index], nbins)
         center_ecc = bin_edges[:-1] + ((bin_edges[1:] - bin_edges[:-1]) / 2)
         area_for_each_bin = self.sector2area(
-            bin_edges[1:], np.ptp(mosaic.theta)
+            bin_edges[1:], np.ptp(mosaic.polar_lim_deg)
         ) - self.sector2area(
-            bin_edges[:-1], np.ptp(mosaic.theta)
+            bin_edges[:-1], np.ptp(mosaic.polar_lim_deg)
         )  # in mm2. Vector length len(edge_ecc) - 1.
         # Cells/area
         model_cell_density = hist / area_for_each_bin  # in cells/mm2
@@ -538,22 +538,24 @@ class Viz:
         data_all_y = mosaic.dd_vs_ecc_to_viz["data_all_y"]
         dd_fit_x = mosaic.dd_vs_ecc_to_viz["dd_fit_x"]
         dd_fit_y = mosaic.dd_vs_ecc_to_viz["dd_fit_y"]
-        dd_vae_x = mosaic.dd_vs_ecc_to_viz["dd_vae_x"]
-        dd_vae_y = mosaic.dd_vs_ecc_to_viz["dd_vae_y"]
+        if mosaic.model_type == "VAE":
+            dd_vae_x = mosaic.dd_vs_ecc_to_viz["dd_vae_x"]
+            dd_vae_y = mosaic.dd_vs_ecc_to_viz["dd_vae_y"]
         polynomials = mosaic.dd_vs_ecc_to_viz["polynomials"]
-        dataset_name = mosaic.dd_vs_ecc_to_viz["dataset_name"]
+        dd_model_caption = mosaic.dd_vs_ecc_to_viz["dd_model_caption"]
         title = mosaic.dd_vs_ecc_to_viz["title"]
 
         fig, ax = plt.subplots(nrows=1, ncols=1)
         ax.plot(data_all_x, data_all_y, "b.", label="Data")
         ax.plot(dd_fit_x, dd_fit_y, "r.", label="Fit")
-        ax.plot(dd_vae_x, dd_vae_y, "k.", label="Vae")
+        if mosaic.model_type == "VAE":
+            ax.plot(dd_vae_x, dd_vae_y, "k.", label="Vae")
 
         ax.set_xlabel("Retinal eccentricity (mm)")
         ax.set_ylabel("Dendritic diameter (um)")
         ax.legend()
 
-        if dataset_name:
+        if dd_model_caption:
             if (
                 len(polynomials) == 2
             ):  # check if only two parameters, ie intercept and slope
@@ -562,7 +564,7 @@ class Viz:
                 ax.plot(data_all_x, intercept + slope * data_all_x, "k--")
                 ax.annotate(
                     "{0} : \ny={1:.1f} + {2:.1f}x".format(
-                        dataset_name, intercept, slope
+                        dd_model_caption, intercept, slope
                     ),
                     xycoords="axes fraction",
                     xy=(0.5, 0.15),
@@ -580,7 +582,7 @@ class Viz:
                 )
                 ax.annotate(
                     "{0}: \ny={1:.1f} + {2:.1f}x + {3:.1f}x^2".format(
-                        dataset_name, intercept, slope, square
+                        dd_model_caption, intercept, slope, square
                     ),
                     xycoords="axes fraction",
                     xy=(0.5, 0.15),
@@ -602,7 +604,7 @@ class Viz:
                 )
                 ax.annotate(
                     "{0}: \ny={1:.1f} + {2:.1f}x + {3:.1f}x^2 + {4:.1f}x^3".format(
-                        dataset_name, intercept, slope, square, cube
+                        dd_model_caption, intercept, slope, square, cube
                     ),
                     xycoords="axes fraction",
                     xy=(0.5, 0.15),
