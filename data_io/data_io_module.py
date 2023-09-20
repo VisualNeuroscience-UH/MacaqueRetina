@@ -223,7 +223,8 @@ class DataIO(DataIOBase):
 
         # Open file by extension type
         filename_extension = data_fullpath_filename.suffix
-        if "gz" in filename_extension or "pkl" in filename_extension:
+        
+        if filename_extension in [".gz", ".pkl"]:
             try:
                 fi = open(data_fullpath_filename, "rb")
                 data_pickle = zlib.decompress(fi.read())
@@ -231,7 +232,7 @@ class DataIO(DataIOBase):
             except:
                 with open(data_fullpath_filename, "rb") as data_pickle:
                     data = pickle.load(data_pickle)
-        elif "mat" in filename_extension:
+        elif ".mat" in filename_extension:
             data = {}
             sio.loadmat(data_fullpath_filename, data)
         elif "csv" in filename_extension:
@@ -240,7 +241,7 @@ class DataIO(DataIOBase):
                 # data = data.drop(["Unnamed: 0"], axis=1)
                 data.set_index("Unnamed: 0", inplace=True)
                 data.index.name = None
-        elif "jpg" in filename_extension or "png" in filename_extension:
+        elif filename_extension in [".jpg", ".png"]:
             image = cv2.imread(
                 str(data_fullpath_filename), 0
             )  # The 0-flag calls for grayscale. Comes in as uint8 type
@@ -252,9 +253,9 @@ class DataIO(DataIOBase):
                 data = np.float32(image)  # 16 bit to save space and memory
         elif filename_extension in [".avi", ".mp4"]:
             data = cv2.VideoCapture(str(data_fullpath_filename))
-        elif "npy" in filename_extension:
+        elif filename_extension in [".npy", ".npz"]:
             data = np.load(data_fullpath_filename)
-        elif filename_extension in ["h5", "hdf5"]:
+        elif filename_extension in [".h5", ".hdf5"]:
             data = self.load_dict_from_hdf5(data_fullpath_filename)
         else:
             raise TypeError("U r trying to input unknown filetype, aborting...")
