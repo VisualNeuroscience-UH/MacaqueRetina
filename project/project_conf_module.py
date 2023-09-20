@@ -91,7 +91,7 @@ viz : visualization
 Main paths in different operating systems
 """
 if sys.platform == "linux":
-    model_root_path = "/opt3/Laskenta/Models"  
+    model_root_path = "/opt3/Laskenta/Models"
     git_repo_root = Path(r"/opt2/Git_Repos/MacaqueRetina")
     ray_root_path = None  # if None, ray_results are saved to model_root_path/project/experiment/output_folder/ray_results
 elif sys.platform == "win32":
@@ -155,13 +155,13 @@ my_retina = {
     "response_type": response_type,
     "ecc_limits": [4.7, 5.3],  # degrees
     "sector_limits": [-1.0, 1.0],  # polar angle in degrees
-    "model_density": 1.0, # 1.0 for 100% of the literature density of ganglion cells
-    "dd_regr_model": "cubic",  # linear, quadratic, cubic. 
-    "randomize_position": 0.1, # between 0 and 1
+    "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
+    "dd_regr_model": "cubic",  # linear, quadratic, cubic.
+    "randomize_position": 0.1,  # between 0 and 1
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
-    "model_type": "FIT",  # "FIT" or "VAE" for variational autoencoder.
-    "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models
+    "model_type": "VAE",  # "FIT" or "VAE" for variational autoencoder.
+    "rf_coverage_adjusted_to_1": True,  # False or True. Applies both to FIT and VAE models
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
     "ray_tune_trial_id": None,  # Trial_id for tune, None for loading single run after "train_model". Applies to VAE "load_model" only.
 }
@@ -242,7 +242,7 @@ my_stimulus_options = {
     "contrast": 0.5,  # Weber constrast
     "mean": 128,
     "temporal_frequency": 8,  # 40,  # Hz
-    "spatial_frequency": .1,
+    "spatial_frequency": 0.1,
     "orientation": 0,  # degrees
     "phase_shift": 0,  # math.pi,  # radians
     "stimulus_video_name": "square_grating.mp4",
@@ -336,11 +336,13 @@ gc_density_file = literature_data_folder / "Perry_1984_Neurosci_GCdensity_Fig8_c
 if my_retina["gc_type"] == "parasol":
     dendr_diam1_file = (
         # literature_data_folder / "Perry_1984_Neurosci_ParasolDendrDiam_c.mat"
-        literature_data_folder / "Perry_1984_Neurosci_ParasolDendrDiam_Fig6A_c.npz"
+        literature_data_folder
+        / "Perry_1984_Neurosci_ParasolDendrDiam_Fig6A_c.npz"
     )
     dendr_diam2_file = (
         # literature_data_folder / "Watanabe_1989_JCompNeurol_GCDendrDiam_parasol_c.mat"
-        literature_data_folder / "Watanabe_1989_JCompNeurol_ParasolDendrDiam_Fig7_c.npz"
+        literature_data_folder
+        / "Watanabe_1989_JCompNeurol_ParasolDendrDiam_Fig7_c.npz"
     )
     temporal_BK_model_file = (
         literature_data_folder / "Benardete_1999_VisNeurosci_parasol.csv"
@@ -348,11 +350,13 @@ if my_retina["gc_type"] == "parasol":
 elif my_retina["gc_type"] == "midget":
     dendr_diam1_file = (
         # literature_data_folder / "Perry_1984_Neurosci_MidgetDendrDiam_c.mat"
-        literature_data_folder / "Perry_1984_Neurosci_MidgetDendrDiam_Fig6B_c.npz"
+        literature_data_folder
+        / "Perry_1984_Neurosci_MidgetDendrDiam_Fig6B_c.npz"
     )
     dendr_diam2_file = (
         # literature_data_folder / "Watanabe_1989_JCompNeurol_GCDendrDiam_midget_c.mat"
-        literature_data_folder / "Watanabe_1989_JCompNeurol_MidgetDendrDiam_Fig7_c.npz"
+        literature_data_folder
+        / "Watanabe_1989_JCompNeurol_MidgetDendrDiam_Fig7_c.npz"
     )
     temporal_BK_model_file = (
         literature_data_folder / "Benardete_1997_VisNeurosci_midget.csv"
@@ -423,7 +427,6 @@ if __name__ == "__main__":
     # ds.collect_and_save_points()
     # ds.quality_control()
 
-
     #################################
     #################################
     ### Build retina ###
@@ -444,22 +447,22 @@ if __name__ == "__main__":
     # This function visualizes the spatial and temporal filter responses, ganglion cell positions and density,
     # mosaic layout, spatial and temporal statistics, dendrite diameter versus eccentricity, and tonic drives
     # in the retina mosaic building process.
-    PM.construct_retina.show_exp_build_process(show_all_spatial_fits=False)
+    # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
 
-    # PM.construct_retina.show_gen_exp_spatial_fit(n_samples=20)
-    # PM.construct_retina.show_gen_exp_spatial_rf(ds_name="test_ds", n_samples=10)
-    # PM.construct_retina.show_latent_tsne_space()
-    # PM.construct_retina.show_gen_spat_post_hist()
-    # PM.construct_retina.show_latent_space_and_samples()
-    # PM.construct_retina.show_retina_img()
-    # PM.construct_retina.show_rf_imgs(n_samples=10)
-    # PM.construct_retina.show_rf_violinplot()
+    # PM.viz.show_gen_exp_spatial_fit(n_samples=20)
+    # PM.viz.show_gen_exp_spatial_rf(ds_name="test_ds", n_samples=10)
+    # PM.viz.show_latent_tsne_space()
+    # PM.viz.show_gen_spat_post_hist()
+    # PM.viz.show_latent_space_and_samples()
+    # PM.viz.show_retina_img()
+    # PM.viz.show_rf_imgs(n_samples=10)
+    # PM.viz.show_rf_violinplot()
 
     # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
     # this_dep_var = "val_loss"
     # ray_exp_name = None  # "TrainableVAE_2023-04-20_22-17-35"  # None for most recent
-    # highlight_trial = "2199e_00029"  # or None
-    # PM.construct_retina.show_ray_experiment(
+    # highlight_trial = None  # "2199e_00029"  # or None
+    # PM.viz.show_ray_experiment(
     #     ray_exp_name, this_dep_var, highlight_trial=highlight_trial
     # )
 
@@ -518,7 +521,7 @@ if __name__ == "__main__":
     #     frame_number=450,
     #     show_rf_id=True,
     # )
-    # TÄHÄN JÄIT: 
+    # TÄHÄN JÄIT:
     # VISUALISOI VAE RF ÄRSYKKEEN KANSSA, TARKISTA ETTEI OLE JO YLLÄ KUN RF LUODAAN
     # VISUALISOI SOLUJEN VASTEET YKSITELLEN HARMAINA KÄPPYRÖINÄ KUN AJETAAN KOKONAINEN KOE
 

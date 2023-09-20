@@ -1677,7 +1677,10 @@ class ConstructRetina(RetinaMath):
             )
 
             if self.rf_coverage_adjusted_to_1 is True:
-                img_rfs_adjusted, img_ret_adjusted = self._adjust_VAE_center_coverage_to_one(
+                (
+                    img_rfs_adjusted,
+                    img_ret_adjusted,
+                ) = self._adjust_VAE_center_coverage_to_one(
                     img_rfs,
                     img_rfs_mask,
                     img_ret,
@@ -1821,95 +1824,3 @@ class ConstructRetina(RetinaMath):
 
         print("Saving model mosaic to %s" % filepath)
         self.gc_df.to_csv(filepath)
-
-    def show_exp_build_process(self, show_all_spatial_fits=False):
-        """
-        Show the process of building the mosaic
-        self goes as argument, to be available for viz
-        """
-
-        # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
-        self.viz.show_exp_build_process(
-            self, show_all_spatial_fits=show_all_spatial_fits
-        )
-
-    def show_gen_exp_spatial_fit(self, n_samples=2):
-        """
-        Show the experimental (fitted) and generated spatial receptive fields
-        self goes as argument, to be available for viz
-        """
-
-        # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
-        self.viz.show_gen_exp_spatial_fit(self, n_samples=n_samples)
-
-    def show_gen_exp_spatial_rf(self, ds_name="test_ds", n_samples=10):
-        """
-        Show the experimental (fitted) and generated spatial receptive fields
-        self goes as argument, to be available for viz
-        """
-
-        # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
-        self.viz.show_gen_exp_spatial_rf(self, ds_name=ds_name, n_samples=n_samples)
-
-    def show_latent_tsne_space(self):
-        """
-        Show the latent space of the encoder
-        self goes as argument, to be available for viz
-        """
-
-        # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
-        self.viz.show_latent_tsne_space(self)
-
-    def show_gen_spat_post_hist(self):
-        """
-        Show the original experimental spatial receptive fields and
-        the generated spatial receptive fields before and after postprocessing
-        """
-
-        # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
-        self.viz.show_gen_spat_post_hist(self)
-
-    def show_latent_space_and_samples(self):
-        """
-        Plot the latent samples on top of the estimated kde, one sublot
-        for each successive two dimensions of latent_dim
-        self goes as argument, to be available for viz
-        """
-
-        # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
-        self.viz.show_latent_space_and_samples(self)
-
-    def show_ray_experiment(self, ray_exp_name, this_dep_var, highlight_trial=None):
-        """
-        Show the ray experiment
-        self goes as argument, to be available for viz
-        """
-
-        # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
-        self.viz.show_ray_experiment(
-            self, ray_exp_name, this_dep_var, highlight_trial=highlight_trial
-        )
-
-    def show_retina_img(self):
-        """
-        Show the VAE retina image
-        """
-
-        # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
-        self.viz.show_retina_img(self)
-
-    def show_rf_imgs(self, n_samples=10):
-        """
-        Show the individual RFs of the VAE retina
-        """
-
-        # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
-        self.viz.show_rf_imgs(self, n_samples=n_samples)
-
-    def show_rf_violinplot(self):
-        """
-        Show each RF and adjusted RF of the VAE retina as boxplots
-        """
-
-        # The argument "self" i.e. the construct_retina object becomes available in the Viz class as "mosaic"
-        self.viz.show_rf_violinplot(self)

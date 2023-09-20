@@ -171,12 +171,11 @@ class Viz:
     # Fit visualization
     def show_temporal_filter_response(
         self,
-        mosaic,
     ):
         """
         Show temporal filter response for each cell.
         """
-        exp_temp_filt_to_viz = mosaic.exp_temp_filt_to_viz
+        exp_temp_filt_to_viz = self.construct_retina.exp_temp_filt_to_viz
         xdata = exp_temp_filt_to_viz["xdata"]
         xdata_finer = exp_temp_filt_to_viz["xdata_finer"]
         title = exp_temp_filt_to_viz["title"]
@@ -337,22 +336,27 @@ class Viz:
                 plt.show()
 
     # ConstructRetina visualization
-    def show_gc_positions_and_density(self, mosaic):
+    def show_gc_positions_and_density(self):
         """
         Show retina cell positions and receptive fields
 
         ConstructRetina call.
         """
 
-        rho = mosaic.gc_df["pos_ecc_mm"].to_numpy()
-        phi = mosaic.gc_df["pos_polar_deg"].to_numpy()
-        gc_density_func_params = mosaic.gc_density_func_params
+        rho = self.construct_retina.gc_df["pos_ecc_mm"].to_numpy()
+        phi = self.construct_retina.gc_df["pos_polar_deg"].to_numpy()
+        gc_density_func_params = self.construct_retina.gc_density_func_params
 
         # to cartesian
         xcoord, ycoord = self.pol2cart(rho, phi)
 
         fig, ax = plt.subplots(nrows=2, ncols=1)
-        ax[0].plot(xcoord.flatten(), ycoord.flatten(), "b.", label=mosaic.gc_type)
+        ax[0].plot(
+            xcoord.flatten(),
+            ycoord.flatten(),
+            "b.",
+            label=self.construct_retina.gc_type,
+        )
         ax[0].axis("equal")
         ax[0].legend()
         ax[0].set_title("Cartesian retina")
@@ -364,57 +368,64 @@ class Viz:
         # Fit for published data
         edge_ecc = np.linspace(np.min(rho), np.max(rho), nbins)
         my_gaussian_fit = self.gauss_plus_baseline(edge_ecc, *gc_density_func_params)
-        my_gaussian_fit_current_GC = my_gaussian_fit * mosaic.gc_proportion
+        my_gaussian_fit_current_GC = (
+            my_gaussian_fit * self.construct_retina.gc_proportion
+        )
         ax[1].plot(edge_ecc, my_gaussian_fit_current_GC, "r")
 
         # Density of model cells
         index = np.all(
             [
-                phi > np.min(mosaic.polar_lim_deg),
-                phi < np.max(mosaic.polar_lim_deg),
-                rho > np.min(mosaic.ecc_lim_mm),
-                rho < np.max(mosaic.ecc_lim_mm),
+                phi > np.min(self.construct_retina.polar_lim_deg),
+                phi < np.max(self.construct_retina.polar_lim_deg),
+                rho > np.min(self.construct_retina.ecc_lim_mm),
+                rho < np.max(self.construct_retina.ecc_lim_mm),
             ],
             axis=0,
         )  # Index only cells within original requested polar_lim_deg
         hist, bin_edges = np.histogram(rho[index], nbins)
         center_ecc = bin_edges[:-1] + ((bin_edges[1:] - bin_edges[:-1]) / 2)
         area_for_each_bin = self.sector2area(
-            bin_edges[1:], np.ptp(mosaic.polar_lim_deg)
+            bin_edges[1:], np.ptp(self.construct_retina.polar_lim_deg)
         ) - self.sector2area(
-            bin_edges[:-1], np.ptp(mosaic.polar_lim_deg)
+            bin_edges[:-1], np.ptp(self.construct_retina.polar_lim_deg)
         )  # in mm2. Vector length len(edge_ecc) - 1.
         # Cells/area
         model_cell_density = hist / area_for_each_bin  # in cells/mm2
         ax[1].plot(center_ecc, model_cell_density, "b.")
 
-    def visualize_mosaic(self, mosaic):
+    def visualize_mosaic(self):
         """
-        Plots the full ganglion cell mosaic. Note that this is slow if you have a large patch.
+        Plots the full ganglion cell self.construct_retina. Note that this is slow if you have a large patch.
 
         ConstructRetina call.
 
         :return:
         """
 
-        rho = mosaic.gc_df["pos_ecc_mm"].to_numpy()
-        phi = mosaic.gc_df["pos_polar_deg"].to_numpy()
+        rho = self.construct_retina.gc_df["pos_ecc_mm"].to_numpy()
+        phi = self.construct_retina.gc_df["pos_polar_deg"].to_numpy()
 
-        gc_rf_models = np.zeros((len(mosaic.gc_df), 6))
-        gc_rf_models[:, 0] = mosaic.gc_df["semi_xc"]
-        gc_rf_models[:, 1] = mosaic.gc_df["semi_yc"]
-        gc_rf_models[:, 2] = mosaic.gc_df["xy_aspect_ratio"]
-        gc_rf_models[:, 3] = mosaic.gc_df["ampl_s"]
-        gc_rf_models[:, 4] = mosaic.gc_df["relat_sur_diam"]
-        gc_rf_models[:, 5] = mosaic.gc_df["orient_cen"]
+        gc_rf_models = np.zeros((len(self.construct_retina.gc_df), 6))
+        gc_rf_models[:, 0] = self.construct_retina.gc_df["semi_xc"]
+        gc_rf_models[:, 1] = self.construct_retina.gc_df["semi_yc"]
+        gc_rf_models[:, 2] = self.construct_retina.gc_df["xy_aspect_ratio"]
+        gc_rf_models[:, 3] = self.construct_retina.gc_df["ampl_s"]
+        gc_rf_models[:, 4] = self.construct_retina.gc_df["relat_sur_diam"]
+        gc_rf_models[:, 5] = self.construct_retina.gc_df["orient_cen"]
 
         # to cartesian
         xcoord, ycoord = self.pol2cart(rho, phi)
 
         fig, ax = plt.subplots(nrows=1, ncols=1)
-        ax.plot(xcoord.flatten(), ycoord.flatten(), "b.", label=mosaic.gc_type)
+        ax.plot(
+            xcoord.flatten(),
+            ycoord.flatten(),
+            "b.",
+            label=self.construct_retina.gc_type,
+        )
 
-        if mosaic.surround_fixed:
+        if self.construct_retina.surround_fixed:
             # gc_rf_models parameters:'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','relat_sur_diam', 'orient_cen'
             # Ellipse parameters: Ellipse(xy, width, height, angle=0, **kwargs). Only possible one at the time, unfortunately.
             for index in np.arange(len(xcoord)):
@@ -443,15 +454,17 @@ class Viz:
         ax.set_xlabel("Eccentricity (mm)")
         ax.set_ylabel("Elevation (mm)")
 
-    def show_spatial_statistics(self, mosaic):
+    def show_spatial_statistics(self):
         """
         Show histograms of receptive field parameters
 
         ConstructRetina call.
         """
-        ydata = mosaic.exp_spat_stat_to_viz["ydata"]
-        spatial_statistics_dict = mosaic.exp_spat_stat_to_viz["spatial_statistics_dict"]
-        model_fit_data = mosaic.exp_spat_stat_to_viz["model_fit_data"]
+        ydata = self.construct_retina.exp_spat_stat_to_viz["ydata"]
+        spatial_statistics_dict = self.construct_retina.exp_spat_stat_to_viz[
+            "spatial_statistics_dict"
+        ]
+        model_fit_data = self.construct_retina.exp_spat_stat_to_viz["model_fit_data"]
 
         distributions = [key for key in spatial_statistics_dict.keys()]
         n_distributions = len(spatial_statistics_dict)
@@ -525,30 +538,25 @@ class Viz:
                 )
             )
 
-    def show_dendrite_diam_vs_ecc(self, mosaic):
+    def show_dendrite_diam_vs_ecc(self):
         """
         Plot dendritic diameter as a function of retinal eccentricity with linear, quadratic, or cubic fitting.
-
-        Parameters
-        ----------
-        mosaic : ContructRetina object
-            An instance of the ContructRetina class containing the data to be plotted.
         """
-        data_all_x = mosaic.dd_vs_ecc_to_viz["data_all_x"]
-        data_all_y = mosaic.dd_vs_ecc_to_viz["data_all_y"]
-        dd_fit_x = mosaic.dd_vs_ecc_to_viz["dd_fit_x"]
-        dd_fit_y = mosaic.dd_vs_ecc_to_viz["dd_fit_y"]
-        if mosaic.model_type == "VAE":
-            dd_vae_x = mosaic.dd_vs_ecc_to_viz["dd_vae_x"]
-            dd_vae_y = mosaic.dd_vs_ecc_to_viz["dd_vae_y"]
-        polynomials = mosaic.dd_vs_ecc_to_viz["polynomials"]
-        dd_model_caption = mosaic.dd_vs_ecc_to_viz["dd_model_caption"]
-        title = mosaic.dd_vs_ecc_to_viz["title"]
+        data_all_x = self.construct_retina.dd_vs_ecc_to_viz["data_all_x"]
+        data_all_y = self.construct_retina.dd_vs_ecc_to_viz["data_all_y"]
+        dd_fit_x = self.construct_retina.dd_vs_ecc_to_viz["dd_fit_x"]
+        dd_fit_y = self.construct_retina.dd_vs_ecc_to_viz["dd_fit_y"]
+        if self.construct_retina.model_type == "VAE":
+            dd_vae_x = self.construct_retina.dd_vs_ecc_to_viz["dd_vae_x"]
+            dd_vae_y = self.construct_retina.dd_vs_ecc_to_viz["dd_vae_y"]
+        polynomials = self.construct_retina.dd_vs_ecc_to_viz["polynomials"]
+        dd_model_caption = self.construct_retina.dd_vs_ecc_to_viz["dd_model_caption"]
+        title = self.construct_retina.dd_vs_ecc_to_viz["title"]
 
         fig, ax = plt.subplots(nrows=1, ncols=1)
         ax.plot(data_all_x, data_all_y, "b.", label="Data")
         ax.plot(dd_fit_x, dd_fit_y, "r.", label="Fit")
-        if mosaic.model_type == "VAE":
+        if self.construct_retina.model_type == "VAE":
             ax.plot(dd_vae_x, dd_vae_y, "k.", label="Vae")
 
         ax.set_xlabel("Retinal eccentricity (mm)")
@@ -614,19 +622,20 @@ class Viz:
 
         plt.title(title)
 
-    def show_temp_stat(self, mosaic):
+    def show_temp_stat(self):
         """
-        Show the temporal statistics of the mosaic.
-        ConstructRetina call.
+        Show the temporal statistics of the retina units.
         """
 
-        temporal_filter_parameters = mosaic.exp_temp_stat_to_viz[
+        temporal_filter_parameters = self.construct_retina.exp_temp_stat_to_viz[
             "temporal_filter_parameters"
         ]
-        distrib_params = mosaic.exp_temp_stat_to_viz["distrib_params"]
-        suptitle = mosaic.exp_temp_stat_to_viz["suptitle"]
-        all_data_fits_df = mosaic.exp_temp_stat_to_viz["all_data_fits_df"]
-        good_idx = mosaic.exp_temp_stat_to_viz["good_idx"]
+        distrib_params = self.construct_retina.exp_temp_stat_to_viz["distrib_params"]
+        suptitle = self.construct_retina.exp_temp_stat_to_viz["suptitle"]
+        all_data_fits_df = self.construct_retina.exp_temp_stat_to_viz[
+            "all_data_fits_df"
+        ]
+        good_idx = self.construct_retina.exp_temp_stat_to_viz["good_idx"]
 
         plt.subplots(2, 3)
         plt.suptitle(suptitle)
@@ -645,28 +654,28 @@ class Viz:
             ax.hist(param_array, density=True)
             ax.set_title(param_name)
 
-    def show_tonic_drives(self, mosaic):
+    def show_tonic_drives(self):
         """
         ConstructRetina call.
         """
-        xs = mosaic.exp_tonic_dr_to_viz["xs"]
-        pdf = mosaic.exp_tonic_dr_to_viz["pdf"]
-        tonicdrive_array = mosaic.exp_tonic_dr_to_viz["tonicdrive_array"]
-        title = mosaic.exp_tonic_dr_to_viz["title"]
+        xs = self.construct_retina.exp_tonic_dr_to_viz["xs"]
+        pdf = self.construct_retina.exp_tonic_dr_to_viz["pdf"]
+        tonicdrive_array = self.construct_retina.exp_tonic_dr_to_viz["tonicdrive_array"]
+        title = self.construct_retina.exp_tonic_dr_to_viz["title"]
 
         plt.plot(xs, pdf)
         plt.hist(tonicdrive_array, density=True)
         plt.title(title)
         plt.xlabel("Tonic drive (a.u.)")
 
-    def show_exp_build_process(self, mosaic, show_all_spatial_fits=False):
+    def show_exp_build_process(self, show_all_spatial_fits=False):
         """
         Visualize the stages of retina mosaic building process.
         """
 
         # If show_all_spatial_fits is true, show the spatial fits
         if show_all_spatial_fits is True:
-            spat_filt_to_viz = mosaic.exp_spat_filt_to_viz
+            spat_filt_to_viz = self.construct_retina.exp_spat_filt_to_viz
             self.show_spatial_filter_response(
                 spat_filt_to_viz,
                 n_samples=np.inf,
@@ -675,26 +684,25 @@ class Viz:
             )
             return
 
-        self.show_temporal_filter_response(mosaic)
+        self.show_temporal_filter_response()
 
-        self.show_gc_positions_and_density(mosaic)
-        self.visualize_mosaic(mosaic)
-        self.show_spatial_statistics(mosaic)
-        self.show_dendrite_diam_vs_ecc(mosaic)
-        self.show_temp_stat(mosaic)
-        self.show_tonic_drives(mosaic)
+        self.show_gc_positions_and_density()
+        self.visualize_mosaic()
+        self.show_spatial_statistics()
+        self.show_dendrite_diam_vs_ecc()
+        self.show_temp_stat()
+        self.show_tonic_drives()
 
-    def show_gen_exp_spatial_fit(self, mosaic, n_samples=2):
+    def show_gen_exp_spatial_fit(self, n_samples=2):
         """
-        Show the experimental (fitted) and generated spatial receptive fields
+        Show the experimental (fitted) and generated spatial receptive fields (VAE)
 
         Parameters
         ----------
-        mosaic : ConstructRetina object
         n_samples : int
             Number of samples to show
         """
-        spat_filt_to_viz = mosaic.exp_spat_filt_to_viz
+        spat_filt_to_viz = self.construct_retina.exp_spat_filt_to_viz
         self.show_spatial_filter_response(
             spat_filt_to_viz,
             n_samples=n_samples,
@@ -702,27 +710,24 @@ class Viz:
             pause_to_show=False,
         )
 
-        spat_filt_to_viz = mosaic.gen_spat_filt_to_viz
-        self.show_spatial_filter_response(
-            spat_filt_to_viz,
-            n_samples=n_samples,
-            title="Generated",
-            pause_to_show=False,
-        )
+        if self.construct_retina.model_type == "VAE":
+            spat_filt_to_viz = self.construct_retina.gen_spat_filt_to_viz
+            self.show_spatial_filter_response(
+                spat_filt_to_viz,
+                n_samples=n_samples,
+                title="Generated",
+                pause_to_show=False,
+            )
 
-    def show_latent_space_and_samples(self, mosaic):
+    def show_latent_space_and_samples(self):
         """
         Plot the latent samples on top of the estimated kde, one sublot for each successive two dimensions of latent_dim
-
-        Parameters
-        ----------
-        mosaic : ConstructRetina object
         """
         from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
-        latent_samples = mosaic.gen_latent_space_to_viz["samples"]
-        latent_data = mosaic.gen_latent_space_to_viz["data"]
-        latent_dim = mosaic.gen_latent_space_to_viz["dim"]
+        latent_samples = self.construct_retina.gen_latent_space_to_viz["samples"]
+        latent_data = self.construct_retina.gen_latent_space_to_viz["data"]
+        latent_dim = self.construct_retina.gen_latent_space_to_viz["dim"]
 
         # Make a grid of subplots
         n_cols = 4
@@ -817,30 +822,30 @@ class Viz:
         # plt.tight_layout()
         fig.suptitle(fig_suptitle_text)
 
-    def show_gen_spat_post_hist(self, mosaic):
+    def show_gen_spat_post_hist(self):
         """
         Show the original experimental spatial receptive fields and
-        the generated spatial receptive fields before and after postprocessing
-
-        Parameters
-        ----------
-        mosaic : ConstructRetina object
+        the generated spatial receptive fields before and after postprocessing.
         """
 
         # Get the keys for the cell_ix arrays
         cell_key_list = [
-            key for key in mosaic.exp_spat_filt_to_viz.keys() if "cell_ix" in key
+            key
+            for key in self.construct_retina.exp_spat_filt_to_viz.keys()
+            if "cell_ix" in key
         ]
-        img_shape = mosaic.exp_spat_filt_to_viz["cell_ix_0"]["spatial_data_array"].shape
+        img_shape = self.construct_retina.exp_spat_filt_to_viz["cell_ix_0"][
+            "spatial_data_array"
+        ].shape
         # The shape of the array is N cells, y_pixels, x_pixels
         img_exp = np.zeros([len(cell_key_list), img_shape[0], img_shape[1]])
         for i, cell_key in enumerate(cell_key_list):
-            img_exp[i, :, :] = mosaic.exp_spat_filt_to_viz[cell_key][
+            img_exp[i, :, :] = self.construct_retina.exp_spat_filt_to_viz[cell_key][
                 "spatial_data_array"
             ]
 
-        img_pre = mosaic.gen_spat_img_to_viz["img_raw"]
-        img_post = mosaic.gen_spat_img_to_viz["img_processed"]
+        img_pre = self.construct_retina.gen_spat_img_to_viz["img_raw"]
+        img_post = self.construct_retina.gen_spat_img_to_viz["img_processed"]
 
         plt.subplot(1, 3, 1)
         plt.hist(img_exp.flatten(), bins=100)
@@ -858,35 +863,41 @@ class Viz:
         plt.axvline(np.median(img_post), color="r")
         plt.title(f"Generated processed, median: {np.median(img_post):.2f}")
 
-    def show_gen_exp_spatial_rf(self, mosaic, ds_name="test_ds", n_samples=10):
+    def show_gen_exp_spatial_rf(self, ds_name="test_ds", n_samples=10):
         """
         Plot the outputs of the autoencoder.
         """
-
+        assert (
+            self.construct_retina.model_type == "VAE"
+        ), "Only model type VAE is supported for show_gen_exp_spatial_rf()"
         if ds_name == "train_ds":
-            ds = mosaic.retina_vae.train_loader.dataset
+            ds = self.construct_retina.retina_vae.train_loader.dataset
         elif ds_name == "valid_ds":
-            ds = mosaic.retina_vae.val_loader.dataset
+            ds = self.construct_retina.retina_vae.val_loader.dataset
         else:
-            ds = mosaic.retina_vae.test_loader.dataset
+            ds = self.construct_retina.retina_vae.test_loader.dataset
 
         plt.figure(figsize=(16, 4.5))
 
-        vae = mosaic.retina_vae.vae
+        vae = self.construct_retina.retina_vae.vae
         vae.eval()
         len_ds = len(ds)
         samples = np.random.choice(len_ds, n_samples, replace=False)
 
         for pos_idx, sample_idx in enumerate(samples):
             ax = plt.subplot(2, len(samples), pos_idx + 1)
-            img = ds[sample_idx][0].unsqueeze(0).to(mosaic.retina_vae.device)
+            img = (
+                ds[sample_idx][0]
+                .unsqueeze(0)
+                .to(self.construct_retina.retina_vae.device)
+            )
             plt.imshow(img.cpu().squeeze().numpy(), cmap="gist_gray")
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
             ax.text(
                 0.05,
                 0.85,
-                mosaic.retina_vae.apricot_data.data_labels2names_dict[
+                self.construct_retina.retina_vae.apricot_data.data_labels2names_dict[
                     ds[sample_idx][1].item()
                 ],
                 fontsize=10,
@@ -908,15 +919,15 @@ class Viz:
         # Set the whole figure title as ds_name
         plt.suptitle(ds_name)
 
-    def show_latent_tsne_space(self, mosaic):
-        train_df = mosaic.retina_vae.get_encoded_samples(
-            dataset=mosaic.retina_vae.train_loader.dataset
+    def show_latent_tsne_space(self):
+        train_df = self.construct_retina.retina_vae.get_encoded_samples(
+            dataset=self.construct_retina.retina_vae.train_loader.dataset
         )
-        valid_df = mosaic.retina_vae.get_encoded_samples(
-            dataset=mosaic.retina_vae.val_loader.dataset
+        valid_df = self.construct_retina.retina_vae.get_encoded_samples(
+            dataset=self.construct_retina.retina_vae.val_loader.dataset
         )
-        test_df = mosaic.retina_vae.get_encoded_samples(
-            dataset=mosaic.retina_vae.test_loader.dataset
+        test_df = self.construct_retina.retina_vae.get_encoded_samples(
+            dataset=self.construct_retina.retina_vae.test_loader.dataset
         )
 
         # Add a column to each df with the dataset name
@@ -945,19 +956,19 @@ class Viz:
         ax0.set(xlabel="tsne-2d-one", ylabel="tsne-2d-two")
         plt.title("TSNE plot of encoded samples")
 
-    def show_ray_experiment(self, mosaic, ray_exp, this_dep_var, highlight_trial=None):
+    def show_ray_experiment(self, ray_exp, this_dep_var, highlight_trial=None):
         """
         Show the results of a ray experiment. If ray_exp is None, then
         the most recent experiment is shown.
 
         Parameters
         ----------
-        mosaic : ConstructRetina object
-            Retina model
         ray_exp : str
             The name of the ray experiment
         this_dep_var : str
             The dependent variable to use for selecting the best trials
+        highlight_trial : int
+            The trial to highlight in the evolution plot
         """
 
         info_columns = ["trial_id", "iteration"]
@@ -1046,13 +1057,13 @@ class Viz:
         #     axd, "dv", result_grid, dep_vars, best_trials_across_dep_vars
         # )
 
-        if hasattr(mosaic, "exp_spat_filt_to_viz"):
-            exp_spat_filt_to_viz = mosaic.exp_spat_filt_to_viz
-            print("mosaic had attribute exp_spat_filt_to_viz")
+        if hasattr(self.construct_retina, "exp_spat_filt_to_viz"):
+            exp_spat_filt_to_viz = self.construct_retina.exp_spat_filt_to_viz
+            print("construct_retina had attribute exp_spat_filt_to_viz")
         else:
-            mosaic._initialize()
-            exp_spat_filt_to_viz = mosaic.exp_spat_filt_to_viz
-            print("mosaic did not have attribute exp_spat_filt_to_viz")
+            self.construct_retina._initialize()
+            exp_spat_filt_to_viz = self.construct_retina.exp_spat_filt_to_viz
+            print("construct_retina did not have attribute exp_spat_filt_to_viz")
 
         num_best_trials = 5  # Also N reco img to show
         best_trials, dep_var_vals = self._get_best_trials(
@@ -1854,14 +1865,14 @@ class Viz:
         plt.figure()
         plt.plot(data.T)
 
-    def show_retina_img(self, retina):
+    def show_retina_img(self):
         """
         Show the image of whole retina with all the receptive fields summed up.
         """
 
-        img_ret = retina.gen_ret_to_viz["img_ret"]
-        img_ret_masked = retina.gen_ret_to_viz["img_ret_masked"]
-        img_ret_adjusted = retina.gen_ret_to_viz["img_ret_adjusted"]
+        img_ret = self.construct_retina.gen_ret_to_viz["img_ret"]
+        img_ret_masked = self.construct_retina.gen_ret_to_viz["img_ret_masked"]
+        img_ret_adjusted = self.construct_retina.gen_ret_to_viz["img_ret_adjusted"]
 
         plt.figure()
         plt.subplot(221)
@@ -1883,7 +1894,7 @@ class Viz:
         plt.colorbar()
         plt.title("Adjusted coverage")
 
-    def show_rf_imgs(self, retina, n_samples=10):
+    def show_rf_imgs(self, n_samples=10):
         """
         Show the individual RFs of the VAE retina
 
@@ -1892,9 +1903,9 @@ class Viz:
         img_rfs_adjusted: (n_cells, n_pix, n_pix)
         """
 
-        img_rf = retina.gen_rfs_to_viz["img_rf"]
-        img_rf_mask = retina.gen_rfs_to_viz["img_rf_mask"]
-        img_rfs_adjusted = retina.gen_rfs_to_viz["img_rfs_adjusted"]
+        img_rf = self.construct_retina.gen_rfs_to_viz["img_rf"]
+        img_rf_mask = self.construct_retina.gen_rfs_to_viz["img_rf_mask"]
+        img_rfs_adjusted = self.construct_retina.gen_rfs_to_viz["img_rfs_adjusted"]
 
         fig, axs = plt.subplots(3, n_samples, figsize=(n_samples, 3))
         samples = np.random.choice(img_rf.shape[0], n_samples, replace=False)
@@ -1929,7 +1940,7 @@ class Viz:
         # # Adjust the layout so labels are visible
         # fig.subplots_adjust(left=0.15)
 
-    def show_rf_violinplot(self, retina):
+    def show_rf_violinplot(self):
         """
         Show the individual RFs of the VAE retina
 
@@ -1937,8 +1948,8 @@ class Viz:
         img_rfs_adjusted: (n_cells, n_pix, n_pix)
         """
 
-        img_rf = retina.gen_rfs_to_viz["img_rf"]
-        img_rfs_adjusted = retina.gen_rfs_to_viz["img_rfs_adjusted"]
+        img_rf = self.construct_retina.gen_rfs_to_viz["img_rf"]
+        img_rfs_adjusted = self.construct_retina.gen_rfs_to_viz["img_rfs_adjusted"]
 
         fig, axs = plt.subplots(
             2, 1, figsize=(10, 10)
