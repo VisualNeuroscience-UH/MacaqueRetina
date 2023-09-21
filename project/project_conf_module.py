@@ -253,7 +253,7 @@ n_files = 1
 
 # Either n_trials or n_cells must be 1, and the other > 1
 my_run_options = {
-    "cell_index": 16,  # int, None for all cells
+    "cell_index": [8, 16],  # int, None for all cells
     "n_trials": 10,  # For each of the response files
     "spike_generator_model": "refractory",  # poisson or refractory
     "save_data": True,
@@ -499,7 +499,7 @@ if __name__ == "__main__":
     # Show impulse response and exit
     ########################################
 
-    contrast_for_impulses = ([0.01, 0.02, 1.00],)  # Not applicable for midget units
+    contrast_for_impulses = [1.00]  # Not applicable for midget units
     PM.working_retina.run_cells(
         cell_index=my_run_options["cell_index"],  # int
         get_impulse_response=True,  # Return with impulse response

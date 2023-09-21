@@ -1825,21 +1825,36 @@ class Viz:
         tvec = viz_dict["tvec"]
         svec = viz_dict["svec"]
 
-        # Get keys which are not "tvec" or "svec"
-        contrasts = [
-            key for key in viz_dict.keys() if key not in ["tvec", "svec", "Unit idx"]
-        ]
+        contrasts = viz_dict["contrasts"]  # contrast_for_impulses
+        yvecs = viz_dict["impulse_responses"]  # yvecs
 
-        for this_contrast in contrasts:
-            plt.plot(tvec[:-1], viz_dict[this_contrast][:-1])
+        # # Get keys which are not "tvec" or "svec"
+        # contrasts = [
+        #     key for key in viz_dict.keys() if key not in ["tvec", "svec", "Unit idx"]
+        # ]
+
+        cell_index = viz_dict["Unit idx"]
+
+        plt.figure()
+
+        for u_idx, this_unit in enumerate(cell_index):
+            for c_idx, this_contrast in enumerate(contrasts):
+                # plt.plot(tvec[:-1], viz_dict[this_contrast][:-1])
+                if len(contrasts) > 1:
+                    label = f"Unit {this_unit}, contrast {this_contrast}"
+                else:
+                    label = f"Unit {this_unit}"
+                plt.plot(
+                    tvec[:-1],
+                    yvecs[u_idx, c_idx, :-1],
+                    label=label,
+                )
 
         # Set vertical dashed line at max (svec) time point, i.e. at the impulse time
         plt.axvline(x=tvec[np.argmax(svec)], color="k", linestyle="--")
-        plt.legend(contrasts)
+        plt.legend()
         plt.ylim(-0.2, 1.1)
-        plt.title(
-            f"{retina.gc_type} impulse response for unit {str(viz_dict['Unit idx'])}"
-        )
+        plt.title(f"{retina.gc_type} impulse response(s)")
 
         if savefigname is not None:
             self._figsave(figurename=savefigname)

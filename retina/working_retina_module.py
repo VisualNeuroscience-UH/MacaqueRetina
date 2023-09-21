@@ -1278,6 +1278,61 @@ class WorkingRetina(RetinaMath):
         svecs = center_surround_filters_sum
         return svecs
 
+    def _get_impulse_response(self, cell_index, contrast_for_impulses, video_dt, tvec):
+        # Dummy kernel for show_impulse response
+        svec = np.zeros(len(tvec))
+        dt = video_dt / b2u.ms
+        idx_100_ms = int(np.round(100 / dt))
+        svec[idx_100_ms] = 1.0
+
+        impulse_for_viz_dict = {
+            "tvec": tvec / b2u.second,
+            "svec": svec,
+        }
+        stim_len_tp = len(tvec)
+        # Append to impulse_for_viz_dict a key str(contrast) for each contrast,
+        # holding empty array for impulse response
+
+        assert contrast_for_impulses is not None and isinstance(
+            contrast_for_impulses, list
+        ), "Impulse must specify contrasts as list, aborting..."
+
+        yvecs = np.empty((len(cell_index), len(contrast_for_impulses), stim_len_tp))
+        for idx, this_cell_index in enumerate(cell_index):
+            # Get unit params
+            params = self.gc_df.loc[this_cell_index]
+
+            if self.gc_type == "parasol":
+                for contrast in contrast_for_impulses:
+                    yvec = self._create_temporal_signal_gc(
+                        tvec,
+                        svec,
+                        video_dt,
+                        params,
+                        show_impulse=True,
+                        impulse_contrast=contrast,
+                    )
+                    yvecs[idx, contrast_for_impulses.index(contrast), :] = yvec
+
+            elif self.gc_type == "midget":
+                if contrast_for_impulses is not None:
+                    print("Contrast_for_impulses will be ignored for midget cells")
+                yvec = self._create_temporal_signal(
+                    tvec,
+                    svec,
+                    video_dt,
+                    params,
+                    "cen",
+                    show_impulse=True,
+                )
+                yvecs[idx, 0, :] = yvec
+
+        impulse_for_viz_dict["contrasts"] = contrast_for_impulses
+        impulse_for_viz_dict["impulse_responses"] = yvecs
+        impulse_for_viz_dict["Unit idx"] = list(cell_index)
+
+        self.impulse_for_viz_dict = impulse_for_viz_dict
+
     def run_cells(
         self,
         cell_index=None,
@@ -1352,67 +1407,25 @@ class WorkingRetina(RetinaMath):
         simulation_dt = simulation_dt * b2u.second  # output
         tvec = range(stim_len_tp) * video_dt
 
-        if get_impulse_response is True:
-            assert isinstance(
-                cell_index, int
-            ), "Impulse response cell_index must be an integer, aborting..."
-
-            # Dummy kernel for show_impulse response
-            svec = np.zeros(len(tvec))
-            dt = video_dt / b2u.ms
-            idx_100_ms = int(np.round(100 / dt))
-            svec[idx_100_ms] = 1.0
-
-            # Get unit params
-            params = self.gc_df.loc[cell_index]
-            impulse_for_viz_dict = {
-                "tvec": tvec / b2u.second,
-                "svec": svec,
-            }
-            impulse_for_viz_dict["Unit idx"] = cell_index
-            # Append to impulse_for_viz_dict a key str(contrast) for each contrast,
-            # holding empty array for impulse response
-
-            if self.gc_type == "parasol":
-                assert contrast_for_impulses is not None and isinstance(
-                    contrast_for_impulses, list
-                ), "Impulse must specify contrasts as list, aborting..."
-
-                for contrast in contrast_for_impulses:
-                    yvec = self._create_temporal_signal_gc(
-                        tvec,
-                        svec,
-                        video_dt,
-                        params,
-                        show_impulse=True,
-                        impulse_contrast=contrast,
-                    )
-                    impulse_for_viz_dict[str(contrast)] = yvec
-
-            elif self.gc_type == "midget":
-                if contrast_for_impulses is not None:
-                    print("Contrast_for_impulses will be ignored for midget cells")
-                yvec = self._create_temporal_signal(
-                    tvec,
-                    svec,
-                    video_dt,
-                    params,
-                    "cen",
-                    show_impulse=True,
-                )
-                impulse_for_viz_dict["all_contrasts"] = yvec
-
-            self.impulse_for_viz_dict = impulse_for_viz_dict
-            return
-
         # Run all cells
         if cell_index is None:
             n_cells = len(self.gc_df.index)  # all cells
             cell_indices = np.arange(n_cells)
-        # Run one cell
-        else:
-            n_cells = 1
+        # Run one or a subset of cells
+        elif isinstance(cell_index, (int, list)):
             cell_indices = np.array(cell_index)
+            n_cells = len(cell_indices)
+
+        else:
+            raise AssertionError(
+                "cell_index must be None, an integer or list, aborting..."
+            )
+
+        if get_impulse_response is True:
+            self._get_impulse_response(
+                cell_index, contrast_for_impulses, video_dt, tvec
+            )
+            return
 
         cell_indices = np.atleast_1d(cell_indices)  # make sure it's an array
 
