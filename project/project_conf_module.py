@@ -123,14 +123,14 @@ input_folder = "../in"  # input figs, videos
 Stimulus context
 Stimulus images and videos
 """
-stimulus_folder = "stimulus_ori0deg"  # input figs, videos
+stimulus_folder = "test_stim_impulse"  # input figs, videos
 
 
 """
 Data context for output. 
 """
 
-output_folder = "SF_mapping_ori0deg"
+output_folder = "test_impulse"  # "crf_midget_on_vae_tf10_c6"
 
 
 """
@@ -161,7 +161,7 @@ my_retina = {
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
     "model_type": "VAE",  # "FIT" or "VAE" for variational autoencoder.
-    "rf_coverage_adjusted_to_1": True,  # False or True. Applies both to FIT and VAE models
+    "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
     "ray_tune_trial_id": None,  # Trial_id for tune, None for loading single run after "train_model". Applies to VAE "load_model" only.
 }
@@ -229,7 +229,7 @@ my_stimulus_options = {
     "image_height": 180,  # 432 for nature1.avi
     "pix_per_deg": 120,
     "fps": 300,  # 300 for good cg integration
-    "duration_seconds": 6.0,  # actual frames = floor(duration_seconds * fps)
+    "duration_seconds": 0.01,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
     "pattern": "sine_grating",  # Natural video is not supported yet. One of the StimulusPatterns
@@ -239,13 +239,13 @@ my_stimulus_options = {
     "stimulus_position": (0, 0),
     "stimulus_size": 2,  # 4.6 deg in Lee_1990_JOSA
     "background": 128,
-    "contrast": 0.5,  # Weber constrast
+    "contrast": 0.8,  # Weber constrast
     "mean": 128,
-    "temporal_frequency": 8,  # 40,  # Hz
-    "spatial_frequency": 0.1,
+    "temporal_frequency": 1,  # 40,  # Hz
+    "spatial_frequency": 1,
     "orientation": 0,  # degrees
     "phase_shift": 0,  # math.pi,  # radians
-    "stimulus_video_name": "square_grating.mp4",
+    "stimulus_video_name": stimulus_folder + ".mp4",
 }
 
 # Each gc response file contain n_trials
@@ -438,7 +438,7 @@ if __name__ == "__main__":
     """
 
     # # Main retina construction method. This method calls all other methods in the retina construction process.
-    PM.construct_retina.build()
+    # PM.construct_retina.build()
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # This is why they are called via the construct_retina attribute. The instance
@@ -477,13 +477,13 @@ if __name__ == "__main__":
     ########################
 
     # See my_stimulus_options for valid stimulus_options
-    # PM.stimulate.make_stimulus_video()
+    PM.stimulate.make_stimulus_video()
 
     ###########################################
     ### Load stimulus to get working retina ###
     ###########################################
 
-    # PM.working_retina.load_stimulus()
+    PM.working_retina.load_stimulus()
 
     ##########################################
     ### Show single ganglion cell response ###
@@ -496,16 +496,17 @@ if __name__ == "__main__":
     # PM.viz.show_convolved_stimulus(PM.working_retina)
 
     ########################################
-    # Show parasol impulse response and exit
+    # Show impulse response and exit
     ########################################
-    # contrast_for_impulses = [0.01, 0.02, 1.00]
-    # PM.working_retina.run_cells(
-    #     cell_index=example_gc,  # int
-    #     get_impulse_response=True,  # Return with impulse response
-    #     contrast_for_impulses=contrast_for_impulses,  # List of contrasts
-    # )
 
-    # PM.viz.show_parasol_impulse_response(PM.working_retina, savefigname="testi.png")
+    contrast_for_impulses = ([0.01, 0.02, 1.00],)  # Not applicable for midget units
+    PM.working_retina.run_cells(
+        cell_index=my_run_options["cell_index"],  # int
+        get_impulse_response=True,  # Return with impulse response
+        contrast_for_impulses=contrast_for_impulses,  # List of contrasts
+    )
+
+    PM.viz.show_impulse_response(PM.working_retina, savefigname="testi.png")
 
     ####################################
     ### Run multiple trials or cells ###
@@ -521,15 +522,16 @@ if __name__ == "__main__":
     #     frame_number=450,
     #     show_rf_id=True,
     # )
-    # TÄHÄN JÄIT:
+    # TODO:
     # VISUALISOI VAE RF ÄRSYKKEEN KANSSA, TARKISTA ETTEI OLE JO YLLÄ KUN RF LUODAAN
     # VISUALISOI SOLUJEN VASTEET YKSITELLEN HARMAINA KÄPPYRÖINÄ KUN AJETAAN KOKONAINEN KOE
+    # REFAKTOROI WORKING RETINA OBJEKTI VIZ IIN PROJECT MANAGERISSA JA POISTA FUNKTIOSIGNATUUREISTA
 
     # PM.viz.show_single_gc_view(
     #     PM.working_retina, cell_index=example_gc, frame_number=21
     # )
 
-    # PM.viz.plot_tf_amplitude_response(PM.working_retina, example_gc)
+    # PM.viz.plot_tf_amplitude_response(PM.working_retina, my_run_options["cell_index"])
 
     # PM.viz.plot_midpoint_contrast(PM.working_retina, example_gc)
     # plt.show(block=False)
@@ -555,19 +557,18 @@ if __name__ == "__main__":
     ###############################################
     ###############################################
 
-    exp_variables = ["spatial_frequency"]  # from my_stimulus_options
+    # exp_variables = ["temporal_frequency"]  # from my_stimulus_options
     # # exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
-    # # Define experiment parameters. List lengths must be equal.
-    # # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logaritmic = [True]
+    # # # Define experiment parameters. List lengths must be equal.
+    # # # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logaritmic = [True]
     # experiment_dict = {
     #     "exp_variables": exp_variables,
-    #     "min_max_values": [[0.1, 10]],  # two vals for each exp_variable # contrast
-    #     # "min_max_values": [[1, 41]],  # two vals # temporal frequency
-    #     # "min_max_values": [[1, 41], [0.02, 0.25]],  # temporal frequency, contrast
-    #     # "n_steps": [10, 5],  # temporal frequency, contrast
-    #     # "logaritmic": [True, True],  # temporal frequency, contras
+    #     "min_max_values": [[0.5, 32]],  # two vals for each exp_variable # frequency
     #     "n_steps": [10],
     #     "logaritmic": [True],
+    #     # "min_max_values": [[0.5, 32], [0.02, 0.8]],  # temporal frequency, contrast
+    #     # "n_steps": [10, 6],  # temporal frequency, contrast
+    #     # "logaritmic": [True, True],  # temporal frequency, contrast
     # }
 
     # PM.experiment.build_and_run(experiment_dict, n_trials=5)
@@ -588,11 +589,13 @@ if __name__ == "__main__":
     ### Visualize Experiment ###
     ################################
 
-    # PM.viz.F1F2_popul_response(exp_variables, xlog=False)
-    # PM.viz.F1F2_unit_response(exp_variables, xlog=True)
-    # PM.viz.fr_response(exp_variables, xlog=True)
+    # PM.viz.F1F2_popul_response(exp_variables, xlog=False, savefigname=None)
+    # PM.viz.F1F2_unit_response(exp_variables, xlog=False, savefigname=output_folder)
+    # PM.viz.fr_response(exp_variables, xlog=True, savefigname=None)
     # PM.viz.spike_raster_response(exp_variables, savefigname=None)
-    # PM.viz.tf_vs_fr_cg_ph(exp_variables, n_contrasts=None, xlog=True, ylog=True)
+    # PM.viz.tf_vs_fr_cg(
+    #     exp_variables, n_contrasts=None, xlog=False, ylog=False, savefigname=None
+    # )
 
     ###############################
     ###############################

@@ -1013,7 +1013,7 @@ class WorkingRetina(RetinaMath):
 
         ### Low pass filter ###
 
-        # Calculate the show_impulse response function.
+        # Calculate the impulse response function.
         h = (
             (1 / torch.math.factorial(NL))
             * (tvec / TL) ** (NL - 1)
@@ -1025,7 +1025,7 @@ class WorkingRetina(RetinaMath):
         # need to do it manually.
         h_flipped = torch.flip(h, dims=[0])
 
-        # Scale the show_impulse response to have unit area
+        # Scale the impulse response to have unit area
         h_flipped = h_flipped / torch.sum(h_flipped)
 
         c_t = torch.tensor(0.0, device=device)
@@ -1074,6 +1074,8 @@ class WorkingRetina(RetinaMath):
         # End of pytorch loop
 
         yvec = yvec.cpu().numpy()
+        if show_impulse is True:
+            return yvec
         D = params["D"]
         D_tp = int(np.round(D / dt.cpu().numpy()))
         generator_potential = np.concatenate((np.zeros(len(tvec)), np.zeros(D_tp)))
@@ -1098,7 +1100,9 @@ class WorkingRetina(RetinaMath):
 
         return firing_rates
 
-    def _create_temporal_signal(self, tvec, svec, dt, params, region):
+    def _create_temporal_signal(
+        self, tvec, svec, dt, params, region, show_impulse=False
+    ):
         """
         Dynamic temporal signal for midget cells
         """
@@ -1114,11 +1118,11 @@ class WorkingRetina(RetinaMath):
         svec = torch.tensor(svec, device=device)
         dt = torch.tensor(dt, device=device)
 
-        # Only one D value is necessary. 
-        # The extra delay (deltaNLTL_sur) emerges from the LP filter delay  
-        params["D_sur"] = params["D_cen"] 
+        # Only one D value is necessary.
+        # The extra delay (deltaNLTL_sur) emerges from the LP filter delay
+        params["D_sur"] = params["D_cen"]
 
-        # Manipulate the index labels 
+        # Manipulate the index labels
         selected_params = params[params.index.str.contains(region)]
 
         # Substring to remove
@@ -1190,6 +1194,8 @@ class WorkingRetina(RetinaMath):
         # End of pytorch loop
 
         yvec = yvec.cpu().numpy()
+        if show_impulse is True:
+            return yvec
         D = params["D"]
         D_tp = int(np.round(D / dt.cpu().numpy()))
         generator_potential = np.concatenate((np.zeros(len(tvec)), np.zeros(D_tp)))
@@ -1350,12 +1356,6 @@ class WorkingRetina(RetinaMath):
             assert isinstance(
                 cell_index, int
             ), "Impulse response cell_index must be an integer, aborting..."
-            assert (
-                self.gc_type == "parasol"
-            ), "Impulse response only available for parasol cells, aborting..."
-            assert contrast_for_impulses is not None and isinstance(
-                contrast_for_impulses, list
-            ), "Impulse must specify contrasts as list, aborting..."
 
             # Dummy kernel for show_impulse response
             svec = np.zeros(len(tvec))
@@ -1363,7 +1363,7 @@ class WorkingRetina(RetinaMath):
             idx_100_ms = int(np.round(100 / dt))
             svec[idx_100_ms] = 1.0
 
-            # Impulse response for parasol cells
+            # Get unit params
             params = self.gc_df.loc[cell_index]
             impulse_for_viz_dict = {
                 "tvec": tvec / b2u.second,
@@ -1373,16 +1373,34 @@ class WorkingRetina(RetinaMath):
             # Append to impulse_for_viz_dict a key str(contrast) for each contrast,
             # holding empty array for impulse response
 
-            for contrast in contrast_for_impulses:
-                yvec = self._create_temporal_signal_gc(
+            if self.gc_type == "parasol":
+                assert contrast_for_impulses is not None and isinstance(
+                    contrast_for_impulses, list
+                ), "Impulse must specify contrasts as list, aborting..."
+
+                for contrast in contrast_for_impulses:
+                    yvec = self._create_temporal_signal_gc(
+                        tvec,
+                        svec,
+                        video_dt,
+                        params,
+                        show_impulse=True,
+                        impulse_contrast=contrast,
+                    )
+                    impulse_for_viz_dict[str(contrast)] = yvec
+
+            elif self.gc_type == "midget":
+                if contrast_for_impulses is not None:
+                    print("Contrast_for_impulses will be ignored for midget cells")
+                yvec = self._create_temporal_signal(
                     tvec,
                     svec,
                     video_dt,
                     params,
+                    "cen",
                     show_impulse=True,
-                    impulse_contrast=contrast,
                 )
-                impulse_for_viz_dict[str(contrast)] = yvec
+                impulse_for_viz_dict["all_contrasts"] = yvec
 
             self.impulse_for_viz_dict = impulse_for_viz_dict
             return
@@ -1473,7 +1491,7 @@ class WorkingRetina(RetinaMath):
                     gen_pot_sur = gen_pot_sur[:stim_len_tp]
 
                     generator_potentials[idx, :] = gen_pot_cen + gen_pot_sur
-                    
+
             # Dynamic contrast gain control with linear-nonlinear model
             # has no separate nonlinearity, so we can use the generator potential directly
             params_all = self.gc_df.loc[cell_indices]

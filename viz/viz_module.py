@@ -1820,7 +1820,7 @@ class Viz:
         plt.xlabel("Time (s)]")
         plt.ylabel("Firing rate (Hz)]")
 
-    def show_parasol_impulse_response(self, retina, savefigname=None):
+    def show_impulse_response(self, retina, savefigname=None):
         viz_dict = retina.impulse_for_viz_dict
         tvec = viz_dict["tvec"]
         svec = viz_dict["svec"]
@@ -1838,7 +1838,7 @@ class Viz:
         plt.legend(contrasts)
         plt.ylim(-0.2, 1.1)
         plt.title(
-            f"Parasol impulse response for unit {str(viz_dict['Unit idx'])} at multiple contrasts"
+            f"{retina.gc_type} impulse response for unit {str(viz_dict['Unit idx'])}"
         )
 
         if savefigname is not None:
