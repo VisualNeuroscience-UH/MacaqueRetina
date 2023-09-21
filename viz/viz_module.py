@@ -1699,7 +1699,7 @@ class Viz:
         ax.plot(tvec, signal)
         ax.set_ylim([0, 1])
 
-    def show_gc_responses(self, retina):
+    def show_gc_responses(self, retina, savefigname=None):
         """
         WorkingRetina call.
         """
@@ -1766,6 +1766,9 @@ class Viz:
         plt.xlabel("Time (s)")
 
         plt.legend()
+
+        if savefigname is not None:
+            self._figsave(figurename=savefigname)
 
     def show_spatiotemporal_filter(self, retina):
         """
