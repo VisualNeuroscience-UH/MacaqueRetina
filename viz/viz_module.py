@@ -1822,16 +1822,15 @@ class Viz:
 
     def show_impulse_response(self, retina, savefigname=None):
         viz_dict = retina.impulse_for_viz_dict
-        tvec = viz_dict["tvec"]
+        tvec = viz_dict["tvec"]  # in secods
         svec = viz_dict["svec"]
 
         contrasts = viz_dict["contrasts"]  # contrast_for_impulses
         yvecs = viz_dict["impulse_responses"]  # yvecs
+        start_delay = viz_dict["start_delay"]  # in milliseconds
 
-        # # Get keys which are not "tvec" or "svec"
-        # contrasts = [
-        #     key for key in viz_dict.keys() if key not in ["tvec", "svec", "Unit idx"]
-        # ]
+        tvec = tvec * 1000  # convert to milliseconds
+        tvec = tvec - start_delay  # shift to start at 0
 
         cell_index = viz_dict["Unit idx"]
 
@@ -1855,6 +1854,10 @@ class Viz:
         plt.legend()
         plt.ylim(-0.2, 1.1)
         plt.title(f"{retina.gc_type} impulse response(s)")
+        plt.xlabel("Time (ms)")
+        plt.ylabel("Normalized response")
+        # Put grid on
+        plt.grid(True)
 
         if savefigname is not None:
             self._figsave(figurename=savefigname)

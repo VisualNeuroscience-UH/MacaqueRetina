@@ -1278,17 +1278,23 @@ class WorkingRetina(RetinaMath):
         svecs = center_surround_filters_sum
         return svecs
 
-    def _get_impulse_response(self, cell_index, contrast_for_impulses, video_dt, tvec):
+    def _get_impulse_response(self, cell_index, contrast_for_impulses, video_dt):
+        total_duration = 1.0 * b2u.second
+        stim_len_tp = int(np.round(total_duration / video_dt))
+        tvec = range(stim_len_tp) * video_dt
+
         # Dummy kernel for show_impulse response
         svec = np.zeros(len(tvec))
         dt = video_dt / b2u.ms
-        idx_100_ms = int(np.round(100 / dt))
+        start_delay = 100  # ms
+        idx_100_ms = int(np.round(start_delay / dt))
         svec[idx_100_ms] = 1.0
 
         impulse_for_viz_dict = {
             "tvec": tvec / b2u.second,
             "svec": svec,
         }
+        impulse_for_viz_dict["start_delay"] = start_delay
         stim_len_tp = len(tvec)
         # Append to impulse_for_viz_dict a key str(contrast) for each contrast,
         # holding empty array for impulse response
@@ -1422,9 +1428,7 @@ class WorkingRetina(RetinaMath):
             )
 
         if get_impulse_response is True:
-            self._get_impulse_response(
-                cell_index, contrast_for_impulses, video_dt, tvec
-            )
+            self._get_impulse_response(cell_index, contrast_for_impulses, video_dt)
             return
 
         cell_indices = np.atleast_1d(cell_indices)  # make sure it's an array

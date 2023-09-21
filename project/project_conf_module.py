@@ -229,8 +229,8 @@ my_stimulus_options = {
     "image_height": 180,  # 432 for nature1.avi
     "pix_per_deg": 120,
     "fps": 300,  # 300 for good cg integration
-    "duration_seconds": 0.01,  # actual frames = floor(duration_seconds * fps)
-    "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
+    "duration_seconds": 1.0,  # actual frames = floor(duration_seconds * fps)
+    "baseline_start_seconds": 0,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
     "pattern": "sine_grating",  # Natural video is not supported yet. One of the StimulusPatterns
     "stimulus_form": "circular",
@@ -253,7 +253,7 @@ n_files = 1
 
 # Either n_trials or n_cells must be 1, and the other > 1
 my_run_options = {
-    "cell_index": [8, 16],  # int, None for all cells
+    "cell_index": [0, 2, 8, 16, 31],  # list of ints or None for all cells
     "n_trials": 10,  # For each of the response files
     "spike_generator_model": "refractory",  # poisson or refractory
     "save_data": True,
@@ -499,7 +499,7 @@ if __name__ == "__main__":
     # Show impulse response and exit
     ########################################
 
-    contrast_for_impulses = [1.00]  # Not applicable for midget units
+    contrast_for_impulses = [1.0]  # [1.0] for midget units
     PM.working_retina.run_cells(
         cell_index=my_run_options["cell_index"],  # int
         get_impulse_response=True,  # Return with impulse response
