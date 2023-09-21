@@ -1101,46 +1101,64 @@ class WorkingRetina(RetinaMath):
         return firing_rates
 
     def _create_temporal_signal(
-        self, tvec, svec, dt, params, region, show_impulse=False
+        self, tvec, svec, dt, params, h, device, show_impulse=False
     ):
         """
         Dynamic temporal signal for midget cells
         """
 
-        # Convert to appropriate units
-        dt = dt / b2u.ms  # sampling period in ms
-        tvec = tvec / b2u.ms
+        # parameter name order for midget ["NL", "NLTL", "TS", "HS", "D", "A"]
+        HS = params[3]
+        TS = params[2]
+        D = params[4]
+        A = params[5]
 
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # Calculate padding size
+        padding_size = len(tvec) - 1
 
-        # move input arguments to GPU
-        tvec = torch.tensor(tvec, device=device)
-        svec = torch.tensor(svec, device=device)
-        dt = torch.tensor(dt, device=device)
+        # Pad the stimulus
+        svec_padded = torch.nn.functional.pad(
+            svec.unsqueeze(0).unsqueeze(0), (padding_size, 0), mode="replicate"
+        )
 
-        # Only one D value is necessary.
-        # The extra delay (deltaNLTL_sur) emerges from the LP filter delay
-        params["D_sur"] = params["D_cen"]
+        # Convolve the stimulus with the flipped kernel
+        x_t_vec = (
+            torch.nn.functional.conv1d(
+                svec_padded,
+                h.view(1, 1, -1),
+                padding=0,
+            ).squeeze()
+            * dt
+        )
 
-        # Manipulate the index labels
-        selected_params = params[params.index.str.contains(region)]
+        ### High pass stages ###
+        y_t = torch.tensor(0.0, device=device)
+        yvec = tvec * torch.tensor(0.0, device=device)
+        for idx in torch.range(1, len(tvec) - 1, dtype=torch.int):
+            y_t = y_t + dt * (
+                (-y_t / TS)
+                + (x_t_vec[idx] - x_t_vec[idx - 1]) / dt
+                + (((1 - HS) * x_t_vec[idx]) / TS)
+            )
+            yvec[idx] = y_t
 
-        # Substring to remove
-        substring_to_remove = "_" + region
+        if show_impulse is True:
+            return yvec
+        D_tp = torch.round(D / dt).to(dtype=torch.int)
+        generator_potential = torch.zeros(len(tvec) + D_tp).to(device)
+        generator_potential[D_tp:] = A * yvec
+        return generator_potential
 
-        # Create new index labels by removing the substring
-        new_index_labels = [
-            label.replace(substring_to_remove, "") for label in selected_params.index
-        ]
-
-        # Assign the new index labels to the DataFrame
-        selected_params.index = new_index_labels
-        params = selected_params
-        # parameter_names for midget gain control ["NL", "NLTL", "TS", "HS", "D"]
-        NL = torch.tensor(int(np.round(params["NL"])), device=device)  # 30
-        TL = torch.tensor(params["NLTL"] / params["NL"], device=device)
-        HS = torch.tensor(params["HS"], device=device)
-        TS = torch.tensor(params["TS"], device=device)
+    def _create_lowpass_response(self, tvec, params):
+        """
+        Lowpass filter kernel for convolution for midget cells
+        """
+        # parameter name order for midget ["NL", "NLTL", "TS", "HS", "D", "A"]
+        NL = params[0]
+        # Chance NL to dtype torch integer
+        NL = NL.to(torch.int)
+        # TL = NLTL / NL
+        TL = params[1] / params[0]
 
         ### Low pass filter ###
         h = (
@@ -1159,48 +1177,7 @@ class WorkingRetina(RetinaMath):
         # need to do it manually.
         h_flipped = torch.flip(h, dims=[0])
 
-        # Scale the show_impulse response to have unit area
-        h_flipped = h_flipped / torch.sum(h_flipped)
-
-        # Calculate padding size
-        padding_size = len(tvec) - 1
-
-        # Pad the stimulus
-        svec_padded = torch.nn.functional.pad(
-            svec.unsqueeze(0).unsqueeze(0), (padding_size, 0), mode="replicate"
-        )
-
-        # Convolve the stimulus with the flipped kernel
-        x_t_vec = (
-            torch.nn.functional.conv1d(
-                svec_padded,
-                h_flipped.view(1, 1, -1),
-                padding=0,
-            ).squeeze()
-            * dt
-        )
-
-        ### High pass stages ###
-        y_t = torch.tensor(0.0, device=device)
-        yvec = torch.zeros(len(tvec), device=device)
-        for idx, this_time in enumerate(tvec[1:]):
-            y_t = y_t + dt * (
-                (-y_t / TS)
-                + (x_t_vec[idx] - x_t_vec[idx - 1]) / dt
-                + (((1 - HS) * x_t_vec[idx]) / TS)
-            )
-            yvec[idx] = y_t
-
-        # End of pytorch loop
-
-        yvec = yvec.cpu().numpy()
-        if show_impulse is True:
-            return yvec
-        D = params["D"]
-        D_tp = int(np.round(D / dt.cpu().numpy()))
-        generator_potential = np.concatenate((np.zeros(len(tvec)), np.zeros(D_tp)))
-        generator_potential[D_tp:] = params["A"] * yvec
-        return generator_potential
+        return h_flipped
 
     def _show_surround_and_exit(self, center_surround_filters, spatial_filters):
         """
@@ -1482,32 +1459,104 @@ class WorkingRetina(RetinaMath):
                 )
 
             # Get generator potentials:  Time to get generator potentials:  19.6 seconds
-            tqdm_desc = "Preparing dynamic generator potential..."
-            generator_potentials = np.empty((num_cells, stim_len_tp))
-            for idx in tqdm(range(num_cells), desc=tqdm_desc):
-                params = self.gc_df.loc[cell_indices[idx]]
+            # tqdm_desc = "Preparing dynamic generator potential..."
+
+            # Get data to gpu, if applicable
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            if self.gc_type == "parasol":
+                columns = ["NL", "TL", "HS", "T0", "Chalf", "D", "A"]
+                params = self.gc_df.loc[cell_indices, columns]
+                params_t = torch.tensor(params.values, device=device)
+                svecs_t = torch.tensor(svecs, device=device)
+            elif self.gc_type == "midget":
+                columns_cen = [
+                    "NL_cen",
+                    "NLTL_cen",
+                    "TS_cen",
+                    "HS_cen",
+                    "D_cen",
+                    "A_cen",
+                ]
+                cen_df = self.gc_df.loc[cell_indices, columns_cen]
+                params_cen = cen_df.values
+                params_cen_t = torch.tensor(params_cen, device=device)
+                svecs_cen_t = torch.tensor(svecs_cen, device=device)
+                # Note delay (D) for sur is the same as for cen, the cen-sur delay
+                # emerges from LP filter parameters
+                columns_sur = [
+                    "NL_sur",
+                    "NLTL_sur",
+                    "TS_sur",
+                    "HS_sur",
+                    "D_cen",
+                    "A_sur",
+                ]
+                sur_df = self.gc_df.loc[cell_indices, columns_sur]
+                params_sur = sur_df.values
+                params_sur_t = torch.tensor(params_sur, device=device)
+                svecs_sur_t = torch.tensor(svecs_sur, device=device)
+
+            stim_len_tp_t = torch.tensor(stim_len_tp, device=device)
+            num_cells_t = torch.tensor(num_cells, device=device)
+            generator_potentials_t = torch.empty(
+                (num_cells_t, stim_len_tp_t), device=device
+            )
+            tvec_t = torch.tensor(tvec / b2u.ms, device=device)
+            video_dt_t = torch.tensor(video_dt / b2u.ms, device=device)
+
+            # for idx in tqdm(range(num_cells), desc=tqdm_desc):
+            for idx in torch.range(0, num_cells_t - 1, dtype=torch.int):
+                print(f"Preparing dynamic generator potential for cell {idx.values}...")
                 if self.gc_type == "parasol":
+                    unit_params = params_t[idx, :]
                     generator_potential = self._create_temporal_signal_gc(
-                        tvec, svecs[idx, :], video_dt, params
+                        tvec_t, svecs_t[idx, :], video_dt_t, unit_params
                     )
                     # generator_potentials are individually delayed from the beginning of the stimulus
                     generator_potential = generator_potential[:stim_len_tp]
-                    generator_potentials[idx, :] = generator_potential
-
+                    generator_potentials_t[idx, :] = generator_potential
+                    # TÄHÄN JÄIT: IMPLEMENTOI GPU LOGIIKKA PARASOLEILLE
                 elif self.gc_type == "midget":
+                    unit_params_cen = params_cen_t[idx, :]
+                    lp_cen = self._create_lowpass_response(tvec_t, unit_params_cen)
+
+                    unit_params_sur = params_sur_t[idx, :]
+                    lp_sur = self._create_lowpass_response(tvec_t, unit_params_sur)
+
+                    # Scale the show_impulse response to have unit area. This corresponds to
+                    # unit gain for DC signals. However, here we run cen first and the sur in the next call.
+                    # So, we need to scale the impulse response to have unit area across both calls.
+                    # This corresponds to summation before high-pass stage, as in Schottdorf_2021_JPhysiol
+                    h_cen = lp_cen / torch.sum(torch.abs(lp_cen) + torch.abs(lp_sur))
+                    h_sur = lp_sur / torch.sum(torch.abs(lp_cen) + torch.abs(lp_sur))
+
                     gen_pot_cen = self._create_temporal_signal(
-                        tvec, svecs_cen[idx, :], video_dt, params, "cen"
+                        tvec_t,
+                        svecs_cen_t[idx, :],
+                        video_dt_t,
+                        unit_params_cen,
+                        h_cen,
+                        device,
+                        show_impulse=get_impulse_response,
                     )
                     gen_pot_sur = self._create_temporal_signal(
-                        tvec, svecs_sur[idx, :], video_dt, params, "sur"
+                        tvec_t,
+                        svecs_sur_t[idx, :],
+                        video_dt_t,
+                        unit_params_sur,
+                        h_sur,
+                        device,
+                        show_impulse=get_impulse_response,
                     )
                     # generator_potentials are individually delayed from the beginning of the stimulus
                     # This may result in diffrerent vector lengths, so we need to crop them to the same length
                     # before summing them
-                    gen_pot_cen = gen_pot_cen[:stim_len_tp]
-                    gen_pot_sur = gen_pot_sur[:stim_len_tp]
+                    gen_pot_cen = gen_pot_cen[:stim_len_tp_t]
+                    gen_pot_sur = gen_pot_sur[:stim_len_tp_t]
 
-                    generator_potentials[idx, :] = gen_pot_cen + gen_pot_sur
+                    generator_potentials_t[idx, :] = gen_pot_cen + gen_pot_sur
+
+            generator_potentials = generator_potentials_t.cpu().numpy()
 
             # Dynamic contrast gain control with linear-nonlinear model
             # has no separate nonlinearity, so we can use the generator potential directly
