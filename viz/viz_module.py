@@ -1987,7 +1987,7 @@ class Viz:
             bbox=dict(boxstyle="Square,pad=0.2", fc="white", ec="white", lw=1),
         )
 
-    def fr_response(self, exp_variables, xlog=False, ylog=False):
+    def fr_response(self, exp_variables, xlog=False, ylog=False, savefigname=None):
         """
         Plot the mean firing rate response curve.
         """
@@ -2042,7 +2042,12 @@ class Viz:
         # Title
         ax[1].set_title(f"{cond_names_string} response function (individual units)")
 
-    def F1F2_popul_response(self, exp_variables, xlog=False, ylog=False):
+        if savefigname:
+            self._figsave(figurename=savefigname)
+
+    def F1F2_popul_response(
+        self, exp_variables, xlog=False, ylog=False, savefigname=None
+    ):
         """
         Plot oF1 and  F2 frequency response curves for all conditions.
         Population response, i.e. mean across units.
@@ -2111,7 +2116,12 @@ class Viz:
                 if ylog:
                     ax[i].set_yscale("log")
 
-    def F1F2_unit_response(self, exp_variables, xlog=False, ylog=False):
+        if savefigname:
+            self._figsave(figurename=savefigname)
+
+    def F1F2_unit_response(
+        self, exp_variables, xlog=False, ylog=False, savefigname=None
+    ):
         """
         Plot F1 and  F2 frequency response curves for all conditions.
         Unit response, i.e. mean across trials.
@@ -2180,6 +2190,9 @@ class Viz:
                 if ylog:
                     ax[i].set_yscale("log")
 
+        if savefigname:
+            self._figsave(figurename=savefigname)
+
     def spike_raster_response(self, exp_variables, trial=0, savefigname=None):
         """
         Show spikes from a results file.
@@ -2246,7 +2259,9 @@ class Viz:
         if savefigname:
             self._figsave(figurename=savefigname)
 
-    def tf_vs_fr_cg(self, exp_variables, n_contrasts=None, xlog=False, ylog=False):
+    def tf_vs_fr_cg(
+        self, exp_variables, n_contrasts=None, xlog=False, ylog=False, savefigname=None
+    ):
         """
         Plot F1 frequency response curves for 2D frequency-contrast experiment.
         Unit response, i.e. mean across trials.
@@ -2342,3 +2357,6 @@ class Viz:
             ax[1].set_xscale("log")
         if ylog:
             ax[1].set_yscale("log")
+
+        if savefigname:
+            self._figsave(figurename=savefigname)
