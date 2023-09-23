@@ -1086,10 +1086,18 @@ class RetinaVAE(RetinaMath):
 
                 elif (
                     context.my_retina["ray_tune_trial_id"] is None
-                ):  # After train_model                    
-                    self.vae = self._load_model(
-                    model_path=self.models_folder, trial_name=None
-                    )
+                ):  # After train_model
+                    if context.my_retina["model_file_name"] is None:
+                        self.vae = self._load_model(model_path=self.models_folder)
+                        self._load_logging()
+                    else:
+                        model_file_name = context.my_retina["model_file_name"]
+                        model_path_full = self.models_folder / model_file_name
+                        self.vae = self._load_model(model_path=model_path_full)
+                        # model file name is of type model_[TIME_STAMP].pt
+                        # Get the time stamp from the file name
+                        time_stamp = model_file_name.split("_")[1].split(".")[0]
+                        self._load_logging(time_stamp=time_stamp)
                     # Get datasets for RF generation and vizualization
                     # Original augmentation and data multiplication is applied to train and val ds
                     self.train_loader = self._augment_and_get_dataloader(
@@ -1099,7 +1107,6 @@ class RetinaVAE(RetinaMath):
                         data_type="val", augmentation_dict=self.vae.augmentation_dict
                     )
 
-                    self._load_logging()
                 else:
                     raise ValueError(
                         "No output path (models_folder) or trial name given, cannot load model, aborting..."
@@ -1401,7 +1408,9 @@ class RetinaVAE(RetinaMath):
         """Set the folder where models are saved"""
 
         # If output_folder is Path instance or string, use it as models_folder
-        if isinstance(context.input_folder, Path) or isinstance(context.input_folder, str):
+        if isinstance(context.input_folder, Path) or isinstance(
+            context.input_folder, str
+        ):
             models_folder = context.input_folder
         else:
             models_folder = context.output_folder / "models"
@@ -1438,8 +1447,8 @@ class RetinaVAE(RetinaMath):
         """
         Save model for single trial, a.k.a. 'train_model' training_mode
         """
-
-        model_path = f"{self.models_folder}/model_{self.timestamp}.pt"
+        filename = f"model_{self.gc_type}_{self.response_type}_{self.timestamp}.pt"
+        model_path = f"{self.models_folder}/{filename}"
         # Create models folder if it does not exist using pathlib
 
         # Get key VAE structural parameters and save them with the full model
@@ -1828,15 +1837,21 @@ class RetinaVAE(RetinaMath):
         # Save log_df as pickle
         self.log_df.to_pickle(self.train_log_folder / f"train_log_{self.timestamp}.pkl")
 
-    def _load_logging(self):
+    def _load_logging(self, time_stamp=None):
         """
         Load logging from train_log_folder
         """
 
         # Get the most recent log file
         try:
-            log_path = max(Path(self.train_log_folder).glob("*.csv"))
-            print(f"Most recent log file is {log_path}.")
+            if log_file_name is not None:
+                # log file name is of type train_log_[TIME_STAMP].csv
+                log_file_name = f"train_log_{time_stamp}.csv"
+                log_path = Path(self.train_log_folder) / log_file_name
+                print(f"Loading log file from {log_path}.")
+            else:
+                log_path = max(Path(self.train_log_folder).glob("*.csv"))
+                print(f"Most recent log file is {log_path}.")
         except ValueError:
             raise FileNotFoundError("No log files found. Aborting...")
 
@@ -1851,13 +1866,6 @@ class RetinaVAE(RetinaMath):
 
         # Create a folder for the experiment tensorboard logs
         Path.mkdir(self.train_log_folder, parents=True, exist_ok=True)
-
-        # Clear files and folders under exp_folder
-        for f in self.train_log_folder.iterdir():
-            if f.is_dir():
-                shutil.rmtree(f)
-            else:
-                f.unlink()
 
         # Make an empty dataframe for logging
         self.log_df = pd.DataFrame(
