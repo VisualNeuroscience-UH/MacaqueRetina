@@ -980,36 +980,25 @@ class WorkingRetina(RetinaMath):
         return generator_potential
 
     def _create_temporal_signal_gc(
-        self, tvec, svec, dt, params, show_impulse=False, impulse_contrast=1.0
+        self, tvec, svec, dt, params, device, show_impulse=False, impulse_contrast=1.0
     ):
         """
         Contrast gain control implemented in temporal domain according to Victor_1987_JPhysiol
         """
 
-        # Convert to appropriate units
-        dt = dt / b2u.ms  # sampling period in ms
-        tvec = tvec / b2u.ms
-
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-        # move input arguments to GPU
-        tvec = torch.tensor(tvec, device=device)
-        svec = torch.tensor(svec, device=device)
-        dt = torch.tensor(dt, device=device)
-
         Tc = torch.tensor(
             15.0, device=device
         )  # 15  # Time constant for dynamical variable c(t), ms. Victor_1987_JPhysiol
 
-        # parameter_names for parasol gain control ["NL", "TL", "HS", "T0", "Chalf", "D"]
-        NL = torch.tensor(int(np.round(params["NL"])), device=device)  # 30
-        # 1.44  # ms Low-pass fr_cutoff = 1 / (2pi * TL) = 110 Hz
-        TL = torch.tensor(params["TL"], device=device)
-        HS = torch.tensor(params["HS"], device=device)
-        # 37.34  # ms High-pass fr_cutoff = 1 / (2pi * T0) = 2.12 Hz
-        T0 = torch.tensor(params["T0"], device=device)
-        # 0.015 dummy for testing
-        Chalf = torch.tensor(params["Chalf"], device=device)
+        # parameter_names for parasol gain control ["NL", "TL", "HS", "T0", "Chalf", "D", "A"]
+        NL = params[0]
+        NL = NL.to(torch.int)
+        TL = params[1]
+        HS = params[2]
+        T0 = params[3]
+        Chalf = params[4]
+        D = params[5]
+        A = params[6]
 
         ### Low pass filter ###
 
@@ -1073,13 +1062,11 @@ class WorkingRetina(RetinaMath):
 
         # End of pytorch loop
 
-        yvec = yvec.cpu().numpy()
         if show_impulse is True:
             return yvec
-        D = params["D"]
-        D_tp = int(np.round(D / dt.cpu().numpy()))
-        generator_potential = np.concatenate((np.zeros(len(tvec)), np.zeros(D_tp)))
-        generator_potential[D_tp:] = params["A"] * yvec
+        D_tp = torch.round(D / dt).to(dtype=torch.int)
+        generator_potential = torch.zeros(len(tvec) + D_tp).to(device)
+        generator_potential[D_tp:] = A * yvec
         return generator_potential
 
     def _generator_to_firing_rate_dynamic(
@@ -1255,7 +1242,7 @@ class WorkingRetina(RetinaMath):
         svecs = center_surround_filters_sum
         return svecs
 
-    def _get_impulse_response(self, cell_index, contrast_for_impulses, video_dt):
+    def _get_impulse_response(self, cell_index, contrasts_for_impulse, video_dt):
         total_duration = 1.0 * b2u.second
         stim_len_tp = int(np.round(total_duration / video_dt))
         tvec = range(stim_len_tp) * video_dt
@@ -1276,17 +1263,17 @@ class WorkingRetina(RetinaMath):
         # Append to impulse_for_viz_dict a key str(contrast) for each contrast,
         # holding empty array for impulse response
 
-        assert contrast_for_impulses is not None and isinstance(
-            contrast_for_impulses, list
+        assert contrasts_for_impulse is not None and isinstance(
+            contrasts_for_impulse, list
         ), "Impulse must specify contrasts as list, aborting..."
 
-        yvecs = np.empty((len(cell_index), len(contrast_for_impulses), stim_len_tp))
+        yvecs = np.empty((len(cell_index), len(contrasts_for_impulse), stim_len_tp))
         for idx, this_cell_index in enumerate(cell_index):
             # Get unit params
             params = self.gc_df.loc[this_cell_index]
 
             if self.gc_type == "parasol":
-                for contrast in contrast_for_impulses:
+                for contrast in contrasts_for_impulse:
                     yvec = self._create_temporal_signal_gc(
                         tvec,
                         svec,
@@ -1295,11 +1282,11 @@ class WorkingRetina(RetinaMath):
                         show_impulse=True,
                         impulse_contrast=contrast,
                     )
-                    yvecs[idx, contrast_for_impulses.index(contrast), :] = yvec
+                    yvecs[idx, contrasts_for_impulse.index(contrast), :] = yvec
 
             elif self.gc_type == "midget":
-                if contrast_for_impulses is not None:
-                    print("Contrast_for_impulses will be ignored for midget cells")
+                if contrasts_for_impulse is not None:
+                    print("contrasts_for_impulse will be ignored for midget cells")
                 yvec = self._create_temporal_signal(
                     tvec,
                     svec,
@@ -1310,7 +1297,7 @@ class WorkingRetina(RetinaMath):
                 )
                 yvecs[idx, 0, :] = yvec
 
-        impulse_for_viz_dict["contrasts"] = contrast_for_impulses
+        impulse_for_viz_dict["contrasts"] = contrasts_for_impulse
         impulse_for_viz_dict["impulse_responses"] = yvecs
         impulse_for_viz_dict["Unit idx"] = list(cell_index)
 
@@ -1326,7 +1313,7 @@ class WorkingRetina(RetinaMath):
         filename=None,
         simulation_dt=0.001,
         get_impulse_response=False,
-        contrast_for_impulses=None,
+        contrasts_for_impulse=None,
     ):
         """
         Runs the LN pipeline for a single ganglion cell (spiking by Brian2).
@@ -1354,7 +1341,7 @@ class WorkingRetina(RetinaMath):
             Whether to compute and return the impulse response for parasol cells.
             If True, the function will not run the pipeline but instead compute the impulse response.
             Default is False.
-        contrast_for_impulses : list of floats or None, optional
+        contrasts_for_impulse : list of floats or None, optional
             If `get_impulse_response` is True, this should be a list of contrast values
             for which the impulse responses are computed. Default is None.
 
@@ -1405,7 +1392,7 @@ class WorkingRetina(RetinaMath):
             )
 
         if get_impulse_response is True:
-            self._get_impulse_response(cell_index, contrast_for_impulses, video_dt)
+            self._get_impulse_response(cell_index, contrasts_for_impulse, video_dt)
             return
 
         cell_indices = np.atleast_1d(cell_indices)  # make sure it's an array
@@ -1505,12 +1492,20 @@ class WorkingRetina(RetinaMath):
             video_dt_t = torch.tensor(video_dt / b2u.ms, device=device)
 
             # for idx in tqdm(range(num_cells), desc=tqdm_desc):
-            for idx in torch.range(0, num_cells_t - 1, dtype=torch.int):
-                print(f"Preparing dynamic generator potential for cell {idx.values}...")
+            tqdm_desc = "Preparing dynamic generator potential..."
+            for idx in tqdm(
+                torch.range(0, num_cells_t - 1, dtype=torch.int), desc=tqdm_desc
+            ):
                 if self.gc_type == "parasol":
                     unit_params = params_t[idx, :]
                     generator_potential = self._create_temporal_signal_gc(
-                        tvec_t, svecs_t[idx, :], video_dt_t, unit_params
+                        tvec_t,
+                        svecs_t[idx, :],
+                        video_dt_t,
+                        unit_params,
+                        device,
+                        show_impulse=get_impulse_response,
+                        impulse_contrast=contrasts_for_impulse,
                     )
                     # generator_potentials are individually delayed from the beginning of the stimulus
                     generator_potential = generator_potential[:stim_len_tp]
@@ -1527,8 +1522,8 @@ class WorkingRetina(RetinaMath):
                     # unit gain for DC signals. However, here we run cen first and the sur in the next call.
                     # So, we need to scale the impulse response to have unit area across both calls.
                     # This corresponds to summation before high-pass stage, as in Schottdorf_2021_JPhysiol
-                    h_cen = lp_cen / torch.sum(torch.abs(lp_cen) + torch.abs(lp_sur))
-                    h_sur = lp_sur / torch.sum(torch.abs(lp_cen) + torch.abs(lp_sur))
+                    h_cen = lp_cen / torch.sum(lp_cen + lp_sur)
+                    h_sur = lp_sur / torch.sum(lp_cen + lp_sur)
 
                     gen_pot_cen = self._create_temporal_signal(
                         tvec_t,
