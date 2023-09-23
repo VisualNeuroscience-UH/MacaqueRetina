@@ -532,10 +532,32 @@ class DataIO(DataIOBase):
 
     def load_stimulus_from_videofile(self, filename):
         """
-        Load stimulus from hdf5 videofile.
-        :param filename: video file name
-        :return: stimulus
+        Load stimulus data from an hdf5 video file.
+
+        This method retrieves the full path of the specified video file and
+        loads its contents into a dictionary. A dummy VideoBaseClass object is
+        then created to represent the stimulus, with its attributes populated
+        from the dictionary. If any of the `options` attribute values of the
+        stimulus are numpy arrays, they are converted to tuples.
+
+        Parameters
+        ----------
+        filename : str
+            Name of the video file from which to load the stimulus.
+
+        Returns
+        -------
+        stimulus : DummyVideoClass instance
+            An instance of the dummy VideoBaseClass that represents the loaded
+            stimulus. Its attributes are populated from the hdf5 file contents.
+
+        Notes
+        -----
+        - If logging handlers are set, an informational log is produced indicating
+        the file that has been loaded.
+        - The function assumes that the file extension is `.hdf5` and appends it to the filename.
         """
+
         fullpath_filename = self.get_video_full_name(filename)
 
         # load video from hdf5 file
@@ -558,10 +580,10 @@ class DataIO(DataIOBase):
             if isinstance(value, np.ndarray):
                 stimulus.options[key] = tuple(value)
 
-        print(f"Loaded file {fullpath_filename}")
+        print(f"Loaded file {full_path_in}")
         # Check for existing loggers (python builtin, called from other modules, such as the run_script.py)
         if logging.getLogger().hasHandlers():
-            logging.info(f"Loaded file {fullpath_filename}")
+            logging.info(f"Loaded file {full_path_in}")
 
         return stimulus
 
