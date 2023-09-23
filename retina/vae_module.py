@@ -1094,10 +1094,7 @@ class RetinaVAE(RetinaMath):
                         model_file_name = context.my_retina["model_file_name"]
                         model_path_full = self.models_folder / model_file_name
                         self.vae = self._load_model(model_path=model_path_full)
-                        # model file name is of type model_[TIME_STAMP].pt
-                        # Get the time stamp from the file name
-                        time_stamp = model_file_name.split("_")[1].split(".")[0]
-                        self._load_logging(time_stamp=time_stamp)
+                        self._load_logging(model_file_name=model_file_name)
                     # Get datasets for RF generation and vizualization
                     # Original augmentation and data multiplication is applied to train and val ds
                     self.train_loader = self._augment_and_get_dataloader(
@@ -1837,14 +1834,19 @@ class RetinaVAE(RetinaMath):
         # Save log_df as pickle
         self.log_df.to_pickle(self.train_log_folder / f"train_log_{self.timestamp}.pkl")
 
-    def _load_logging(self, time_stamp=None):
+    def _load_logging(self, model_file_name=None):
         """
         Load logging from train_log_folder
         """
 
+        # Get the time stamp from the file name
+        name_stem = model_file_name.split(".")[0]
+        times = name_stem.split("_")[-2:]
+        time_stamp = "_".join(times)
+
         # Get the most recent log file
         try:
-            if log_file_name is not None:
+            if time_stamp is not None:
                 # log file name is of type train_log_[TIME_STAMP].csv
                 log_file_name = f"train_log_{time_stamp}.csv"
                 log_path = Path(self.train_log_folder) / log_file_name
