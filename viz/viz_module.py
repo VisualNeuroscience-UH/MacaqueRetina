@@ -1828,7 +1828,7 @@ class Viz:
         tvec = viz_dict["tvec"]  # in secods
         svec = viz_dict["svec"]
 
-        contrasts = viz_dict["contrasts"]  # contrast_for_impulses
+        contrasts = viz_dict["contrasts"]  # contrasts_for_impulse
         yvecs = viz_dict["impulse_responses"]  # yvecs
         start_delay = viz_dict["start_delay"]  # in milliseconds
 

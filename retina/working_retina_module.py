@@ -1060,13 +1060,16 @@ class WorkingRetina(RetinaMath):
             if show_impulse is True:
                 c_t = c_t_imp
 
-        # End of pytorch loop
-
         if show_impulse is True:
             return yvec
+
+        # Add delay
         D_tp = torch.round(D / dt).to(dtype=torch.int)
         generator_potential = torch.zeros(len(tvec) + D_tp).to(device)
+
+        # Add gain
         generator_potential[D_tp:] = A * yvec
+
         return generator_potential
 
     def _generator_to_firing_rate_dynamic(
@@ -1131,9 +1134,14 @@ class WorkingRetina(RetinaMath):
 
         if show_impulse is True:
             return yvec
+
+        # Add delay
         D_tp = torch.round(D / dt).to(dtype=torch.int)
         generator_potential = torch.zeros(len(tvec) + D_tp).to(device)
+
+        # Add gain
         generator_potential[D_tp:] = A * yvec
+
         return generator_potential
 
     def _create_lowpass_response(self, tvec, params):
