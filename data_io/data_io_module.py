@@ -146,6 +146,7 @@ class DataIO(DataIOBase):
             data_fullpath_filename = self._check_candidate_file(Path("./"), filename)
 
             # Next check direct load in output path, stimulus_path, input path and project path in this order
+            # Keep output path as first, because if you rebuild the retina in the same run, it will be at the output path.
             if not data_fullpath_filename:
                 data_fullpath_filename = self._check_candidate_file(
                     output_path, filename
