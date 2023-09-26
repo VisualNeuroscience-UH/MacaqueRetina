@@ -411,8 +411,8 @@ class RetinaMath:
         y = self.lowpass(t, n, p1, tau1) - self.lowpass(t, n, p2, tau2)
         return y
 
-    def DoG2D_concentric_symmetric(
-        self, xy_tuple, ampl_c, rad_c, ampl_s, rad_s, x0, y0, offset
+    def DoG2D_concentric_rings(
+        self, xy_tuple, ampl_c, x0, y0, rad_c, ampl_s, rad_s, offset
     ):
         """
         DoG model with the center and surround as concentric circles and a shared center (x0, y0).
