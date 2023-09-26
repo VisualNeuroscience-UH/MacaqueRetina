@@ -396,7 +396,6 @@ class DataSampler:
         data_points = plt.ginput(-1, timeout=0)
         for point in data_points:
             self.add_data_point(point)
-        pdb.set_trace()
         plt.close(fig)
 
         self.save_data()
