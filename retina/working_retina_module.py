@@ -366,10 +366,8 @@ class WorkingRetina(RetinaMath):
         tvec = np.linspace(0, self.data_filter_duration, self.temporal_filter_len)
         temporal_filter = self.diff_of_lowpass_filters(tvec, *filter_params)
 
-        # Scale to sum of 1 for the low-pass filters. This is comparable to gain control model.
-        scaling_params = self.gc_df.iloc[cell_index][["n", "p1", "tau1"]]
-        scaling_filter = self.lowpass(tvec, *scaling_params)
-        temporal_filter = temporal_filter / np.sum(scaling_filter)
+        # Scale to sum of 1
+        temporal_filter = temporal_filter / np.sum(np.abs(temporal_filter))
 
         return temporal_filter
 
