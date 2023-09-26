@@ -208,7 +208,7 @@ class Viz:
         data_all_viable_cells = spat_filt_to_viz["data_all_viable_cells"]
         x_grid = spat_filt_to_viz["x_grid"]
         y_grid = spat_filt_to_viz["y_grid"]
-        surround_model = spat_filt_to_viz["surround_model"]
+        DoG_model_type = spat_filt_to_viz["DoG_model_type"]
         pixel_array_shape_x = spat_filt_to_viz["num_pix_x"]
         pixel_array_shape_y = spat_filt_to_viz["num_pix_y"]
 
@@ -249,7 +249,7 @@ class Viz:
 
             # # Ellipses for DoG2D_fixed_surround
 
-            if surround_model == 1:
+            if DoG_model_type == 1:
                 # xy_tuple, ampl_c, xoc, yoc, semi_xc, semi_yc, orient_cen, ampl_s, relat_sur_diam, offset
                 data_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
 

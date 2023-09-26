@@ -213,7 +213,7 @@ class Fit(ApricotData, RetinaMath):
         spat_data_array,
         cen_rot_rad_all=None,
         bad_idx_for_spatial_fit=None,
-        surround_model=1,
+        DoG_model_type=1,
         semi_x_always_major=True,
     ):
         """
@@ -227,7 +227,7 @@ class Fit(ApricotData, RetinaMath):
             Array of shape `(n_cells,)` containing the rotation angle for each cell. If None, rotation is set to 0, by default None
         bad_idx_for_spatial_fit : numpy.ndarray or None, optional
             Indices of cells to exclude from fitting, by default None
-        surround_model : int, optional
+        DoG_model_type : int, optional
             Whether to fit center and surround separately (0) or to fix surround midpoint to be the same as center midpoint (1), by default 1
         semi_x_always_major : bool, optional
             Whether to rotate Gaussians so that semi_x is always the semimajor/longer axis, by default True
@@ -237,13 +237,13 @@ class Fit(ApricotData, RetinaMath):
         tuple
             A dataframe with spatial parameters and errors for each cell, and a dictionary of spatial filters to show with visualization.
             The dataframe has shape `(n_cells, 8)` and columns: ['ampl_c', 'xoc', 'yoc', 'semi_xc', 'semi_yc', 'orient_cen',
-            'ampl_s', 'relat_sur_diam', 'offset'] if surround_model=1, or shape `(n_cells, 13)` and columns:
+            'ampl_s', 'relat_sur_diam', 'offset'] if DoG_model_type=1, or shape `(n_cells, 13)` and columns:
             ['ampl_c', 'xoc', 'yoc', 'semi_xc', 'semi_yc', 'orient_cen', 'ampl_s', 'xos', 'yos', 'semi_xs',
-            'semi_ys', 'orientation_surround', 'offset'] if surround_model=0.
+            'semi_ys', 'orientation_surround', 'offset'] if DoG_model_type=0.
             The dictionary spat_filt_to_viz has keys:
                 'x_grid': numpy.ndarray of shape `(num_pix_y, num_pix_x)`, X-coordinates of the grid points
                 'y_grid': numpy.ndarray of shape `(num_pix_y, num_pix_x)`, Y-coordinates of the grid points
-                'surround_model': int, the type of surround model used (0 or 1)
+                'DoG_model_type': int, the type of surround model used (0 or 1)
                 'num_pix_x': int, the number of pixels in the x-dimension
                 'num_pix_y': int, the number of pixels in the y-dimension
                 'filters': numpy.ndarray of shape `(n_cells, num_pix_y, num_pix_x)`, containing the fitted spatial filters for each cell
@@ -267,7 +267,7 @@ class Fit(ApricotData, RetinaMath):
 
         all_viable_cells = np.setdiff1d(np.arange(n_cells), bad_idx_for_spatial_fit)
 
-        if surround_model == 1:
+        if DoG_model_type == 1:
             parameter_names = [
                 "ampl_c",
                 "xoc",
@@ -309,14 +309,14 @@ class Fit(ApricotData, RetinaMath):
         spat_filt_to_viz = {
             "x_grid": x_grid,
             "y_grid": y_grid,
-            "surround_model": surround_model,
+            "DoG_model_type": DoG_model_type,
             "num_pix_x": num_pix_x,
             "num_pix_y": num_pix_y,
         }
 
         # Set initial guess for fitting
         rot = 0.0
-        if surround_model == 1:
+        if DoG_model_type == 1:
             # Build initial guess for (ampl_c, xoc, yoc, semi_xc, semi_yc, orient_cen, ampl_s, relat_sur_diam, offset)
             p0 = np.array(
                 [
@@ -404,7 +404,7 @@ class Fit(ApricotData, RetinaMath):
             rot = cen_rot_rad_all[cell_idx]
 
             try:
-                if surround_model == 1:
+                if DoG_model_type == 1:
                     p0[5] = rot
                     popt, pcov = opt.curve_fit(
                         self.DoG2D_fixed_surround,
@@ -451,7 +451,7 @@ class Fit(ApricotData, RetinaMath):
                     data_all_viable_cells[cell_idx, 5] = (rotation + np.pi / 2) % np.pi
 
                 # Rotate also the surround if it is defined separately
-                if surround_model == 0:
+                if DoG_model_type == 0:
                     if (
                         data_all_viable_cells[cell_idx, 9]
                         < data_all_viable_cells[cell_idx, 10]
@@ -474,7 +474,7 @@ class Fit(ApricotData, RetinaMath):
                 data_all_viable_cells[cell_idx, 5] = rotation
 
             # Compute fitting error
-            if surround_model == 1:
+            if DoG_model_type == 1:
                 data_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
             else:
                 data_fitted = self.DoG2D_independent_surround((x_grid, y_grid), *popt)
@@ -584,7 +584,7 @@ class Fit(ApricotData, RetinaMath):
             spat_data_array=spatial_data,
             cen_rot_rad_all=cen_rot_rad_all,
             bad_idx_for_spatial_fit=self.manually_picked_bad_data_idx,
-            surround_model=1,
+            DoG_model_type=1,
             semi_x_always_major=True,
         )
 
@@ -645,7 +645,7 @@ class Fit(ApricotData, RetinaMath):
             spat_data_array=spatial_data,
             cen_rot_rad_all=cen_rot_rad_all,
             bad_idx_for_spatial_fit=[],
-            surround_model=1,
+            DoG_model_type=1,
             semi_x_always_major=True,
         )
 

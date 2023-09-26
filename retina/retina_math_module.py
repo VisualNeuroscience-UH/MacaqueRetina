@@ -411,6 +411,29 @@ class RetinaMath:
         y = self.lowpass(t, n, p1, tau1) - self.lowpass(t, n, p2, tau2)
         return y
 
+    def DoG2D_concentric_symmetric(
+        self, xy_tuple, ampl_c, rad_c, ampl_s, rad_s, x0, y0, offset
+    ):
+        """
+        DoG model with the center and surround as concentric circles and a shared center (x0, y0).
+        """
+
+        (x_fit, y_fit) = xy_tuple
+
+        # Distance squared from the center for the given (x_fit, y_fit) points
+        distance_sq = (x_fit - x0) ** 2 + (y_fit - y0) ** 2
+
+        # Gaussian for the center
+        center_gaussian = ampl_c * np.exp(-distance_sq / (2 * rad_c**2))
+
+        # Gaussian for the surround
+        surround_gaussian = ampl_s * np.exp(-distance_sq / (2 * rad_s**2))
+
+        # Difference of gaussians
+        model_fit = offset + center_gaussian - surround_gaussian
+
+        return model_fit.ravel()
+
     # Not in use
     def generator2firing(self, generator=0, show_generator_vs_fr=True):
         """

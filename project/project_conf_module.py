@@ -123,7 +123,7 @@ input_folder = "../in"  # input figs, videos
 Stimulus context
 Stimulus images and videos
 """
-stimulus_folder = "parasol_stim_tf10_c10"  # input figs, videos
+stimulus_folder = "stim_temporal_test_2cpd"  # "parasol_stim_tf10_c10"
 
 
 """
@@ -153,17 +153,17 @@ response_type = "off"
 my_retina = {
     "gc_type": gc_type,
     "response_type": response_type,
-    "ecc_limits": [4.5, 5.5],  # degrees
+    "ecc_limits": [4, 6],  # degrees
     "sector_limits": [-3.0, 3.0],  # polar angle in degrees
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
     "dd_regr_model": "cubic",  # linear, quadratic, cubic.
     "randomize_position": 0.1,  # between 0 and 1
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
-    "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
-    "model_type": "VAE",  # "FIT" or "VAE" for variational autoencoder.
+    "temporal_model": "fixed",  # fixed, dynamic # Gain control for parasol cells only
+    "model_type": "FIT",  # "FIT" or "VAE" for variational autoencoder.
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models
-    "training_mode": "train_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
-    "model_file_name": None,  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[TIME_STAMP].pt" at input_folder
+    "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
+    "model_file_name": "model_parasol_off_20230923_215156.pt",  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only.
     "ray_tune_trial_id": None,  # Trial_id for tune, None for loading single run after "train_model". Applies to VAE "load_model" only.
 }
 
@@ -243,10 +243,10 @@ my_stimulus_options = {
     "contrast": 0.8,  # Weber constrast
     "mean": 128,
     "temporal_frequency": 0.5,  # 40,  # Hz
-    "spatial_frequency": 1.0,
+    "spatial_frequency": 2.0,
     "orientation": 0,  # degrees
     "phase_shift": 0,  # math.pi,  # radians
-    "stimulus_video_name": "sin_drift_120Hz.mp4",
+    "stimulus_video_name": "sin_drift.mp4",
 }
 
 # Each gc response file contain n_trials
@@ -256,7 +256,7 @@ n_files = 1
 my_run_options = {
     "cell_index": None,  # list of ints or None for all cells
     "n_trials": 1,  # For each of the response files
-    "spike_generator_model": "poisson",  # poisson or refractory
+    "spike_generator_model": "refractory",  # poisson or refractory
     "save_data": True,
     "gc_response_filenames": [f"gc_response_{x:02}" for x in range(n_files)],
     "simulation_dt": 0.0001,  # in sec 0.001 = 1 ms
@@ -421,12 +421,18 @@ if __name__ == "__main__":
 
     # # Note: sample only temporal hemiretina
     # from project.project_utilities_module import DataSampler
-    # filename = "Perry_1984_Neurosci_GCdensity_Fig8.jpg"
+
+    # filename = "Schottdorf_2021_JPhysiol_CenRadius_Fig4C_midget.jpg"
     # filename_full = git_repo_root.joinpath(r"retina/literature_data", filename)
-    # min_X, max_X, min_Y, max_Y = 0, 17, 0, 35 # Fig lowest and highest tick values, use these as calibration points
+    # min_X, max_X, min_Y, max_Y = (
+    #     0,
+    #     15,
+    #     0,
+    #     12,
+    # )  # Fig lowest and highest tick values, use these as calibration points
     # ds = DataSampler(filename_full, min_X, max_X, min_Y, max_Y)
-    # ds.collect_and_save_points()
-    # ds.quality_control()
+    # # ds.collect_and_save_points()
+    # ds.quality_control(restore=True)
 
     #################################
     #################################
@@ -448,8 +454,11 @@ if __name__ == "__main__":
     # This function visualizes the spatial and temporal filter responses, ganglion cell positions and density,
     # mosaic layout, spatial and temporal statistics, dendrite diameter versus eccentricity, and tonic drives
     # in the retina mosaic building process.
+
+    # For ellipse FIT
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
 
+    # For VAE
     # PM.viz.show_gen_exp_spatial_fit(n_samples=20)
     # PM.viz.show_gen_exp_spatial_rf(ds_name="test_ds", n_samples=10)
     # PM.viz.show_latent_tsne_space()
@@ -466,6 +475,9 @@ if __name__ == "__main__":
     # PM.viz.show_ray_experiment(
     #     ray_exp_name, this_dep_var, highlight_trial=highlight_trial
     # )
+
+    # For both FIT and VAE
+    # PM.viz.validate_gc_rf_size() # Schottdorf_2021_JPhysiol
 
     ###################################
     ###################################
@@ -523,7 +535,8 @@ if __name__ == "__main__":
     #     frame_number=450,
     #     show_rf_id=True,
     # )
-    # TODO:
+
+    # TODO: visualization
     # VISUALISOI VAE RF ÄRSYKKEEN KANSSA, TARKISTA ETTEI OLE JO YLLÄ KUN RF LUODAAN
     # VISUALISOI SOLUJEN VASTEET YKSITELLEN HARMAINA KÄPPYRÖINÄ KUN AJETAAN KOKONAINEN KOE
     # REFAKTOROI WORKING RETINA OBJEKTI VIZ IIN PROJECT MANAGERISSA JA POISTA FUNKTIOSIGNATUUREISTA
@@ -558,40 +571,40 @@ if __name__ == "__main__":
     ###############################################
     ###############################################
 
-    # exp_variables = ["contrast"]  # from my_stimulus_options
+    # exp_variables = ["temporal_frequency"]  # from my_stimulus_options
     exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
     # # Define experiment parameters. List lengths must be equal.
     # # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logaritmic = [True]
-    experiment_dict = {
-        "exp_variables": exp_variables,
-        # "min_max_values": [[0.02, 0.8]],  # two vals for each exp_variable # frequency
-        # "n_steps": [6],
-        # "logaritmic": [True],
-        "min_max_values": [[0.5, 32], [0.02, 0.8]],  # temporal frequency, contrast
-        "n_steps": [10, 10],  # temporal frequency, contrast
-        "logaritmic": [True, True],  # temporal frequency, contrast
-    }
+    # experiment_dict = {
+    #     "exp_variables": exp_variables,
+    #     "min_max_values": [[0.5, 32]],  # two vals for each exp_variable # frequency
+    #     "n_steps": [100],
+    #     "logaritmic": [False],
+    #     # "min_max_values": [[0.5, 32], [0.02, 0.8]],  # temporal frequency, contrast
+    #     # "n_steps": [10, 10],  # temporal frequency, contrast
+    #     # "logaritmic": [True, True],  # temporal frequency, contrast
+    # }
 
-    PM.experiment.build_and_run(experiment_dict, n_trials=5)
+    # PM.experiment.build_and_run(experiment_dict, n_trials=5)
 
-    ###############################
-    ## Analyze Experiment ###
-    ###############################
+    # ###############################
+    # ## Analyze Experiment ###
+    # ###############################
 
-    my_analysis_options = {
-        "exp_variables": exp_variables,
-        "t_start_ana": 1,
-        "t_end_ana": 7,
-    }
+    # my_analysis_options = {
+    #     "exp_variables": exp_variables,
+    #     "t_start_ana": 1,
+    #     "t_end_ana": 7,
+    # }
 
-    PM.ana.analyze_response(my_analysis_options)
+    # PM.ana.analyze_response(my_analysis_options)
 
     ################################
     ### Visualize Experiment ###
     ################################
 
     # PM.viz.F1F2_popul_response(exp_variables, xlog=False, savefigname=None)
-    PM.viz.F1F2_unit_response(exp_variables, xlog=False, savefigname=output_folder)
+    # PM.viz.F1F2_unit_response(exp_variables, xlog=False, savefigname=output_folder)
     # PM.viz.fr_response(exp_variables, xlog=True, savefigname=None)
     # PM.viz.spike_raster_response(exp_variables, savefigname=None)
     # PM.viz.tf_vs_fr_cg(
