@@ -1516,7 +1516,6 @@ class WorkingRetina(RetinaMath):
                     # generator_potentials are individually delayed from the beginning of the stimulus
                     generator_potential = generator_potential[:stim_len_tp]
                     generator_potentials_t[idx, :] = generator_potential
-                    # TÄHÄN JÄIT: IMPLEMENTOI GPU LOGIIKKA PARASOLEILLE
                 elif self.gc_type == "midget":
                     unit_params_cen = params_cen_t[idx, :]
                     lp_cen = self._create_lowpass_response(tvec_t, unit_params_cen)
