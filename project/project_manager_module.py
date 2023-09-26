@@ -8,6 +8,7 @@ from viz.viz_module import Viz
 from retina.construct_retina_module import ConstructRetina
 from retina.working_retina_module import WorkingRetina, PhotoReceptor
 from retina.retina_math_module import RetinaMath
+from retina.fit_module import Fit
 from stimuli.visual_stimulus_module import ConstructStimulus, AnalogInput
 from stimuli.experiment_module import Experiment
 
@@ -94,9 +95,10 @@ class ProjectManager(ProjectBase, ProjectUtilities):
 
         self.viz = viz
 
-        self.construct_retina = ConstructRetina(context, data_io, viz)
+        # Fit will be initialized more than once in ConstructRetina, thus we need to inject the class.
+        self.construct_retina = ConstructRetina(context, data_io, viz, Fit)
         self.viz.construct_retina = self.construct_retina
-        
+
         self.working_retina = WorkingRetina(context, data_io, viz)
 
         experiment = Experiment(context, data_io)
