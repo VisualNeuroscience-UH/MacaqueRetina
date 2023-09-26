@@ -33,7 +33,6 @@ from tqdm import tqdm
 # import brian2.units as b2u
 
 # Local
-from retina.fit_module import Fit
 from retina.retina_math_module import RetinaMath
 from retina.vae_module import RetinaVAE
 
@@ -85,11 +84,12 @@ class ConstructRetina(RetinaMath):
         "apricot_metadata",
     ]
 
-    def __init__(self, context, data_io, viz) -> None:
+    def __init__(self, context, data_io, viz, Fit) -> None:
         # Dependency injection at ProjectManager construction
         self._context = context.set_context(self._properties_list)
         self._data_io = data_io
         self._viz = viz
+        self._Fit = Fit
 
         self.initialized = False
 
@@ -104,6 +104,10 @@ class ConstructRetina(RetinaMath):
     @property
     def viz(self):
         return self._viz
+
+    @property
+    def Fit(self):
+        return self._Fit
 
     def _initialize(self, fits_from_file=None):
         """
@@ -231,7 +235,7 @@ class ConstructRetina(RetinaMath):
                 self.exp_temp_stat_to_viz,
                 self.exp_tonic_dr_to_viz,
                 self.apricot_data_resolution_hw,
-            ) = Fit(
+            ) = self.Fit(
                 self.context.apricot_data_folder,
                 gc_type,
                 response_type,
@@ -1549,7 +1553,7 @@ class ConstructRetina(RetinaMath):
             _,
             gc_vae_df,
             good_idx,
-        ) = Fit(
+        ) = self.Fit(
             self.context.apricot_data_folder,
             self.gc_type,
             self.response_type,
@@ -1729,7 +1733,7 @@ class ConstructRetina(RetinaMath):
                 self.gen_spat_stat_to_viz,
                 self.gc_vae_df,
                 good_idx,
-            ) = Fit(
+            ) = self.Fit(
                 self.context.apricot_data_folder,
                 self.gc_type,
                 self.response_type,
