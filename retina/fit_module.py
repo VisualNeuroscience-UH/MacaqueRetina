@@ -558,15 +558,25 @@ class Fit(ApricotData, RetinaMath):
 
         # Finally build a dataframe of the fitted parameters
         fits_df = pd.DataFrame(data_all_viable_cells, columns=parameter_names)
-        if DoG_model_type in [0, 1]:
-            aspect_ratios_df = pd.DataFrame(
-                fits_df.semi_xc / fits_df.semi_yc, columns=["aspect_ratio"]
-            ).fillna(0.0)
-        elif DoG_model_type == 2:  # empty
-            aspect_ratios_df = pd.DataFrame(columns=["aspect_ratio"]).fillna(1.0)
 
+        if DoG_model_type == 2:
             # Map DoG_model_type 2 to type 1 parameters [ampl_c, xoc, yoc, semi_xc, semi_yc, orient_cen, ampl_s, relat_sur_diam, offset]
-            pdb.set_trace()
+            # For compatibility with downstream analysis and visualization
+            fits_df_as_fixed = pd.DataFrame()
+            fits_df_as_fixed["ampl_c"] = fits_df["ampl_c"]
+            fits_df_as_fixed["xoc"] = fits_df["xoc"]
+            fits_df_as_fixed["yoc"] = fits_df["yoc"]
+            fits_df_as_fixed["semi_xc"] = fits_df["rad_c"]
+            fits_df_as_fixed["semi_yc"] = fits_df["rad_c"]
+            fits_df_as_fixed["orient_cen"] = 0.0
+            fits_df_as_fixed["ampl_s"] = fits_df["ampl_s"]
+            fits_df_as_fixed["relat_sur_diam"] = fits_df["rad_s"] / fits_df["rad_c"]
+            fits_df_as_fixed["offset"] = fits_df["offset"]
+            fits_df = fits_df_as_fixed
+
+        aspect_ratios_df = pd.DataFrame(
+            fits_df.semi_xc / fits_df.semi_yc, columns=["aspect_ratio"]
+        ).fillna(0.0)
 
         dog_filtersum_df = pd.DataFrame(
             dog_filtersum_array,
@@ -583,7 +593,7 @@ class Fit(ApricotData, RetinaMath):
 
         # identify outliers (> 3SD from mean) and mark them bad
         bad_idx_for_spatial_fit = self._get_fit_outliers(
-            fits_df, bad_idx_for_spatial_fit, columns=parameter_names
+            fits_df, bad_idx_for_spatial_fit, columns=fits_df.columns
         )
 
         for i in bad_idx_for_spatial_fit:
@@ -607,7 +617,7 @@ class Fit(ApricotData, RetinaMath):
 
     def _fit_experimental_data(self):
         """
-        Fits spatial, temporal and tonic drive parameters to the experimental data.
+        Fits spatial ellipse, temporal and tonic drive parameters to the experimental data.
 
         Returns
         -------
@@ -679,7 +689,7 @@ class Fit(ApricotData, RetinaMath):
 
     def _fit_generated_data(self, spatial_data):
         """
-        Fits spatial, temporal, and tonic drive parameters to the generated data.
+        Fits spatial ellipse parameters to the generated data.
 
         Parameters:
         -----------
@@ -715,12 +725,12 @@ class Fit(ApricotData, RetinaMath):
 
     def _fit_concentric_rings(self, spatial_data):
         """
-        Fits spatial, temporal, and tonic drive parameters to the existing data.
+        Fits symmetric DoG model parameters to the existing data.
 
         Parameters:
         -----------
         spatial_data : numpy.ndarray
-            Array of shape (n_samples, height, width) containing the generated spatial data.
+            Array of shape (n_samples, height, width) containing the spatial data.
 
         Returns:
         --------
@@ -743,9 +753,7 @@ class Fit(ApricotData, RetinaMath):
         all_data_fits_df = pd.concat([spatial_fits], axis=1)
 
         good_idx = np.where(good_mask == 1)[0]
-        # Set all_data_fits_df rows which are not part of good_idx to zero
-        all_data_fits_df.loc[~all_data_fits_df.index.isin(good_idx)] = 0.0
-        pdb.set_trace()
+
         return all_data_fits_df, spat_filt_to_viz, good_idx
 
     def _fit_spatial_statistics(self, good_idx):

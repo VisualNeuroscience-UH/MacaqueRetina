@@ -78,10 +78,7 @@ class ConstructRetina(RetinaMath):
         "my_retina",
         "apricot_data_folder",
         "literature_data_folder",
-        "dendr_diam1_file",
-        "dendr_diam2_file",
-        "gc_density_file",
-        "apricot_metadata",
+        "literature_data_files",
     ]
 
     def __init__(self, context, data_io, viz, Fit) -> None:
@@ -311,8 +308,13 @@ class ConstructRetina(RetinaMath):
         Read re-digitized old literature data from mat files
         """
 
-        print("Reading density data from:", self.context.gc_density_file)
-        gc_density = self.data_io.get_data(self.context.gc_density_file)
+        print(
+            "Reading density data from:",
+            self.context.literature_data_files["gc_density_file"],
+        )
+        gc_density = self.data_io.get_data(
+            self.context.literature_data_files["gc_density_file"]
+        )
         cell_eccentricity = np.squeeze(gc_density["Xdata"])
         cell_density = (
             np.squeeze(gc_density["Ydata"]) * 1e3
@@ -357,8 +359,12 @@ class ConstructRetina(RetinaMath):
         # Read dendritic field data and return linear fit with scipy.stats.linregress
         dendr_diam_parameters = {}
 
-        dendr_diam1 = self.data_io.get_data(self.context.dendr_diam1_file)
-        dendr_diam2 = self.data_io.get_data(self.context.dendr_diam2_file)
+        dendr_diam1 = self.data_io.get_data(
+            self.context.literature_data_files["dendr_diam1_file"]
+        )
+        dendr_diam2 = self.data_io.get_data(
+            self.context.literature_data_files["dendr_diam2_file"]
+        )
 
         # Quality control. Datasets separately for visualization
         data_set_1_x = np.squeeze(dendr_diam1["Xdata"])
@@ -852,7 +858,9 @@ class ConstructRetina(RetinaMath):
         distrib_params = np.zeros((len(temporal_model_parameters), 3))
         response_type = self.response_type.upper()
 
-        temp_params_df = pd.read_csv(self.context.temporal_BK_model_file)
+        temp_params_df = pd.read_csv(
+            self.context.literature_data_files["temporal_BK_model_file"]
+        )
 
         for i, param_name in enumerate(temporal_model_parameters):
             condition = (temp_params_df["Parameter"] == param_name) & (
@@ -1662,6 +1670,7 @@ class ConstructRetina(RetinaMath):
 
             # Update gc_vae_df to have the same columns as gc_df
             self.gc_vae_df = self._update_gc_vae_df(self.gc_vae_df, new_um_per_pix)
+            self.updated_vae_um_per_pix = new_um_per_pix
 
             # Sum separate rf images onto one retina
             img_ret, rf_lu_pix = self._get_full_retina_with_rf_images(
@@ -1752,6 +1761,8 @@ class ConstructRetina(RetinaMath):
                 self.dd_vs_ecc_to_viz["dd_vae_y"],
             ) = self._get_dd_fit_for_viz(self.gc_vae_df)
 
+            # Save original df
+            self.gc_df_original = self.gc_df.copy()
             # Apply the spatial VAE model to df
             self.gc_df = self.gc_vae_df
 

@@ -130,7 +130,7 @@ stimulus_folder = "stim_temporal_test_2cpd"  # "parasol_stim_tf10_c10"
 Data context for output. 
 """
 
-output_folder = "parasol_off_crf_tf10_c10"  # "crf_midget_on_vae_tf10_c6"
+output_folder = "midget_off_temporal_test_2cpd"  # "crf_midget_on_vae_tf10_c6"
 
 
 """
@@ -148,22 +148,22 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 # For training, see __init__ method. For tuning, the __init__ contains search space and
 # _set_ray_tuner contains the starting point.
 gc_type = "parasol"
-response_type = "off"
+response_type = "on"
 
 my_retina = {
     "gc_type": gc_type,
     "response_type": response_type,
-    "ecc_limits": [4, 6],  # degrees
-    "sector_limits": [-3.0, 3.0],  # polar angle in degrees
+    "ecc_limits": [4.7, 5.3],  # degrees
+    "sector_limits": [-0.7, 0.7],  # polar angle in degrees
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
     "dd_regr_model": "cubic",  # linear, quadratic, cubic.
     "randomize_position": 0.1,  # between 0 and 1
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
-    "temporal_model": "fixed",  # fixed, dynamic # Gain control for parasol cells only
-    "model_type": "FIT",  # "FIT" or "VAE" for variational autoencoder.
-    "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models
+    "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
+    "model_type": "VAE",  # "FIT" or "VAE" for variational autoencoder.
+    "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models. Note that ellipse fit does not tolearate VAE adjustments => fit to nonadjusted generated rfs
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
-    "model_file_name": "model_parasol_off_20230923_215156.pt",  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only.
+    "model_file_name": "model_parasol_on_20230923_193921.pt",  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only.
     "ray_tune_trial_id": None,  # Trial_id for tune, None for loading single run after "train_model". Applies to VAE "load_model" only.
 }
 
@@ -348,6 +348,10 @@ if my_retina["gc_type"] == "parasol":
     temporal_BK_model_file = (
         literature_data_folder / "Benardete_1999_VisNeurosci_parasol.csv"
     )
+    spatial_DoG_file = (
+        literature_data_folder
+        / "Schottdorf_2021_JPhysiol_CenRadius_Fig4C_parasol_c.npz"
+    )
 elif my_retina["gc_type"] == "midget":
     dendr_diam1_file = (
         # literature_data_folder / "Perry_1984_Neurosci_MidgetDendrDiam_c.mat"
@@ -362,6 +366,16 @@ elif my_retina["gc_type"] == "midget":
     temporal_BK_model_file = (
         literature_data_folder / "Benardete_1997_VisNeurosci_midget.csv"
     )
+    spatial_DoG_file = (
+        literature_data_folder / "Schottdorf_2021_JPhysiol_CenRadius_Fig4C_midget_c.npz"
+    )
+literature_data_files = {
+    "gc_density_file": gc_density_file,
+    "dendr_diam1_file": dendr_diam1_file,
+    "dendr_diam2_file": dendr_diam2_file,
+    "temporal_BK_model_file": temporal_BK_model_file,
+    "spatial_DoG_file": spatial_DoG_file,
+}
 
 
 profile = False
@@ -393,10 +407,7 @@ if __name__ == "__main__":
         my_run_options=my_run_options,
         apricot_data_folder=apricot_data_folder,
         literature_data_folder=literature_data_folder,
-        dendr_diam1_file=dendr_diam1_file,
-        dendr_diam2_file=dendr_diam2_file,
-        gc_density_file=gc_density_file,
-        temporal_BK_model_file=temporal_BK_model_file,
+        literature_data_files=literature_data_files,
         apricot_metadata=apricot_metadata,
         numpy_seed=numpy_seed,
     )
@@ -456,7 +467,7 @@ if __name__ == "__main__":
     # in the retina mosaic building process.
 
     # For ellipse FIT
-    # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
+    PM.viz.show_exp_build_process(show_all_spatial_fits=False)
 
     # For VAE
     # PM.viz.show_gen_exp_spatial_fit(n_samples=20)
@@ -477,7 +488,7 @@ if __name__ == "__main__":
     # )
 
     # For both FIT and VAE
-    # PM.viz.validate_gc_rf_size() # Schottdorf_2021_JPhysiol
+    PM.viz.validate_gc_rf_size()  # Schottdorf_2021_JPhysiol
 
     ###################################
     ###################################
@@ -572,7 +583,7 @@ if __name__ == "__main__":
     ###############################################
 
     # exp_variables = ["temporal_frequency"]  # from my_stimulus_options
-    exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
+    # # exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
     # # Define experiment parameters. List lengths must be equal.
     # # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logaritmic = [True]
     # experiment_dict = {

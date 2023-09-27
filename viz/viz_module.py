@@ -336,7 +336,7 @@ class Viz:
                 plt.show()
 
     # ConstructRetina visualization
-    def show_gc_positions_and_density(self):
+    def show_gc_positions(self):
         """
         Show retina cell positions and receptive fields
 
@@ -350,49 +350,18 @@ class Viz:
         # to cartesian
         xcoord, ycoord = self.pol2cart(rho, phi)
 
-        fig, ax = plt.subplots(nrows=2, ncols=1)
-        ax[0].plot(
+        fig, ax = plt.subplots(nrows=1, ncols=1)
+        ax.plot(
             xcoord.flatten(),
             ycoord.flatten(),
             "b.",
             label=self.construct_retina.gc_type,
         )
-        ax[0].axis("equal")
-        ax[0].legend()
-        ax[0].set_title("Cartesian retina")
-        ax[0].set_xlabel("Eccentricity (mm)")
-        ax[0].set_ylabel("Elevation (mm)")
-
-        # quality control for density.
-        nbins = 50
-        # Fit for published data
-        edge_ecc = np.linspace(np.min(rho), np.max(rho), nbins)
-        my_gaussian_fit = self.gauss_plus_baseline(edge_ecc, *gc_density_func_params)
-        my_gaussian_fit_current_GC = (
-            my_gaussian_fit * self.construct_retina.gc_proportion
-        )
-        ax[1].plot(edge_ecc, my_gaussian_fit_current_GC, "r")
-
-        # Density of model cells
-        index = np.all(
-            [
-                phi > np.min(self.construct_retina.polar_lim_deg),
-                phi < np.max(self.construct_retina.polar_lim_deg),
-                rho > np.min(self.construct_retina.ecc_lim_mm),
-                rho < np.max(self.construct_retina.ecc_lim_mm),
-            ],
-            axis=0,
-        )  # Index only cells within original requested polar_lim_deg
-        hist, bin_edges = np.histogram(rho[index], nbins)
-        center_ecc = bin_edges[:-1] + ((bin_edges[1:] - bin_edges[:-1]) / 2)
-        area_for_each_bin = self.sector2area(
-            bin_edges[1:], np.ptp(self.construct_retina.polar_lim_deg)
-        ) - self.sector2area(
-            bin_edges[:-1], np.ptp(self.construct_retina.polar_lim_deg)
-        )  # in mm2. Vector length len(edge_ecc) - 1.
-        # Cells/area
-        model_cell_density = hist / area_for_each_bin  # in cells/mm2
-        ax[1].plot(center_ecc, model_cell_density, "b.")
+        ax.axis("equal")
+        ax.legend()
+        ax.set_title("Cartesian retina")
+        ax.set_xlabel("Eccentricity (mm)")
+        ax.set_ylabel("Elevation (mm)")
 
     def visualize_mosaic(self):
         """
@@ -686,7 +655,7 @@ class Viz:
 
         self.show_temporal_filter_response()
 
-        self.show_gc_positions_and_density()
+        self.show_gc_positions()
         self.visualize_mosaic()
         self.show_spatial_statistics()
         self.show_dendrite_diam_vs_ecc()
@@ -2381,3 +2350,72 @@ class Viz:
 
         if savefigname:
             self._figsave(figurename=savefigname)
+
+    # Validation viz
+    def validate_gc_rf_size(self):
+        gen_rfs_to_viz = self.construct_retina.gen_rfs_to_viz
+        img_rf = gen_rfs_to_viz["img_rf"]
+
+        new_um_per_pix = self.construct_retina.updated_vae_um_per_pix
+
+        # Get ellipse FIT and VAE FIT values
+        gc_df = self.construct_retina.gc_df_original
+        gc_vae_df = self.construct_retina.gc_vae_df
+
+        fit = self.construct_retina.Fit(
+            self.context.apricot_data_folder,
+            self.construct_retina.gc_type,
+            self.construct_retina.response_type,
+            spatial_data=img_rf,
+            fit_type="concentric_rings",
+            new_um_per_pix=new_um_per_pix,
+        )
+
+        all_data_fits_df = fit.all_data_fits_df
+        gen_spat_filt_to_viz = fit.gen_spat_filt_to_viz
+        good_idx_rings = fit.good_idx_rings
+
+        # cr for concentric rings, i.e. the symmetric DoG model
+        # Scales pix to mm for semi_xc i.e. central radius for cd fits
+        gc_vae_cr_df = self.construct_retina._update_gc_vae_df(
+            all_data_fits_df, new_um_per_pix
+        )
+
+        # Center radius and eccentricity for cr
+        deg_per_mm = self.construct_retina.deg_per_mm
+        cen_mm_cr = gc_vae_cr_df["semi_xc"].values
+        cen_deg_cr = cen_mm_cr * deg_per_mm
+        cen_min_arc_cr = cen_deg_cr * 60
+        ecc_mm_cr = self.construct_retina.gc_vae_df["pos_ecc_mm"].values
+        ecc_deg_cr = ecc_mm_cr * deg_per_mm
+
+        # Center radius and eccentricity for ellipse fit
+        cen_mm_fit = np.sqrt(gc_df["semi_xc"].values * gc_df["semi_yc"].values)
+        cen_deg_fit = cen_mm_fit * deg_per_mm
+        cen_min_arc_fit = cen_deg_fit * 60
+        ecc_mm_fit = gc_df["pos_ecc_mm"].values
+        ecc_deg_fit = ecc_mm_fit * deg_per_mm
+
+        # Center radius and eccentricity for vae ellipse fit
+        cen_mm_vae = np.sqrt(gc_vae_df["semi_xc"].values * gc_vae_df["semi_yc"].values)
+        cen_deg_vae = cen_mm_vae * deg_per_mm
+        cen_min_arc_vae = cen_deg_vae * 60
+        ecc_mm_vae = gc_vae_df["pos_ecc_mm"].values
+        ecc_deg_vae = ecc_mm_vae * deg_per_mm
+
+        # Read in corresponding data from literature
+        spatial_DoG_file = self.context.literature_data_files["spatial_DoG_file"]
+        spatial_DoG_data = self.data_io.get_data(spatial_DoG_file)
+
+        lit_ecc_deg = spatial_DoG_data["Xdata"]  # ecc (deg)
+        lit_cen_min_arc = spatial_DoG_data["Ydata"]  # rf center radius (min of arc)
+
+        # Plot the results
+        fig, ax = plt.subplots(1, 1, figsize=(5, 5))
+        plt.plot(ecc_deg_fit, cen_min_arc_fit, "o", label="Ellipse fit")
+        plt.plot(ecc_deg_vae, cen_min_arc_vae, "o", label="VAE ellipse fit")
+        plt.plot(ecc_deg_cr, cen_min_arc_cr, "o", label="VAE concentric rings fit")
+        plt.plot(lit_ecc_deg, lit_cen_min_arc, "o", label="Lit")
+        plt.xlabel("Eccentricity (deg)")
+        plt.ylabel("Center radius (min of arc)")
+        plt.legend()
