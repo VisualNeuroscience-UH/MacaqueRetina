@@ -126,6 +126,7 @@ class ConstructRetina(RetinaMath):
         gc_type = my_retina["gc_type"]
         response_type = my_retina["response_type"]
         ecc_limits = my_retina["ecc_limits"]
+        visual_field_limit_for_dd_fit = my_retina["visual_field_limit_for_dd_fit"]
         sector_limits = my_retina["sector_limits"]
         model_density = my_retina["model_density"]
         self.rf_coverage_adjusted_to_1 = my_retina["rf_coverage_adjusted_to_1"]
@@ -190,15 +191,12 @@ class ConstructRetina(RetinaMath):
         self.eccentricity = ecc_limits
         self.ecc_lim_mm = np.asarray(
             [r / self.deg_per_mm for r in ecc_limits]
-        )  # Turn list to numpy array
+        )  # Turn list to numpy array and deg to mm
+        self.visual_field_limit_for_dd_fit_mm = (
+            visual_field_limit_for_dd_fit / self.deg_per_mm
+        )
         self.polar_lim_deg = np.asarray(sector_limits)  # Turn list to numpy array
         self.randomize_position = randomize_position
-
-        # If study concerns visual field within 4 mm (20 deg) of retinal eccentricity, the cubic fit for dendritic diameters fails close to fovea. Better limit it to more central part of the data
-        if np.max(self.ecc_lim_mm) <= 4:
-            self.visual_field_fit_limit = 4
-        else:
-            self.visual_field_fit_limit = np.inf
 
         # Initialize pandas dataframe to hold the ganglion cells (one per row) and all their parameters in one place
         columns = [
@@ -341,7 +339,7 @@ class ConstructRetina(RetinaMath):
 
         return popt  # = gc_density_func_params
 
-    def _fit_dd_vs_ecc(self, visual_field_fit_limit, dd_regr_model):
+    def _fit_dd_vs_ecc(self, visual_field_limit_for_dd_fit_mm, dd_regr_model):
         """
         Fit dendritic field diameter with respect to eccentricity. Linear, quadratic and cubic fit.
 
@@ -379,7 +377,7 @@ class ConstructRetina(RetinaMath):
         # Limit eccentricities for central visual field studies to get better approximation at about 5 deg ecc (1mm)
         # x is eccentricity in mm
         # y is dendritic field diameter in micrometers
-        data_all_x_index = data_all_x <= visual_field_fit_limit
+        data_all_x_index = data_all_x <= visual_field_limit_for_dd_fit_mm
         data_all_x = data_all_x[data_all_x_index]
         data_all_y = data_all_y[
             data_all_x_index
@@ -396,35 +394,48 @@ class ConstructRetina(RetinaMath):
 
         if dd_regr_model == "linear":
             polynomial_order = 1
-            polynomials = np.polyfit(data_all_x, data_all_y, polynomial_order)
+            fit_parameters = np.polyfit(data_all_x, data_all_y, polynomial_order)
             dendr_diam_parameters[dict_key] = {
-                "intercept": polynomials[1],
-                "slope": polynomials[0],
+                "intercept": fit_parameters[1],
+                "slope": fit_parameters[0],
             }
         elif dd_regr_model == "quadratic":
             polynomial_order = 2
-            polynomials = np.polyfit(data_all_x, data_all_y, polynomial_order)
+            fit_parameters = np.polyfit(data_all_x, data_all_y, polynomial_order)
             dendr_diam_parameters[dict_key] = {
-                "intercept": polynomials[2],
-                "slope": polynomials[1],
-                "square": polynomials[0],
+                "intercept": fit_parameters[2],
+                "slope": fit_parameters[1],
+                "square": fit_parameters[0],
             }
         elif dd_regr_model == "cubic":
             polynomial_order = 3
-            polynomials = np.polyfit(data_all_x, data_all_y, polynomial_order)
+            fit_parameters = np.polyfit(data_all_x, data_all_y, polynomial_order)
             dendr_diam_parameters[dict_key] = {
-                "intercept": polynomials[3],
-                "slope": polynomials[2],
-                "square": polynomials[1],
-                "cube": polynomials[0],
+                "intercept": fit_parameters[3],
+                "slope": fit_parameters[2],
+                "square": fit_parameters[1],
+                "cube": fit_parameters[0],
             }
+        elif dd_regr_model == "exponential":
+
+            def exp_func(x, a, b):
+                return a + np.exp(x / b)
+
+            fit_parameters, pcov = opt.curve_fit(
+                exp_func, data_all_x, data_all_y, p0=[0, 1]
+            )
+            dendr_diam_parameters[dict_key] = {
+                "constant": fit_parameters[0],
+                "lamda": fit_parameters[1],
+            }
+            # pdb.set_trace()
 
         dd_model_caption = f"All data {dd_regr_model} fit"
 
         self.dd_vs_ecc_to_viz = {
             "data_all_x": data_all_x,
             "data_all_y": data_all_y,
-            "polynomials": polynomials,
+            "fit_parameters": fit_parameters,
             "dd_model_caption": dd_model_caption,
             "title": f"DF diam wrt ecc for {self.gc_type} type, {dd_model_caption} dataset",
         }
@@ -583,6 +594,10 @@ class ConstructRetina(RetinaMath):
                 + diam_fit_params["slope"] * gc_eccentricity
                 + diam_fit_params["square"] * gc_eccentricity**2
                 + diam_fit_params["cube"] * gc_eccentricity**3
+            )
+        elif dd_regr_model == "exponential":
+            gc_diameters_um = diam_fit_params["constant"] + np.exp(
+                gc_eccentricity / diam_fit_params["lamda"]
             )
 
         # Set parameters for all cells
@@ -1091,15 +1106,24 @@ class ConstructRetina(RetinaMath):
         # Determine the receptive field diameter based on eccentricity
         key = list(dd_ecc_params.keys())[0]
         parameters = dd_ecc_params[key]
-        dd_um = np.polyval(
-            [
-                parameters.get("cube", 0),
-                parameters.get("square", 0),
-                parameters.get("slope", 0),
-                parameters.get("intercept", 0),
-            ],
-            ret_pos_ecc_mm,
-        )
+        if self.context.my_retina["dd_regr_model"] in ["linear", "quadratic", "cubic"]:
+            dd_um = np.polyval(
+                [
+                    parameters.get("cube", 0),
+                    parameters.get("square", 0),
+                    parameters.get("slope", 0),
+                    parameters.get("intercept", 0),
+                ],
+                ret_pos_ecc_mm,
+            )
+        elif self.context.my_retina["dd_regr_model"] == "exponential":
+            dd_um = parameters.get("constant", 0) + np.exp(
+                ret_pos_ecc_mm / parameters.get("lamda", 0)
+            )
+        else:
+            raise ValueError(
+                f"Unknown dd_regr_model: {self.context.my_retina['dd_regr_model']}"
+            )
 
         scaling_factors = dd_um / data_dd_um
         um_per_pix = scaling_factors * data_um_per_pix
@@ -1593,7 +1617,9 @@ class ConstructRetina(RetinaMath):
         # Get fit parameters for dendritic field diameter (um) with respect to eccentricity (mm).
         # Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
         dd_regr_model = self.dd_regr_model  # "linear", "quadratic", "cubic"
-        dd_ecc_params = self._fit_dd_vs_ecc(self.visual_field_fit_limit, dd_regr_model)
+        dd_ecc_params = self._fit_dd_vs_ecc(
+            self.visual_field_limit_for_dd_fit_mm, dd_regr_model
+        )
 
         # # Quality control: check that the fitted dendritic diameter is close to the original data
         # # Frechette_2005_JNeurophysiol datasets: 9.7 mm (45°); 9.0 mm (41°); 8.4 mm (38°)

@@ -518,7 +518,7 @@ class Viz:
         if self.construct_retina.model_type == "VAE":
             dd_vae_x = self.construct_retina.dd_vs_ecc_to_viz["dd_vae_x"]
             dd_vae_y = self.construct_retina.dd_vs_ecc_to_viz["dd_vae_y"]
-        polynomials = self.construct_retina.dd_vs_ecc_to_viz["polynomials"]
+        fit_parameters = self.construct_retina.dd_vs_ecc_to_viz["fit_parameters"]
         dd_model_caption = self.construct_retina.dd_vs_ecc_to_viz["dd_model_caption"]
         title = self.construct_retina.dd_vs_ecc_to_viz["title"]
 
@@ -533,11 +533,9 @@ class Viz:
         ax.legend()
 
         if dd_model_caption:
-            if (
-                len(polynomials) == 2
-            ):  # check if only two parameters, ie intercept and slope
-                intercept = polynomials[1]
-                slope = polynomials[0]
+            if self.context.my_retina["dd_regr_model"] == "linear":
+                intercept = fit_parameters[1]
+                slope = fit_parameters[0]
                 ax.plot(data_all_x, intercept + slope * data_all_x, "k--")
                 ax.annotate(
                     "{0} : \ny={1:.1f} + {2:.1f}x".format(
@@ -548,10 +546,10 @@ class Viz:
                     ha="left",
                     color="k",
                 )
-            elif len(polynomials) == 3:
-                intercept = polynomials[2]
-                slope = polynomials[1]
-                square = polynomials[0]
+            elif self.context.my_retina["dd_regr_model"] == "quadratic":
+                intercept = fit_parameters[2]
+                slope = fit_parameters[1]
+                square = fit_parameters[0]
                 ax.plot(
                     data_all_x,
                     intercept + slope * data_all_x + square * data_all_x**2,
@@ -566,11 +564,11 @@ class Viz:
                     ha="left",
                     color="k",
                 )
-            elif len(polynomials) == 4:
-                intercept = polynomials[3]
-                slope = polynomials[2]
-                square = polynomials[1]
-                cube = polynomials[0]
+            elif self.context.my_retina["dd_regr_model"] == "cubic":
+                intercept = fit_parameters[3]
+                slope = fit_parameters[2]
+                square = fit_parameters[1]
+                cube = fit_parameters[0]
                 ax.plot(
                     data_all_x,
                     intercept
@@ -582,6 +580,19 @@ class Viz:
                 ax.annotate(
                     "{0}: \ny={1:.1f} + {2:.1f}x + {3:.1f}x^2 + {4:.1f}x^3".format(
                         dd_model_caption, intercept, slope, square, cube
+                    ),
+                    xycoords="axes fraction",
+                    xy=(0.5, 0.15),
+                    ha="left",
+                    color="k",
+                )
+            elif self.context.my_retina["dd_regr_model"] == "exponential":
+                constant = fit_parameters[0]
+                lamda = fit_parameters[1]
+                ax.plot(data_all_x, constant + np.exp(data_all_x / lamda), "k--")
+                ax.annotate(
+                    "{0}: \ny={1:.1f} + exp(x/{2:.1f})".format(
+                        dd_model_caption, constant, lamda
                     ),
                     xycoords="axes fraction",
                     xy=(0.5, 0.15),
@@ -655,7 +666,7 @@ class Viz:
 
         self.show_temporal_filter_response()
 
-        self.show_gc_positions()
+        # self.show_gc_positions()
         self.visualize_mosaic()
         self.show_spatial_statistics()
         self.show_dendrite_diam_vs_ecc()
@@ -2353,27 +2364,32 @@ class Viz:
 
     # Validation viz
     def validate_gc_rf_size(self):
-        gen_rfs_to_viz = self.construct_retina.gen_rfs_to_viz
-        img_rf = gen_rfs_to_viz["img_rf"]
+        if self.context.my_retina["model_type"] == "VAE":
+            gen_rfs_to_viz = self.construct_retina.gen_rfs_to_viz
+            img_rf = gen_rfs_to_viz["img_rf"]
 
-        new_um_per_pix = self.construct_retina.updated_vae_um_per_pix
+            new_um_per_pix = self.construct_retina.updated_vae_um_per_pix
 
-        # Get ellipse FIT and VAE FIT values
-        gc_df = self.construct_retina.gc_df_original
-        gc_vae_df = self.construct_retina.gc_vae_df
+            # Get ellipse FIT and VAE FIT values
+            gc_df = self.construct_retina.gc_df_original
+            gc_vae_df = self.construct_retina.gc_vae_df
 
-        fit = self.construct_retina.Fit(
-            self.context.apricot_data_folder,
-            self.construct_retina.gc_type,
-            self.construct_retina.response_type,
-            spatial_data=img_rf,
-            fit_type="concentric_rings",
-            new_um_per_pix=new_um_per_pix,
-        )
+            fit = self.construct_retina.Fit(
+                self.context.apricot_data_folder,
+                self.construct_retina.gc_type,
+                self.construct_retina.response_type,
+                spatial_data=img_rf,
+                fit_type="concentric_rings",
+                new_um_per_pix=new_um_per_pix,
+            )
 
-        all_data_fits_df = fit.all_data_fits_df
-        gen_spat_filt_to_viz = fit.gen_spat_filt_to_viz
-        good_idx_rings = fit.good_idx_rings
+            all_data_fits_df = fit.all_data_fits_df
+            gen_spat_filt_to_viz = fit.gen_spat_filt_to_viz
+            good_idx_rings = fit.good_idx_rings
+        else:
+            raise ValueError(
+                "Only VAE model_type is supported for validate_gc_rf_size, it shows FIT values, too."
+            )
 
         # cr for concentric rings, i.e. the symmetric DoG model
         # Scales pix to mm for semi_xc i.e. central radius for cd fits
@@ -2415,7 +2431,10 @@ class Viz:
         plt.plot(ecc_deg_fit, cen_min_arc_fit, "o", label="Ellipse fit")
         plt.plot(ecc_deg_vae, cen_min_arc_vae, "o", label="VAE ellipse fit")
         plt.plot(ecc_deg_cr, cen_min_arc_cr, "o", label="VAE concentric rings fit")
-        plt.plot(lit_ecc_deg, lit_cen_min_arc, "o", label="Lit")
+        plt.plot(lit_ecc_deg, lit_cen_min_arc, "o", label="Schottdorf_2021_JPhysiol")
         plt.xlabel("Eccentricity (deg)")
         plt.ylabel("Center radius (min of arc)")
         plt.legend()
+        plt.title(
+            f"GC dendritic diameter vs eccentricity, {self.construct_retina.gc_type} type"
+        )

@@ -82,6 +82,7 @@ Path structure is assumed to be model_root_path/project/experiment/output_folder
 Abbreviations:
 ana : analysis
 col : column
+dd : dendritic diameter
 full : full absolute path 
 param : parameter
 viz : visualization
@@ -147,23 +148,24 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 # When training or tuning generative models, multiple hyperparameters are set at the RetinaVAE class.
 # For training, see __init__ method. For tuning, the __init__ contains search space and
 # _set_ray_tuner contains the starting point.
-gc_type = "parasol"
+gc_type = "midget"
 response_type = "on"
 
 my_retina = {
     "gc_type": gc_type,
     "response_type": response_type,
     "ecc_limits": [4.7, 5.3],  # degrees
-    "sector_limits": [-0.7, 0.7],  # polar angle in degrees
+    "sector_limits": [-1, 1],  # polar angle in degrees
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
-    "dd_regr_model": "cubic",  # linear, quadratic, cubic.
+    "dd_regr_model": "linear",  # linear, quadratic, cubic, exponential
+    "visual_field_limit_for_dd_fit": math.inf,  # 20,  # degrees, math.inf for no limit
     "randomize_position": 0.1,  # between 0 and 1
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
     "model_type": "VAE",  # "FIT" or "VAE" for variational autoencoder.
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models. Note that ellipse fit does not tolearate VAE adjustments => fit to nonadjusted generated rfs
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
-    "model_file_name": "model_parasol_on_20230923_193921.pt",  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only.
+    "model_file_name": "model_midget_on_20230927_133151.pt",  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only.
     "ray_tune_trial_id": None,  # Trial_id for tune, None for loading single run after "train_model". Applies to VAE "load_model" only.
 }
 
