@@ -920,7 +920,6 @@ class RetinaVAE(RetinaMath):
 
         self.latent_space_plot_scale = 15.0  # Scale for plotting latent space
 
-        # TODO: JOS LADATAAN MALLI, TIMESTAMP OSOITTAMAAN KYSEISEEN MALLIIN -- NÄIN IN FOLDERISSA VOI OLLA USEITA MALLEJA
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         self.models_folder = self._set_models_folder(context)
