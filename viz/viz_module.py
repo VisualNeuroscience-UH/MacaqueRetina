@@ -201,9 +201,8 @@ class Viz:
     def show_spatial_filter_response(
         self,
         spat_filt_to_viz,
-        n_samples=np.inf,
+        n_samples=1,
         title="",
-        pause_to_show=False,
     ):
         data_all_viable_cells = spat_filt_to_viz["data_all_viable_cells"]
         x_grid = spat_filt_to_viz["x_grid"]
@@ -272,15 +271,7 @@ class Viz:
                     fill=False,
                     linestyle="--",
                 )
-                if 0:
-                    print(
-                        popt[0],
-                        popt[np.array([1, 2])],
-                        popt[3],
-                        popt[4],
-                        -popt[5] * 180 / np.pi,
-                    )
-                    print(popt[6], "relat_sur_diam=", popt[7], "offset=", popt[8])
+
             else:
                 data_fitted = self.DoG2D_independent_surround((x_grid, y_grid), *popt)
                 e1 = Ellipse(
@@ -302,23 +293,6 @@ class Viz:
                     fill=False,
                     linestyle="--",
                 )
-                if 0:
-                    print(
-                        popt[0],
-                        popt[np.array([1, 2])],
-                        popt[3],
-                        popt[4],
-                        -popt[5] * 180 / np.pi,
-                    )
-                    print(
-                        popt[6],
-                        popt[np.array([7, 8])],
-                        popt[9],
-                        popt[10],
-                        -popt[11] * 180 / np.pi,
-                    )
-
-                    print("\n")
 
             ax1.add_artist(e1)
             ax1.add_artist(e2)
@@ -331,9 +305,6 @@ class Viz:
                 origin="lower",
             )
             fig.colorbar(sur, ax=ax2)
-
-            if pause_to_show:
-                plt.show()
 
     # ConstructRetina visualization
     def show_gc_positions(self):
@@ -363,7 +334,7 @@ class Viz:
         ax.set_xlabel("Eccentricity (mm)")
         ax.set_ylabel("Elevation (mm)")
 
-    def visualize_mosaic(self):
+    def visualize_mosaic(self, savefigname=None):
         """
         Plots the full ganglion cell self.construct_retina. Note that this is slow if you have a large patch.
 
@@ -422,6 +393,9 @@ class Viz:
         ax.set_title("Cartesian retina")
         ax.set_xlabel("Eccentricity (mm)")
         ax.set_ylabel("Elevation (mm)")
+
+        if savefigname:
+            self._figsave(figurename=savefigname)
 
     def show_spatial_statistics(self):
         """
@@ -507,7 +481,7 @@ class Viz:
                 )
             )
 
-    def show_dendrite_diam_vs_ecc(self):
+    def show_dendrite_diam_vs_ecc(self, savefigname=None):
         """
         Plot dendritic diameter as a function of retinal eccentricity with linear, quadratic, or cubic fitting.
         """
@@ -602,6 +576,9 @@ class Viz:
 
         plt.title(title)
 
+        if savefigname:
+            self._figsave(figurename=savefigname)
+
     def show_temp_stat(self):
         """
         Show the temporal statistics of the retina units.
@@ -665,8 +642,6 @@ class Viz:
             return
 
         self.show_temporal_filter_response()
-
-        # self.show_gc_positions()
         self.visualize_mosaic()
         self.show_spatial_statistics()
         self.show_dendrite_diam_vs_ecc()
@@ -843,7 +818,9 @@ class Viz:
         plt.axvline(np.median(img_post), color="r")
         plt.title(f"Generated processed, median: {np.median(img_post):.2f}")
 
-    def show_gen_exp_spatial_rf(self, ds_name="test_ds", n_samples=10):
+    def show_gen_exp_spatial_rf(
+        self, ds_name="test_ds", n_samples=10, savefigname=None
+    ):
         """
         Plot the outputs of the autoencoder.
         """
@@ -898,6 +875,9 @@ class Viz:
 
         # Set the whole figure title as ds_name
         plt.suptitle(ds_name)
+
+        if savefigname:
+            self._figsave(figurename=savefigname)
 
     def show_latent_tsne_space(self):
         train_df = self.construct_retina.retina_vae.get_encoded_samples(
@@ -1866,7 +1846,7 @@ class Viz:
         plt.figure()
         plt.plot(data.T)
 
-    def show_retina_img(self):
+    def show_retina_img(self, savefigname=None):
         """
         Show the image of whole retina with all the receptive fields summed up.
         """
@@ -1895,7 +1875,10 @@ class Viz:
         plt.colorbar()
         plt.title("Adjusted coverage")
 
-    def show_rf_imgs(self, n_samples=10):
+        if savefigname:
+            self._figsave(figurename=savefigname)
+
+    def show_rf_imgs(self, n_samples=10, savefigname=None):
         """
         Show the individual RFs of the VAE retina
 
@@ -1940,6 +1923,8 @@ class Viz:
 
         # # Adjust the layout so labels are visible
         # fig.subplots_adjust(left=0.15)
+        if savefigname:
+            self._figsave(figurename=savefigname)
 
     def show_rf_violinplot(self):
         """
