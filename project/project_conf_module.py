@@ -124,14 +124,14 @@ input_folder = "../in"  # input figs, videos
 Stimulus context
 Stimulus images and videos
 """
-stimulus_folder = "stim_temporal_test_2cpd"  # "parasol_stim_tf10_c10"
+stimulus_folder = "stim_temporal_sine_100"  # "parasol_stim_tf10_c10"
 
 
 """
 Data context for output. 
 """
 
-output_folder = "midget_off_temporal_test_2cpd"  # "crf_midget_on_vae_tf10_c6"
+output_folder = "parasol_on_temporal_sine_100"  # "crf_midget_on_vae_tf10_c6"
 
 
 """
@@ -148,24 +148,24 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 # When training or tuning generative models, multiple hyperparameters are set at the RetinaVAE class.
 # For training, see __init__ method. For tuning, the __init__ contains search space and
 # _set_ray_tuner contains the starting point.
-gc_type = "midget"
+gc_type = "parasol"
 response_type = "on"
 
 my_retina = {
     "gc_type": gc_type,
     "response_type": response_type,
-    "ecc_limits": [4.7, 5.3],  # degrees
-    "sector_limits": [-1, 1],  # polar angle in degrees
+    "ecc_limits": [4.5, 5.5],  # degrees
+    "sector_limits": [-3, 3],  # polar angle in degrees
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
     "dd_regr_model": "linear",  # linear, quadratic, cubic, exponential
-    "visual_field_limit_for_dd_fit": math.inf,  # 20,  # degrees, math.inf for no limit
-    "randomize_position": 0.1,  # between 0 and 1
+    "visual_field_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
+    "randomize_position": 0.2,  # between 0 and 1
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
     "model_type": "VAE",  # "FIT" or "VAE" for variational autoencoder.
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models. Note that ellipse fit does not tolearate VAE adjustments => fit to nonadjusted generated rfs
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
-    "model_file_name": "model_midget_on_20230927_133151.pt",  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only.
+    "model_file_name": "model_parasol_on_20230923_193921.pt",  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only.
     "ray_tune_trial_id": None,  # Trial_id for tune, None for loading single run after "train_model". Applies to VAE "load_model" only.
 }
 
@@ -223,7 +223,9 @@ stimulus_video_name: name of the stimulus video
 With assuming rgb voltage = cd/m2, and average pupil diameter of 3 mm, the mean voltage of 128 in background
 would mean ~ 905 Trolands. Td = lum * pi * (diam/2)^2, resulting in 128 cd/m2 = 128 * pi * (3/2)^2 ~ 905 Td.
 
-
+VAE rf have different resolution from original RF data, if the estimated eccentricity is different from the original data.
+VAE rf have different amplitude from original RF data, because the VAE model operates with values between 0 and 1. Later
+the median is removed to get the zero level to approximately match the original data. 
 """
 
 my_stimulus_options = {
@@ -235,7 +237,7 @@ my_stimulus_options = {
     "duration_seconds": 7.0,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
-    "pattern": "sine_grating",  # Natural video is not supported yet. One of the StimulusPatterns
+    "pattern": "temporal_sine_pattern",  # Natural video is not supported yet. One of the StimulusPatterns
     "stimulus_form": "circular",
     "size_inner": 0.02,  # Applies to annulus only
     "size_outer": 2,  # Applies to annulus only
@@ -244,7 +246,7 @@ my_stimulus_options = {
     "background": 128,
     "contrast": 0.8,  # Weber constrast
     "mean": 128,
-    "temporal_frequency": 0.5,  # 40,  # Hz
+    "temporal_frequency": 3,  # 40,  # Hz
     "spatial_frequency": 2.0,
     "orientation": 0,  # degrees
     "phase_shift": 0,  # math.pi,  # radians
@@ -469,17 +471,19 @@ if __name__ == "__main__":
     # in the retina mosaic building process.
 
     # For ellipse FIT
-    PM.viz.show_exp_build_process(show_all_spatial_fits=False)
+    # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
+    # PM.viz.visualize_mosaic(savefigname="parasol_on_ellipses.eps")
+    # PM.viz.show_dendrite_diam_vs_ecc(savefigname="parasol_on_dd_ecc.eps")
 
     # For VAE
-    # PM.viz.show_gen_exp_spatial_fit(n_samples=20)
-    # PM.viz.show_gen_exp_spatial_rf(ds_name="test_ds", n_samples=10)
+    # PM.viz.show_gen_exp_spatial_fit(n_samples=5, savefigname="DoG_ellipse_fit.eps")
+    # PM.viz.show_gen_exp_spatial_rf(ds_name="train_ds", n_samples=15, savefigname=None)
     # PM.viz.show_latent_tsne_space()
     # PM.viz.show_gen_spat_post_hist()
     # PM.viz.show_latent_space_and_samples()
-    # PM.viz.show_retina_img()
-    # PM.viz.show_rf_imgs(n_samples=10)
-    # PM.viz.show_rf_violinplot()
+    # PM.viz.show_retina_img(savefigname="parasol_on_vae_retina.eps")
+    # PM.viz.show_rf_imgs(n_samples=10, savefigname="parasol_on_vae_gen_rf.eps")
+    # PM.viz.show_rf_violinplot() # Pixel values for each unit
 
     # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
     # this_dep_var = "val_loss"
@@ -490,7 +494,9 @@ if __name__ == "__main__":
     # )
 
     # For both FIT and VAE
-    PM.viz.validate_gc_rf_size()  # Schottdorf_2021_JPhysiol
+    PM.viz.validate_gc_rf_size(
+        savefigname="rf_size_vs_Schottdorf_data.eps"
+    )  # Schottdorf_2021_JPhysiol
 
     ###################################
     ###################################
@@ -595,7 +601,7 @@ if __name__ == "__main__":
     #     "logaritmic": [False],
     #     # "min_max_values": [[0.5, 32], [0.02, 0.8]],  # temporal frequency, contrast
     #     # "n_steps": [10, 10],  # temporal frequency, contrast
-    #     # "logaritmic": [True, True],  # temporal frequency, contrast
+    #     # "logaritmic": [True, False],  # temporal frequency, contrast
     # }
 
     # PM.experiment.build_and_run(experiment_dict, n_trials=5)
@@ -617,7 +623,9 @@ if __name__ == "__main__":
     ################################
 
     # PM.viz.F1F2_popul_response(exp_variables, xlog=False, savefigname=None)
-    # PM.viz.F1F2_unit_response(exp_variables, xlog=False, savefigname=output_folder)
+    # PM.viz.F1F2_unit_response(
+    #     exp_variables, xlog=False, savefigname=output_folder  # + ".eps"
+    # )
     # PM.viz.fr_response(exp_variables, xlog=True, savefigname=None)
     # PM.viz.spike_raster_response(exp_variables, savefigname=None)
     # PM.viz.tf_vs_fr_cg(

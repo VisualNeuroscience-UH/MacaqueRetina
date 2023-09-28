@@ -199,10 +199,7 @@ class Viz:
         plt.title(f"{title} ({N_cells} cells)")
 
     def show_spatial_filter_response(
-        self,
-        spat_filt_to_viz,
-        n_samples=1,
-        title="",
+        self, spat_filt_to_viz, n_samples=1, title="", savefigname=None
     ):
         data_all_viable_cells = spat_filt_to_viz["data_all_viable_cells"]
         x_grid = spat_filt_to_viz["x_grid"]
@@ -219,10 +216,16 @@ class Viz:
         if n_samples < len(cell_ixs_list):
             cell_ixs_list = np.random.choice(cell_ixs_list, n_samples, replace=False)
 
-        for this_cell_ix in cell_ixs_list:
-            imshow_cmap = "bwr"
-            ellipse_edgecolor = "black"
+        # Create a single figure for all the samples
+        fig, axes = plt.subplots(figsize=(8, 2 * n_samples), nrows=n_samples, ncols=2)
+        if n_samples == 1:  # Ensure axes is a 2D array for consistency
+            axes = np.array([axes])
 
+        imshow_cmap = "viridis"
+        ellipse_edgecolor = "white"
+        colorscale_min_max = [None, None]  # [-0.2, 0.8]
+
+        for idx, this_cell_ix in enumerate(cell_ixs_list):
             this_cell_ix_numerical = int(this_cell_ix.split("_")[-1])
             # Get DoG model fit parameters to popt
             popt = data_all_viable_cells[this_cell_ix_numerical, :]
@@ -230,28 +233,19 @@ class Viz:
             suptitle = spat_filt_to_viz[this_cell_ix]["suptitle"]
             suptitle = f"{title}, {suptitle})"
 
-            fig, (ax1, ax2) = plt.subplots(figsize=(8, 3), ncols=2)
-
-            plt.suptitle(
-                suptitle,
-                fontsize=10,
-            )
-            cen = ax1.imshow(
+            cen = axes[idx, 0].imshow(
                 spatial_data_array,
-                # vmin=-0.1,
-                # vmax=0.4,
                 cmap=imshow_cmap,
                 origin="lower",
                 extent=(x_grid.min(), x_grid.max(), y_grid.min(), y_grid.max()),
+                vmin=colorscale_min_max[0],
+                vmax=colorscale_min_max[1],
             )
-            fig.colorbar(cen, ax=ax1)
+            fig.colorbar(cen, ax=axes[idx, 0])
 
-            # # Ellipses for DoG2D_fixed_surround
-
+            # Ellipses for DoG2D_fixed_surround
             if DoG_model_type == 1:
-                # xy_tuple, ampl_c, xoc, yoc, semi_xc, semi_yc, orient_cen, ampl_s, relat_sur_diam, offset
                 data_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
-
                 e1 = Ellipse(
                     (popt[np.array([1, 2])]),
                     popt[3],
@@ -294,17 +288,25 @@ class Viz:
                     linestyle="--",
                 )
 
-            ax1.add_artist(e1)
-            ax1.add_artist(e2)
+            axes[idx, 0].add_artist(e1)
+            axes[idx, 0].add_artist(e2)
 
-            sur = ax2.imshow(
+            sur = axes[idx, 1].imshow(
                 data_fitted.reshape(pixel_array_shape_y, pixel_array_shape_x),
-                # vmin=-0.1,
-                # vmax=0.4,
                 cmap=imshow_cmap,
                 origin="lower",
+                extent=(x_grid.min(), x_grid.max(), y_grid.min(), y_grid.max()),
+                vmin=colorscale_min_max[0],
+                vmax=colorscale_min_max[1],
             )
-            fig.colorbar(sur, ax=ax2)
+            fig.colorbar(sur, ax=axes[idx, 1])
+
+        plt.tight_layout()
+        plt.suptitle(title, fontsize=10)
+        plt.subplots_adjust(top=0.95)
+
+        if savefigname:
+            self._figsave(figurename=title + "_" + savefigname)
 
     # ConstructRetina visualization
     def show_gc_positions(self):
@@ -352,7 +354,9 @@ class Viz:
         gc_rf_models[:, 2] = self.construct_retina.gc_df["xy_aspect_ratio"]
         gc_rf_models[:, 3] = self.construct_retina.gc_df["ampl_s"]
         gc_rf_models[:, 4] = self.construct_retina.gc_df["relat_sur_diam"]
-        gc_rf_models[:, 5] = self.construct_retina.gc_df["orient_cen"]
+        gc_rf_models[:, 5] = self.construct_retina.gc_df["orient_cen_rad"]
+
+        gc_rf_models[:, 5] = gc_rf_models[:, 5] * 180 / np.pi
 
         # to cartesian
         xcoord, ycoord = self.pol2cart(rho, phi)
@@ -366,7 +370,7 @@ class Viz:
         )
 
         if self.construct_retina.surround_fixed:
-            # gc_rf_models parameters:'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','relat_sur_diam', 'orient_cen'
+            # gc_rf_models parameters:'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','relat_sur_diam', 'orient_cen_rad'
             # Ellipse parameters: Ellipse(xy, width, height, angle=0, **kwargs). Only possible one at the time, unfortunately.
             for index in np.arange(len(xcoord)):
                 ellipse_center_x = xcoord[index]
@@ -454,7 +458,7 @@ class Viz:
                     ax.set_ylim([ax.get_ylim()[0], 1.1 * bin_values.max()])
 
         # Check correlations
-        # distributions = ['semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','relat_sur_diam', 'orient_cen']
+        # distributions = ['semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','relat_sur_diam', 'orient_cen_rad']
         fig2, axes2 = plt.subplots(2, 3, figsize=(13, 4))
         axes2 = axes2.flatten()
         ref_index = 1
@@ -648,7 +652,7 @@ class Viz:
         self.show_temp_stat()
         self.show_tonic_drives()
 
-    def show_gen_exp_spatial_fit(self, n_samples=2):
+    def show_gen_exp_spatial_fit(self, n_samples=2, savefigname=None):
         """
         Show the experimental (fitted) and generated spatial receptive fields (VAE)
 
@@ -662,7 +666,7 @@ class Viz:
             spat_filt_to_viz,
             n_samples=n_samples,
             title="Experimental",
-            pause_to_show=False,
+            savefigname=savefigname,
         )
 
         if self.construct_retina.model_type == "VAE":
@@ -671,7 +675,7 @@ class Viz:
                 spat_filt_to_viz,
                 n_samples=n_samples,
                 title="Generated",
-                pause_to_show=False,
+                savefigname=savefigname,
             )
 
     def show_latent_space_and_samples(self):
@@ -1464,7 +1468,7 @@ class Viz:
                 (gc.q_pix, gc.r_pix),
                 width=2 * gc.semi_xc,
                 height=2 * gc.semi_yc,
-                angle=gc.orient_cen * (-1),
+                angle=gc.orient_cen_rad * (-1),  # Rotation in degrees anti-clockwise.
                 edgecolor="blue",
                 facecolor=facecolor,
             )
@@ -1543,7 +1547,7 @@ class Viz:
             (gc.q_pix, gc.r_pix),
             width=2 * gc.semi_xc,
             height=2 * gc.semi_yc,
-            angle=gc.orient_cen * (-1),
+            angle=gc.orient_cen_rad * (-1),  # Rotation in degrees anti-clockwise.
             edgecolor="white",
             facecolor="yellow",
         )
@@ -2348,7 +2352,7 @@ class Viz:
             self._figsave(figurename=savefigname)
 
     # Validation viz
-    def validate_gc_rf_size(self):
+    def validate_gc_rf_size(self, savefigname=None):
         if self.context.my_retina["model_type"] == "VAE":
             gen_rfs_to_viz = self.construct_retina.gen_rfs_to_viz
             img_rf = gen_rfs_to_viz["img_rf"]
@@ -2423,3 +2427,6 @@ class Viz:
         plt.title(
             f"GC dendritic diameter vs eccentricity, {self.construct_retina.gc_type} type"
         )
+
+        if savefigname:
+            self._figsave(figurename=savefigname)

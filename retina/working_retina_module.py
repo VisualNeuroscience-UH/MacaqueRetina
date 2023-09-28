@@ -277,7 +277,6 @@ class WorkingRetina(RetinaMath):
             np.arange(qmin, qmax + 1, 1), np.arange(rmin, rmax + 1, 1)
         )
 
-        orient_cen = gc.orient_cen * (np.pi / 180)
         # spatial_kernel is here 1-dim vector
         spatial_kernel = self.DoG2D_fixed_surround(
             (x_grid, y_grid),
@@ -286,19 +285,12 @@ class WorkingRetina(RetinaMath):
             gc.r_pix,
             gc.semi_xc,
             gc.semi_yc,
-            orient_cen,
+            gc.orient_cen_rad,
             gc.ampl_s,
             gc.relat_sur_diam,
             offset,
         )
         spatial_kernel = np.reshape(spatial_kernel, (s, s))
-
-        # Skip scaling for now
-        # # Scale the spatial filter so that its maximal gain is something reasonable
-        # # TODO - how should you scale the kernel??
-        # max_gain = np.max(np.abs(np.fft.fft2(spatial_kernel)))
-        # # 5.3 here just to give exp(5.3) = 200 Hz max firing rate to sinusoids
-        # spatial_kernel = (5.3 / max_gain) * spatial_kernel
 
         if get_masks:
             # Create center mask
@@ -332,7 +324,7 @@ class WorkingRetina(RetinaMath):
             np.arange(qmin, qmax + 1, 1), np.arange(rmin, rmax + 1, 1)
         )
 
-        orient_cen = gc.orient_cen * (np.pi / 180)
+        # orient_cen_rad = gc.orient_cen_rad * (np.pi / 180)
 
         if get_masks == True:
             spatial_kernel = resize(
@@ -343,12 +335,6 @@ class WorkingRetina(RetinaMath):
             spatial_kernel = resize(
                 self.spat_rf[cell_index, :, :], (s, s), anti_aliasing=True
             )
-
-            # Skip scaling for now
-            # # Scale the spatial filter so that its maximal gain is something reasonable
-            # max_gain = np.max(np.abs(np.fft.fft2(spatial_kernel)))
-            # # The 18 is arbitrary, to give reasonable firing rates
-            # spatial_kernel = (18 / max_gain) * spatial_kernel
 
         return spatial_kernel
 

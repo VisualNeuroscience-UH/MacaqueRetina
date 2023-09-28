@@ -243,9 +243,9 @@ class Fit(ApricotData, RetinaMath):
         tuple
             A dataframe with spatial parameters and errors for each cell, and a dictionary of spatial filters to show with visualization.
             The dataframe has shape `(n_cells, 13)` and columns:
-            ['ampl_c', 'xoc', 'yoc', 'semi_xc', 'semi_yc', 'orient_cen', 'ampl_s', 'xos', 'yos', 'semi_xs',
+            ['ampl_c', 'xoc', 'yoc', 'semi_xc', 'semi_yc', 'orient_cen_rad', 'ampl_s', 'xos', 'yos', 'semi_xs',
             'semi_ys', 'orientation_surround', 'offset'] if DoG_model_type=0,
-            or shape `(n_cells, 8)` and columns: ['ampl_c', 'xoc', 'yoc', 'semi_xc', 'semi_yc', 'orient_cen',
+            or shape `(n_cells, 8)` and columns: ['ampl_c', 'xoc', 'yoc', 'semi_xc', 'semi_yc', 'orient_cen_rad',
             'ampl_s', 'relat_sur_diam', 'offset'] if DoG_model_type=1.
             The dictionary spat_filt_to_viz has keys:
                 'x_grid': numpy.ndarray of shape `(num_pix_y, num_pix_x)`, X-coordinates of the grid points
@@ -281,7 +281,7 @@ class Fit(ApricotData, RetinaMath):
                 "yoc",
                 "semi_xc",
                 "semi_yc",
-                "orient_cen",
+                "orient_cen_rad",
                 "ampl_s",
                 "xos",
                 "yos",
@@ -299,7 +299,7 @@ class Fit(ApricotData, RetinaMath):
                 "yoc",
                 "semi_xc",
                 "semi_yc",
-                "orient_cen",
+                "orient_cen_rad",
                 "ampl_s",
                 "relat_sur_diam",
                 "offset",
@@ -334,7 +334,7 @@ class Fit(ApricotData, RetinaMath):
         # Set initial guess for fitting
         rot = 0.0
         if DoG_model_type == 0:
-            # Build initial guess for (ampl_c, xoc, yoc, semi_xc, semi_yc, orient_cen, ampl_s, xos, yos, semi_xs, semi_ys, orientation_surround, offset)
+            # Build initial guess for (ampl_c, xoc, yoc, semi_xc, semi_yc, orient_cen_rad, ampl_s, xos, yos, semi_xs, semi_ys, orientation_surround, offset)
             p0 = np.array(
                 [
                     1,
@@ -389,7 +389,7 @@ class Fit(ApricotData, RetinaMath):
                 ),
             )
         elif DoG_model_type == 1:
-            # Build initial guess for (ampl_c, xoc, yoc, semi_xc, semi_yc, orient_cen, ampl_s, relat_sur_diam, offset)
+            # Build initial guess for (ampl_c, xoc, yoc, semi_xc, semi_yc, orient_cen_rad, ampl_s, relat_sur_diam, offset)
             p0 = np.array(
                 [
                     1,
@@ -560,7 +560,7 @@ class Fit(ApricotData, RetinaMath):
         fits_df = pd.DataFrame(data_all_viable_cells, columns=parameter_names)
 
         if DoG_model_type == 2:
-            # Map DoG_model_type 2 to type 1 parameters [ampl_c, xoc, yoc, semi_xc, semi_yc, orient_cen, ampl_s, relat_sur_diam, offset]
+            # Map DoG_model_type 2 to type 1 parameters [ampl_c, xoc, yoc, semi_xc, semi_yc, orient_cen_rad, ampl_s, relat_sur_diam, offset]
             # For compatibility with downstream analysis and visualization
             fits_df_as_fixed = pd.DataFrame()
             fits_df_as_fixed["ampl_c"] = fits_df["ampl_c"]
@@ -568,7 +568,7 @@ class Fit(ApricotData, RetinaMath):
             fits_df_as_fixed["yoc"] = fits_df["yoc"]
             fits_df_as_fixed["semi_xc"] = fits_df["rad_c"]
             fits_df_as_fixed["semi_yc"] = fits_df["rad_c"]
-            fits_df_as_fixed["orient_cen"] = 0.0
+            fits_df_as_fixed["orient_cen_rad"] = 0.0
             fits_df_as_fixed["ampl_s"] = fits_df["ampl_s"]
             fits_df_as_fixed["relat_sur_diam"] = fits_df["rad_s"] / fits_df["rad_c"]
             fits_df_as_fixed["offset"] = fits_df["offset"]
@@ -761,7 +761,7 @@ class Fit(ApricotData, RetinaMath):
     def _fit_spatial_statistics(self, good_idx):
         """
         Fits gamma distribution parameters for the 'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s',
-        and 'relat_sur_diam' RF parameters, and fits vonmisees distribution parameters for the 'orient_cen' RF parameter.
+        and 'relat_sur_diam' RF parameters, and fits vonmisees distribution parameters for the 'orient_cen_rad' RF parameter.
 
         Parameters:
         -----------
@@ -772,7 +772,7 @@ class Fit(ApricotData, RetinaMath):
         --------
         spatial_stat_df : pandas DataFrame
             A DataFrame containing gamma distribution parameters for the RF parameters 'semi_xc', 'semi_yc',
-            'xy_aspect_ratio', 'ampl_s', and 'relat_sur_diam', and vonmises   distribution parameters for the 'orient_cen'.
+            'xy_aspect_ratio', 'ampl_s', and 'relat_sur_diam', and vonmises   distribution parameters for the 'orient_cen_rad'.
         spat_stat_to_viz : dict
             A dictionary containing data that can be used to visualize the RF parameters' spatial statistics.
             Includes 'ydata', 'spatial_statistics_dict', and 'model_fit_data'.
@@ -790,14 +790,13 @@ class Fit(ApricotData, RetinaMath):
         )
         xy_aspect_ratio_pd_series.rename("xy_aspect_ratio")
         spatial_data_df["xy_aspect_ratio"] = xy_aspect_ratio_pd_series
-
         rf_parameter_names = [
             "semi_xc",
             "semi_yc",
             "xy_aspect_ratio",
             "ampl_s",
             "relat_sur_diam",
-            "orient_cen",
+            "orient_cen_rad",
         ]
 
         n_distributions = len(rf_parameter_names)

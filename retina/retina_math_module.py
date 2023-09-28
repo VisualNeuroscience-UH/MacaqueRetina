@@ -138,7 +138,7 @@ class RetinaMath:
         yoc,
         semi_xc,
         semi_yc,
-        orient_cen,
+        orient_cen_rad,
         ampl_s,
         xos,
         yos,
@@ -152,14 +152,14 @@ class RetinaMath:
         """
 
         (x_fit, y_fit) = xy_tuple
-        acen = (np.cos(orient_cen) ** 2) / (2 * semi_xc**2) + (
-            np.sin(orient_cen) ** 2
+        acen = (np.cos(orient_cen_rad) ** 2) / (2 * semi_xc**2) + (
+            np.sin(orient_cen_rad) ** 2
         ) / (2 * semi_yc**2)
-        bcen = -(np.sin(2 * orient_cen)) / (4 * semi_xc**2) + (
-            np.sin(2 * orient_cen)
+        bcen = -(np.sin(2 * orient_cen_rad)) / (4 * semi_xc**2) + (
+            np.sin(2 * orient_cen_rad)
         ) / (4 * semi_yc**2)
-        ccen = (np.sin(orient_cen) ** 2) / (2 * semi_xc**2) + (
-            np.cos(orient_cen) ** 2
+        ccen = (np.sin(orient_cen_rad) ** 2) / (2 * semi_xc**2) + (
+            np.cos(orient_cen_rad) ** 2
         ) / (2 * semi_yc**2)
 
         asur = (np.cos(orientation_surround) ** 2) / (2 * semi_xs**2) + (
@@ -334,7 +334,7 @@ class RetinaMath:
         yoc,
         semi_xc,
         semi_yc,
-        orient_cen,
+        orient_cen_rad,
         ampl_s,
         relat_sur_diam,
         offset,
@@ -345,24 +345,24 @@ class RetinaMath:
         """
 
         (x_fit, y_fit) = xy_tuple
-        acen = (np.cos(orient_cen) ** 2) / (2 * semi_xc**2) + (
-            np.sin(orient_cen) ** 2
+        acen = (np.cos(orient_cen_rad) ** 2) / (2 * semi_xc**2) + (
+            np.sin(orient_cen_rad) ** 2
         ) / (2 * semi_yc**2)
-        bcen = -(np.sin(2 * orient_cen)) / (4 * semi_xc**2) + (
-            np.sin(2 * orient_cen)
+        bcen = -(np.sin(2 * orient_cen_rad)) / (4 * semi_xc**2) + (
+            np.sin(2 * orient_cen_rad)
         ) / (4 * semi_yc**2)
-        ccen = (np.sin(orient_cen) ** 2) / (2 * semi_xc**2) + (
-            np.cos(orient_cen) ** 2
+        ccen = (np.sin(orient_cen_rad) ** 2) / (2 * semi_xc**2) + (
+            np.cos(orient_cen_rad) ** 2
         ) / (2 * semi_yc**2)
 
-        asur = (np.cos(orient_cen) ** 2) / (2 * (relat_sur_diam * semi_xc) ** 2) + (
-            np.sin(orient_cen) ** 2
+        asur = (np.cos(orient_cen_rad) ** 2) / (2 * (relat_sur_diam * semi_xc) ** 2) + (
+            np.sin(orient_cen_rad) ** 2
         ) / (2 * (relat_sur_diam * semi_yc) ** 2)
-        bsur = -(np.sin(2 * orient_cen)) / (4 * (relat_sur_diam * semi_xc) ** 2) + (
-            np.sin(2 * orient_cen)
+        bsur = -(np.sin(2 * orient_cen_rad)) / (4 * (relat_sur_diam * semi_xc) ** 2) + (
+            np.sin(2 * orient_cen_rad)
         ) / (4 * (relat_sur_diam * semi_yc) ** 2)
-        csur = (np.sin(orient_cen) ** 2) / (2 * (relat_sur_diam * semi_xc) ** 2) + (
-            np.cos(orient_cen) ** 2
+        csur = (np.sin(orient_cen_rad) ** 2) / (2 * (relat_sur_diam * semi_xc) ** 2) + (
+            np.cos(orient_cen_rad) ** 2
         ) / (2 * (relat_sur_diam * semi_yc) ** 2)
 
         ## Difference of gaussians

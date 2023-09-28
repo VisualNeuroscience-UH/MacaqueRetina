@@ -208,7 +208,7 @@ class ConstructRetina(RetinaMath):
             "xy_aspect_ratio",
             "ampl_s",
             "relat_sur_diam",
-            "orient_cen",
+            "orient_cen_rad",
         ]
         self.gc_df = pd.DataFrame(columns=columns)
 
@@ -495,7 +495,7 @@ class ConstructRetina(RetinaMath):
         """
         Create spatial receptive fields to model cells using coverage = 1.
         Starting from 2D difference-of-gaussian parameters:
-        'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','relat_sur_diam', 'orient_cen'
+        'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','relat_sur_diam', 'orient_cen_rad'
 
         Places all ganglion cell spatial parameters to ganglion cell object dataframe self.gc_df
         """
@@ -557,15 +557,11 @@ class ConstructRetina(RetinaMath):
         self.gc_df["semi_xc"] = semi_xc / 1000
         self.gc_df["semi_yc"] = semi_yc / 1000
 
-        # self.gc_df["orient_cen"] = self.gc_df[
-        #     "pos_polar_deg"
-        # ]  # plus some noise here TODO. See Watanabe 1989 JCompNeurol section Dendritic field orietation
-
     def _fit_ellipse_with_rf_from_literature(self, dd_ecc_params, dd_regr_model):
         """
         Create spatial receptive fields to model cells according to eccentricity.
         Starting from 2D difference-of-gaussian parameters:
-        'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','relat_sur_diam', 'orient_cen'
+        'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','relat_sur_diam', 'orient_cen_rad'
 
         Places all ganglion cell spatial parameters to ganglion cell object dataframe self.gc_df
         """
@@ -1215,7 +1211,7 @@ class ConstructRetina(RetinaMath):
             gc_vae_df["semi_xc"].values * 1000, gc_vae_df["semi_yc"].values * 1000
         )
 
-        gc_vae_df["orient_cen"] = gc_vae_df_in["orient_cen"]
+        gc_vae_df["orient_cen_rad"] = gc_vae_df_in["orient_cen_rad"]
 
         gc_vae_df["xy_aspect_ratio"] = gc_vae_df_in["semi_yc"] / gc_vae_df_in["semi_xc"]
 
@@ -1614,8 +1610,12 @@ class ConstructRetina(RetinaMath):
         return img_processed, img_raw, gc_vae_df
 
     def _create_spatial_rfs(self):
-        ##########################################################
-        ### Generation of spatial receptive fields starts here ###
+        """
+        Generation of spatial receptive fields starts here
+
+        RF become resampled, and the resolution will change if
+        eccentricity is different from eccentricity of the original data.
+        """
 
         # Get fit parameters for dendritic field diameter (um) with respect to eccentricity (mm).
         # Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
@@ -1652,7 +1652,7 @@ class ConstructRetina(RetinaMath):
 
         # At this point the fitted ellipse spatial receptive fields are ready. All parameters are in self.gc_df.
         # The positions are in the columns 'pos_ecc_mm', 'pos_polar_deg', 'ecc_group_idx', and the rf parameters in 'semi_xc',
-        # 'semi_yc', 'xy_aspect_ratio', 'ampl_c', 'ampl_s', 'relat_sur_diam', 'relat_sur_ampl', 'orient_cen', 'den_diam_um'
+        # 'semi_yc', 'xy_aspect_ratio', 'ampl_c', 'ampl_s', 'relat_sur_diam', 'relat_sur_ampl', 'orient_cen_rad', 'den_diam_um'
 
         if self.model_type == "VAE":
             # Fit or load variational autoencoder to generate receptive fields
