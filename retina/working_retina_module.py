@@ -137,6 +137,12 @@ class WorkingRetina(RetinaMath):
         # Drop retinal positions from the df (so that they are not used by accident)
         self.gc_df = self.gc_df.drop(["pos_ecc_mm", "pos_polar_deg"], axis=1)
 
+        # Drop rows (units) where semi_xc and semi_yc is zero.
+        # These have bad (>3SD deviation in any ellipse parameter) fits
+        self.gc_df = self.gc_df[
+            (self.gc_df.semi_xc != 0) & (self.gc_df.semi_yc != 0)
+        ].reset_index(drop=True)
+
         # Simulated data
         self.simulated_spiketrains = []
 
