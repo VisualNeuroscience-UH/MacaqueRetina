@@ -753,6 +753,8 @@ class Fit(ApricotData, RetinaMath):
         all_data_fits_df = pd.concat([spatial_fits], axis=1)
 
         good_idx = np.where(good_mask == 1)[0]
+        # Set all_data_fits_df rows which are not part of good_idx to zero
+        all_data_fits_df.loc[~all_data_fits_df.index.isin(good_idx)] = 0.0
 
         return all_data_fits_df, spat_filt_to_viz, good_idx
 
