@@ -1186,8 +1186,11 @@ class ConstructRetina(RetinaMath):
 
     def _get_dd_fit_for_viz(self, gc_df):
         # Add diameters to dataframe
+        # Assumes semi_xc and semi_yc are in mm
+        # TODO: make semi_xc and semi_yc to include units in all methods
         gc_df["den_diam_um"] = self.ellipse2diam(
-            gc_df["semi_xc"].values * 1000, gc_df["semi_yc"].values * 1000
+            gc_df["semi_xc"].values * 1000,
+            gc_df["semi_yc"].values * 1000,
         )
         dd_fit_x = gc_df["pos_ecc_mm"].values
         dd_fit_y = gc_df["den_diam_um"].values
@@ -1204,9 +1207,9 @@ class ConstructRetina(RetinaMath):
         gc_vae_df["pos_polar_deg"] = self.gc_df["pos_polar_deg"]
         gc_vae_df["ecc_group_idx"] = self.gc_df["ecc_group_idx"]
 
-        # Scale factor for semi_x and semi_y from pix to micrometers and divide by 1000 to get mm
-        gc_vae_df["semi_xc"] = gc_vae_df_in["semi_xc"] * new_microm_per_pix / 1000
-        gc_vae_df["semi_yc"] = gc_vae_df_in["semi_yc"] * new_microm_per_pix / 1000
+        # Scale factor for semi_x and semi_y from pix to micrometers
+        gc_vae_df["semi_xc"] = gc_vae_df_in["semi_xc"] * new_microm_per_pix / 1000  # mm
+        gc_vae_df["semi_yc"] = gc_vae_df_in["semi_yc"] * new_microm_per_pix / 1000  # mm
 
         gc_vae_df["den_diam_um"] = self.ellipse2diam(
             gc_vae_df["semi_xc"].values * 1000, gc_vae_df["semi_yc"].values * 1000
