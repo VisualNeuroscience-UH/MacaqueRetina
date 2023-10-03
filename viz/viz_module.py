@@ -1428,7 +1428,13 @@ class Viz:
 
     # WorkingRetina visualization
     def show_stimulus_with_gcs(
-        self, retina, frame_number=0, ax=None, example_gc=5, show_rf_id=False
+        self,
+        retina,
+        frame_number=0,
+        ax=None,
+        example_gc=5,
+        show_rf_id=False,
+        savefigname=None,
     ):
         """
         Plots the 1SD ellipses of the RGC mosaic. This method is a WorkingRetina call.
@@ -1458,6 +1464,8 @@ class Viz:
         ax.imshow(stimulus_video.frames[:, :, frame_number], vmin=0, vmax=255)
         ax = plt.gca()
 
+        gc_rot_deg = gc_df_pixspace["orient_cen_rad"] * (-1) * 180 / np.pi
+
         for index, gc in gc_df_pixspace.iterrows():
             if index == example_gc:
                 facecolor = "yellow"
@@ -1468,7 +1476,7 @@ class Viz:
                 (gc.q_pix, gc.r_pix),
                 width=2 * gc.semi_xc,
                 height=2 * gc.semi_yc,
-                angle=gc.orient_cen_rad * (-1),  # Rotation in degrees anti-clockwise.
+                angle=gc_rot_deg[index],  # Rotation in degrees anti-clockwise.
                 edgecolor="blue",
                 facecolor=facecolor,
             )
@@ -1509,6 +1517,9 @@ class Viz:
         ax2.set_ylabel("mm")
 
         fig.tight_layout()
+
+        if savefigname:
+            self._figsave(figurename=savefigname)
 
     def show_single_gc_view(self, retina, cell_index, frame_number=0, ax=None):
         """
@@ -1710,19 +1721,15 @@ class Viz:
         plt.xlim([0, duration / b2u.second])
 
         # Compute average firing rate over trials (should approximately follow generator)
-        # hist_dt = 1 * b2u.ms
         hist_dt = self.context.my_run_options["simulation_dt"] * b2u.second
-        # n_bins = int((duration/hist_dt))
         bin_edges = np.append(
             tvec_new, [duration / b2u.second]
         )  # Append the rightmost edge
-        # hist, _ = np.histogram(spiketrains_flat, bins=bin_edges)
         hist, _ = np.histogram(for_histogram, bins=bin_edges)
-        # avg_fr = hist / n_trials / (hist_dt / b2u.second)
         avg_fr = hist / n_samples / (hist_dt / b2u.second)
 
         xsmooth = np.arange(-15, 15 + 1)
-        smoothing = stats.norm.pdf(xsmooth, scale=5)  # Gaussian smoothing with SD=5 ms
+        smoothing = stats.norm.pdf(xsmooth, scale=5)  # Gaussian with SD=5*simulation_dt
         smoothed_avg_fr = np.convolve(smoothing, avg_fr, mode="same")
 
         plt.plot(bin_edges[:-1], smoothed_avg_fr, label="Measured")
