@@ -1521,7 +1521,7 @@ class WorkingRetina(RetinaMath):
 
             # Dummy variables to avoid jump to cpu. Impulse response is called above.
             get_impulse_response = torch.tensor(False, device=device)
-            contrasts_for_impulse = torch.tensor(None, device=device)
+            contrasts_for_impulse = torch.tensor([1.0], device=device)
 
             if self.gc_type == "parasol":
                 columns = ["NL", "TL", "HS", "T0", "Chalf", "D", "A"]
