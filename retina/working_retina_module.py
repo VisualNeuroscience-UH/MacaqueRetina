@@ -1110,7 +1110,6 @@ class WorkingRetina(RetinaMath):
             ).squeeze()
             * dt
         )
-
         ### High pass stages ###
         y_t = torch.tensor(0.0, device=device)
         yvec = tvec * torch.tensor(0.0, device=device)
@@ -1241,6 +1240,11 @@ class WorkingRetina(RetinaMath):
         return svecs
 
     def _get_impulse_response(self, cell_index, contrasts_for_impulse, video_dt):
+        """
+        Provides impulse response for distinct ganglion cell and response types.
+        Much of the run_cells code is copied here, but with the stimulus replaced by an impulse.
+        """
+
         total_duration = 1.0 * b2u.second
         stim_len_tp = int(np.round(total_duration / video_dt))
         tvec = range(stim_len_tp) * video_dt
@@ -1251,6 +1255,11 @@ class WorkingRetina(RetinaMath):
         start_delay = 100  # ms
         idx_100_ms = int(np.round(start_delay / dt))
         svec[idx_100_ms] = 1.0
+
+        if self.response_type == "off":
+            # Spatial OFF filters have been inverted to max upwards for construction of RFs.
+            # We need to invert them back to max downwards for simulation.
+            svec = -svec
 
         impulse_for_viz_dict = {
             "tvec": tvec / b2u.second,
@@ -1266,31 +1275,70 @@ class WorkingRetina(RetinaMath):
         ), "Impulse must specify contrasts as list, aborting..."
 
         yvecs = np.empty((len(cell_index), len(contrasts_for_impulse), stim_len_tp))
-        for idx, this_cell_index in enumerate(cell_index):
-            # Get unit params
-            params = self.gc_df.loc[this_cell_index]
 
+        device = torch.device("cpu")
+        svec_t = torch.tensor(svec, device=device)
+        tvec_t = torch.tensor(tvec / b2u.ms, device=device)
+        video_dt_t = torch.tensor(video_dt / b2u.ms, device=device)
+
+        for idx, this_cell_index in enumerate(cell_index):
             if self.gc_type == "parasol":
+                # Get unit params
+                columns = ["NL", "TL", "HS", "T0", "Chalf", "D", "A"]
+                params_df = self.gc_df.loc[cell_index, columns]
+                params = params_df.values
+                params_t = torch.tensor(params, device=device)
+                unit_params = params_t[idx, :]
+
                 for contrast in contrasts_for_impulse:
                     yvec = self._create_temporal_signal_gc(
-                        tvec,
-                        svec,
-                        video_dt,
-                        params,
+                        tvec_t,
+                        svec_t,
+                        video_dt_t,
+                        unit_params,
+                        device,
                         show_impulse=True,
                         impulse_contrast=contrast,
                     )
                     yvecs[idx, contrasts_for_impulse.index(contrast), :] = yvec
 
             elif self.gc_type == "midget":
-                if contrasts_for_impulse is not None:
-                    print("contrasts_for_impulse will be ignored for midget cells")
+                columns_cen = [
+                    "NL_cen",
+                    "NLTL_cen",
+                    "TS_cen",
+                    "HS_cen",
+                    "D_cen",
+                    "A_cen",
+                ]
+                cen_df = self.gc_df.loc[cell_index, columns_cen]
+                params_cen = cen_df.values
+                params_cen_t = torch.tensor(params_cen, device=device)
+                unit_params_cen = params_cen_t[idx, :]
+                lp_cen = self._create_lowpass_response(tvec_t, unit_params_cen)
+
+                columns_sur = [
+                    "NL_sur",
+                    "NLTL_sur",
+                    "TS_sur",
+                    "HS_sur",
+                    "D_cen",
+                    "A_sur",
+                ]
+                sur_df = self.gc_df.loc[cell_index, columns_sur]
+                params_sur = sur_df.values
+                params_sur_t = torch.tensor(params_sur, device=device)
+                unit_params_sur = params_sur_t[idx, :]
+                lp_sur = self._create_lowpass_response(tvec_t, unit_params_sur)
+                h_cen = lp_cen / torch.sum(lp_cen + lp_sur)
+
                 yvec = self._create_temporal_signal(
-                    tvec,
-                    svec,
-                    video_dt,
-                    params,
-                    "cen",
+                    tvec_t,
+                    svec_t,
+                    video_dt_t,
+                    unit_params_cen,
+                    h_cen,
+                    device,
                     show_impulse=True,
                 )
                 yvecs[idx, 0, :] = yvec
@@ -1492,7 +1540,6 @@ class WorkingRetina(RetinaMath):
             tvec_t = torch.tensor(tvec / b2u.ms, device=device)
             video_dt_t = torch.tensor(video_dt / b2u.ms, device=device)
 
-            # for idx in tqdm(range(num_cells), desc=tqdm_desc):
             tqdm_desc = "Preparing dynamic generator potential..."
             for idx in tqdm(
                 torch.range(0, num_cells_t - 1, dtype=torch.int), desc=tqdm_desc
