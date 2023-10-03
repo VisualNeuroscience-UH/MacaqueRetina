@@ -1443,11 +1443,14 @@ class WorkingRetina(RetinaMath):
                     surround=True,
                 )
 
-            # Get generator potentials:  Time to get generator potentials:  19.6 seconds
-            # tqdm_desc = "Preparing dynamic generator potential..."
-
-            # Get data to gpu, if applicable
+            # Get generator potentials
+            # Put data to gpu, if applicable
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+            # Dummy variables to avoid jump to cpu. Impulse response is called above.
+            get_impulse_response = torch.tensor(False, device=device)
+            contrasts_for_impulse = torch.tensor(None, device=device)
+
             if self.gc_type == "parasol":
                 columns = ["NL", "TL", "HS", "T0", "Chalf", "D", "A"]
                 params = self.gc_df.loc[cell_indices, columns]
