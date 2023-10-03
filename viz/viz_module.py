@@ -1807,6 +1807,7 @@ class Viz:
         tvec = tvec - start_delay  # shift to start at 0
 
         cell_index = viz_dict["Unit idx"]
+        ylims = np.array([np.min(yvecs), np.max(yvecs)])
 
         plt.figure()
 
@@ -1826,7 +1827,7 @@ class Viz:
         # Set vertical dashed line at max (svec) time point, i.e. at the impulse time
         plt.axvline(x=tvec[np.argmax(svec)], color="k", linestyle="--")
         plt.legend()
-        plt.ylim(-0.2, 1.1)
+        plt.ylim(ylims[0] * 1.1, ylims[1] * 1.1)
         plt.title(f"{retina.gc_type} impulse response(s)")
         plt.xlabel("Time (ms)")
         plt.ylabel("Normalized response")
