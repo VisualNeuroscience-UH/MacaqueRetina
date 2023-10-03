@@ -110,7 +110,7 @@ project = "Retina"
 """
 Current experiment. Use distinct folders fo distinct stimuli.
 """
-experiment = "luminance_onset"
+experiment = "sine_grating_contrast_response_function"  # "luminance_onset"
 
 
 """
@@ -124,14 +124,16 @@ input_folder = "../in"  # input figs, videos, models
 Stimulus context
 Stimulus images and videos
 """
-stimulus_folder = "stim_luminance_onset"  # "stim_luminance_onset"
+stimulus_folder = "stim_sine_grating_sf2p0_crf_10_7"  # "stim_luminance_onset"
 
 
 """
 Data context for output. 
 """
 
-output_folder = "impulse_test"  # "parasol_on_luminance_onset"
+output_folder = (
+    "parasol_on_stim_sine_grating_sf2p0_crf_10_7"  # "parasol_on_luminance_onset"
+)
 
 
 """
@@ -239,19 +241,19 @@ my_stimulus_options = {
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
     "fps": 300,  # 300 for good cg integration
-    "duration_seconds": 1.0,  # actual frames = floor(duration_seconds * fps)
+    "duration_seconds": 7.0,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
-    "pattern": "temporal_square_pattern",  # Natural video is not supported yet. One of the StimulusPatterns
+    "pattern": "sine_grating",  # Natural video is not supported yet. One of the StimulusPatterns
     "stimulus_form": "rectangular",
     "size_inner": 0.02,  # deg, Applies to annulus only
     "size_outer": 2,  # deg, Applies to annulus only
     "stimulus_position": (0, 0),
-    "stimulus_size": 1,  # deg, radius for circle, sidelen/2 for rectangle.
+    "stimulus_size": 2.0,  # 2,  # deg, radius for circle, sidelen/2 for rectangle.
     "background": 128,
     "contrast": 0.8,  # Weber constrast
     "mean": 128,
-    "temporal_frequency": 0.1,  # 40,  # Hz
+    "temporal_frequency": 4.0,  # 4.0,  # 40,  # Hz
     "spatial_frequency": 2.0,
     "orientation": 0,  # degrees
     "phase_shift": 0,  # math.pi,  # radians
@@ -527,7 +529,7 @@ if __name__ == "__main__":
     ### Load stimulus to get working retina ###
     ###########################################
 
-    PM.working_retina.load_stimulus()
+    # PM.working_retina.load_stimulus()
 
     ##########################################
     ### Show single ganglion cell response ###
@@ -543,18 +545,18 @@ if __name__ == "__main__":
     # Show impulse response and exit
     ########################################
 
-    # contrast for impulse response applies only for parasol cells with dynamic model
-    # Use [1.0] for others, or any other single value (multiple values will plot on top of each other)
-    contrasts_for_impulse = [0.01, 1.0]
-    PM.working_retina.run_cells(
-        cell_index=[16],  # list of ints
-        get_impulse_response=True,  # Return with impulse response
-        contrasts_for_impulse=contrasts_for_impulse,  # List of contrasts
-    )
-    savename = (
-        f"{gc_type}_{response_type}_{my_retina['temporal_model']}_impulse" + ".png"
-    )
-    PM.viz.show_impulse_response(PM.working_retina, savefigname=savename)
+    # # contrast for impulse response applies only for parasol cells with dynamic model
+    # # Use [1.0] for others, or any other single value (multiple values will plot on top of each other)
+    # contrasts_for_impulse = [0.01, 1.0]
+    # PM.working_retina.run_cells(
+    #     cell_index=[16],  # list of ints
+    #     get_impulse_response=True,  # Return with impulse response
+    #     contrasts_for_impulse=contrasts_for_impulse,  # List of contrasts
+    # )
+    # savename = (
+    #     f"{gc_type}_{response_type}_{my_retina['temporal_model']}_impulse" + ".eps"
+    # )
+    # PM.viz.show_impulse_response(PM.working_retina, savefigname=savename)
 
     ####################################
     ### Run multiple trials or cells ###
@@ -611,47 +613,51 @@ if __name__ == "__main__":
     ### Build and run Experiment ###
     ################################
 
-    # # # exp_variables = ["temporal_frequency"]  # from my_stimulus_options
-    # exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
-    # # # # Define experiment parameters. List lengths must be equal.
-    # # # # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logaritmic = [True]
-    # # experiment_dict = {
-    # #     "exp_variables": exp_variables,
-    # #     # "min_max_values": [[0.5, 32]],  # two vals for each exp_variable # frequency
-    # #     # "n_steps": [10],
-    # #     # "logaritmic": [False],
-    # #     "min_max_values": [[0.5, 32], [0.01, 0.91]],  # temporal frequency, contrast
-    # #     "n_steps": [10, 10],  # temporal frequency, contrast
-    # #     "logaritmic": [False, False],  # temporal frequency, contrast
-    # # }
+    # # # # exp_variables = ["contrast"]  # from my_stimulus_options
+    exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
+    # # # Define experiment parameters. List lengths must be equal.
+    # # # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logaritmic = [True]
+    experiment_dict = {
+        "exp_variables": exp_variables,
+        # "min_max_values": [[0.01, 0.91]],  # two vals for each exp_variable # frequency
+        # "n_steps": [10],
+        # "logaritmic": [False],
+        "min_max_values": [[0.5, 39], [0.01, 0.64]],  # temporal frequency, contrast
+        "n_steps": [12, 7],  # temporal frequency, contrast
+        "logaritmic": [False, True],  # temporal frequency, contrast
+    }
 
-    # # PM.experiment.build_and_run(experiment_dict, n_trials=5)
+    PM.experiment.build_and_run(experiment_dict, n_trials=5)
 
-    # # #########################
-    # # ## Analyze Experiment ###
-    # # #########################
+    #########################
+    ## Analyze Experiment ###
+    #########################
 
-    # # my_analysis_options = {
-    # #     "exp_variables": exp_variables,
-    # #     "t_start_ana": 1,
-    # #     "t_end_ana": 7,
-    # # }
+    my_analysis_options = {
+        "exp_variables": exp_variables,
+        "t_start_ana": 1,
+        "t_end_ana": 7,
+    }
 
-    # # PM.ana.analyze_response(my_analysis_options)
+    PM.ana.analyze_response(my_analysis_options)
 
-    # ############################
-    # ### Visualize Experiment ###
-    # ############################
+    ############################
+    ### Visualize Experiment ###
+    ############################
 
-    # # PM.viz.F1F2_popul_response(exp_variables, xlog=False, savefigname=None)
-    # # PM.viz.F1F2_unit_response(
-    # #     exp_variables, xlog=False, savefigname=output_folder  # + ".eps"
-    # # )
-    # # PM.viz.fr_response(exp_variables, xlog=True, savefigname=None)
-    # # PM.viz.spike_raster_response(exp_variables, savefigname=None)
-    # PM.viz.tf_vs_fr_cg(
-    #     exp_variables, n_contrasts=2, xlog=True, ylog=True, savefigname=None
+    # PM.viz.F1F2_popul_response(exp_variables, xlog=False, savefigname=None)
+    # PM.viz.F1F2_unit_response(
+    #     exp_variables, xlog=False, savefigname=output_folder + ".eps"
     # )
+    # PM.viz.fr_response(exp_variables, xlog=True, savefigname=None)
+    # PM.viz.spike_raster_response(exp_variables, savefigname=None)
+    PM.viz.tf_vs_fr_cg(
+        exp_variables,
+        n_contrasts=3,
+        xlog=True,
+        ylog=True,
+        savefigname="tf_vs_fr_cg_sine_grating.eps",
+    )
 
     ###############################
     ###############################
