@@ -994,7 +994,7 @@ class WorkingRetina(RetinaMath):
 
         ### Low pass filter ###
 
-        # Calculate the impulse response function.
+        # Calculate the low-pass impulse response function.
         h = (
             (1 / torch.math.factorial(NL))
             * (tvec / TL) ** (NL - 1)
@@ -1026,14 +1026,11 @@ class WorkingRetina(RetinaMath):
         )
 
         # Convolve the stimulus with the flipped kernel
-        x_t_vec = (
-            torch.nn.functional.conv1d(
-                svec_padded,
-                h_flipped.view(1, 1, -1),
-                padding=0,
-            ).squeeze()
-            * dt
-        )
+        x_t_vec = torch.nn.functional.conv1d(
+            svec_padded,
+            h_flipped.view(1, 1, -1),
+            padding=0,
+        ).squeeze()
 
         ### High pass stages ###
         y_t = torch.tensor(0.0, device=device)
