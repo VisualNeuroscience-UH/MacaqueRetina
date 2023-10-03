@@ -357,9 +357,11 @@ class WorkingRetina(RetinaMath):
 
         tvec = np.linspace(0, self.data_filter_duration, self.temporal_filter_len)
         temporal_filter = self.diff_of_lowpass_filters(tvec, *filter_params)
-
-        # Scale to sum of 1
-        temporal_filter = temporal_filter / np.sum(np.abs(temporal_filter))
+        norm_filter_params = filter_params.copy()
+        norm_filter_params["p2"] = 0
+        norm_filter = self.diff_of_lowpass_filters(tvec, *norm_filter_params)
+        # Amplitude will be scaled by first (positive) lowpass filter.
+        temporal_filter = temporal_filter / np.sum(np.abs(norm_filter))
 
         return temporal_filter
 
@@ -1245,7 +1247,10 @@ class WorkingRetina(RetinaMath):
         Much of the run_cells code is copied here, but with the stimulus replaced by an impulse.
         """
 
-        total_duration = 1.0 * b2u.second
+        # Set filter duration the same as in Apricot data
+        total_duration = (
+            self.data_filter_timesteps * (1000 / self.data_filter_fps) * b2u.ms
+        )
         stim_len_tp = int(np.round(total_duration / video_dt))
         tvec = range(stim_len_tp) * video_dt
 
@@ -1258,7 +1263,6 @@ class WorkingRetina(RetinaMath):
 
         if self.response_type == "off":
             # Spatial OFF filters have been inverted to max upwards for construction of RFs.
-            # We need to invert them back to max downwards for simulation.
             svec = -svec
 
         impulse_for_viz_dict = {
@@ -1275,73 +1279,96 @@ class WorkingRetina(RetinaMath):
         ), "Impulse must specify contrasts as list, aborting..."
 
         yvecs = np.empty((len(cell_index), len(contrasts_for_impulse), stim_len_tp))
+        if self.temporal_model == "dynamic":
+            device = torch.device("cpu")
+            svec_t = torch.tensor(svec, device=device)
+            tvec_t = torch.tensor(tvec / b2u.ms, device=device)
+            video_dt_t = torch.tensor(video_dt / b2u.ms, device=device)
 
-        device = torch.device("cpu")
-        svec_t = torch.tensor(svec, device=device)
-        tvec_t = torch.tensor(tvec / b2u.ms, device=device)
-        video_dt_t = torch.tensor(video_dt / b2u.ms, device=device)
+            for idx, this_cell_index in enumerate(cell_index):
+                if self.gc_type == "parasol":
+                    # Get unit params
+                    columns = ["NL", "TL", "HS", "T0", "Chalf", "D", "A"]
+                    params_df = self.gc_df.loc[cell_index, columns]
+                    params = params_df.values
+                    params_t = torch.tensor(params, device=device)
+                    unit_params = params_t[idx, :]
 
-        for idx, this_cell_index in enumerate(cell_index):
-            if self.gc_type == "parasol":
-                # Get unit params
-                columns = ["NL", "TL", "HS", "T0", "Chalf", "D", "A"]
-                params_df = self.gc_df.loc[cell_index, columns]
-                params = params_df.values
-                params_t = torch.tensor(params, device=device)
-                unit_params = params_t[idx, :]
+                    for contrast in contrasts_for_impulse:
+                        yvec = self._create_temporal_signal_gc(
+                            tvec_t,
+                            svec_t,
+                            video_dt_t,
+                            unit_params,
+                            device,
+                            show_impulse=True,
+                            impulse_contrast=contrast,
+                        )
+                        yvecs[idx, contrasts_for_impulse.index(contrast), :] = yvec
 
-                for contrast in contrasts_for_impulse:
-                    yvec = self._create_temporal_signal_gc(
+                elif self.gc_type == "midget":
+                    columns_cen = [
+                        "NL_cen",
+                        "NLTL_cen",
+                        "TS_cen",
+                        "HS_cen",
+                        "D_cen",
+                        "A_cen",
+                    ]
+                    cen_df = self.gc_df.loc[cell_index, columns_cen]
+                    params_cen = cen_df.values
+                    params_cen_t = torch.tensor(params_cen, device=device)
+                    unit_params_cen = params_cen_t[idx, :]
+                    lp_cen = self._create_lowpass_response(tvec_t, unit_params_cen)
+
+                    columns_sur = [
+                        "NL_sur",
+                        "NLTL_sur",
+                        "TS_sur",
+                        "HS_sur",
+                        "D_cen",
+                        "A_sur",
+                    ]
+                    sur_df = self.gc_df.loc[cell_index, columns_sur]
+                    params_sur = sur_df.values
+                    params_sur_t = torch.tensor(params_sur, device=device)
+                    unit_params_sur = params_sur_t[idx, :]
+                    lp_sur = self._create_lowpass_response(tvec_t, unit_params_sur)
+                    h_cen = lp_cen / torch.sum(lp_cen + lp_sur)
+
+                    yvec = self._create_temporal_signal(
                         tvec_t,
                         svec_t,
                         video_dt_t,
-                        unit_params,
+                        unit_params_cen,
+                        h_cen,
                         device,
                         show_impulse=True,
-                        impulse_contrast=contrast,
                     )
-                    yvecs[idx, contrasts_for_impulse.index(contrast), :] = yvec
+                    yvecs[idx, 0, :] = yvec
 
-            elif self.gc_type == "midget":
-                columns_cen = [
-                    "NL_cen",
-                    "NLTL_cen",
-                    "TS_cen",
-                    "HS_cen",
-                    "D_cen",
-                    "A_cen",
-                ]
-                cen_df = self.gc_df.loc[cell_index, columns_cen]
-                params_cen = cen_df.values
-                params_cen_t = torch.tensor(params_cen, device=device)
-                unit_params_cen = params_cen_t[idx, :]
-                lp_cen = self._create_lowpass_response(tvec_t, unit_params_cen)
+        elif self.temporal_model == "fixed":  # Linear model
+            # Amplitude will be scaled by first (positive) lowpass filter.
+            # for idx, this_cell_index in enumerate(cell_index):
+            temporal_filter = self.get_temporal_filters(cell_index)
+            yvecs = np.repeat(
+                temporal_filter[:, np.newaxis, :], len(contrasts_for_impulse), axis=1
+            )
+            if self.response_type == "off":
+                # Spatial OFF filters have been inverted to max upwards for construction of RFs.
+                yvecs = -yvecs
 
-                columns_sur = [
-                    "NL_sur",
-                    "NLTL_sur",
-                    "TS_sur",
-                    "HS_sur",
-                    "D_cen",
-                    "A_sur",
-                ]
-                sur_df = self.gc_df.loc[cell_index, columns_sur]
-                params_sur = sur_df.values
-                params_sur_t = torch.tensor(params_sur, device=device)
-                unit_params_sur = params_sur_t[idx, :]
-                lp_sur = self._create_lowpass_response(tvec_t, unit_params_sur)
-                h_cen = lp_cen / torch.sum(lp_cen + lp_sur)
-
-                yvec = self._create_temporal_signal(
-                    tvec_t,
-                    svec_t,
-                    video_dt_t,
-                    unit_params_cen,
-                    h_cen,
-                    device,
-                    show_impulse=True,
-                )
-                yvecs[idx, 0, :] = yvec
+            # Shift impulse response to start_delay and cut length correspondingly
+            idx_start_delay = int(np.round(start_delay / (video_dt / b2u.ms)))
+            # append zeros to the start of the impulse response
+            yvecs = np.pad(
+                yvecs,
+                ((0, 0), (0, 0), (idx_start_delay, 0)),
+                mode="constant",
+                constant_values=0,
+            )
+            # cut the impulse response to the desired length
+            yvecs = yvecs[:, :, :-idx_start_delay]
 
         impulse_for_viz_dict["contrasts"] = contrasts_for_impulse
         impulse_for_viz_dict["impulse_responses"] = yvecs

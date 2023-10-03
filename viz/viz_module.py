@@ -1813,7 +1813,6 @@ class Viz:
 
         for u_idx, this_unit in enumerate(cell_index):
             for c_idx, this_contrast in enumerate(contrasts):
-                # plt.plot(tvec[:-1], viz_dict[this_contrast][:-1])
                 if len(contrasts) > 1:
                     label = f"Unit {this_unit}, contrast {this_contrast}"
                 else:
@@ -1825,10 +1824,12 @@ class Viz:
                 )
 
         # Set vertical dashed line at max (svec) time point, i.e. at the impulse time
-        plt.axvline(x=tvec[np.argmax(svec)], color="k", linestyle="--")
+        plt.axvline(x=tvec[np.argmax(np.abs(svec))], color="k", linestyle="--")
         plt.legend()
         plt.ylim(ylims[0] * 1.1, ylims[1] * 1.1)
-        plt.title(f"{retina.gc_type} impulse response(s)")
+        plt.title(
+            f"{retina.gc_type} {retina.response_type} ({retina.temporal_model} model) impulse response(s)"
+        )
         plt.xlabel("Time (ms)")
         plt.ylabel("Normalized response")
         # Put grid on

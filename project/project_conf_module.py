@@ -131,7 +131,7 @@ stimulus_folder = "stim_luminance_onset"  # "stim_luminance_onset"
 Data context for output. 
 """
 
-output_folder = "midget_on_luminance_onset"  # "parasol_on_luminance_onset"
+output_folder = "impulse_test"  # "parasol_on_luminance_onset"
 
 
 """
@@ -151,7 +151,7 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 
 # For "load_model" training_mode, the model is loaded from model_file_name at output_folder (primary)
 # or input_folder. The correct model name (including time stamp) must be given in the model_file_name.
-gc_type = "midget"
+gc_type = "parasol"
 response_type = "on"
 
 my_retina = {
@@ -543,30 +543,34 @@ if __name__ == "__main__":
     # Show impulse response and exit
     ########################################
 
-    # contrasts_for_impulse = [1.0]  # [1.0] for midget units
-    # PM.working_retina.run_cells(
-    #     cell_index=my_run_options["cell_index"],  # int
-    #     get_impulse_response=True,  # Return with impulse response
-    #     contrasts_for_impulse=contrasts_for_impulse,  # List of contrasts
-    # )
-
-    # PM.viz.show_impulse_response(PM.working_retina, savefigname="testi.png")
+    # contrast for impulse response applies only for parasol cells with dynamic model
+    # Use [1.0] for others, or any other single value (multiple values will plot on top of each other)
+    contrasts_for_impulse = [0.01, 1.0]
+    PM.working_retina.run_cells(
+        cell_index=[16],  # list of ints
+        get_impulse_response=True,  # Return with impulse response
+        contrasts_for_impulse=contrasts_for_impulse,  # List of contrasts
+    )
+    savename = (
+        f"{gc_type}_{response_type}_{my_retina['temporal_model']}_impulse" + ".png"
+    )
+    PM.viz.show_impulse_response(PM.working_retina, savefigname=savename)
 
     ####################################
     ### Run multiple trials or cells ###
     ####################################
 
-    PM.working_retina.run_with_my_run_options()
+    # PM.working_retina.run_with_my_run_options()
 
-    PM.viz.show_gc_responses(PM.working_retina, savefigname=f"{output_folder}.eps")
+    # PM.viz.show_gc_responses(PM.working_retina, savefigname=f"{output_folder}.eps")
 
-    PM.viz.show_stimulus_with_gcs(
-        PM.working_retina,
-        example_gc=my_run_options["cell_index"],
-        frame_number=300,
-        show_rf_id=True,
-        savefigname=f"{output_folder}_rfs_stimulus.eps",
-    )
+    # PM.viz.show_stimulus_with_gcs(
+    #     PM.working_retina,
+    #     example_gc=my_run_options["cell_index"],
+    #     frame_number=300,
+    #     show_rf_id=True,
+    #     savefigname=f"{output_folder}_rfs_stimulus.eps",
+    # )
 
     # TODO: visualization
     # VISUALISOI VAE RF ÄRSYKKEEN KANSSA, TARKISTA ETTEI OLE JO YLLÄ KUN RF LUODAAN
