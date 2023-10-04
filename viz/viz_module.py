@@ -169,9 +169,7 @@ class Viz:
         )
 
     # Fit visualization
-    def show_temporal_filter_response(
-        self,
-    ):
+    def show_temporal_filter_response(self, n_curves=None, savefigname=None):
         """
         Show temporal filter response for each cell.
         """
@@ -185,6 +183,9 @@ class Viz:
             ci for ci in exp_temp_filt_to_viz.keys() if ci.startswith("cell_ix_")
         ]
 
+        if n_curves is not None:
+            cell_ixs_list = np.random.choice(cell_ixs_list, n_curves, replace=False)
+
         for this_cell_ix in cell_ixs_list:
             ydata = exp_temp_filt_to_viz[f"{this_cell_ix}"]["ydata"]
             y_fit = exp_temp_filt_to_viz[f"{this_cell_ix}"]["y_fit"]
@@ -197,6 +198,9 @@ class Viz:
 
         N_cells = len(cell_ixs_list)
         plt.title(f"{title} ({N_cells} cells)")
+
+        if savefigname:
+            self._figsave(figurename=savefigname)
 
     def show_spatial_filter_response(
         self, spat_filt_to_viz, n_samples=1, title="", savefigname=None
@@ -401,7 +405,7 @@ class Viz:
         if savefigname:
             self._figsave(figurename=savefigname)
 
-    def show_spatial_statistics(self):
+    def show_spatial_statistics(self, savefigname=None):
         """
         Show histograms of receptive field parameters
 
@@ -456,6 +460,9 @@ class Viz:
                 # Rescale y axis if model fit goes high. Shows histogram better
                 if y_model_fit[:, index].max() > 1.5 * bin_values.max():
                     ax.set_ylim([ax.get_ylim()[0], 1.1 * bin_values.max()])
+
+        if savefigname:
+            self._figsave(figurename=savefigname)
 
         # Check correlations
         # distributions = ['semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','relat_sur_diam', 'orient_cen_rad']
