@@ -84,6 +84,56 @@ class Analysis(AnalysisBase):
 
         return fr, N_neurons
 
+    def _analyze_peak2peak_fr(
+        self, data, trial, t_start, t_end, temp_freq, bins_per_cycle=32
+    ):
+        # Analyze the peak-to-peak firing rate across units.
+        units, times = self._get_spikes_by_interval(data, trial, t_start, t_end)
+        N_neurons = data["n_units"]
+
+        cycle_length = 1 / temp_freq  # in seconds
+        # Calculate N full cycles in the interval
+        n_cycles = int(np.floor((t_end - t_start) / cycle_length))
+
+        # Corrected time interval
+        t_epoch = n_cycles * cycle_length
+
+        # Change t_end to be the end of the last full cycle
+        t_end_full = t_start + t_epoch
+
+        # Remove spikes before t_start
+        times = times[(times / b2u.second) > t_start]
+
+        # Remove spikes after t_end_full
+        times = times[(times / b2u.second) < t_end_full]
+
+        # Calculate bins matching t_end_full - t_start
+        bins = np.linspace(
+            t_start, t_end_full, (n_cycles * bins_per_cycle) + 1, endpoint=True
+        )
+
+        bin_width = bins[1] - bins[0]
+        # add one bin to the end
+        spike_counts, _ = np.histogram(times, bins=bins)
+
+        # Compute average cycle. Average across cycles.
+        spike_counts_reshaped = np.reshape(
+            spike_counts, (int(len(spike_counts) / bins_per_cycle), bins_per_cycle)
+        )
+
+        spike_counts_mean_across_cycles = np.mean(spike_counts_reshaped, axis=0)
+        spike_count__unit_fr = spike_counts_mean_across_cycles / (N_neurons * bin_width)
+
+        peak2peak_counts_all = np.max(spike_counts_mean_across_cycles) - np.min(
+            spike_counts_mean_across_cycles
+        )
+
+        peak2peak_counts_unit_mean = peak2peak_counts_all / N_neurons
+        # Convert to Hz: ptp mean across units / time for one bin
+        peak2peak_fr = peak2peak_counts_unit_mean / bin_width
+
+        return peak2peak_fr
+
     def _fourier_amplitude_and_phase(
         self, data, trial, t_start, t_end, temp_freq, phase_shift=0, bins_per_cycle=16
     ):
