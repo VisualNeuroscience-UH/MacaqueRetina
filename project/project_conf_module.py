@@ -110,7 +110,7 @@ project = "Retina"
 """
 Current experiment. Use distinct folders fo distinct stimuli.
 """
-experiment = "sine_grating_contrast_response_function"  # "luminance_onset"
+experiment = "contrast_response_function"  # "luminance_onset"
 
 
 """
@@ -124,16 +124,14 @@ input_folder = "../in"  # input figs, videos, models
 Stimulus context
 Stimulus images and videos
 """
-stimulus_folder = "stim_sine_grating_sf2p0_crf_14_7"  # "stim_luminance_onset"
+stimulus_folder = "stim_temporal_sine_10"  # stim_sine_grating_sf2p0_crf_14_7"  # "stim_luminance_onset"
 
 
 """
 Data context for output. 
 """
 
-output_folder = (
-    "parasol_on_stim_sine_grating_sf2p0_crf_14_7"  # "parasol_on_luminance_onset"
-)
+output_folder = "parasol_on_temporal_sine_100"  # "parasol_on_stim_sine_grating_sf2p0_crf_14_7"  # "parasol_on_luminance_onset"
 
 
 """
@@ -156,6 +154,7 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 gc_type = "parasol"
 response_type = "on"
 
+# These values are used for building a new retina
 my_retina = {
     "gc_type": gc_type,
     "response_type": response_type,
@@ -474,7 +473,7 @@ if __name__ == "__main__":
     """
 
     # # Main retina construction method. This method calls all other methods in the retina construction process.
-    PM.construct_retina.build()
+    # PM.construct_retina.build()
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # This is why they are called via the construct_retina attribute. The instance
@@ -488,7 +487,7 @@ if __name__ == "__main__":
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
     # PM.viz.visualize_mosaic(savefigname="parasol_on_ellipses.eps")
     # PM.viz.show_dendrite_diam_vs_ecc(savefigname="parasol_on_dd_ecc.eps")
-    PM.viz.show_temporal_filter_response(n_curves=3, savefigname="temporal_filters.eps")
+    # PM.viz.show_temporal_filter_response(n_curves=3, savefigname="temporal_filters.eps")
     # PM.viz.show_spatial_statistics(savefigname="spatial_stats.eps")
 
     # For VAE
@@ -615,7 +614,7 @@ if __name__ == "__main__":
     ### Build and run Experiment ###
     ################################
 
-    # # # # # exp_variables = ["contrast"]  # from my_stimulus_options
+    exp_variables = ["temporal_frequency"]  # from my_stimulus_options
     # exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
     # # # # Define experiment parameters. List lengths must be equal.
     # # # # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logaritmic = [True]
@@ -635,24 +634,24 @@ if __name__ == "__main__":
     # ## Analyze Experiment ###
     # #########################
 
-    # my_analysis_options = {
-    #     "exp_variables": exp_variables,
-    #     "t_start_ana": 1,
-    #     "t_end_ana": 7,
-    # }
+    my_analysis_options = {
+        "exp_variables": exp_variables,
+        "t_start_ana": 1,
+        "t_end_ana": 7,
+    }
 
-    # PM.ana.analyze_response(my_analysis_options)
+    PM.ana.analyze_response(my_analysis_options)
 
     # ############################
     # ### Visualize Experiment ###
     # ############################
 
-    # # PM.viz.F1F2_popul_response(exp_variables, xlog=False, savefigname=None)
-    # # PM.viz.F1F2_unit_response(
-    # #     exp_variables, xlog=False, savefigname=output_folder + ".eps"
-    # # )
-    # # PM.viz.fr_response(exp_variables, xlog=True, savefigname=None)
-    # # PM.viz.spike_raster_response(exp_variables, savefigname=None)
+    PM.viz.F1F2_popul_response(exp_variables, xlog=False, savefigname=None)
+    # PM.viz.F1F2_unit_response(
+    #     exp_variables, xlog=False, savefigname=output_folder + ".eps"
+    # )
+    # PM.viz.fr_response(exp_variables, xlog=True, savefigname=None)
+    # PM.viz.spike_raster_response(exp_variables, savefigname=None)
     # PM.viz.tf_vs_fr_cg(
     #     exp_variables,
     #     n_contrasts=3,
