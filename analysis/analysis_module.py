@@ -89,6 +89,8 @@ class Analysis(AnalysisBase):
     ):
         # Analyze the peak-to-peak firing rate across units.
         units, times = self._get_spikes_by_interval(data, trial, t_start, t_end)
+        times = times / b2u.second
+
         N_neurons = data["n_units"]
 
         cycle_length = 1 / temp_freq  # in seconds
@@ -102,10 +104,10 @@ class Analysis(AnalysisBase):
         t_end_full = t_start + t_epoch
 
         # Remove spikes before t_start
-        times = times[(times / b2u.second) > t_start]
+        times = times[times > t_start]
 
         # Remove spikes after t_end_full
-        times = times[(times / b2u.second) < t_end_full]
+        times = times[times < t_end_full]
 
         # Calculate bins matching t_end_full - t_start
         bins = np.linspace(
