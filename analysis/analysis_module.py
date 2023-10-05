@@ -185,63 +185,113 @@ class Analysis(AnalysisBase):
             N_neurons,
         )
 
-    def _fourier_amplitude_pooled(
-        self, data, trial, t_start, t_end, temp_freq, bins_per_cycle=32
+    def _generate_spikes(
+        self,
+        N_neurons,
+        temp_freq,
+        t_start,
+        t_end,
+        baseline_rate=10,
+        modulation_depth=5,
     ):
         """
-        Calculate the F1 amplitude (amplitude at the stimulus frequency) of pooled spike rates.
+        A helper function to generate random spikes for N_neurons with sinusoidal modulation.
 
-        Parameters
-        ----------
-        data : dict
-            The data dictionary containing the spike information.
-        trial : int
-            The trial number to analyze.
-        t_start : float
-            The start time of the interval (in seconds) to analyze.
-        t_end : float
-            The end time of the interval (in seconds) to analyze.
-        temp_freq : float
-            The frequency (in Hz) of the stimulus.
-        bins_per_cycle : int, optional
-            The number of bins per cycle to use for the spike rate. The default is 32.
+        Args:
+        - N_neurons (int): Number of neurons.
+        - temp_freq (float): Temporal frequency for sinusoidal modulation.
+        - total_time (float): Total simulation time in seconds.
+        - baseline_rate (float): Baseline firing rate in Hz.
+        - modulation_depth (float): Depth of sinusoidal modulation in Hz.
 
-        Returns
-        -------
-        float
-            The F1 amplitude for the pooled neurons.
+        Returns:
+        - spikes (list of np.ndarray): A list of spike times for each neuron.
         """
 
+        sampling_rate = 10000  # Hz
+
+        t = np.linspace(
+            t_start, t_end, int((t_end - t_start) * sampling_rate)
+        )  # 1 ms resolution
+        modulating_signal_raw = (modulation_depth / 2) * np.sin(
+            2 * np.pi * temp_freq * t
+        )
+        modulating_signal = baseline_rate + (
+            modulating_signal_raw - np.min(modulating_signal_raw)
+        )
+
+        spikes = np.array([])
+
+        for _ in range(N_neurons):
+            neuron_spikes = []
+            for i, rate in enumerate(modulating_signal):
+                # For each time bin, decide whether to emit a spike based on rate
+                if np.random.random() < (
+                    rate / sampling_rate
+                ):  # Convert Hz to rate per ms
+                    neuron_spikes.append(t[i])
+            spikes = np.concatenate((spikes, np.array(neuron_spikes)), axis=0)
+
+        return np.sort(spikes)
+
+    def _fourier_amplitude_pooled(
+        self,
+        data,
+        trial,
+        t_start,
+        t_end,
+        temp_freq,
+        bins_per_cycle=32,
+    ):
         units, times = self._get_spikes_by_interval(data, trial, t_start, t_end)
+        times = times / b2u.second
         N_neurons = data["n_units"]
 
-        cycle_length = 1 / temp_freq  # in seconds
-        bins = np.arange(t_start, t_end, cycle_length / bins_per_cycle)
+        cycle_length = 1 / temp_freq
+
+        # Due to scalloping loss artefact causing spectral leakage, we need to
+        # match the sampling points in frequency space to stimulation frequency.
+
+        # Find the integer number of full cycles matching t_end - t_start
+        n_cycles = int(np.floor((t_end - t_start) / cycle_length))
+
+        # Corrected time interval
+        t_epoch = n_cycles * cycle_length
+
+        # Change t_end to be the end of the last full cycle
+        t_end_full = t_start + t_epoch
+
+        # Remove spikes before t_start
+        times = times[times > t_start]
+
+        # Remove spikes after t_end_full
+        times = times[times < t_end_full]
+
+        # Calculate bins matching t_end_full - t_start
+        bins = np.linspace(
+            t_start, t_end_full, (n_cycles * bins_per_cycle) + 1, endpoint=True
+        )
+
+        bin_width = bins[1] - bins[0]
 
         # Bin spike rates
         spike_counts, _ = np.histogram(times, bins=bins)
-        # Convert spike counts to spike rates
-        spike_rate = spike_counts / (cycle_length / bins_per_cycle)
-        total_time = len(spike_rate) * (cycle_length / bins_per_cycle)
+        spike_rate = spike_counts / bin_width
 
-        # Analyze Fourier amplitude
-        # Compute the one-dimensional n-point discrete Fourier Transform for real input
+        # Compute Fourier Transform and associated frequencies
         sp = np.fft.rfft(spike_rate)
-        # Compute the frequencies corresponding to the coefficients
-        freq = np.fft.rfftfreq(len(spike_rate), d=(cycle_length / bins_per_cycle))
+        freq = np.fft.rfftfreq(len(spike_rate), d=bin_width)
 
-        # Normalize the spectrum. The factor of 2 is to account for the fact that we are
-        # using half of the spectrum (the other half is the negative frequencies)
-        normalized_spectrum = np.abs(sp) / len(spike_rate) * 2
-
-        # Get spectrum per unit
+        # the np.fft.rfft function gives the positive frequency components
+        # for real-valued inputs. This is half the total amplitude.
+        # To adjust for this, we multiply the amplitude by 2:
+        normalized_spectrum = 2 * np.abs(sp) / len(spike_rate)
         normalized_spectrum_per_unit = normalized_spectrum / N_neurons
 
-        # Get F1 amplitude
+        # Extract the F1 and F2 amplitudes
         closest_freq_index = np.abs(freq - temp_freq).argmin()
         ampl_F1 = normalized_spectrum_per_unit[closest_freq_index]
 
-        # Get F2 amplitude
         closest_freq_index = np.abs(freq - (2 * temp_freq)).argmin()
         ampl_F2 = normalized_spectrum_per_unit[closest_freq_index]
 
