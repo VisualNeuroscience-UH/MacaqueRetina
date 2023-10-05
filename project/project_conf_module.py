@@ -650,6 +650,9 @@ if __name__ == "__main__":
     # PM.viz.F1F2_unit_response(
     #     exp_variables, xlog=False, savefigname=output_folder + ".eps"
     # )
+    PM.viz.ptp_response(
+        exp_variables, x_of_interest=["tf11", "tf16", "tf22"], savefigname=None
+    )
     # PM.viz.fr_response(exp_variables, xlog=True, savefigname=None)
     # PM.viz.spike_raster_response(exp_variables, savefigname=None)
     # PM.viz.tf_vs_fr_cg(
