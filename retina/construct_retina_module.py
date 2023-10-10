@@ -76,8 +76,7 @@ class ConstructRetina(RetinaMath):
         "output_folder",
         "input_folder",
         "my_retina",
-        "apricot_data_folder",
-        "literature_data_folder",
+        "apricot_metadata",
         "literature_data_files",
     ]
 
@@ -223,7 +222,7 @@ class ConstructRetina(RetinaMath):
             self.exp_tonic_dr_to_viz,
             self.apricot_data_resolution_hw,
         ) = self.Fit(
-            self.context.apricot_data_folder,
+            self.context.apricot_metadata,
             gc_type,
             response_type,
             fit_type="experimental",
@@ -295,10 +294,10 @@ class ConstructRetina(RetinaMath):
 
         print(
             "Reading density data from:",
-            self.context.literature_data_files["gc_density_file"],
+            self.context.literature_data_files["gc_density_fullpath"],
         )
         gc_density = self.data_io.get_data(
-            self.context.literature_data_files["gc_density_file"]
+            self.context.literature_data_files["gc_density_fullpath"]
         )
         cell_eccentricity = np.squeeze(gc_density["Xdata"])
         cell_density = (
@@ -345,10 +344,10 @@ class ConstructRetina(RetinaMath):
         dendr_diam_parameters = {}
 
         dendr_diam1 = self.data_io.get_data(
-            self.context.literature_data_files["dendr_diam1_file"]
+            self.context.literature_data_files["dendr_diam1_fullpath"]
         )
         dendr_diam2 = self.data_io.get_data(
-            self.context.literature_data_files["dendr_diam2_file"]
+            self.context.literature_data_files["dendr_diam2_fullpath"]
         )
 
         # Quality control. Datasets separately for visualization
@@ -852,7 +851,7 @@ class ConstructRetina(RetinaMath):
         response_type = self.response_type.upper()
 
         temp_params_df = pd.read_csv(
-            self.context.literature_data_files["temporal_BK_model_file"]
+            self.context.literature_data_files["temporal_BK_model_fullpath"]
         )
 
         for i, param_name in enumerate(temporal_model_parameters):
@@ -1569,7 +1568,7 @@ class ConstructRetina(RetinaMath):
             gc_vae_df,
             good_idx_generated,
         ) = self.Fit(
-            self.context.apricot_data_folder,
+            self.context.apricot_metadata,
             self.gc_type,
             self.response_type,
             spatial_data=img_processed,
@@ -1756,7 +1755,7 @@ class ConstructRetina(RetinaMath):
                 self.gc_vae_df,
                 _,
             ) = self.Fit(
-                self.context.apricot_data_folder,
+                self.context.apricot_metadata,
                 self.gc_type,
                 self.response_type,
                 spatial_data=img_rfs,  # Ellipse fit does not tolearate current adjustments

@@ -277,13 +277,13 @@ my_run_options = {
 ###  Semi-constant variables
 ############################
 
-# TODO: Refactor apricot_data_module.py to use these. Requires new composition of the module.
 apricot_metadata = {
     "data_microm_per_pix": 60,
     "data_spatialfilter_height": 13,
     "data_spatialfilter_width": 13,
     "data_fps": 30,
     "data_temporalfilter_samples": 15,
+    "apricot_data_folder": git_repo_root.joinpath(r"retina/apricot_data"),
 }
 
 # Proportion from all ganglion cells. Density of all ganglion cells is given later as a function of ecc from literature.
@@ -334,7 +334,6 @@ my_retina_append = {
 
 my_retina.update(my_retina_append)
 
-apricot_data_folder = git_repo_root.joinpath(r"retina/apricot_data")
 literature_data_folder = git_repo_root.joinpath(r"retina/literature_data")
 
 # Define digitized literature data files for gc density and dendritic diameters.
@@ -342,49 +341,51 @@ literature_data_folder = git_repo_root.joinpath(r"retina/literature_data")
 # Define literature data files for linear temporal models.
 # Data from Benardete_1999_VisNeurosci and Benardete_1997_VisNeurosci
 
-# gc_density_file = literature_data_folder / "Perry_1984_Neurosci_GCdensity_c.mat"
-gc_density_file = literature_data_folder / "Perry_1984_Neurosci_GCdensity_Fig8_c.npz"
+# gc_density_fullpath = literature_data_folder / "Perry_1984_Neurosci_GCdensity_c.mat"
+gc_density_fullpath = (
+    literature_data_folder / "Perry_1984_Neurosci_GCdensity_Fig8_c.npz"
+)
 if my_retina["gc_type"] == "parasol":
-    dendr_diam1_file = (
+    dendr_diam1_fullpath = (
         # literature_data_folder / "Perry_1984_Neurosci_ParasolDendrDiam_c.mat"
         literature_data_folder
         / "Perry_1984_Neurosci_ParasolDendrDiam_Fig6A_c.npz"
     )
-    dendr_diam2_file = (
+    dendr_diam2_fullpath = (
         # literature_data_folder / "Watanabe_1989_JCompNeurol_GCDendrDiam_parasol_c.mat"
         literature_data_folder
         / "Watanabe_1989_JCompNeurol_ParasolDendrDiam_Fig7_c.npz"
     )
-    temporal_BK_model_file = (
+    temporal_BK_model_fullpath = (
         literature_data_folder / "Benardete_1999_VisNeurosci_parasol.csv"
     )
-    spatial_DoG_file = (
+    spatial_DoG_fullpath = (
         literature_data_folder
         / "Schottdorf_2021_JPhysiol_CenRadius_Fig4C_parasol_c.npz"
     )
 elif my_retina["gc_type"] == "midget":
-    dendr_diam1_file = (
+    dendr_diam1_fullpath = (
         # literature_data_folder / "Perry_1984_Neurosci_MidgetDendrDiam_c.mat"
         literature_data_folder
         / "Perry_1984_Neurosci_MidgetDendrDiam_Fig6B_c.npz"
     )
-    dendr_diam2_file = (
+    dendr_diam2_fullpath = (
         # literature_data_folder / "Watanabe_1989_JCompNeurol_GCDendrDiam_midget_c.mat"
         literature_data_folder
         / "Watanabe_1989_JCompNeurol_MidgetDendrDiam_Fig7_c.npz"
     )
-    temporal_BK_model_file = (
+    temporal_BK_model_fullpath = (
         literature_data_folder / "Benardete_1997_VisNeurosci_midget.csv"
     )
-    spatial_DoG_file = (
+    spatial_DoG_fullpath = (
         literature_data_folder / "Schottdorf_2021_JPhysiol_CenRadius_Fig4C_midget_c.npz"
     )
 literature_data_files = {
-    "gc_density_file": gc_density_file,
-    "dendr_diam1_file": dendr_diam1_file,
-    "dendr_diam2_file": dendr_diam2_file,
-    "temporal_BK_model_file": temporal_BK_model_file,
-    "spatial_DoG_file": spatial_DoG_file,
+    "gc_density_fullpath": gc_density_fullpath,
+    "dendr_diam1_fullpath": dendr_diam1_fullpath,
+    "dendr_diam2_fullpath": dendr_diam2_fullpath,
+    "temporal_BK_model_fullpath": temporal_BK_model_fullpath,
+    "spatial_DoG_fullpath": spatial_DoG_fullpath,
 }
 
 
@@ -422,8 +423,6 @@ if __name__ == "__main__":
         my_stimulus_metadata=my_stimulus_metadata,
         my_stimulus_options=my_stimulus_options,
         my_run_options=my_run_options,
-        apricot_data_folder=apricot_data_folder,
-        literature_data_folder=literature_data_folder,
         literature_data_files=literature_data_files,
         apricot_metadata=apricot_metadata,
         numpy_seed=numpy_seed,

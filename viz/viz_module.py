@@ -2436,7 +2436,7 @@ class Viz:
             gc_vae_df = self.construct_retina.gc_vae_df
 
             fit = self.construct_retina.Fit(
-                self.context.apricot_data_folder,
+                self.context.apricot_metadata,
                 self.construct_retina.gc_type,
                 self.construct_retina.response_type,
                 spatial_data=img_rf,
@@ -2481,8 +2481,10 @@ class Viz:
         ecc_deg_vae = ecc_mm_vae * deg_per_mm
 
         # Read in corresponding data from literature
-        spatial_DoG_file = self.context.literature_data_files["spatial_DoG_file"]
-        spatial_DoG_data = self.data_io.get_data(spatial_DoG_file)
+        spatial_DoG_fullpath = self.context.literature_data_files[
+            "spatial_DoG_fullpath"
+        ]
+        spatial_DoG_data = self.data_io.get_data(spatial_DoG_fullpath)
 
         lit_ecc_deg = spatial_DoG_data["Xdata"]  # ecc (deg)
         lit_cen_min_arc = spatial_DoG_data["Ydata"]  # rf center radius (min of arc)

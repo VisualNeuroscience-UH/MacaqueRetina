@@ -21,8 +21,9 @@ class ApricotData:
     Read data from external mat files.
     """
 
-    def __init__(self, apricot_data_folder, gc_type, response_type):
-        self.apricot_data_folder = apricot_data_folder
+    def __init__(self, apricot_metadata, gc_type, response_type):
+        self.apricot_data_folder = apricot_metadata["apricot_data_folder"]
+        self.metadata = apricot_metadata
         gc_type = gc_type.lower()
         response_type = response_type.lower()
         self.gc_type = gc_type
@@ -82,13 +83,13 @@ class ApricotData:
         self.n_cells = len(self.data)
         self.inverted_data_indices = self._get_inverted_indices()
 
-        self.metadata = {
-            "data_microm_per_pix": 60,
-            "data_spatialfilter_height": 13,
-            "data_spatialfilter_width": 13,
-            "data_fps": 30,  # Uncertain - "30 or 120 Hz"
-            "data_temporalfilter_samples": 15,
-        }
+        # self.metadata = {
+        #     "data_microm_per_pix": 60,
+        #     "data_spatialfilter_height": 13,
+        #     "data_spatialfilter_width": 13,
+        #     "data_fps": 30,  # Uncertain - "30 or 120 Hz"
+        #     "data_temporalfilter_samples": 15,
+        # }
 
     def _get_inverted_indices(self):
         """

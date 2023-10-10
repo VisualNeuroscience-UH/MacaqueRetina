@@ -33,7 +33,7 @@ class Fit(ApricotData, RetinaMath):
 
     def __init__(
         self,
-        apricot_data_folder,
+        apricot_metadata,
         gc_type,
         response_type,
         fit_type="experimental",  # "experimental", "generated" or "concentric_rings"
@@ -45,8 +45,8 @@ class Fit(ApricotData, RetinaMath):
 
         Parameters
         ----------
-        apricot_data_folder : str
-            The path to the apricot data folder.
+        apricot_metadata : dict
+            Metadata for the apricot dataset, including the data folder path.
         gc_type : str
             The type of ganglion cell.
         response_type : str
@@ -66,7 +66,7 @@ class Fit(ApricotData, RetinaMath):
         AssertionError
             If fit_type is 'generated' and spatial_data is not provided.
         """
-        super().__init__(apricot_data_folder, gc_type, response_type)
+        super().__init__(apricot_metadata, gc_type, response_type)
 
         assert (
             fit_type == "experimental" or new_um_per_pix is not None

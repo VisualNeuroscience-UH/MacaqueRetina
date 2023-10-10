@@ -860,7 +860,7 @@ class RetinaVAE(RetinaMath):
     ):
         super().__init__()
 
-        self.apricot_data_folder = context.apricot_data_folder
+        self.apricot_metadata = context.apricot_metadata
         self.gc_type = gc_type
         self.response_type = response_type
 
@@ -1719,7 +1719,7 @@ class RetinaVAE(RetinaMath):
 
         # Get requested data
         self.apricot_data = ApricotData(
-            self.apricot_data_folder, self.gc_type, self.response_type
+            self.apricot_metadata, self.gc_type, self.response_type
         )
 
         # Log requested label
@@ -1762,7 +1762,7 @@ class RetinaVAE(RetinaMath):
             gc_types, response_types, response_labels
         ):
             print(f"Loading data for {gc_type}_{response_type} (label {label})")
-            apricot_data = ApricotData(self.apricot_data_folder, gc_type, response_type)
+            apricot_data = ApricotData(self.apricot_metadata, gc_type, response_type)
             bad_data_idx = apricot_data.manually_picked_bad_data_idx
             (
                 gc_spatial_data_np_orig,
