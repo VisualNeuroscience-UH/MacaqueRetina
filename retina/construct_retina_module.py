@@ -63,7 +63,7 @@ class ConstructRetina(RetinaMath):
         Whether to randomize the position of the ganglion cells
     deg_per_mm : float
         Degrees per mm
-    model_type : str
+    spatial_model : str
         Type of model, either "FIT"or  "VAE"
     gc_proportion : float
         Proportion of ganglion cells to be created
@@ -111,7 +111,7 @@ class ConstructRetina(RetinaMath):
         Initialize the ganglion cell mosaic.
             First: sets ConstructRetina instance parameters from conf file my_retina
             Second: creates empty gc_df to hold the final ganglion cell mosaics
-            Third: gets gc creation model according to model_type
+            Third: gets gc creation model according to spatial_model
                 Calls Fit or RetinaVAE classes
 
         See class attributes for more details.
@@ -132,8 +132,8 @@ class ConstructRetina(RetinaMath):
         self.gc_type = gc_type
         self.response_type = response_type
 
-        self.model_type = my_retina["model_type"]
-        if self.model_type in ["VAE"]:
+        self.spatial_model = my_retina["spatial_model"]
+        if self.spatial_model in ["VAE"]:
             self.training_mode = my_retina["training_mode"]
 
         proportion_of_parasol_gc_type = my_retina["proportion_of_parasol_gc_type"]
@@ -207,7 +207,7 @@ class ConstructRetina(RetinaMath):
         ]
         self.gc_df = pd.DataFrame(columns=columns)
 
-        # Current version needs Fit for all 'model_type's (FIT, VAE, etc.)
+        # Current version needs Fit for all 'spatial_model's (FIT, VAE, etc.)
         # If surround is fixed, the surround position, semi_x, semi_y (aspect_ratio) and orientation are the same as center params. This appears to give better results.
         self.surround_fixed = 1
 
@@ -807,11 +807,6 @@ class ConstructRetina(RetinaMath):
         Data from Benardete & Kaplan Visual Neuroscience 16 (1999) 355-368 (parasol cells), and
         Benardete & Kaplan Visual Neuroscience 14 (1997) 169-185 (midget cells).
 
-        Parameters
-        ----------
-        good_idx : ndarray
-            Boolean index array indicating which rows of `self.all_data_fits_df` to use for fitting.
-
         Returns
         -------
         temporal_exp_stat_df : pd.DataFrame
@@ -820,8 +815,8 @@ class ConstructRetina(RetinaMath):
 
         temp_stat_to_viz : dict
             A dictionary containing information needed for visualization, including the temporal filter parameters, the
-            fitted distribution parameters, the super title of the plot, `self.gc_type`, `self.response_type`, the
-            `self.all_data_fits_df` DataFrame, and the `good_idx` Boolean index array.
+            fitted distribution parameters, the super title of the plot, `self.gc_type`, `self.response_type`, and the
+            `self.all_data_fits_df` DataFrame.
         """
 
         cell_type = self.gc_type
@@ -939,6 +934,7 @@ class ConstructRetina(RetinaMath):
         Second step of scaling is done before convolving with the stimulus.
         """
 
+        # TODO: Normalize with center volume alone
         # For each model cell, set center amplitude as data_cen_mean**2 / sigma_x * sigma_y
         # For each model cell, scale surround amplitude by data_sur_mean**2 / sur_sigma_x * sur_sigma_y
         # (Volume of 2D Gaussian = 2 * pi * sigma_x*sigma_y)
@@ -1540,7 +1536,8 @@ class ConstructRetina(RetinaMath):
 
     def _get_rfs_from_vae(self, nsamples):
         """
-        Get spatial receptive fields from the VAE. Discard any RFs that are not included in the good_idx.
+        Get spatial receptive fields from the VAE.
+        Discard any RFs that are not included in the good_idx_generated.
 
         Parameters
         ----------
@@ -1572,7 +1569,7 @@ class ConstructRetina(RetinaMath):
             _,
             _,
             gc_vae_df,
-            good_idx,
+            good_idx_generated,
         ) = self.Fit(
             self.context.apricot_data_folder,
             self.gc_type,
@@ -1583,8 +1580,8 @@ class ConstructRetina(RetinaMath):
         ).get_generated_spatial_fits()
 
         # Replace bad rfs with the reserve rfs
-        missing_indices = np.setdiff1d(np.arange(nsamples), good_idx)
-        available_indices = good_idx > nsamples
+        missing_indices = np.setdiff1d(np.arange(nsamples), good_idx_generated)
+        available_indices = good_idx_generated > nsamples
         for idx, this_miss in enumerate(missing_indices):
             this_replace = np.where(available_indices)[0][idx]
             img_processed[this_miss, :, :] = img_processed[this_replace, :, :]
@@ -1643,7 +1640,7 @@ class ConstructRetina(RetinaMath):
         # The positions are in the columns 'pos_ecc_mm', 'pos_polar_deg', 'ecc_group_idx', and the rf parameters in 'semi_xc',
         # 'semi_yc', 'xy_aspect_ratio', 'ampl_c', 'ampl_s', 'relat_sur_diam', 'relat_sur_ampl', 'orient_cen_rad', 'den_diam_um'
 
-        if self.model_type == "VAE":
+        if self.spatial_model == "VAE":
             # Fit or load variational autoencoder to generate receptive fields
             self.retina_vae = RetinaVAE(
                 self.gc_type,
@@ -1759,7 +1756,7 @@ class ConstructRetina(RetinaMath):
                 self.gen_spat_filt_to_viz,
                 self.gen_spat_stat_to_viz,
                 self.gc_vae_df,
-                good_idx,
+                _,
             ) = self.Fit(
                 self.context.apricot_data_folder,
                 self.gc_type,

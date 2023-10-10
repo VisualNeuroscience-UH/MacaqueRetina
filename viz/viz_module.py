@@ -32,6 +32,8 @@ from retina.vae_module import AugmentedDataset
 import os
 from pathlib import Path
 import pdb
+import copy
+from functools import reduce
 
 
 class Viz:
@@ -500,7 +502,7 @@ class Viz:
         data_all_y = self.construct_retina.dd_vs_ecc_to_viz["data_all_y"]
         dd_fit_x = self.construct_retina.dd_vs_ecc_to_viz["dd_fit_x"]
         dd_fit_y = self.construct_retina.dd_vs_ecc_to_viz["dd_fit_y"]
-        if self.construct_retina.model_type == "VAE":
+        if self.construct_retina.spatial_model == "VAE":
             dd_vae_x = self.construct_retina.dd_vs_ecc_to_viz["dd_vae_x"]
             dd_vae_y = self.construct_retina.dd_vs_ecc_to_viz["dd_vae_y"]
         fit_parameters = self.construct_retina.dd_vs_ecc_to_viz["fit_parameters"]
@@ -510,7 +512,7 @@ class Viz:
         fig, ax = plt.subplots(nrows=1, ncols=1)
         ax.plot(data_all_x, data_all_y, "b.", label="Data")
         ax.plot(dd_fit_x, dd_fit_y, "r.", label="Fit")
-        if self.construct_retina.model_type == "VAE":
+        if self.construct_retina.spatial_model == "VAE":
             ax.plot(dd_vae_x, dd_vae_y, "k.", label="Vae")
 
         ax.set_xlabel("Retinal eccentricity (mm)")
@@ -603,7 +605,9 @@ class Viz:
         all_data_fits_df = self.construct_retina.exp_temp_stat_to_viz[
             "all_data_fits_df"
         ]
-        good_idx = self.construct_retina.exp_temp_stat_to_viz["good_idx"]
+        good_idx_experimental = self.construct_retina.exp_temp_stat_to_viz[
+            "good_idx_experimental"
+        ]
 
         plt.subplots(2, 3)
         plt.suptitle(suptitle)
@@ -611,7 +615,9 @@ class Viz:
             plt.subplot(2, 3, i + 1)
             ax = plt.gca()
             shape, loc, scale = distrib_params[i, :]
-            param_array = np.array(all_data_fits_df.iloc[good_idx][param_name])
+            param_array = np.array(
+                all_data_fits_df.iloc[good_idx_experimental][param_name]
+            )
 
             x_min, x_max = stats.gamma.ppf(
                 [0.001, 0.999], a=shape, loc=loc, scale=scale
@@ -676,7 +682,7 @@ class Viz:
             savefigname=savefigname,
         )
 
-        if self.construct_retina.model_type == "VAE":
+        if self.construct_retina.spatial_model == "VAE":
             spat_filt_to_viz = self.construct_retina.gen_spat_filt_to_viz
             self.show_spatial_filter_response(
                 spat_filt_to_viz,
@@ -836,7 +842,7 @@ class Viz:
         Plot the outputs of the autoencoder.
         """
         assert (
-            self.construct_retina.model_type == "VAE"
+            self.construct_retina.spatial_model == "VAE"
         ), "Only model type VAE is supported for show_gen_exp_spatial_rf()"
         if ds_name == "train_ds":
             ds = self.construct_retina.retina_vae.train_loader.dataset
@@ -2419,7 +2425,7 @@ class Viz:
 
     # Validation viz
     def validate_gc_rf_size(self, savefigname=None):
-        if self.context.my_retina["model_type"] == "VAE":
+        if self.context.my_retina["spatial_model"] == "VAE":
             gen_rfs_to_viz = self.construct_retina.gen_rfs_to_viz
             img_rf = gen_rfs_to_viz["img_rf"]
 
@@ -2443,7 +2449,7 @@ class Viz:
             good_idx_rings = fit.good_idx_rings
         else:
             raise ValueError(
-                "Only VAE model_type is supported for validate_gc_rf_size, it shows FIT values, too."
+                "Only VAE spatial_model is supported for validate_gc_rf_size, it shows FIT values, too."
             )
 
         # cr for concentric rings, i.e. the symmetric DoG model
@@ -2496,3 +2502,577 @@ class Viz:
 
         if savefigname:
             self._figsave(figurename=savefigname)
+
+    def _build_param_plot(self, coll_ana_df_in, param_plot_dict, to_spa_dict_in):
+        """
+        Prepare for parametric plotting of multiple conditions.
+
+        Parameters
+        ----------
+        coll_ana_df_in : pandas.DataFrame
+            Mapping from to_spa_dict in conf file to dataframes which include parameter and analysis details.
+        param_plot_dict : dict
+            Dictionary guiding the parametric plot. See :func:`show_catplot` for details.
+        to_spa_dict_in : dict
+            Dictionary containing the startpoints, parameters and analyzes which are active in conf file.
+
+        Returns
+        -------
+        data_list : list
+            A nested list of data for each combination of outer and inner conditions.
+        data_name_list : list
+            A nested list of names for each combination of outer and inner conditions.
+        data_sub_list : list
+            A nested list of sub data for each combination of outer and inner conditions.
+        outer_name_list : list
+            A list of names for the outer conditions.
+        sub_col_name : str
+            The short name for the sub analysis, if active.
+        """
+
+        sub_col_name = ""
+
+        # Isolate inner sub ana, if active
+        if param_plot_dict["inner_sub"] is True:
+            coll_sub_S = coll_ana_df_in.loc[param_plot_dict["inner_sub_ana"]]
+            coll_ana_df = coll_ana_df_in.drop(
+                index=param_plot_dict["inner_sub_ana"], inplace=False
+            )
+            analyzes_list = copy.deepcopy(to_spa_dict_in["analyzes"])
+            analyzes_list.remove(param_plot_dict["inner_sub_ana"])
+            to_spa_dict = {k: to_spa_dict_in[k] for k in ["startpoints", "parameters"]}
+            to_spa_dict["analyzes"] = analyzes_list
+            # Short ana name for sub to diff from data col names
+            sub_col_name = coll_sub_S["ana_name_prefix"]
+        else:
+            to_spa_dict = to_spa_dict_in
+            coll_ana_df = coll_ana_df_in
+
+        [title] = to_spa_dict[param_plot_dict["title"]]
+        outer_list = to_spa_dict[param_plot_dict["outer"]]
+        inner_list = to_spa_dict[param_plot_dict["inner"]]
+
+        # if paths to data provided, take inner names from distinct list
+        if param_plot_dict["inner_paths"] is True:
+            inner_list = param_plot_dict["inner_path_names"]
+
+        mid_idx = list(param_plot_dict.values()).index("startpoints")
+        par_idx = list(param_plot_dict.values()).index("parameters")
+        ana_idx = list(param_plot_dict.values()).index("analyzes")
+
+        key_list = list(param_plot_dict.keys())
+
+        # Create dict whose key is folder hierarchy and value is plot hierarchy
+        hdict = {
+            "mid": key_list[mid_idx],
+            "par": key_list[par_idx],
+            "ana": key_list[ana_idx],
+        }
+
+        data_list = []  # nested list, N items = N outer x N inner
+        data_name_list = []  # nested list, N items = N outer x N inner
+        data_sub_list = []  # nested list, N items = N outer x N inner
+        outer_name_list = []  # list , N items = N outer
+
+        for outer in outer_list:
+            inner_data_list = []  # list , N items = N inner
+            inner_name_list = []  # list , N items = N inner
+            inner_data_sub_list = []  # list , N items = N inner
+
+            for in_idx, inner in enumerate(inner_list):
+                # Nutcracker. eval to "outer", "inner" and "title"
+                mid = eval(f"{hdict['mid']}")
+                par = eval(f"{hdict['par']}")
+                this_folder = f"{mid}_{par}"
+                this_ana = eval(f"{hdict['ana']}")
+
+                this_ana_col = coll_ana_df.loc[this_ana]["csv_col_name"]
+                if param_plot_dict["compiled_results"] is True:
+                    this_folder = f"{this_folder}_compiled_results"
+                    this_ana_col = f"{this_ana_col}_mean"
+
+                if param_plot_dict["inner_paths"] is True:
+                    csv_path_tuple = param_plot_dict["paths"][in_idx]
+                    csv_path = reduce(
+                        lambda acc, y: Path(acc).joinpath(y), csv_path_tuple
+                    )
+                else:
+                    csv_path = None
+
+                # get data
+                (
+                    data0_df,
+                    data_df_compiled,
+                    independent_var_col_list,
+                    dependent_var_col_list,
+                    time_stamp,
+                ) = self.data_io.get_csv_as_df(
+                    folder_name=this_folder, csv_path=csv_path, include_only=None
+                )
+
+                df = data_df_compiled[this_ana_col]
+                inner_data_list.append(df)
+                inner_name_list.append(inner)
+
+                if param_plot_dict["inner_sub"] is True:
+                    sub_col = coll_sub_S["csv_col_name"]
+                    if param_plot_dict["compiled_results"] is True:
+                        sub_col = f"{sub_col}_mean"
+                    df_sub = data_df_compiled[sub_col]
+                    inner_data_sub_list.append(df_sub)
+
+            data_list.append(inner_data_list)
+            data_name_list.append(inner_name_list)
+            data_sub_list.append(inner_data_sub_list)
+            outer_name_list.append(outer)
+
+        return (
+            data_list,
+            data_name_list,
+            data_sub_list,
+            outer_name_list,
+            sub_col_name,
+        )
+
+    def show_catplot(self, param_plot_dict):
+        """
+        Visualization of parameter values in different categories. Data is collected in _build_param_plot, and all plotting is here.
+
+        Definitions for parametric plotting of multiple conditions/categories.
+
+        First, define what data is going to be visualized in to_spa_dict.
+        Second, define how it is visualized in param_plot_dict.
+
+        Limitations:
+            You cannot have analyzes as title AND inner_sub = True.
+            For violinplot and inner_sub = True, N bin edges MUST be two (split view)
+
+        outer : panel (distinct subplots) # analyzes, startpoints, parameters, controls
+        inner : inside one axis (subplot) # startpoints, parameters, controls
+
+        The dictionary xy_plot_dict contains:
+
+        title : str
+            Title-level of plot, e.g. "parameters". Multiple allowed => each in separate figure
+        outer : str
+            Panel-level of plot, e.g. "analyzes". Multiple allowed => plt subplot panels
+        inner : str
+            Inside one axis (subplot) level of plot, e.g. "startpoints". Multiple allowed => direct comparison
+        inner_sub : bool
+            Further subdivision by value, such as mean firing rate
+        inner_sub_ana : str
+            Name of ana. This MUST be included into to_spa_dict "analyzes". E.g. "Excitatory Firing Rate"
+        bin_edges : list of lists
+            Binning of data. E.g. [[0.001, 150], [150, 300]]
+        plot_type : str
+            Parametric plot type. Allowed types include "box", "violin", "strip", "swarm", "boxen", "point" and "bar".
+        compiled_results : bool
+            Data at compiled_results folder, mean over iterations
+        sharey : bool
+            Share y-axis between subplots
+        inner_paths : bool
+            Provide comparison from arbitrary paths, e.g. controls
+        paths : list of tuples
+            Provide list of tuples of full path parts to data folder.
+            E.g. [(root_path, 'Single_narrow_iterations_control', 'Bacon_gL_compiled_results'),]
+            The number of paths MUST be the same as the number of corresponding inner variables.
+        """
+
+        coll_ana_df = copy.deepcopy(self.coll_spa_dict["coll_ana_df"])
+        to_spa_dict = copy.deepcopy(self.context.to_spa_dict)
+
+        titles = to_spa_dict[param_plot_dict["title"]]
+
+        if param_plot_dict["save_description"] is True:
+            describe_df_list = []
+            describe_df_columns_list = []
+            describe_folder_full = Path.joinpath(self.context.path, "Descriptions")
+            describe_folder_full.mkdir(parents=True, exist_ok=True)
+
+        # If param_plot_dict["inner_paths"] is True, replace titles with and [""] .
+        if param_plot_dict["inner_paths"] is True:
+            titles = [""]
+
+        # Recursive call for multiple titles => multiple figures
+        for this_title in titles:
+            this_title_list = [this_title]
+            to_spa_dict[param_plot_dict["title"]] = this_title_list
+
+            (
+                data_list,
+                data_name_list,
+                data_sub_list,
+                outer_name_list,
+                sub_col_name,
+            ) = self._build_param_plot(coll_ana_df, param_plot_dict, to_spa_dict)
+
+            sharey = param_plot_dict["sharey"]
+            palette = param_plot_dict["palette"]
+
+            if param_plot_dict["display_optimal_values"] is True:
+                optimal_value_foldername = param_plot_dict["optimal_value_foldername"]
+                optimal_description_name = param_plot_dict["optimal_description_name"]
+
+                # read optimal values to dataframe from path/optimal_values/optimal_unfit_description.csv
+                optimal_df = pd.read_csv(
+                    Path.joinpath(
+                        self.context.path,
+                        optimal_value_foldername,
+                        optimal_description_name,
+                    )
+                )
+                # set the first column as index
+                optimal_df.set_index(optimal_df.columns[0], inplace=True)
+
+            fig, [axs] = plt.subplots(1, len(data_list), sharey=sharey, squeeze=False)
+
+            if (
+                "divide_by_frequency" in param_plot_dict
+                and param_plot_dict["divide_by_frequency"] is True
+            ):
+                # Divide by frequency
+
+                frequency_names_list = [
+                    "Excitatory Firing Rate",
+                    "Inhibitory Firing Rate",
+                ]
+
+                # Get the index of the frequency names
+                # pdb.set_trace()
+                out_fr_idx = np.array([], dtype=int)
+                for out_idx, this_name in enumerate(outer_name_list):
+                    if this_name in frequency_names_list:
+                        out_fr_idx = np.append(out_fr_idx, out_idx)
+
+                # Sum the two frequency values, separately for each inner
+                frequencies = np.zeros([len(data_list[0][0]), len(data_list[0])])
+                # Make a numpy array of zeros, whose shape is length
+                for this_idx in out_fr_idx:
+                    this_fr_list = data_list[this_idx]
+                    for fr_idx, this_fr in enumerate(this_fr_list):
+                        frequencies[:, fr_idx] += this_fr.values
+
+                # Drop the out_fr_idx from the data_list
+                data_list = [
+                    l for idx, l in enumerate(data_list) if idx not in out_fr_idx
+                ]
+                outer_name_list = [
+                    l for idx, l in enumerate(outer_name_list) if idx not in out_fr_idx
+                ]
+
+                # Divide the values by the frequencies
+                for out_idx, this_data_list in enumerate(data_list):
+                    for in_idx, this_data in enumerate(this_data_list):
+                        new_values = this_data.values / frequencies[:, in_idx]
+                        # Assign this_data.values back to the data_list
+                        data_list[out_idx][in_idx] = pd.Series(
+                            new_values, name=this_data.name
+                        )
+
+            for out_idx, inner_data_list in enumerate(data_list):
+                outer_name = outer_name_list[out_idx]
+                inner_df_coll = pd.DataFrame()
+                sub_df_coll = pd.DataFrame()
+                for in_idx, inner_series in enumerate(inner_data_list):
+                    inner_df_coll[data_name_list[out_idx][in_idx]] = inner_series
+                    if param_plot_dict["inner_sub"] is True:
+                        sub_df_coll[data_name_list[out_idx][in_idx]] = data_sub_list[
+                            out_idx
+                        ][in_idx]
+
+                self.data_is_valid(inner_df_coll.values, accept_empty=False)
+
+                # For backwards compatibility in FCN22 project 221209 SV
+                if outer_name == "Coherence":
+                    if inner_df_coll.max().max() > 1:
+                        inner_df_coll = inner_df_coll / 34
+                if param_plot_dict["save_description"] is True:
+                    describe_df_list.append(inner_df_coll)  # for saving
+                    describe_df_columns_list.append(f"{outer_name}")
+
+                # We use axes level plots instead of catplot which is figure level plot.
+                # This way we can control the plotting order and additional arguments
+                if param_plot_dict["inner_sub"] is False:
+                    # wide df--each column plotted
+                    boxprops = dict(
+                        linestyle="-", linewidth=1, edgecolor="black", facecolor=".7"
+                    )
+
+                    if param_plot_dict["plot_type"] == "box":
+                        g1 = sns.boxplot(
+                            data=inner_df_coll,
+                            ax=axs[out_idx],
+                            boxprops=boxprops,
+                            whis=[0, 100],
+                            showfliers=False,
+                            showbox=True,
+                            palette=palette,
+                        )
+                    elif param_plot_dict["plot_type"] == "violin":
+                        g1 = sns.violinplot(
+                            data=inner_df_coll,
+                            ax=axs[out_idx],
+                            palette=palette,
+                        )
+                    elif param_plot_dict["plot_type"] == "strip":
+                        g1 = sns.stripplot(
+                            data=inner_df_coll,
+                            ax=axs[out_idx],
+                            palette=palette,
+                        )
+                    elif param_plot_dict["plot_type"] == "swarm":
+                        g1 = sns.swarmplot(
+                            data=inner_df_coll,
+                            ax=axs[out_idx],
+                            palette=palette,
+                        )
+                    elif param_plot_dict["plot_type"] == "boxen":
+                        g1 = sns.boxenplot(
+                            data=inner_df_coll,
+                            ax=axs[out_idx],
+                            palette=palette,
+                        )
+                    elif param_plot_dict["plot_type"] == "point":
+                        g1 = sns.pointplot(
+                            data=inner_df_coll,
+                            ax=axs[out_idx],
+                            palette=palette,
+                        )
+                    elif param_plot_dict["plot_type"] == "bar":
+                        g1 = sns.barplot(
+                            data=inner_df_coll,
+                            ax=axs[out_idx],
+                            palette=palette,
+                        )
+
+                elif param_plot_dict["inner_sub"] is True:
+                    inner_df_id_vars = pd.DataFrame().reindex_like(inner_df_coll)
+                    # Make a “long-form” DataFrame
+                    for this_bin_idx, this_bin_limits in enumerate(
+                        param_plot_dict["bin_edges"]
+                    ):
+                        # Apply bin edges to sub data
+                        inner_df_id_vars_idx = sub_df_coll.apply(
+                            lambda x: (x > this_bin_limits[0])
+                            & (x < this_bin_limits[1]),
+                            raw=True,
+                        )
+                        inner_df_id_vars[inner_df_id_vars_idx] = this_bin_idx
+
+                    inner_df_id_values_vars = pd.concat(
+                        [
+                            inner_df_coll.stack(dropna=False),
+                            inner_df_id_vars.stack(dropna=False),
+                        ],
+                        axis=1,
+                    )
+
+                    inner_df_id_values_vars = inner_df_id_values_vars.reset_index()
+                    inner_df_id_values_vars.drop(columns="level_0", inplace=True)
+                    inner_df_id_values_vars.columns = [
+                        "Title",
+                        outer_name,
+                        sub_col_name,
+                    ]
+
+                    bin_legends = [
+                        f"{m}-{n}" for [m, n] in param_plot_dict["bin_edges"]
+                    ]
+                    inner_df_id_values_vars[sub_col_name].replace(
+                        to_replace=[*range(0, len(param_plot_dict["bin_edges"]))],
+                        value=bin_legends,
+                        inplace=True,
+                    )
+
+                    if param_plot_dict["plot_type"] == "box":
+                        g1 = sns.boxplot(
+                            data=inner_df_id_values_vars,
+                            x="Title",
+                            y=outer_name,
+                            hue=sub_col_name,
+                            palette=palette,
+                            ax=axs[out_idx],
+                            hue_order=bin_legends,
+                            whis=[0, 100],
+                            showfliers=False,
+                            showbox=True,
+                        )
+                    elif param_plot_dict["plot_type"] == "violin":
+                        g1 = sns.violinplot(
+                            data=inner_df_id_values_vars,
+                            x="Title",
+                            y=outer_name,
+                            hue=sub_col_name,
+                            palette=palette,
+                            ax=axs[out_idx],
+                            hue_order=bin_legends,
+                            split=True,
+                        )
+                    elif param_plot_dict["plot_type"] == "strip":
+                        g1 = sns.stripplot(
+                            data=inner_df_id_values_vars,
+                            x="Title",
+                            y=outer_name,
+                            hue=sub_col_name,
+                            palette=palette,
+                            ax=axs[out_idx],
+                            hue_order=bin_legends,
+                            dodge=True,
+                        )
+                    elif param_plot_dict["plot_type"] == "swarm":
+                        g1 = sns.swarmplot(
+                            data=inner_df_id_values_vars,
+                            x="Title",
+                            y=outer_name,
+                            hue=sub_col_name,
+                            palette=palette,
+                            ax=axs[out_idx],
+                            hue_order=bin_legends,
+                            dodge=True,
+                        )
+                    elif param_plot_dict["plot_type"] == "boxen":
+                        g1 = sns.boxenplot(
+                            data=inner_df_id_values_vars,
+                            x="Title",
+                            y=outer_name,
+                            hue=sub_col_name,
+                            palette=palette,
+                            ax=axs[out_idx],
+                            hue_order=bin_legends,
+                            dodge=True,
+                        )
+                    elif param_plot_dict["plot_type"] == "point":
+                        g1 = sns.pointplot(
+                            data=inner_df_id_values_vars,
+                            x="Title",
+                            y=outer_name,
+                            hue=sub_col_name,
+                            palette=palette,
+                            ax=axs[out_idx],
+                            hue_order=bin_legends,
+                            dodge=True,
+                        )
+                    elif param_plot_dict["plot_type"] == "bar":
+                        g1 = sns.barplot(
+                            data=inner_df_id_values_vars,
+                            x="Title",
+                            y=outer_name,
+                            hue=sub_col_name,
+                            palette=palette,
+                            ax=axs[out_idx],
+                            hue_order=bin_legends,
+                            dodge=True,
+                        )
+
+                g1.set(xlabel=None, ylabel=None)
+                fig.suptitle(this_title, fontsize=16)
+
+                labels = data_name_list[out_idx]
+                axs[out_idx].set_xticklabels(labels, rotation=60)
+
+                if param_plot_dict["display_optimal_values"] is True:
+                    # Get column name from coll_ana_df
+                    col_name = coll_ana_df.loc[outer_name, "csv_col_name"]
+                    matching_column = [
+                        c
+                        for c in optimal_df.columns
+                        if c.startswith(col_name) and c.endswith("_mean")
+                    ]
+                    if len(matching_column) > 0:
+                        min_value = optimal_df.loc["min", matching_column[0]]
+                        max_value = optimal_df.loc["max", matching_column[0]]
+                        # draw a horizontal dashed line to axs[out_idx] at y=min_value and y=max_value
+                        axs[out_idx].axhline(y=min_value, color="black", linestyle="--")
+                        axs[out_idx].axhline(y=max_value, color="black", linestyle="--")
+
+                # To get min max etc if necessary
+                # print(inner_df_coll.describe())
+
+                # If statistics is tested, set statistics value and name to each axs subplot
+                if param_plot_dict["inner_stat_test"] is True:
+                    """
+                    Apply the statistical test to inner_df_coll
+                    If len(inner_data_list) == 2, apply Wilcoxon signed-rank test.
+                    Else if len(inner_data_list) > 2, apply Friedman test.
+                    Set stat_name to the test name.
+                    """
+                    if len(inner_data_list) == 2:
+                        stat_test_name = "Wilcoxon signed-rank test"
+                        statistics, stat_p_value = self.ana.stat_tests.wilcoxon_test(
+                            inner_df_coll.values[:, 0], inner_df_coll.values[:, 1]
+                        )
+                    elif len(inner_data_list) > 2:
+                        stat_test_name = "Friedman test"
+                        statistics, stat_p_value = self.ana.stat_tests.friedman_test(
+                            inner_df_coll.values
+                        )
+                    else:
+                        raise ValueError(
+                            "len(inner_data_list) must be 2 or more for stat_test, aborting..."
+                        )
+
+                    # Find the column with largest median value, excluding nans
+                    median_list = []
+                    for this_idx, this_column in enumerate(inner_df_coll.columns):
+                        median_list.append(
+                            np.nanmedian(inner_df_coll.values[:, this_idx])
+                        )
+                    max_median_idx = np.argmax(median_list)
+
+                    # If p-value is less than 0.05, append
+                    # the str(max_median_idx) to stat_p_value
+                    if stat_p_value < 0.05:
+                        stat_corrected_p_value_str = f"{stat_p_value:.3f} (max median at {data_name_list[out_idx][max_median_idx]})"
+                    else:
+                        stat_corrected_p_value_str = f"{stat_p_value:.3f}"
+
+                    axs[out_idx].set_title(
+                        f"{outer_name}\n{stat_test_name} =\n{stat_corrected_p_value_str}\n{statistics:.1f}\nN = {inner_df_coll.shape[0]}"
+                    )
+                else:
+                    axs[out_idx].set_title(outer_name)
+
+            if param_plot_dict["save_description"] is True:
+                describe_df_columns_list = [
+                    c.replace(" ", "_") for c in describe_df_columns_list
+                ]
+                describe_df_all = pd.DataFrame()
+                for this_idx, this_column in enumerate(describe_df_columns_list):
+                    # Append the describe_df_all data describe_df_list[this_idx]
+                    this_describe_df = describe_df_list[this_idx]
+                    # Prepend the column names with this_column
+                    this_describe_df.columns = [
+                        this_column + "_" + c for c in this_describe_df.columns
+                    ]
+
+                    describe_df_all = pd.concat(
+                        [describe_df_all, this_describe_df], axis=1
+                    )
+
+                filename_full = Path.joinpath(
+                    describe_folder_full,
+                    param_plot_dict["save_name"] + "_" + this_title + ".csv",
+                )
+
+                # Save the describe_df_all dataframe .to_csv(filename_full, index=False)
+                describe_df_all_df = describe_df_all.describe()
+                describe_df_all_df.insert(
+                    0, "description", describe_df_all.describe().index
+                )
+                describe_df_all_df.to_csv(filename_full, index=False)
+                describe_df_list = []
+                describe_df_columns_list = []
+
+            if self.save_figure_with_arrayidentifier is not None:
+                id = "box"
+
+                self._figsave(
+                    figurename=f"{self.save_figure_with_arrayidentifier}_{id}_{this_title}",
+                    myformat="svg",
+                    subfolderpath=self.save_figure_to_folder,
+                )
+                self._figsave(
+                    figurename=f"{self.save_figure_with_arrayidentifier}_{id}_{this_title}",
+                    myformat="png",
+                    subfolderpath=self.save_figure_to_folder,
+                )

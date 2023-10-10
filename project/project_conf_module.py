@@ -61,8 +61,8 @@ NOTE: If eccentricity stays under 20 deg, dendritic diameter data fitted up to 2
 
     Parasol dendritic field diameter: temporal retina 51.8 microm + ecc(mm) * 20.6 microm/mm, nasal retina; 115.5 microm + ecc(mm) * 6.97 microm/mm
 
-model_type FIT : Fit ellipse to center and surround
-model_type : VAE : Variational autoencoder. The model reconstructs the full receptive field and generates new samples from the latent space.
+spatial_model FIT : Fit ellipse to center and surround
+spatial_model : VAE : Variational autoencoder. The model reconstructs the full receptive field and generates new samples from the latent space.
     
 Contrast gain control (CGC) is implemented according to Victor_1987_JPhysiol using numerical integration in discretized temporal domain.
 The unit parameters are drawn from Benardete_1999_VisNeurosci for parasol cells and Benardete_1997_VisNeurosci_a for midget cells.
@@ -110,7 +110,7 @@ project = "Retina"
 """
 Current experiment. Use distinct folders fo distinct stimuli.
 """
-experiment = "contrast_response_function"  # "luminance_onset"
+experiment = "spatiotemporal"  # "luminance_onset"
 
 
 """
@@ -124,14 +124,14 @@ input_folder = "../in"  # input figs, videos, models
 Stimulus context
 Stimulus images and videos
 """
-stimulus_folder = "stim_temporal_sine_10"  # stim_sine_grating_sf2p0_crf_14_7"  # "stim_luminance_onset"
+stimulus_folder = "stim"  # stim_sine_grating_sf2p0_crf_14_7"  # "stim_luminance_onset"
 
 
 """
 Data context for output. 
 """
 
-output_folder = "parasol_on_temporal_sine_100"  # "parasol_on_stim_sine_grating_sf2p0_crf_14_7"  # "parasol_on_luminance_onset"
+output_folder = "parasol_on_stim"  # "parasol_on_stim_sine_grating_sf2p0_crf_14_7"  # "parasol_on_luminance_onset"
 
 
 """
@@ -168,7 +168,7 @@ my_retina = {
     "randomize_position": 0.2,  # between 0 and 1
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
-    "model_type": "VAE",  # "FIT" or "VAE" for variational autoencoder.
+    "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder.
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models. Note that ellipse fit does not tolearate VAE adjustments => fit to nonadjusted generated rfs
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
     "model_file_name": "model_midget_on_20230927_133151.pt",  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only.
@@ -473,20 +473,20 @@ if __name__ == "__main__":
     """
 
     # # Main retina construction method. This method calls all other methods in the retina construction process.
-    # PM.construct_retina.build()
+    PM.construct_retina.build()
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # This is why they are called via the construct_retina attribute. The instance
     # object is attached to the call for viz.
 
-    # This function visualizes the spatial and temporal filter responses, ganglion cell positions and density,
+    # The show_exp_build_process method visualizes the spatial and temporal filter responses, ganglion cell positions and density,
     # mosaic layout, spatial and temporal statistics, dendrite diameter versus eccentricity, and tonic drives
     # in the retina mosaic building process.
 
     # For ellipse FIT
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
     # PM.viz.visualize_mosaic(savefigname="parasol_on_ellipses.eps")
-    # PM.viz.show_dendrite_diam_vs_ecc(savefigname="parasol_on_dd_ecc.eps")
+    PM.viz.show_dendrite_diam_vs_ecc(savefigname="parasol_on_dd_ecc.eps")
     # PM.viz.show_temporal_filter_response(n_curves=3, savefigname="temporal_filters.eps")
     # PM.viz.show_spatial_statistics(savefigname="spatial_stats.eps")
 
@@ -508,10 +508,11 @@ if __name__ == "__main__":
     #     ray_exp_name, this_dep_var, highlight_trial=highlight_trial
     # )
 
-    # # For both FIT and VAE
-    # PM.viz.validate_gc_rf_size(
-    #     savefigname="rf_size_vs_Schottdorf_data.eps"
-    # )  # Schottdorf_2021_JPhysiol
+    # For both FIT and VAE. Estimated luminance for validation data is
+    # 222.2 td / (np.pi * (4 mm diam / 2)**2) = 17.7 cd/m2
+    PM.viz.validate_gc_rf_size(
+        savefigname="rf_size_vs_Schottdorf_data.eps"
+    )  # Schottdorf_2021_JPhysiol, van Hateren_2002_JNeurosci
 
     ###################################
     ###################################
@@ -614,8 +615,8 @@ if __name__ == "__main__":
     ### Build and run Experiment ###
     ################################
 
-    exp_variables = ["temporal_frequency"]  # from my_stimulus_options
-    # exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
+    # exp_variables = ["temporal_frequency"]  # from my_stimulus_options
+    exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
     # # # # Define experiment parameters. List lengths must be equal.
     # # # # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logaritmic = [True]
     # experiment_dict = {
@@ -634,34 +635,73 @@ if __name__ == "__main__":
     # ## Analyze Experiment ###
     # #########################
 
-    my_analysis_options = {
-        "exp_variables": exp_variables,
-        "t_start_ana": 1,
-        "t_end_ana": 7,
-    }
+    # my_analysis_options = {
+    #     "exp_variables": exp_variables,
+    #     "t_start_ana": 1,
+    #     "t_end_ana": 7,
+    # }
 
-    PM.ana.analyze_response(my_analysis_options)
+    # PM.ana.analyze_response(my_analysis_options)
 
     # ############################
     # ### Visualize Experiment ###
     # ############################
 
-    PM.viz.F1F2_popul_response(exp_variables, xlog=False, savefigname=None)
+    # PM.viz.F1F2_popul_response(exp_variables, xlog=False, savefigname=None)
     # PM.viz.F1F2_unit_response(
     #     exp_variables, xlog=False, savefigname=output_folder + ".eps"
     # )
-    PM.viz.ptp_response(
-        exp_variables, x_of_interest=["tf11", "tf16", "tf22"], savefigname=None
-    )
+    # PM.viz.ptp_response(exp_variables, x_of_interest=None, savefigname=None)
     # PM.viz.fr_response(exp_variables, xlog=True, savefigname=None)
     # PM.viz.spike_raster_response(exp_variables, savefigname=None)
     # PM.viz.tf_vs_fr_cg(
     #     exp_variables,
     #     n_contrasts=3,
     #     xlog=True,
-    #     ylog=True,
+    #     ylog=False,
     #     savefigname="tf_vs_fr_cg_sine_grating.eps",
     # )
+
+    #################################################################################
+    ######              Categorical plot of parametric data              ############
+    #################################################################################
+
+    """
+    Define what data is going to be visualized and how it is visualized
+
+    title : figures, multiple allowed 
+    outer : panels (distinct subplots) multiple allowed
+    inner : inside one axis (subplot) multiple allowed, statistics available
+    plot_type : seaborn plot types: "violin", "box", "strip", "swarm", "boxen", "point", "bar"
+    palette : seaborn color palette: "viridis", "plasma", "inferno", "magma", "Greys"
+    inner_stat_test : bool. If True, perform statistical test between inner variables.
+    -if N inner == 2, apply Wilcoxon signed-rank test, if N inner > 2, apply Friedman test.
+
+    inner_paths : bool (only inner available for setting paths). Provide comparison from arbitrary paths, e.g. controls. The 'inner' is ignored.
+    inner_path_names: list of names of paths to compare.
+    paths : provide list of tuples of full path parts to data folder. 
+    E.g. [(path, 'Single_narrow_iterations_control', 'Bacon_gL_compiled_results'),] 
+    The number of paths MUST be the same as the number of corresponding inner variables. 
+    """
+
+    param_plot_dict = {
+        "title": "parameters",
+        "outer": "analyzes",
+        "inner": "startpoints",
+        "plot_type": "box",
+        "sharey": False,
+        "palette": "Greys",
+        "inner_stat_test": False,
+        # "inner_paths": False,
+        # "inner_path_names": ["Comrad", "Bacon", "Random_EI", "Random_all"],
+        # "paths": [
+        #     (path, "Comrad_gL_compiled_results"),
+        #     (path, "Bacon_gL_compiled_results"),
+        #     (path, "Bacon_gL_compiled_results_EI"),
+        #     (path, "Bacon_gL_compiled_results_ALL"),
+        # ],
+    }
+    PM.viz.show_catplot(param_plot_dict)
 
     ###############################
     ###############################

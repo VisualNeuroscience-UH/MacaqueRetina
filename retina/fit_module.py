@@ -82,7 +82,7 @@ class Fit(ApricotData, RetinaMath):
                     self.exp_spat_filt_to_viz,
                     self.exp_temp_filt_to_viz,
                     self.apricot_data_resolution_hw,
-                    self.good_idx,
+                    self.good_idx_experimental,
                 ) = self._fit_experimental_data()
             case "generated":
                 (
@@ -97,7 +97,7 @@ class Fit(ApricotData, RetinaMath):
                     self.good_idx_rings,
                 ) = self._fit_concentric_rings(spatial_data)
 
-    def _fit_temporal_filters(self, good_idx, normalize_before_fit=False):
+    def _fit_temporal_filters(self, good_idx_experimental, normalize_before_fit=False):
         """
         Fits each temporal filter to a function consisting of the difference of two cascades of lowpass filters.
         This follows the method described by Chichilnisky & Kalmar in their 2002 JNeurosci paper, using retinal spike
@@ -105,7 +105,7 @@ class Fit(ApricotData, RetinaMath):
 
         Parameters
         ----------
-        good_idx : array-like of int
+        good_idx_experimental : array-like of int
             Indices of the cells to fit the temporal filters for.
         normalize_before_fit : bool, default False
             If True, normalize each temporal filter before fitting.
@@ -167,7 +167,7 @@ class Fit(ApricotData, RetinaMath):
             "title": f"{self.gc_type}_{self.response_type}",
         }
 
-        for cell_ix in tqdm(good_idx, desc="Fitting temporal filters"):
+        for cell_ix in tqdm(good_idx_experimental, desc="Fitting temporal filters"):
             ydata = temporal_filters[cell_ix, :]
 
             try:
@@ -234,7 +234,7 @@ class Fit(ApricotData, RetinaMath):
         bad_idx_for_spatial_fit : numpy.ndarray or None, optional
             Indices of cells to exclude from fitting, by default None
         DoG_model_type : int, optional
-           0 fit center and surround separately, 1 fix surround midpoint to center (default), 2 concentric, symmetric rings
+           0 fit center and surround ellipses separately, 1 fix surround ellipse midpoint to center (default), 2 fit concentric, symmetric rings
         semi_x_always_major : bool, optional
             Whether to rotate Gaussians so that semi_x is always the semimajor/longer axis, by default True
 
@@ -631,7 +631,7 @@ class Fit(ApricotData, RetinaMath):
                 Array of temporal filters in the format required for visualization.
             apricot_data_resolution_hw : Tuple[int, int]
                 Tuple containing the height and width of the original Apricot data.
-            good_idx : numpy.ndarray
+            good_idx_experimental : numpy.ndarray
                 Array of indices of good data after manually picked bad data and
                 failed spatial fit indeces have been removed.
         """
@@ -655,8 +655,10 @@ class Fit(ApricotData, RetinaMath):
 
         spatial_filter_sums = self.compute_spatial_filter_sums()
 
-        good_idx = np.where(good_mask == 1)[0]
-        temporal_fits, temp_filt_to_viz = self._fit_temporal_filters(good_idx)
+        good_idx_experimental = np.where(good_mask == 1)[0]
+        temporal_fits, temp_filt_to_viz = self._fit_temporal_filters(
+            good_idx_experimental
+        )
 
         # Note that this ignores only manually picked bad data indices,
         # if remove_bad_data_idx=True.
@@ -676,15 +678,15 @@ class Fit(ApricotData, RetinaMath):
             axis=1,
         )
 
-        # Set all_data_fits_df rows which are not part of good_idx to zero
-        all_data_fits_df.loc[~all_data_fits_df.index.isin(good_idx)] = 0.0
+        # Set all_data_fits_df rows which are not part of good_idx_experimental to zero
+        all_data_fits_df.loc[~all_data_fits_df.index.isin(good_idx_experimental)] = 0.0
 
         return (
             all_data_fits_df,
             spat_filt_to_viz,
             temp_filt_to_viz,
             apricot_data_resolution_hw,
-            good_idx,
+            good_idx_experimental,
         )
 
     def _fit_generated_data(self, spatial_data):
@@ -702,6 +704,8 @@ class Fit(ApricotData, RetinaMath):
             A DataFrame containing the fitted parameters for the spatial filter.
         spat_filt_to_viz : numpy.ndarray
             Array of shape (n_samples, height, width) containing the visualized spatial filters.
+        good_idx_generated : numpy.ndarray
+            Array of indices of good data after failed spatial fit indeces have been removed.
         """
 
         cen_rot_rad_all = np.zeros(spatial_data.shape[0])
@@ -717,11 +721,11 @@ class Fit(ApricotData, RetinaMath):
         # Collect everything into one big dataframe
         all_data_fits_df = pd.concat([spatial_fits], axis=1)
 
-        good_idx = np.where(good_mask == 1)[0]
-        # Set all_data_fits_df rows which are not part of good_idx to zero
-        all_data_fits_df.loc[~all_data_fits_df.index.isin(good_idx)] = 0.0
+        good_idx_generated = np.where(good_mask == 1)[0]
+        # Set all_data_fits_df rows which are not part of good_idx_generated to zero
+        all_data_fits_df.loc[~all_data_fits_df.index.isin(good_idx_generated)] = 0.0
 
-        return all_data_fits_df, spat_filt_to_viz, good_idx
+        return all_data_fits_df, spat_filt_to_viz, good_idx_generated
 
     def _fit_concentric_rings(self, spatial_data):
         """
@@ -752,20 +756,20 @@ class Fit(ApricotData, RetinaMath):
         # Collect everything into one big dataframe
         all_data_fits_df = pd.concat([spatial_fits], axis=1)
 
-        good_idx = np.where(good_mask == 1)[0]
-        # Set all_data_fits_df rows which are not part of good_idx to zero
-        all_data_fits_df.loc[~all_data_fits_df.index.isin(good_idx)] = 0.0
+        good_idx_rings = np.where(good_mask == 1)[0]
+        # Set all_data_fits_df rows which are not part of good_idx_rings to zero
+        all_data_fits_df.loc[~all_data_fits_df.index.isin(good_idx_rings)] = 0.0
 
-        return all_data_fits_df, spat_filt_to_viz, good_idx
+        return all_data_fits_df, spat_filt_to_viz, good_idx_rings
 
-    def _fit_spatial_statistics(self, good_idx):
+    def _fit_spatial_statistics(self, good_data_fit_idx):
         """
         Fits gamma distribution parameters for the 'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s',
         and 'relat_sur_diam' RF parameters, and fits vonmisees distribution parameters for the 'orient_cen_rad' RF parameter.
 
         Parameters:
         -----------
-        good_idx : array_like
+        good_data_fit_idx : array_like
             A list of indices indicating the selected good cells.
 
         Returns:
@@ -779,7 +783,7 @@ class Fit(ApricotData, RetinaMath):
         """
 
         data_all_cells = np.array(self.all_data_fits_df)
-        all_viable_cells = data_all_cells[good_idx]
+        all_viable_cells = data_all_cells[good_data_fit_idx]
 
         parameter_names = self.all_data_fits_df.columns.tolist()
         spatial_data_df = pd.DataFrame(data=all_viable_cells, columns=parameter_names)
@@ -895,13 +899,13 @@ class Fit(ApricotData, RetinaMath):
         # Return stats for RF creation
         return spatial_stat_df, spat_stat_to_viz
 
-    def _fit_temporal_statistics(self, good_idx):
+    def _fit_temporal_statistics(self, good_data_fit_idx):
         """
         Fit temporal statistics of the temporal filter parameters using the gamma distribution.
 
         Parameters
         ----------
-        good_idx : ndarray
+        good_data_fit_idx : ndarray
             Boolean index array indicating which rows of `self.all_data_fits_df` to use for fitting.
 
         Returns
@@ -913,14 +917,16 @@ class Fit(ApricotData, RetinaMath):
         temp_stat_to_viz : dict
             A dictionary containing information needed for visualization, including the temporal filter parameters, the
             fitted distribution parameters, the super title of the plot, `self.gc_type`, `self.response_type`, the
-            `self.all_data_fits_df` DataFrame, and the `good_idx` Boolean index array.
+            `self.all_data_fits_df` DataFrame, and the `good_data_fit_idx` Boolean index array.
         """
 
         temporal_filter_parameters = ["n", "p1", "p2", "tau1", "tau2"]
         distrib_params = np.zeros((len(temporal_filter_parameters), 3))
 
         for i, param_name in enumerate(temporal_filter_parameters):
-            param_array = np.array(self.all_data_fits_df.iloc[good_idx][param_name])
+            param_array = np.array(
+                self.all_data_fits_df.iloc[good_data_fit_idx][param_name]
+            )
             shape, loc, scale = stats.gamma.fit(param_array)
             distrib_params[i, :] = [shape, loc, scale]
 
@@ -929,7 +935,7 @@ class Fit(ApricotData, RetinaMath):
             "distrib_params": distrib_params,
             "suptitle": self.gc_type + " " + self.response_type,
             "all_data_fits_df": self.all_data_fits_df,
-            "good_idx": good_idx,
+            "good_idx_experimental": good_data_fit_idx,
         }
 
         temporal_exp_stat_df = pd.DataFrame(
@@ -943,13 +949,13 @@ class Fit(ApricotData, RetinaMath):
 
         return temporal_exp_stat_df, temp_stat_to_viz
 
-    def _fit_tonicdrive_statistics(self, good_idx):
+    def _fit_tonicdrive_statistics(self, good_data_fit_idx):
         """
         Fits tonic drive statistics to tonic drive value fits using gamma distribution.
 
         Parameters
         ----------
-        good_idx : list of int
+        good_data_fit_idx : list of int
             List of indices of good data fits to be used for fitting the tonic drive statistics.
 
         Returns
@@ -965,7 +971,9 @@ class Fit(ApricotData, RetinaMath):
             - title: a string representing the title of the plot, which includes the gc_type and response_type.
         """
 
-        tonicdrive_array = np.array(self.all_data_fits_df.iloc[good_idx].tonicdrive)
+        tonicdrive_array = np.array(
+            self.all_data_fits_df.iloc[good_data_fit_idx].tonicdrive
+        )
         shape, loc, scale = stats.gamma.fit(tonicdrive_array)
 
         x_min, x_max = stats.gamma.ppf([0.001, 0.999], a=shape, loc=loc, scale=scale)
@@ -995,13 +1003,13 @@ class Fit(ApricotData, RetinaMath):
 
         return td_df, exp_tonic_dr_to_viz
 
-    def _get_center_surround_sd(self, good_idx):
+    def _get_center_surround_sd(self, good_data_fit_idx):
         """
         Calculates mean center and surround standard deviations in millimeters for spatial RF volume scaling.
 
         Parameters
         ----------
-        good_idx : ndarray or boolean mask
+        good_data_fit_idx : ndarray or boolean mask
             Indices or boolean mask for selecting valid data fits.
 
         Returns
@@ -1011,7 +1019,7 @@ class Fit(ApricotData, RetinaMath):
         mean_surround_sd : float
             Mean surround standard deviation in millimeters.
         """
-        df = self.all_data_fits_df.iloc[good_idx]
+        df = self.all_data_fits_df.iloc[good_data_fit_idx]
 
         # Get mean center and surround RF size from data in millimeters
         mean_center_sd = np.mean(np.sqrt(df.semi_xc * df.semi_yc)) * self.DATA_PIXEL_LEN
@@ -1120,13 +1128,17 @@ class Fit(ApricotData, RetinaMath):
             Dictionary with spatial filter statistics and distributions
         """
 
-        good_idx = self.good_idx_generated
+        good_idx_generated = self.good_idx_generated
 
         # Get statistics for spatial filters
-        gen_spat_stat_df, gen_spat_stat_to_viz = self._fit_spatial_statistics(good_idx)
+        gen_spat_stat_df, gen_spat_stat_to_viz = self._fit_spatial_statistics(
+            good_idx_generated
+        )
 
         # get center and surround sd
-        gen_mean_cen_sd, gen_mean_sur_sd = self._get_center_surround_sd(good_idx)
+        gen_mean_cen_sd, gen_mean_sur_sd = self._get_center_surround_sd(
+            good_idx_generated
+        )
 
         # Collect everything into one big dataframe
         gen_stat_df = pd.concat(
@@ -1141,7 +1153,7 @@ class Fit(ApricotData, RetinaMath):
             self.gen_spat_filt_to_viz,
             gen_spat_stat_to_viz,
             self.all_data_fits_df,
-            good_idx,
+            good_idx_generated,
         )
 
 

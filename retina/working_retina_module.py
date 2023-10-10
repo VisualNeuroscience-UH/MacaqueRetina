@@ -81,7 +81,7 @@ class WorkingRetina(RetinaMath):
             stimulus_height_pix (int): Height of stimulus in pixels
             pix_per_deg (float): Pixels per degree
             fps (float): Frames per second
-            model_type (str): Model type
+            spatial_model (str): Model type
             data_microm_per_pixel (float): Micrometers per pixel
             data_filter_fps (float): Timesteps per second in data
             data_filter_timesteps (int): Timesteps in data
@@ -107,7 +107,7 @@ class WorkingRetina(RetinaMath):
         pix_per_deg = self.context.my_stimulus_options["pix_per_deg"]
         fps = self.context.my_stimulus_options["fps"]
 
-        self.model_type = self.context.my_retina["model_type"]
+        self.spatial_model = self.context.my_retina["spatial_model"]
         self.temporal_model = self.context.my_retina["temporal_model"]
 
         # Metadata for Apricot dataset.
@@ -162,9 +162,9 @@ class WorkingRetina(RetinaMath):
 
         self._initialize_digital_sampling()
 
-        self.model_type = self.context.my_retina["model_type"]
+        self.spatial_model = self.context.my_retina["spatial_model"]
 
-        if self.model_type == "VAE":
+        if self.spatial_model == "VAE":
             self.spat_rf = self.data_io.get_data(
                 filename=self.context.my_retina["spatial_rfs_file"],
             )
@@ -750,9 +750,9 @@ class WorkingRetina(RetinaMath):
             The column-dimension is the number of frames in the stimulus
         """
 
-        if self.model_type == "FIT":
+        if self.spatial_model == "FIT":
             spatial_filter = self._create_spatial_filter_FIT(cell_index)
-        elif self.model_type == "VAE":
+        elif self.spatial_model == "VAE":
             spatial_filter = self._create_spatial_filter_VAE(cell_index)
         else:
             raise ValueError("Unknown model type, aborting...")
@@ -836,17 +836,17 @@ class WorkingRetina(RetinaMath):
         Notes
         -----
         This function depends on the following instance variables:
-          - self.model_type: a string indicating the type of model used. Expected values are 'FIT' or 'VAE'.
+          - self.spatial_model: a string indicating the type of model used. Expected values are 'FIT' or 'VAE'.
           - self.spatial_filter_sidelen: an integer specifying the side length of a spatial filter.
         """
         s = self.spatial_filter_sidelen
         spatial_filters = np.zeros((len(cell_indices), s**2))
         for idx, cell_index in enumerate(cell_indices):
-            if self.model_type == "FIT":
+            if self.spatial_model == "FIT":
                 spatial_filter = self._create_spatial_filter_FIT(
                     cell_index, get_masks=get_masks
                 )
-            elif self.model_type == "VAE":
+            elif self.spatial_model == "VAE":
                 spatial_filter = self._create_spatial_filter_VAE(
                     cell_index, get_masks=get_masks
                 )
