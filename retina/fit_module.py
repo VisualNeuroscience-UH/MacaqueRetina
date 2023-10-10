@@ -1094,15 +1094,14 @@ class Fit(ApricotData, RetinaMath):
             [spatial_exp_stat_df, temporal_exp_stat_df, tonicdrive_exp_stat_df],
             axis=0,
         )
+
         return (
             exp_stat_df,
-            good_data_fit_idx,
-            bad_data_fit_idx,
             exp_spat_cen_sd_mm,
             exp_spat_sur_sd_mm,
-            self.exp_temp_filt_to_viz,
             self.exp_spat_filt_to_viz,
             exp_spat_stat_to_viz,
+            self.exp_temp_filt_to_viz,
             exp_temp_stat_to_viz,
             exp_tonic_dr_to_viz,
             self.apricot_data_resolution_hw,

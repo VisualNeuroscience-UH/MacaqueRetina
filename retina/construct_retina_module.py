@@ -214,13 +214,11 @@ class ConstructRetina(RetinaMath):
         # Make or read fits
         (
             self.exp_stat_df,
-            self.good_data_idx,
-            self.bad_data_idx,
             self.exp_spat_cen_sd_mm,
             self.exp_spat_sur_sd_mm,
-            self.exp_temp_filt_to_viz,
             self.exp_spat_filt_to_viz,
             self.exp_spat_stat_to_viz,
+            self.exp_temp_filt_to_viz,
             self.exp_temp_stat_to_viz,
             self.exp_tonic_dr_to_viz,
             self.apricot_data_resolution_hw,

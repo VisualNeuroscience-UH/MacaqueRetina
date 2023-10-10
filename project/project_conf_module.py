@@ -169,7 +169,7 @@ my_retina = {
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
     "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder.
-    "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models. Note that ellipse fit does not tolearate VAE adjustments => fit to nonadjusted generated rfs
+    "rf_coverage_adjusted_to_1": True,  # False or True. Applies both to FIT and VAE models. Note that ellipse fit does not tolearate VAE adjustments => fit to nonadjusted generated rfs
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
     "model_file_name": "model_midget_on_20230927_133151.pt",  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only.
     "ray_tune_trial_id": None,  # Trial_id for tune, None for loading single run after "train_model". Applies to VAE "load_model" only.
@@ -240,7 +240,7 @@ my_stimulus_options = {
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
     "fps": 300,  # 300 for good cg integration
-    "duration_seconds": 7.0,  # actual frames = floor(duration_seconds * fps)
+    "duration_seconds": 1,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
     "pattern": "sine_grating",  # Natural video is not supported yet. One of the StimulusPatterns
@@ -510,9 +510,9 @@ if __name__ == "__main__":
 
     # For both FIT and VAE. Estimated luminance for validation data is
     # 222.2 td / (np.pi * (4 mm diam / 2)**2) = 17.7 cd/m2
-    PM.viz.validate_gc_rf_size(
-        savefigname="rf_size_vs_Schottdorf_data.eps"
-    )  # Schottdorf_2021_JPhysiol, van Hateren_2002_JNeurosci
+    # PM.viz.validate_gc_rf_size(
+    #     savefigname="rf_size_vs_Schottdorf_data.eps"
+    # )  # Schottdorf_2021_JPhysiol, van Hateren_2002_JNeurosci
 
     ###################################
     ###################################
@@ -525,13 +525,13 @@ if __name__ == "__main__":
     ########################
 
     # See my_stimulus_options for valid stimulus_options
-    # PM.stimulate.make_stimulus_video()
+    PM.stimulate.make_stimulus_video()
 
     ###########################################
     ### Load stimulus to get working retina ###
     ###########################################
 
-    # PM.working_retina.load_stimulus()
+    PM.working_retina.load_stimulus()
 
     ##########################################
     ### Show single ganglion cell response ###
@@ -564,9 +564,9 @@ if __name__ == "__main__":
     ### Run multiple trials or cells ###
     ####################################
 
-    # PM.working_retina.run_with_my_run_options()
+    PM.working_retina.run_with_my_run_options()
 
-    # PM.viz.show_gc_responses(PM.working_retina, savefigname=f"{output_folder}.eps")
+    PM.viz.show_gc_responses(PM.working_retina, savefigname=f"{output_folder}.eps")
 
     # PM.viz.show_stimulus_with_gcs(
     #     PM.working_retina,
@@ -666,42 +666,42 @@ if __name__ == "__main__":
     ######              Categorical plot of parametric data              ############
     #################################################################################
 
-    """
-    Define what data is going to be visualized and how it is visualized
+    # """
+    # Define what data is going to be visualized and how it is visualized
 
-    title : figures, multiple allowed 
-    outer : panels (distinct subplots) multiple allowed
-    inner : inside one axis (subplot) multiple allowed, statistics available
-    plot_type : seaborn plot types: "violin", "box", "strip", "swarm", "boxen", "point", "bar"
-    palette : seaborn color palette: "viridis", "plasma", "inferno", "magma", "Greys"
-    inner_stat_test : bool. If True, perform statistical test between inner variables.
-    -if N inner == 2, apply Wilcoxon signed-rank test, if N inner > 2, apply Friedman test.
+    # title : figures, multiple allowed, categorical independent variable
+    # outer : panels (distinct subplots) multiple allowed, categorical independent variable
+    # inner : inside one axis (subplot) multiple allowed, parametric dependent variable, statistics available
+    # plot_type : seaborn plot types: "violin", "box", "strip", "swarm", "boxen", "point", "bar"
+    # palette : seaborn color palette: "viridis", "plasma", "inferno", "magma", "Greys"
+    # inner_stat_test : bool. If True, perform statistical test between inner variables.
+    # -if N inner == 2, apply Wilcoxon signed-rank test, if N inner > 2, apply Friedman test.
 
-    inner_paths : bool (only inner available for setting paths). Provide comparison from arbitrary paths, e.g. controls. The 'inner' is ignored.
-    inner_path_names: list of names of paths to compare.
-    paths : provide list of tuples of full path parts to data folder. 
-    E.g. [(path, 'Single_narrow_iterations_control', 'Bacon_gL_compiled_results'),] 
-    The number of paths MUST be the same as the number of corresponding inner variables. 
-    """
+    # inner_paths : bool (only inner available for setting paths). Provide comparison from arbitrary paths, e.g. controls. The 'inner' is ignored.
+    # inner_path_names: list of names of paths to compare.
+    # paths : provide list of tuples of full path parts to data folder.
+    # E.g. [(path, 'Single_narrow_iterations_control', 'Bacon_gL_compiled_results'),]
+    # The number of paths MUST be the same as the number of corresponding inner variables.
+    # """
 
-    param_plot_dict = {
-        "title": "parameters",
-        "outer": "analyzes",
-        "inner": "startpoints",
-        "plot_type": "box",
-        "sharey": False,
-        "palette": "Greys",
-        "inner_stat_test": False,
-        # "inner_paths": False,
-        # "inner_path_names": ["Comrad", "Bacon", "Random_EI", "Random_all"],
-        # "paths": [
-        #     (path, "Comrad_gL_compiled_results"),
-        #     (path, "Bacon_gL_compiled_results"),
-        #     (path, "Bacon_gL_compiled_results_EI"),
-        #     (path, "Bacon_gL_compiled_results_ALL"),
-        # ],
-    }
-    PM.viz.show_catplot(param_plot_dict)
+    # param_plot_dict = {
+    #     "title": "parameters",
+    #     "outer": "analyzes",
+    #     "inner": "startpoints",
+    #     "plot_type": "box",
+    #     "sharey": False,
+    #     "palette": "Greys",
+    #     "inner_stat_test": False,
+    #     # "inner_paths": False,
+    #     # "inner_path_names": ["Comrad", "Bacon", "Random_EI", "Random_all"],
+    #     # "paths": [
+    #     #     (path, "Comrad_gL_compiled_results"),
+    #     #     (path, "Bacon_gL_compiled_results"),
+    #     #     (path, "Bacon_gL_compiled_results_EI"),
+    #     #     (path, "Bacon_gL_compiled_results_ALL"),
+    #     # ],
+    # }
+    # PM.viz.show_catplot(param_plot_dict)
 
     ###############################
     ###############################

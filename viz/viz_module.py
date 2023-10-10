@@ -2522,31 +2522,12 @@ class Viz:
             A nested list of data for each combination of outer and inner conditions.
         data_name_list : list
             A nested list of names for each combination of outer and inner conditions.
-        data_sub_list : list
-            A nested list of sub data for each combination of outer and inner conditions.
         outer_name_list : list
             A list of names for the outer conditions.
-        sub_col_name : str
-            The short name for the sub analysis, if active.
         """
 
-        sub_col_name = ""
-
-        # Isolate inner sub ana, if active
-        if param_plot_dict["inner_sub"] is True:
-            coll_sub_S = coll_ana_df_in.loc[param_plot_dict["inner_sub_ana"]]
-            coll_ana_df = coll_ana_df_in.drop(
-                index=param_plot_dict["inner_sub_ana"], inplace=False
-            )
-            analyzes_list = copy.deepcopy(to_spa_dict_in["analyzes"])
-            analyzes_list.remove(param_plot_dict["inner_sub_ana"])
-            to_spa_dict = {k: to_spa_dict_in[k] for k in ["startpoints", "parameters"]}
-            to_spa_dict["analyzes"] = analyzes_list
-            # Short ana name for sub to diff from data col names
-            sub_col_name = coll_sub_S["ana_name_prefix"]
-        else:
-            to_spa_dict = to_spa_dict_in
-            coll_ana_df = coll_ana_df_in
+        to_spa_dict = to_spa_dict_in
+        coll_ana_df = coll_ana_df_in
 
         [title] = to_spa_dict[param_plot_dict["title"]]
         outer_list = to_spa_dict[param_plot_dict["outer"]]
@@ -2571,13 +2552,11 @@ class Viz:
 
         data_list = []  # nested list, N items = N outer x N inner
         data_name_list = []  # nested list, N items = N outer x N inner
-        data_sub_list = []  # nested list, N items = N outer x N inner
         outer_name_list = []  # list , N items = N outer
 
         for outer in outer_list:
             inner_data_list = []  # list , N items = N inner
             inner_name_list = []  # list , N items = N inner
-            inner_data_sub_list = []  # list , N items = N inner
 
             for in_idx, inner in enumerate(inner_list):
                 # Nutcracker. eval to "outer", "inner" and "title"
@@ -2614,24 +2593,14 @@ class Viz:
                 inner_data_list.append(df)
                 inner_name_list.append(inner)
 
-                if param_plot_dict["inner_sub"] is True:
-                    sub_col = coll_sub_S["csv_col_name"]
-                    if param_plot_dict["compiled_results"] is True:
-                        sub_col = f"{sub_col}_mean"
-                    df_sub = data_df_compiled[sub_col]
-                    inner_data_sub_list.append(df_sub)
-
             data_list.append(inner_data_list)
             data_name_list.append(inner_name_list)
-            data_sub_list.append(inner_data_sub_list)
             outer_name_list.append(outer)
 
         return (
             data_list,
             data_name_list,
-            data_sub_list,
             outer_name_list,
-            sub_col_name,
         )
 
     def show_catplot(self, param_plot_dict):
