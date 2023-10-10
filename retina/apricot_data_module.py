@@ -83,14 +83,6 @@ class ApricotData:
         self.n_cells = len(self.data)
         self.inverted_data_indices = self._get_inverted_indices()
 
-        # self.metadata = {
-        #     "data_microm_per_pix": 60,
-        #     "data_spatialfilter_height": 13,
-        #     "data_spatialfilter_width": 13,
-        #     "data_fps": 30,  # Uncertain - "30 or 120 Hz"
-        #     "data_temporalfilter_samples": 15,
-        # }
-
     def _get_inverted_indices(self):
         """
         The rank-1 space and time matrices in the dataset have bumps in an inconsistent way, but the
