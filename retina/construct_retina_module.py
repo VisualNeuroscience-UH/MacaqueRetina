@@ -106,7 +106,7 @@ class ConstructRetina(RetinaMath):
     def Fit(self):
         return self._Fit
 
-    def _initialize(self, fits_from_file=None):
+    def _initialize(self):
         """
         Initialize the ganglion cell mosaic.
             First: sets ConstructRetina instance parameters from conf file my_retina
@@ -115,11 +115,6 @@ class ConstructRetina(RetinaMath):
                 Calls Fit or RetinaVAE classes
 
         See class attributes for more details.
-
-        Parameters
-        ----------
-        fits_from_file : str
-            Path to a file containing the fits. If None, fits are computed from scratch
         """
 
         my_retina = self.context.my_retina
@@ -217,30 +212,24 @@ class ConstructRetina(RetinaMath):
         self.surround_fixed = 1
 
         # Make or read fits
-        if fits_from_file is None:
-            (
-                self.exp_stat_df,
-                self.good_data_idx,
-                self.bad_data_idx,
-                self.exp_spat_cen_sd_mm,
-                self.exp_spat_sur_sd_mm,
-                self.exp_temp_filt_to_viz,
-                self.exp_spat_filt_to_viz,
-                self.exp_spat_stat_to_viz,
-                self.exp_temp_stat_to_viz,
-                self.exp_tonic_dr_to_viz,
-                self.apricot_data_resolution_hw,
-            ) = self.Fit(
-                self.context.apricot_data_folder,
-                gc_type,
-                response_type,
-                fit_type="experimental",
-            ).get_experimental_fits()
-        else:
-            # probably obsolete 230118 SV
-            self.all_fits_df = pd.read_csv(
-                fits_from_file, header=0, index_col=0
-            ).fillna(0.0)
+        (
+            self.exp_stat_df,
+            self.good_data_idx,
+            self.bad_data_idx,
+            self.exp_spat_cen_sd_mm,
+            self.exp_spat_sur_sd_mm,
+            self.exp_temp_filt_to_viz,
+            self.exp_spat_filt_to_viz,
+            self.exp_spat_stat_to_viz,
+            self.exp_temp_stat_to_viz,
+            self.exp_tonic_dr_to_viz,
+            self.apricot_data_resolution_hw,
+        ) = self.Fit(
+            self.context.apricot_data_folder,
+            gc_type,
+            response_type,
+            fit_type="experimental",
+        ).get_experimental_fits()
 
         self.initialized = True
 
