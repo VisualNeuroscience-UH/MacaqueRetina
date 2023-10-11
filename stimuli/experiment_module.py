@@ -6,7 +6,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Local
-from stimuli.visual_stimulus_module import VideoBaseClass, VisualStimulus
+from stimuli.visual_stimulus_module import VideoBaseClass
 
 # Builtin
 import pdb
