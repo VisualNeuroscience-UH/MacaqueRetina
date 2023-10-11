@@ -594,7 +594,7 @@ class StimulusForm:
         raise NotImplementedError
 
 
-class ConstructStimulus(VideoBaseClass):
+class VisualStimulus(VideoBaseClass):
     """
     Create stimulus video and save
     """

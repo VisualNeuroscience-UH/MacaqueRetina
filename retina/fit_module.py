@@ -32,10 +32,11 @@ class Fit(RetinaMath):
     a function consisting of cascade of two lowpass filters and for adding the tonic drive .
     """
 
-    def __init__(self, context, data_io):
+    def __init__(self, context, data_io, project_data):
         # Dependency injection at ProjectManager construction
         self._context = context.set_context(self)
         self._data_io = data_io
+        self._project_data = project_data
 
         self.metadata = self.context.apricot_metadata
 
@@ -46,6 +47,10 @@ class Fit(RetinaMath):
     @property
     def data_io(self):
         return self._data_io
+
+    @property
+    def project_data(self):
+        return self._project_data
 
     def initialize(
         self,
@@ -100,21 +105,21 @@ class Fit(RetinaMath):
             case "experimental":
                 (
                     self.all_data_fits_df,
-                    self.exp_spat_filt_to_viz,
-                    self.exp_temp_filt_to_viz,
+                    self.exp_spat_filt,
+                    self.exp_temp_filt,
                     self.apricot_data_resolution_hw,
                     self.good_idx_experimental,
                 ) = self._fit_experimental_data()
             case "generated":
                 (
                     self.all_data_fits_df,
-                    self.gen_spat_filt_to_viz,
+                    self.gen_spat_filt,
                     self.good_idx_generated,
                 ) = self._fit_generated_data(spatial_data)
             case "concentric_rings":
                 (
                     self.all_data_fits_df,
-                    self.gen_spat_filt_to_viz,
+                    self.gen_spat_filt,
                     self.good_idx_rings,
                 ) = self._fit_concentric_rings(spatial_data)
 
@@ -143,7 +148,7 @@ class Fit(RetinaMath):
                 - 'p2': Normalization factor for the second filter.
                 - 'tau1': Time constant of the first filter in milliseconds.
                 - 'tau2': Time constant of the second filter in milliseconds.
-            - exp_temp_filt_to_viz (dict):
+            - exp_temp_filt (dict):
                 Dictionary of temporal filters to show with viz. The keys are strings of the format 'cell_ix_{cell_idx}',
                 where cell_idx is the index of the cell. Each value is a dictionary with the following keys:
                 - 'ydata': The temporal filter data for the cell.
@@ -184,7 +189,7 @@ class Fit(RetinaMath):
 
         xdata = np.arange(15)
         xdata_finer = np.linspace(0, max(xdata), 100)
-        exp_temp_filt_to_viz = {
+        exp_temp_filt = {
             "xdata": xdata,
             "xdata_finer": xdata_finer,
             "title": f"{self.gc_type}_{self.response_type}",
@@ -207,7 +212,7 @@ class Fit(RetinaMath):
                 error_array[cell_ix] = max_error
                 continue
 
-            exp_temp_filt_to_viz[f"cell_ix_{cell_ix}"] = {
+            exp_temp_filt[f"cell_ix_{cell_ix}"] = {
                 "ydata": ydata,
                 "y_fit": self.diff_of_lowpass_filters(xdata_finer, *popt),
             }
@@ -219,7 +224,7 @@ class Fit(RetinaMath):
 
         error_df = pd.DataFrame(error_array, columns=["temporalfit_mse"])
 
-        return pd.concat([parameters_df, error_df], axis=1), exp_temp_filt_to_viz
+        return pd.concat([parameters_df, error_df], axis=1), exp_temp_filt
 
     def _get_fit_outliers(self, fits_df, bad_idx_for_spatial_fit, columns):
         """
@@ -270,7 +275,7 @@ class Fit(RetinaMath):
             'semi_ys', 'orientation_surround', 'offset'] if DoG_model_type=0,
             or shape `(n_cells, 8)` and columns: ['ampl_c', 'xoc', 'yoc', 'semi_xc', 'semi_yc', 'orient_cen_rad',
             'ampl_s', 'relat_sur_diam', 'offset'] if DoG_model_type=1.
-            The dictionary spat_filt_to_viz has keys:
+            The dictionary spat_filt has keys:
                 'x_grid': numpy.ndarray of shape `(num_pix_y, num_pix_x)`, X-coordinates of the grid points
                 'y_grid': numpy.ndarray of shape `(num_pix_y, num_pix_x)`, Y-coordinates of the grid points
                 'DoG_model_type': int, the type of DoG model used (0, 1 or 2)
@@ -346,7 +351,7 @@ class Fit(RetinaMath):
         error_all_viable_cells = np.zeros((n_cells, 1))
         dog_filtersum_array = np.zeros((n_cells, 4))
 
-        spat_filt_to_viz = {
+        spat_filt = {
             "x_grid": x_grid,
             "y_grid": y_grid,
             "DoG_model_type": DoG_model_type,
@@ -571,13 +576,13 @@ class Fit(RetinaMath):
             dog_filtersum_array[cell_idx, 3] = np.sum(this_rf[this_rf > 0])
 
             # For visualization
-            spat_filt_to_viz[f"cell_ix_{cell_idx}"] = {
+            spat_filt[f"cell_ix_{cell_idx}"] = {
                 "spatial_data_array": this_rf,
                 "suptitle": f"celltype={self.gc_type}, responsetype={self.response_type}, cell_ix={cell_idx}",
             }
 
         # Fitted parameters are assigned to both a dictionary and a dataframe
-        spat_filt_to_viz["data_all_viable_cells"] = data_all_viable_cells
+        spat_filt["data_all_viable_cells"] = data_all_viable_cells
 
         # Finally build a dataframe of the fitted parameters
         fits_df = pd.DataFrame(data_all_viable_cells, columns=parameter_names)
@@ -634,7 +639,7 @@ class Fit(RetinaMath):
                 ],
                 axis=1,
             ),
-            spat_filt_to_viz,
+            spat_filt,
             good_mask,
         )
 
@@ -648,9 +653,9 @@ class Fit(RetinaMath):
             all_data_fits_df : pandas.DataFrame
                 DataFrame containing all the fitted data, including spatial and temporal filter
                 parameters, sums of the spatial and temporal filters, and tonic drives.
-            spat_filt_to_viz : numpy.ndarray
+            spat_filt : numpy.ndarray
                 Array of spatial filters in the format required for visualization.
-            temp_filt_to_viz : numpy.ndarray
+            temp_filt : numpy.ndarray
                 Array of temporal filters in the format required for visualization.
             apricot_data_resolution_hw : Tuple[int, int]
                 Tuple containing the height and width of the original Apricot data.
@@ -668,7 +673,7 @@ class Fit(RetinaMath):
         # Get original Apricot data spatial resolution
         apricot_data_resolution_hw = spatial_data.shape[1:3]
 
-        spatial_fits, spat_filt_to_viz, good_mask = self._fit_spatial_filters(
+        spatial_fits, spat_filt, good_mask = self._fit_spatial_filters(
             spat_data_array=spatial_data,
             cen_rot_rad_all=cen_rot_rad_all,
             bad_idx_for_spatial_fit=self.bad_data_idx,
@@ -679,9 +684,7 @@ class Fit(RetinaMath):
         spatial_filter_sums = self.apricot_data.compute_spatial_filter_sums()
 
         good_idx_experimental = np.where(good_mask == 1)[0]
-        temporal_fits, temp_filt_to_viz = self._fit_temporal_filters(
-            good_idx_experimental
-        )
+        temporal_fits, temp_filt = self._fit_temporal_filters(good_idx_experimental)
 
         # Note that this ignores only manually picked bad data indices,
         # if remove_bad_data_idx=True.
@@ -708,8 +711,8 @@ class Fit(RetinaMath):
 
         return (
             all_data_fits_df,
-            spat_filt_to_viz,
-            temp_filt_to_viz,
+            spat_filt,
+            temp_filt,
             apricot_data_resolution_hw,
             good_idx_experimental,
         )
@@ -727,7 +730,7 @@ class Fit(RetinaMath):
         --------
         all_data_fits_df : pandas.DataFrame
             A DataFrame containing the fitted parameters for the spatial filter.
-        spat_filt_to_viz : numpy.ndarray
+        spat_filt : numpy.ndarray
             Array of shape (n_samples, height, width) containing the visualized spatial filters.
         good_idx_generated : numpy.ndarray
             Array of indices of good data after failed spatial fit indeces have been removed.
@@ -735,7 +738,7 @@ class Fit(RetinaMath):
 
         cen_rot_rad_all = np.zeros(spatial_data.shape[0])
 
-        spatial_fits, spat_filt_to_viz, good_mask = self._fit_spatial_filters(
+        spatial_fits, spat_filt, good_mask = self._fit_spatial_filters(
             spat_data_array=spatial_data,
             cen_rot_rad_all=cen_rot_rad_all,
             bad_idx_for_spatial_fit=[],
@@ -750,7 +753,7 @@ class Fit(RetinaMath):
         # Set all_data_fits_df rows which are not part of good_idx_generated to zero
         all_data_fits_df.loc[~all_data_fits_df.index.isin(good_idx_generated)] = 0.0
 
-        return all_data_fits_df, spat_filt_to_viz, good_idx_generated
+        return all_data_fits_df, spat_filt, good_idx_generated
 
     def _fit_concentric_rings(self, spatial_data):
         """
@@ -765,13 +768,13 @@ class Fit(RetinaMath):
         --------
         all_data_fits_df : pandas.DataFrame
             A DataFrame containing the fitted parameters for the spatial filter.
-        spat_filt_to_viz : numpy.ndarray
+        spat_filt : numpy.ndarray
             Array of shape (n_samples, height, width) containing the visualized spatial filters.
         """
 
         cen_rot_rad_all = np.zeros(spatial_data.shape[0])
 
-        spatial_fits, spat_filt_to_viz, good_mask = self._fit_spatial_filters(
+        spatial_fits, spat_filt, good_mask = self._fit_spatial_filters(
             spat_data_array=spatial_data,
             cen_rot_rad_all=cen_rot_rad_all,
             bad_idx_for_spatial_fit=[],
@@ -785,7 +788,7 @@ class Fit(RetinaMath):
         # Set all_data_fits_df rows which are not part of good_idx_rings to zero
         all_data_fits_df.loc[~all_data_fits_df.index.isin(good_idx_rings)] = 0.0
 
-        return all_data_fits_df, spat_filt_to_viz, good_idx_rings
+        return all_data_fits_df, spat_filt, good_idx_rings
 
     def _fit_spatial_statistics(self, good_data_fit_idx):
         """
@@ -802,7 +805,7 @@ class Fit(RetinaMath):
         spatial_stat_df : pandas DataFrame
             A DataFrame containing gamma distribution parameters for the RF parameters 'semi_xc', 'semi_yc',
             'xy_aspect_ratio', 'ampl_s', and 'relat_sur_diam', and vonmises   distribution parameters for the 'orient_cen_rad'.
-        spat_stat_to_viz : dict
+        spat_stat : dict
             A dictionary containing data that can be used to visualize the RF parameters' spatial statistics.
             Includes 'ydata', 'spatial_statistics_dict', and 'model_fit_data'.
         """
@@ -910,7 +913,7 @@ class Fit(RetinaMath):
             "distribution": "vonmises",
         }
 
-        spat_stat_to_viz = {
+        spat_stat = {
             "ydata": ydata,
             "spatial_statistics_dict": spatial_statistics_dict,
             "model_fit_data": (x_model_fit, y_model_fit),
@@ -922,7 +925,7 @@ class Fit(RetinaMath):
         spatial_stat_df["domain"] = "spatial"
 
         # Return stats for RF creation
-        return spatial_stat_df, spat_stat_to_viz
+        return spatial_stat_df, spat_stat
 
     def _fit_temporal_statistics(self, good_data_fit_idx):
         """
@@ -939,7 +942,7 @@ class Fit(RetinaMath):
             A DataFrame containing the temporal statistics of the temporal filter parameters, including the shape, loc,
             and scale parameters of the fitted gamma distribution, as well as the name of the distribution and the domain.
 
-        temp_stat_to_viz : dict
+        temp_stat : dict
             A dictionary containing information needed for visualization, including the temporal filter parameters, the
             fitted distribution parameters, the super title of the plot, `self.gc_type`, `self.response_type`, the
             `self.all_data_fits_df` DataFrame, and the `good_data_fit_idx` Boolean index array.
@@ -955,7 +958,7 @@ class Fit(RetinaMath):
             shape, loc, scale = stats.gamma.fit(param_array)
             distrib_params[i, :] = [shape, loc, scale]
 
-        temp_stat_to_viz = {
+        temp_stat = {
             "temporal_filter_parameters": temporal_filter_parameters,
             "distrib_params": distrib_params,
             "suptitle": self.gc_type + " " + self.response_type,
@@ -972,7 +975,7 @@ class Fit(RetinaMath):
         temporal_exp_stat_df["distribution"] = "gamma"
         temporal_exp_stat_df["domain"] = "temporal"
 
-        return temporal_exp_stat_df, temp_stat_to_viz
+        return temporal_exp_stat_df, temp_stat
 
     def _fit_tonicdrive_statistics(self, good_data_fit_idx):
         """
@@ -988,7 +991,7 @@ class Fit(RetinaMath):
         td_df : pandas.DataFrame
             DataFrame with tonic drive statistics, including shape, loc, and scale parameters for the gamma distribution
             as well as the distribution type (gamma) and domain (tonic).
-        exp_tonic_dr_to_viz : dict
+        exp_tonic_dr : dict
             Dictionary containing the following visualization data:
             - xs: an array of 100 x-values to plot the probability density function of the gamma distribution
             - pdf: an array of 100 y-values representing the probability density function of the gamma distribution
@@ -1006,7 +1009,7 @@ class Fit(RetinaMath):
         pdf = stats.gamma.pdf(xs, a=shape, loc=loc, scale=scale)
         title = self.gc_type + " " + self.response_type
 
-        exp_tonic_dr_to_viz = {
+        exp_tonic_dr = {
             "xs": xs,
             "pdf": pdf,
             "tonicdrive_array": tonicdrive_array,
@@ -1026,7 +1029,7 @@ class Fit(RetinaMath):
             orient="index",
         )
 
-        return td_df, exp_tonic_dr_to_viz
+        return td_df, exp_tonic_dr
 
     def _get_center_surround_sd(self, good_data_fit_idx):
         """
@@ -1073,15 +1076,15 @@ class Fit(RetinaMath):
             Mean center standard deviation in millimeters
         exp_spat_sur_sd_mm : float
             Mean surround standard deviation in millimeters
-        exp_temp_filt_to_viz : dict
+        exp_temp_filt : dict
             Dictionary with temporal filter parameters and distributions
-        exp_spat_filt_to_viz : dict
+        exp_spat_filt : dict
             Dictionary with spatial filter parameters and distributions
-        exp_spat_stat_to_viz : dict
+        exp_spat_stat : dict
             Dictionary with spatial filter statistics for visualization
-        exp_temp_stat_to_viz : dict
+        exp_temp_stat : dict
             Dictionary with temporal filter statistics for visualization
-        exp_tonic_dr_to_viz : dict
+        exp_tonic_dr : dict
             Dictionary with tonic drive statistics for visualization
         apricot_data_resolution_hw : tuple
             Tuple containing the height and width of the Apricot dataset in pixels
@@ -1096,17 +1099,17 @@ class Fit(RetinaMath):
         good_data_fit_idx = np.setdiff1d(range(n_cells_data), bad_data_fit_idx)
 
         # Get statistics for spatial filters of good data indices
-        spatial_exp_stat_df, exp_spat_stat_to_viz = self._fit_spatial_statistics(
+        spatial_exp_stat_df, exp_spat_stat = self._fit_spatial_statistics(
             good_data_fit_idx
         )
 
         # Get statistics for temporal filters of good data indices
-        temporal_exp_stat_df, exp_temp_stat_to_viz = self._fit_temporal_statistics(
+        temporal_exp_stat_df, exp_temp_stat = self._fit_temporal_statistics(
             good_data_fit_idx
         )
 
         # Get statistics for tonic drives of good data indices
-        tonicdrive_exp_stat_df, exp_tonic_dr_to_viz = self._fit_tonicdrive_statistics(
+        tonicdrive_exp_stat_df, exp_tonic_dr = self._fit_tonicdrive_statistics(
             good_data_fit_idx
         )
 
@@ -1121,15 +1124,16 @@ class Fit(RetinaMath):
             axis=0,
         )
 
+        self.project_data.fit["exp_spat_filt"] = self.exp_spat_filt
+        self.project_data.fit["exp_spat_stat"] = exp_spat_stat
+        self.project_data.fit["exp_temp_filt"] = self.exp_temp_filt
+        self.project_data.fit["exp_temp_stat"] = exp_temp_stat
+        self.project_data.fit["exp_tonic_dr"] = exp_tonic_dr
+
         return (
             exp_stat_df,
             exp_spat_cen_sd_mm,
             exp_spat_sur_sd_mm,
-            self.exp_spat_filt_to_viz,
-            exp_spat_stat_to_viz,
-            self.exp_temp_filt_to_viz,
-            exp_temp_stat_to_viz,
-            exp_tonic_dr_to_viz,
             self.apricot_data_resolution_hw,
         )
 
@@ -1147,16 +1151,16 @@ class Fit(RetinaMath):
             Mean center standard deviation in millimeters
         gen_mean_sur_sd : float
             Mean surround standard deviation in millimeters
-        gen_spat_filt_to_viz : dict
+        gen_spat_filt : dict
             Dictionary with spatial filter parameters and distributions
-        gen_spat_stat_to_viz : dict
+        gen_spat_stat : dict
             Dictionary with spatial filter statistics and distributions
         """
 
         good_idx_generated = self.good_idx_generated
 
         # Get statistics for spatial filters
-        gen_spat_stat_df, gen_spat_stat_to_viz = self._fit_spatial_statistics(
+        gen_spat_stat_df, gen_spat_stat = self._fit_spatial_statistics(
             good_idx_generated
         )
 
@@ -1171,12 +1175,13 @@ class Fit(RetinaMath):
             axis=0,
         )
 
+        self.project_data.fit["gen_spat_filt"] = self.gen_spat_filt
+        self.project_data.fit["gen_spat_stat"] = gen_spat_stat
+
         return (
             gen_stat_df,
             gen_mean_cen_sd,
             gen_mean_sur_sd,
-            self.gen_spat_filt_to_viz,
-            gen_spat_stat_to_viz,
             self.all_data_fits_df,
             good_idx_generated,
         )

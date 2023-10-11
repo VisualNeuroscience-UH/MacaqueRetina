@@ -429,7 +429,7 @@ if __name__ == "__main__":
     )
 
     #################################
-    ### Check cone response ###
+    ###    Check cone response    ###
     #################################
 
     """
@@ -442,11 +442,11 @@ if __name__ == "__main__":
 
     # TODO take raw hdf5 image through cone response to working retina
 
-    #################################
-    ### Sample image data ###
-    #################################
+    ###########################################
+    ##   Sample figure data from literature  ##
+    ###########################################
 
-    # # Note: sample only temporal hemiretina
+    # # If possible, sample only temporal hemiretina
     # from project.project_utilities_module import DataSampler
 
     # filename = "Schottdorf_2021_JPhysiol_CenRadius_Fig4C_midget.jpg"
@@ -463,7 +463,7 @@ if __name__ == "__main__":
 
     #################################
     #################################
-    ### Build retina ###
+    ###        Build retina       ###
     #################################
     #################################
 
@@ -474,18 +474,17 @@ if __name__ == "__main__":
     # # Main retina construction method. This method calls all other methods in the retina construction process.
     PM.construct_retina.build()
 
-    # The following visualizations are dependent on the ConstructRetina instance.
-    # This is why they are called via the construct_retina attribute. The instance
-    # object is attached to the call for viz.
+    # The following visualizations are dependent on the ConstructRetina instance. Thus, they are called after the
+    # retina is built.
 
     # The show_exp_build_process method visualizes the spatial and temporal filter responses, ganglion cell positions and density,
     # mosaic layout, spatial and temporal statistics, dendrite diameter versus eccentricity, and tonic drives
     # in the retina mosaic building process.
 
-    # For ellipse FIT
+    # For FIT (ellipse and DoG fits, temporal kernels and tonic drives)
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
     # PM.viz.visualize_mosaic(savefigname="parasol_on_ellipses.eps")
-    PM.viz.show_dendrite_diam_vs_ecc(savefigname="parasol_on_dd_ecc.eps")
+    # PM.viz.show_dendrite_diam_vs_ecc(savefigname="parasol_on_dd_ecc.eps")
     # PM.viz.show_temporal_filter_response(n_curves=3, savefigname="temporal_filters.eps")
     # PM.viz.show_spatial_statistics(savefigname="spatial_stats.eps")
 
@@ -497,7 +496,7 @@ if __name__ == "__main__":
     # PM.viz.show_latent_space_and_samples()
     # PM.viz.show_retina_img(savefigname="parasol_on_vae_retina.eps")
     # PM.viz.show_rf_imgs(n_samples=10, savefigname="parasol_on_vae_gen_rf.eps")
-    # PM.viz.show_rf_violinplot() # Pixel values for each unit
+    # PM.viz.show_rf_violinplot()  # Pixel values for each unit
 
     # # "train_loss", "val_loss", "mse", "ssim", "kid_mean", "kid_std"
     # this_dep_var = "val_loss"
@@ -507,11 +506,9 @@ if __name__ == "__main__":
     #     ray_exp_name, this_dep_var, highlight_trial=highlight_trial
     # )
 
-    # For both FIT and VAE. Estimated luminance for validation data is
-    # 222.2 td / (np.pi * (4 mm diam / 2)**2) = 17.7 cd/m2
-    # PM.viz.validate_gc_rf_size(
-    #     savefigname="rf_size_vs_Schottdorf_data.eps"
-    # )  # Schottdorf_2021_JPhysiol, van Hateren_2002_JNeurosci
+    # For both FIT and VAE. Estimated luminance for validation data (Schottdorf_2021_JPhysiol,
+    # van Hateren_2002_JNeurosci) is 222.2 td / (np.pi * (4 mm diam / 2)**2) = 17.7 cd/m2
+    # PM.viz.validate_gc_rf_size(savefigname="rf_size_vs_Schottdorf_data.eps")
 
     ###################################
     ###################################
@@ -524,13 +521,13 @@ if __name__ == "__main__":
     ########################
 
     # See my_stimulus_options for valid stimulus_options
-    PM.stimulate.make_stimulus_video()
+    # PM.stimulate.make_stimulus_video()
 
     ###########################################
     ### Load stimulus to get working retina ###
     ###########################################
 
-    PM.working_retina.load_stimulus()
+    # PM.working_retina.load_stimulus()
 
     ##########################################
     ### Show single ganglion cell response ###
@@ -563,9 +560,9 @@ if __name__ == "__main__":
     ### Run multiple trials or cells ###
     ####################################
 
-    PM.working_retina.run_with_my_run_options()
+    # PM.working_retina.run_with_my_run_options()
 
-    PM.viz.show_gc_responses(PM.working_retina, savefigname=f"{output_folder}.eps")
+    # PM.viz.show_gc_responses(PM.working_retina, savefigname=f"{output_folder}.eps")
 
     # PM.viz.show_stimulus_with_gcs(
     #     PM.working_retina,

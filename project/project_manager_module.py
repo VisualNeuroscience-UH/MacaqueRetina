@@ -9,7 +9,7 @@ from retina.construct_retina_module import ConstructRetina
 from retina.working_retina_module import WorkingRetina, PhotoReceptor
 from retina.retina_math_module import RetinaMath
 from retina.fit_module import Fit
-from stimuli.visual_stimulus_module import ConstructStimulus, AnalogInput
+from stimuli.visual_stimulus_module import VisualStimulus, AnalogInput
 from stimuli.experiment_module import Experiment
 
 # Numerical
@@ -37,6 +37,17 @@ Simo Vanni 2022
 """
 
 
+class ProjectData:
+    """
+    This is a container for project data for internal use, such as visualizations.
+    """
+
+    def __init__(self) -> None:
+        self.construct_retina = {}
+        self.working_retina = {}
+        self.fit = {}
+
+
 class ProjectManager(ProjectBase, ProjectUtilities):
     def __init__(self, **all_properties):
         """
@@ -47,8 +58,7 @@ class ProjectManager(ProjectBase, ProjectUtilities):
 
         context = Context(all_properties)
 
-        # Get correct context attributes. Empty properties return all existing project
-        # attributes to context. That is what we want for the project manager
+        # Set context attributes for project manager
         self.context = context.set_context(self)
 
         data_io = DataIO(context)
@@ -57,7 +67,9 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         cones = PhotoReceptor(context, data_io)
         self.cones = cones
 
-        stimulate = ConstructStimulus(context, data_io, cones)
+        project_data = ProjectData()
+
+        stimulate = VisualStimulus(context, data_io, cones)
         self.stimulate = stimulate
 
         # natural_image = NaturalImage(context, data_io, cones)
@@ -81,6 +93,7 @@ class ProjectManager(ProjectBase, ProjectUtilities):
             # Interfaces
             context,
             data_io,
+            project_data,
             ana,
             # Dictionaries
             # Methods, which are needed also elsewhere
@@ -94,9 +107,11 @@ class ProjectManager(ProjectBase, ProjectUtilities):
 
         self.viz = viz
 
-        fit = Fit(context, data_io)
+        fit = Fit(context, data_io, project_data)
 
-        self.construct_retina = ConstructRetina(context, data_io, viz, fit)
+        self.construct_retina = ConstructRetina(
+            context, data_io, viz, fit, project_data
+        )
         self.viz.construct_retina = self.construct_retina
 
         self.working_retina = WorkingRetina(context, data_io, viz)
@@ -177,11 +192,11 @@ class ProjectManager(ProjectBase, ProjectUtilities):
 
     @stimulate.setter
     def stimulate(self, value):
-        if isinstance(value, ConstructStimulus):
+        if isinstance(value, VisualStimulus):
             self._stimulate = value
         else:
             raise AttributeError(
-                "Trying to set improper stimulate. stimulate must be a ConstructStimulus instance."
+                "Trying to set improper stimulate. stimulate must be a VisualStimulus instance."
             )
 
     @property

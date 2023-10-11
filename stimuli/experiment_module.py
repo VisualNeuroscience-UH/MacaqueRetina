@@ -6,7 +6,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Local
-from stimuli.visual_stimulus_module import VideoBaseClass, ConstructStimulus
+from stimuli.visual_stimulus_module import VideoBaseClass, VisualStimulus
 
 # Builtin
 import pdb
@@ -117,7 +117,7 @@ class Experiment(VideoBaseClass):
                 )
 
         # Calculate voltage values, assuming voltage is linearly associated with photopic Td
-        # Return cond_options -- a dict with all keywords matching visual_stimulus_module.ConstructStimulus
+        # Return cond_options -- a dict with all keywords matching visual_stimulus_module.VisualStimulus
         # and values being a list of values to replace the corresponding keyword in the stimulus
         (
             cond_options,

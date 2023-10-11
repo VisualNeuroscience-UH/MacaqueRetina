@@ -45,9 +45,10 @@ class Viz:
 
     cmap = "gist_earth"  # viridis or cividis would be best for color-blind
 
-    def __init__(self, context, data_io, ana, **kwargs) -> None:
+    def __init__(self, context, data_io, project_data, ana, **kwargs) -> None:
         self._context = context.set_context(self)
         self._data_io = data_io
+        self._project_data = project_data
         self._ana = ana
 
         for attr, value in kwargs.items():
@@ -64,6 +65,10 @@ class Viz:
     @property
     def data_io(self):
         return self._data_io
+
+    @property
+    def project_data(self):
+        return self._project_data
 
     @property
     def ana(self):
@@ -171,22 +176,20 @@ class Viz:
         """
         Show temporal filter response for each cell.
         """
-        exp_temp_filt_to_viz = self.construct_retina.exp_temp_filt_to_viz
-        xdata = exp_temp_filt_to_viz["xdata"]
-        xdata_finer = exp_temp_filt_to_viz["xdata_finer"]
-        title = exp_temp_filt_to_viz["title"]
+        exp_temp_filt = self.project_data.fit["exp_temp_filt"]
+        xdata = exp_temp_filt["xdata"]
+        xdata_finer = exp_temp_filt["xdata_finer"]
+        title = exp_temp_filt["title"]
 
         # get cell_ixs
-        cell_ixs_list = [
-            ci for ci in exp_temp_filt_to_viz.keys() if ci.startswith("cell_ix_")
-        ]
+        cell_ixs_list = [ci for ci in exp_temp_filt.keys() if ci.startswith("cell_ix_")]
 
         if n_curves is not None:
             cell_ixs_list = np.random.choice(cell_ixs_list, n_curves, replace=False)
 
         for this_cell_ix in cell_ixs_list:
-            ydata = exp_temp_filt_to_viz[f"{this_cell_ix}"]["ydata"]
-            y_fit = exp_temp_filt_to_viz[f"{this_cell_ix}"]["y_fit"]
+            ydata = exp_temp_filt[f"{this_cell_ix}"]["ydata"]
+            y_fit = exp_temp_filt[f"{this_cell_ix}"]["y_fit"]
             plt.scatter(xdata, ydata)
             plt.plot(
                 xdata_finer,
@@ -201,19 +204,17 @@ class Viz:
             self._figsave(figurename=savefigname)
 
     def show_spatial_filter_response(
-        self, spat_filt_to_viz, n_samples=1, title="", savefigname=None
+        self, spat_filt, n_samples=1, title="", savefigname=None
     ):
-        data_all_viable_cells = spat_filt_to_viz["data_all_viable_cells"]
-        x_grid = spat_filt_to_viz["x_grid"]
-        y_grid = spat_filt_to_viz["y_grid"]
-        DoG_model_type = spat_filt_to_viz["DoG_model_type"]
-        pixel_array_shape_x = spat_filt_to_viz["num_pix_x"]
-        pixel_array_shape_y = spat_filt_to_viz["num_pix_y"]
+        data_all_viable_cells = spat_filt["data_all_viable_cells"]
+        x_grid = spat_filt["x_grid"]
+        y_grid = spat_filt["y_grid"]
+        DoG_model_type = spat_filt["DoG_model_type"]
+        pixel_array_shape_x = spat_filt["num_pix_x"]
+        pixel_array_shape_y = spat_filt["num_pix_y"]
 
         # get cell_ixs
-        cell_ixs_list = [
-            ci for ci in spat_filt_to_viz.keys() if ci.startswith("cell_ix_")
-        ]
+        cell_ixs_list = [ci for ci in spat_filt.keys() if ci.startswith("cell_ix_")]
 
         if n_samples < len(cell_ixs_list):
             cell_ixs_list = np.random.choice(cell_ixs_list, n_samples, replace=False)
@@ -231,8 +232,8 @@ class Viz:
             this_cell_ix_numerical = int(this_cell_ix.split("_")[-1])
             # Get DoG model fit parameters to popt
             popt = data_all_viable_cells[this_cell_ix_numerical, :]
-            spatial_data_array = spat_filt_to_viz[this_cell_ix]["spatial_data_array"]
-            suptitle = spat_filt_to_viz[this_cell_ix]["suptitle"]
+            spatial_data_array = spat_filt[this_cell_ix]["spatial_data_array"]
+            suptitle = spat_filt[this_cell_ix]["suptitle"]
             suptitle = f"{title}, {suptitle})"
 
             cen = axes[idx, 0].imshow(
@@ -409,11 +410,11 @@ class Viz:
 
         ConstructRetina call.
         """
-        ydata = self.construct_retina.exp_spat_stat_to_viz["ydata"]
-        spatial_statistics_dict = self.construct_retina.exp_spat_stat_to_viz[
+        ydata = self.project_data.fit["exp_spat_stat"]["ydata"]
+        spatial_statistics_dict = self.project_data.fit["exp_spat_stat"][
             "spatial_statistics_dict"
         ]
-        model_fit_data = self.construct_retina.exp_spat_stat_to_viz["model_fit_data"]
+        model_fit_data = self.project_data.fit["exp_spat_stat"]["model_fit_data"]
 
         distributions = [key for key in spatial_statistics_dict.keys()]
         n_distributions = len(spatial_statistics_dict)
@@ -494,16 +495,17 @@ class Viz:
         """
         Plot dendritic diameter as a function of retinal eccentricity with linear, quadratic, or cubic fitting.
         """
-        data_all_x = self.construct_retina.dd_vs_ecc_to_viz["data_all_x"]
-        data_all_y = self.construct_retina.dd_vs_ecc_to_viz["data_all_y"]
-        dd_fit_x = self.construct_retina.dd_vs_ecc_to_viz["dd_fit_x"]
-        dd_fit_y = self.construct_retina.dd_vs_ecc_to_viz["dd_fit_y"]
+        dd_vs_ecc = self.project_data.construct_retina["dd_vs_ecc"]
+        data_all_x = dd_vs_ecc["data_all_x"]
+        data_all_y = dd_vs_ecc["data_all_y"]
+        dd_fit_x = dd_vs_ecc["dd_fit_x"]
+        dd_fit_y = dd_vs_ecc["dd_fit_y"]
         if self.construct_retina.spatial_model == "VAE":
-            dd_vae_x = self.construct_retina.dd_vs_ecc_to_viz["dd_vae_x"]
-            dd_vae_y = self.construct_retina.dd_vs_ecc_to_viz["dd_vae_y"]
-        fit_parameters = self.construct_retina.dd_vs_ecc_to_viz["fit_parameters"]
-        dd_model_caption = self.construct_retina.dd_vs_ecc_to_viz["dd_model_caption"]
-        title = self.construct_retina.dd_vs_ecc_to_viz["title"]
+            dd_vae_x = dd_vs_ecc["dd_vae_x"]
+            dd_vae_y = dd_vs_ecc["dd_vae_y"]
+        fit_parameters = dd_vs_ecc["fit_parameters"]
+        dd_model_caption = dd_vs_ecc["dd_model_caption"]
+        title = dd_vs_ecc["title"]
 
         fig, ax = plt.subplots(nrows=1, ncols=1)
         ax.plot(data_all_x, data_all_y, "b.", label="Data")
@@ -593,17 +595,13 @@ class Viz:
         Show the temporal statistics of the retina units.
         """
 
-        temporal_filter_parameters = self.construct_retina.exp_temp_stat_to_viz[
-            "temporal_filter_parameters"
-        ]
-        distrib_params = self.construct_retina.exp_temp_stat_to_viz["distrib_params"]
-        suptitle = self.construct_retina.exp_temp_stat_to_viz["suptitle"]
-        all_data_fits_df = self.construct_retina.exp_temp_stat_to_viz[
-            "all_data_fits_df"
-        ]
-        good_idx_experimental = self.construct_retina.exp_temp_stat_to_viz[
-            "good_idx_experimental"
-        ]
+        exp_temp_stat = self.project_data.fit["exp_temp_stat"]
+
+        temporal_filter_parameters = exp_temp_stat["temporal_filter_parameters"]
+        distrib_params = exp_temp_stat["distrib_params"]
+        suptitle = exp_temp_stat["suptitle"]
+        all_data_fits_df = exp_temp_stat["all_data_fits_df"]
+        good_idx_experimental = exp_temp_stat["good_idx_experimental"]
 
         plt.subplots(2, 3)
         plt.suptitle(suptitle)
@@ -628,10 +626,13 @@ class Viz:
         """
         ConstructRetina call.
         """
-        xs = self.construct_retina.exp_tonic_dr_to_viz["xs"]
-        pdf = self.construct_retina.exp_tonic_dr_to_viz["pdf"]
-        tonicdrive_array = self.construct_retina.exp_tonic_dr_to_viz["tonicdrive_array"]
-        title = self.construct_retina.exp_tonic_dr_to_viz["title"]
+
+        exp_tonic_dr = self.project_data.fit["exp_tonic_dr"]
+
+        xs = exp_tonic_dr["xs"]
+        pdf = exp_tonic_dr["pdf"]
+        tonicdrive_array = exp_tonic_dr["tonicdrive_array"]
+        title = exp_tonic_dr["title"]
 
         plt.plot(xs, pdf)
         plt.hist(tonicdrive_array, density=True)
@@ -645,9 +646,9 @@ class Viz:
 
         # If show_all_spatial_fits is true, show the spatial fits
         if show_all_spatial_fits is True:
-            spat_filt_to_viz = self.construct_retina.exp_spat_filt_to_viz
+            spat_filt = self.project_data.fit["exp_spat_filt"]
             self.show_spatial_filter_response(
-                spat_filt_to_viz,
+                spat_filt,
                 n_samples=np.inf,
                 title="Experimental",
                 pause_to_show=True,
@@ -670,18 +671,18 @@ class Viz:
         n_samples : int
             Number of samples to show
         """
-        spat_filt_to_viz = self.construct_retina.exp_spat_filt_to_viz
+        spat_filt = self.project_data.fit["exp_spat_filt"]
         self.show_spatial_filter_response(
-            spat_filt_to_viz,
+            spat_filt,
             n_samples=n_samples,
             title="Experimental",
             savefigname=savefigname,
         )
 
         if self.construct_retina.spatial_model == "VAE":
-            spat_filt_to_viz = self.construct_retina.gen_spat_filt_to_viz
+            spat_filt = self.project_data.fit["gen_spat_filt"]
             self.show_spatial_filter_response(
-                spat_filt_to_viz,
+                spat_filt,
                 n_samples=n_samples,
                 title="Generated",
                 savefigname=savefigname,
@@ -693,9 +694,11 @@ class Viz:
         """
         from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
-        latent_samples = self.construct_retina.gen_latent_space_to_viz["samples"]
-        latent_data = self.construct_retina.gen_latent_space_to_viz["data"]
-        latent_dim = self.construct_retina.gen_latent_space_to_viz["dim"]
+        gen_latent_space = self.project_data.construct_retina["gen_latent_space"]
+
+        latent_samples = gen_latent_space["samples"]
+        latent_data = gen_latent_space["data"]
+        latent_dim = gen_latent_space["dim"]
 
         # Make a grid of subplots
         n_cols = 4
@@ -799,21 +802,21 @@ class Viz:
         # Get the keys for the cell_ix arrays
         cell_key_list = [
             key
-            for key in self.construct_retina.exp_spat_filt_to_viz.keys()
+            for key in self.project_data.fit["exp_spat_filt"].keys()
             if "cell_ix" in key
         ]
-        img_shape = self.construct_retina.exp_spat_filt_to_viz["cell_ix_0"][
+        img_shape = self.project_data.fit["exp_spat_filt"]["cell_ix_0"][
             "spatial_data_array"
         ].shape
         # The shape of the array is N cells, y_pixels, x_pixels
         img_exp = np.zeros([len(cell_key_list), img_shape[0], img_shape[1]])
         for i, cell_key in enumerate(cell_key_list):
-            img_exp[i, :, :] = self.construct_retina.exp_spat_filt_to_viz[cell_key][
+            img_exp[i, :, :] = self.project_data.fit["exp_spat_filt"][cell_key][
                 "spatial_data_array"
             ]
 
-        img_pre = self.construct_retina.gen_spat_img_to_viz["img_raw"]
-        img_post = self.construct_retina.gen_spat_img_to_viz["img_processed"]
+        img_pre = self.project_data.construct_retina["gen_spat_img"]["img_raw"]
+        img_post = self.project_data.construct_retina["gen_spat_img"]["img_processed"]
 
         plt.subplot(1, 3, 1)
         plt.hist(img_exp.flatten(), bins=100)
@@ -1026,17 +1029,15 @@ class Viz:
 
         self._subplot_dependent_boxplots(axd, "dh", df, dep_vars, config_vars_changed)
 
-        # self._subplot_dependent_variables(
-        #     axd, "dv", result_grid, dep_vars, best_trials_across_dep_vars
-        # )
+        # if hasattr(self.construct_retina, "exp_spat_filt"):
+        #     exp_spat_filt = self.construct_retina.exp_spat_filt
+        #     print("construct_retina had attribute exp_spat_filt")
+        # else:
+        #     self.construct_retina._initialize()
+        #     exp_spat_filt = self.construct_retina.exp_spat_filt
+        #     print("construct_retina did not have attribute exp_spat_filt")
 
-        if hasattr(self.construct_retina, "exp_spat_filt_to_viz"):
-            exp_spat_filt_to_viz = self.construct_retina.exp_spat_filt_to_viz
-            print("construct_retina had attribute exp_spat_filt_to_viz")
-        else:
-            self.construct_retina._initialize()
-            exp_spat_filt_to_viz = self.construct_retina.exp_spat_filt_to_viz
-            print("construct_retina did not have attribute exp_spat_filt_to_viz")
+        exp_spat_filt = self.project_data.fit["exp_spat_filt"]
 
         num_best_trials = 5  # Also N reco img to show
         best_trials, dep_var_vals = self._get_best_trials(
@@ -1044,7 +1045,7 @@ class Viz:
         )
 
         img, rec_img, samples = self._get_imgs(
-            df, nsamples, exp_spat_filt_to_viz, best_trials[0]
+            df, nsamples, exp_spat_filt, best_trials[0]
         )
 
         title = f"Original \nimages"
@@ -1055,7 +1056,7 @@ class Viz:
 
         for idx, this_trial in enumerate(best_trials[1:]):
             img, rec_img, samples = self._get_imgs(
-                df, nsamples, exp_spat_filt_to_viz, this_trial
+                df, nsamples, exp_spat_filt, this_trial
             )
 
             title = f"Reco for \n{this_dep_var} = \n{dep_var_vals[this_trial]:.3f}, \nidx = {this_trial}"
@@ -1066,7 +1067,7 @@ class Viz:
         self,
         df,
         nsamples,
-        exp_spat_filt_to_viz,
+        exp_spat_filt,
         this_trial_idx,
     ):
         log_dir = df["logdir"][this_trial_idx]
@@ -1083,8 +1084,8 @@ class Viz:
         if hasattr(model, "test_data"):
             test_data = model.test_data[:nsamples, :, :, :]
         else:
-            # Make a list of dict keys starting "cell_ix_" from exp_spat_filt_to_viz dictionary
-            keys = exp_spat_filt_to_viz.keys()
+            # Make a list of dict keys starting "cell_ix_" from exp_spat_filt dictionary
+            keys = exp_spat_filt.keys()
             cell_ix_names_list = [key for key in keys if "cell_ix_" in key]
             # Make a numpy array of numbers following "cell_ix_"
             cell_ix_array = np.array(
@@ -1099,14 +1100,14 @@ class Viz:
                 [
                     nsamples,
                     1,
-                    exp_spat_filt_to_viz["num_pix_y"],
-                    exp_spat_filt_to_viz["num_pix_x"],
+                    exp_spat_filt["num_pix_y"],
+                    exp_spat_filt["num_pix_x"],
                 ]
             )
             for idx, this_sample in enumerate(samples):
-                test_data[idx, 0, :, :] = exp_spat_filt_to_viz[
-                    f"cell_ix_{this_sample}"
-                ]["spatial_data_array"]
+                test_data[idx, 0, :, :] = exp_spat_filt[f"cell_ix_{this_sample}"][
+                    "spatial_data_array"
+                ]
 
         # Hack to reuse the AugmentedDataset._feature_scaling method. Scales to [0,1]
         test_data = AugmentedDataset._feature_scaling("", test_data)
@@ -1873,9 +1874,11 @@ class Viz:
         Show the image of whole retina with all the receptive fields summed up.
         """
 
-        img_ret = self.construct_retina.gen_ret_to_viz["img_ret"]
-        img_ret_masked = self.construct_retina.gen_ret_to_viz["img_ret_masked"]
-        img_ret_adjusted = self.construct_retina.gen_ret_to_viz["img_ret_adjusted"]
+        gen_ret = self.project_data.construct_retina["gen_ret"]
+
+        img_ret = gen_ret["img_ret"]
+        img_ret_masked = gen_ret["img_ret_masked"]
+        img_ret_adjusted = gen_ret["img_ret_adjusted"]
 
         plt.figure()
         plt.subplot(221)
@@ -1909,9 +1912,11 @@ class Viz:
         img_rfs_adjusted: (n_cells, n_pix, n_pix)
         """
 
-        img_rf = self.construct_retina.gen_rfs_to_viz["img_rf"]
-        img_rf_mask = self.construct_retina.gen_rfs_to_viz["img_rf_mask"]
-        img_rfs_adjusted = self.construct_retina.gen_rfs_to_viz["img_rfs_adjusted"]
+        gen_rfs = self.project_data.construct_retina["gen_rfs"]
+
+        img_rf = gen_rfs["img_rf"]
+        img_rf_mask = gen_rfs["img_rf_mask"]
+        img_rfs_adjusted = gen_rfs["img_rfs_adjusted"]
 
         fig, axs = plt.subplots(3, n_samples, figsize=(n_samples, 3))
         samples = np.random.choice(img_rf.shape[0], n_samples, replace=False)
@@ -1956,8 +1961,10 @@ class Viz:
         img_rfs_adjusted: (n_cells, n_pix, n_pix)
         """
 
-        img_rf = self.construct_retina.gen_rfs_to_viz["img_rf"]
-        img_rfs_adjusted = self.construct_retina.gen_rfs_to_viz["img_rfs_adjusted"]
+        gen_rfs = self.project_data.construct_retina["gen_rfs"]
+
+        img_rf = gen_rfs["img_rf"]
+        img_rfs_adjusted = gen_rfs["img_rfs_adjusted"]
 
         fig, axs = plt.subplots(
             2, 1, figsize=(10, 10)
@@ -2421,9 +2428,11 @@ class Viz:
 
     # Validation viz
     def validate_gc_rf_size(self, savefigname=None):
+        gen_rfs = self.project_data.construct_retina["gen_rfs"]
+
         if self.context.my_retina["spatial_model"] == "VAE":
-            gen_rfs_to_viz = self.construct_retina.gen_rfs_to_viz
-            img_rf = gen_rfs_to_viz["img_rf"]
+            gen_rfs = gen_rfs
+            img_rf = gen_rfs["img_rf"]
 
             new_um_per_pix = self.construct_retina.updated_vae_um_per_pix
 
@@ -2441,7 +2450,7 @@ class Viz:
             )
 
             all_data_fits_df = fit.all_data_fits_df
-            gen_spat_filt_to_viz = fit.gen_spat_filt_to_viz
+            gen_spat_filt = fit.gen_spat_filt
             good_idx_rings = fit.good_idx_rings
         else:
             raise ValueError(

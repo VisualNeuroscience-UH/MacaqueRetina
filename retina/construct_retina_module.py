@@ -73,12 +73,13 @@ class ConstructRetina(RetinaMath):
 
     _properties_list = []
 
-    def __init__(self, context, data_io, viz, fit) -> None:
+    def __init__(self, context, data_io, viz, fit, project_data) -> None:
         # Dependency injection at ProjectManager construction
         self._context = context.set_context(self)
         self._data_io = data_io
         self._viz = viz
         self._fit = fit
+        self._project_data = project_data
 
         self.initialized = False
 
@@ -97,6 +98,10 @@ class ConstructRetina(RetinaMath):
     @property
     def fit(self):
         return self._fit
+
+    @property
+    def project_data(self):
+        return self._project_data
 
     def _initialize(self):
         """
@@ -213,11 +218,6 @@ class ConstructRetina(RetinaMath):
             self.exp_stat_df,
             self.exp_spat_cen_sd_mm,
             self.exp_spat_sur_sd_mm,
-            self.exp_spat_filt_to_viz,
-            self.exp_spat_stat_to_viz,
-            self.exp_temp_filt_to_viz,
-            self.exp_temp_stat_to_viz,
-            self.exp_tonic_dr_to_viz,
             self.apricot_data_resolution_hw,
         ) = self.fit.get_experimental_fits()
 
@@ -411,7 +411,7 @@ class ConstructRetina(RetinaMath):
 
         dd_model_caption = f"All data {dd_regr_model} fit"
 
-        self.dd_vs_ecc_to_viz = {
+        self.project_data.construct_retina["dd_vs_ecc"] = {
             "data_all_x": data_all_x,
             "data_all_y": data_all_y,
             "fit_parameters": fit_parameters,
@@ -803,7 +803,7 @@ class ConstructRetina(RetinaMath):
             A DataFrame containing the temporal statistics of the temporal filter parameters, including the shape, loc,
             and scale parameters of the fitted gamma distribution, as well as the name of the distribution and the domain.
 
-        temp_stat_to_viz : dict
+        temp_stat : dict
             A dictionary containing information needed for visualization, including the temporal filter parameters, the
             fitted distribution parameters, the super title of the plot, `self.gc_type`, `self.response_type`, and the
             `self.all_data_fits_df` DataFrame.
@@ -887,14 +887,14 @@ class ConstructRetina(RetinaMath):
             temporal_exp_stat_df.loc["A_cen", "snr"] = A_cen_snr
             temporal_exp_stat_df.loc["A_sur", "snr"] = A_sur_snr
 
-        temp_stat_to_viz = {
+        self.project_data.construct_retina["exp_temp_BK_model"] = {
             "temporal_model_parameters": temporal_model_parameters,
             "distrib_params": distrib_params,
             "suptitle": self.gc_type + " " + self.response_type,
             "all_data_fits_df": all_data_fits_df,
         }
+
         self.exp_stat_df = all_data_fits_df
-        self.exp_temp_BK_model_to_viz = temp_stat_to_viz
 
         return temporal_exp_stat_df
 
@@ -976,7 +976,7 @@ class ConstructRetina(RetinaMath):
         latent_samples = latent_samples.type(torch.float32)
         latent_dim = self.retina_vae.latent_dim
 
-        self.gen_latent_space_to_viz = {
+        self.project_data.construct_retina["gen_latent_space"] = {
             "samples": latent_samples.to("cpu").numpy(),
             "dim": latent_dim,
             "data": latent_data,
@@ -1563,8 +1563,6 @@ class ConstructRetina(RetinaMath):
             _,
             _,
             _,
-            _,
-            _,
             gc_vae_df,
             good_idx_generated,
         ) = self.fit.get_generated_spatial_fits()
@@ -1617,9 +1615,12 @@ class ConstructRetina(RetinaMath):
         # Add FIT:ed dendritic diameter for visualization
         (
             self.gc_df,
-            self.dd_vs_ecc_to_viz["dd_fit_x"],
-            self.dd_vs_ecc_to_viz["dd_fit_y"],
+            dd_fit_x,
+            dd_fit_y,
         ) = self._get_dd_fit_for_viz(self.gc_df)
+
+        self.project_data.construct_retina["dd_vs_ecc"]["dd_fit_x"] = dd_fit_x
+        self.project_data.construct_retina["dd_vs_ecc"]["dd_fit_y"] = dd_fit_y
 
         # Scale center and surround amplitude so that Gaussian volume is preserved
         self.gc_df = self._scale_both_amplitudes(
@@ -1645,7 +1646,7 @@ class ConstructRetina(RetinaMath):
             img_processed, img_raw, self.gc_vae_df = self._get_rfs_from_vae(nsamples)
 
             # Set self attribute for later visualization of image histograms
-            self.gen_spat_img_to_viz = {
+            self.project_data.construct_retina["gen_spat_img"] = {
                 "img_processed": img_processed,
                 "img_raw": img_raw,
             }
@@ -1714,13 +1715,13 @@ class ConstructRetina(RetinaMath):
                 img_rfs_final = img_rfs
 
             # Set self attributes for later visualization
-            self.gen_rfs_to_viz = {
+            self.project_data.construct_retina["gen_rfs"] = {
                 "img_rf": img_rfs,
                 "img_rf_mask": img_rfs_mask,
                 "img_rfs_adjusted": img_rfs_adjusted,
             }
 
-            self.gen_ret_to_viz = {
+            self.project_data.construct_retina["gen_ret"] = {
                 "img_ret": img_ret,
                 "img_ret_masked": img_ret_masked,
                 "img_ret_adjusted": img_ret_adjusted,
@@ -1750,8 +1751,6 @@ class ConstructRetina(RetinaMath):
                 self.gen_stat_df,
                 self.gen_spat_cen_sd,
                 self.gen_spat_sur_sd,
-                self.gen_spat_filt_to_viz,
-                self.gen_spat_stat_to_viz,
                 self.gc_vae_df,
                 _,
             ) = self.fit.get_generated_spatial_fits()
@@ -1762,10 +1761,12 @@ class ConstructRetina(RetinaMath):
             # Add fitted VAE dendritic diameter for visualization
             (
                 self.gc_vae_df,
-                self.dd_vs_ecc_to_viz["dd_vae_x"],
-                self.dd_vs_ecc_to_viz["dd_vae_y"],
+                dd_vae_x,
+                dd_vae_y,
             ) = self._get_dd_fit_for_viz(self.gc_vae_df)
 
+            self.project_data.construct_retina["dd_vs_ecc"]["dd_vae_x"] = dd_vae_x
+            self.project_data.construct_retina["dd_vs_ecc"]["dd_vae_y"] = dd_vae_y
             # Save original df
             self.gc_df_original = self.gc_df.copy()
             # Apply the spatial VAE model to df
