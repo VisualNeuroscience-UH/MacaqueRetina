@@ -2,6 +2,7 @@
 from pathlib import Path
 import pdb
 from typing import Type
+from copy import deepcopy
 
 from context.context_base_module import ContextBase
 
@@ -17,11 +18,15 @@ class Context(ContextBase):
     def __init__(self, all_properties) -> None:
         self.validated_properties = self._validate_properties(all_properties)
 
-    def set_context(self, _properties_list=None):
+    # def set_context(self, _properties_list=None):
+    def set_context(self, obj_instance):
         """
         Each module orders object_instance.context.property name from context by calling set_context(). Empty list provides all properties.
         """
-        if _properties_list is None:
+
+        if hasattr(obj_instance, "_properties_list"):
+            _properties_list = obj_instance._properties_list
+        else:
             _properties_list = []
 
         if isinstance(_properties_list, list):
@@ -31,15 +36,18 @@ class Context(ContextBase):
         else:
             raise TypeError("properties list must be a list or a string, aborting...")
 
+        # Make a copy of the context object, so that you do not always return the same object
+        _context = deepcopy(self)
+
         for attr, val in self.validated_properties.items():
             if len(_properties_list) > 0 and attr in _properties_list:
-                setattr(self, attr, val)
+                setattr(_context, attr, val)
             elif len(_properties_list) > 0 and attr not in _properties_list:
                 pass
             else:
-                setattr(self, attr, val)
+                setattr(_context, attr, val)
 
-        return self
+        return _context
 
     def _validate_properties(self, all_properties):
         validated_properties = {}
