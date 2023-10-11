@@ -34,11 +34,8 @@ from context.context_module import Context
 
 
 class DataIO(DataIOBase):
-    # self.context. attributes
-    _properties_list = ["path", "input_folder", "output_folder"]
-
     def __init__(self, context) -> None:
-        self.context = context.set_context(self._properties_list)
+        self.context = context.set_context(self)
 
         # Attach cxsystem2 methods
         self.write_to_file = write_to_file

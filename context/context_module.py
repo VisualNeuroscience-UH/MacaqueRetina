@@ -18,14 +18,23 @@ class Context(ContextBase):
     def __init__(self, all_properties) -> None:
         self.validated_properties = self._validate_properties(all_properties)
 
-    # def set_context(self, _properties_list=None):
-    def set_context(self, obj_instance):
+    def set_context(self, class_instance):
         """
-        Each module orders object_instance.context.property name from context by calling set_context(). Empty list provides all properties.
+        Each module orders class_instance.context.property name from context by calling set_context().
+        Empty list provides all properties.
+
+        The context object is separate for each processed class_instance, but the class_instance.context.attribute
+        is always the same as context.attribute. Thus it will always point to the project manager context
+        (input arguments to the project manager init).
+
+        Parameters
+        ----------
+        class_instance : object
+            Class instance that calls set_context().
         """
 
-        if hasattr(obj_instance, "_properties_list"):
-            _properties_list = obj_instance._properties_list
+        if hasattr(class_instance, "_properties_list"):
+            _properties_list = class_instance._properties_list
         else:
             _properties_list = []
 

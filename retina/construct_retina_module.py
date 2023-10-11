@@ -71,21 +71,14 @@ class ConstructRetina(RetinaMath):
         Dataframe containing the ganglion cell mosaic
     """
 
-    _properties_list = [
-        "path",
-        "output_folder",
-        "input_folder",
-        "my_retina",
-        "apricot_metadata",
-        "literature_data_files",
-    ]
+    _properties_list = []
 
-    def __init__(self, context, data_io, viz, Fit) -> None:
+    def __init__(self, context, data_io, viz, fit) -> None:
         # Dependency injection at ProjectManager construction
-        self._context = context.set_context(self._properties_list)
+        self._context = context.set_context(self)
         self._data_io = data_io
         self._viz = viz
-        self._Fit = Fit
+        self._fit = fit
 
         self.initialized = False
 
@@ -102,8 +95,8 @@ class ConstructRetina(RetinaMath):
         return self._viz
 
     @property
-    def Fit(self):
-        return self._Fit
+    def fit(self):
+        return self._fit
 
     def _initialize(self):
         """
@@ -211,6 +204,11 @@ class ConstructRetina(RetinaMath):
         self.surround_fixed = 1
 
         # Make or read fits
+        self.fit.initialize(
+            gc_type,
+            response_type,
+            fit_type="experimental",
+        )
         (
             self.exp_stat_df,
             self.exp_spat_cen_sd_mm,
@@ -221,12 +219,7 @@ class ConstructRetina(RetinaMath):
             self.exp_temp_stat_to_viz,
             self.exp_tonic_dr_to_viz,
             self.apricot_data_resolution_hw,
-        ) = self.Fit(
-            self.context.apricot_metadata,
-            gc_type,
-            response_type,
-            fit_type="experimental",
-        ).get_experimental_fits()
+        ) = self.fit.get_experimental_fits()
 
         self.initialized = True
 
@@ -1559,6 +1552,13 @@ class ConstructRetina(RetinaMath):
         # Fit elliptical gaussians to the generated receptive fields
         # If fit fails, or semi major or minor axis is >3 std from the mean,
         # replace with reserve RF
+        self.fit.initialize(
+            self.gc_type,
+            self.response_type,
+            spatial_data=img_processed,
+            fit_type="generated",
+            new_um_per_pix=data_um_per_pix,
+        )
         (
             _,
             _,
@@ -1567,14 +1567,7 @@ class ConstructRetina(RetinaMath):
             _,
             gc_vae_df,
             good_idx_generated,
-        ) = self.Fit(
-            self.context.apricot_metadata,
-            self.gc_type,
-            self.response_type,
-            spatial_data=img_processed,
-            fit_type="generated",
-            new_um_per_pix=data_um_per_pix,
-        ).get_generated_spatial_fits()
+        ) = self.fit.get_generated_spatial_fits()
 
         # Replace bad rfs with the reserve rfs
         missing_indices = np.setdiff1d(np.arange(nsamples), good_idx_generated)
@@ -1746,6 +1739,13 @@ class ConstructRetina(RetinaMath):
             )
 
             # Fit elliptical gaussians to the adjusted receptive fields
+            self.fit.initialize(
+                self.gc_type,
+                self.response_type,
+                spatial_data=img_rfs,  # Ellipse fit does not tolearate current adjustments
+                fit_type="generated",
+                new_um_per_pix=new_um_per_pix,
+            )
             (
                 self.gen_stat_df,
                 self.gen_spat_cen_sd,
@@ -1754,14 +1754,7 @@ class ConstructRetina(RetinaMath):
                 self.gen_spat_stat_to_viz,
                 self.gc_vae_df,
                 _,
-            ) = self.Fit(
-                self.context.apricot_metadata,
-                self.gc_type,
-                self.response_type,
-                spatial_data=img_rfs,  # Ellipse fit does not tolearate current adjustments
-                fit_type="generated",
-                new_um_per_pix=new_um_per_pix,
-            ).get_generated_spatial_fits()
+            ) = self.fit.get_generated_spatial_fits()
 
             # Update gc_vae_df to have the same columns as gc_df
             self.gc_vae_df = self._update_gc_vae_df(self.gc_vae_df, new_um_per_pix)

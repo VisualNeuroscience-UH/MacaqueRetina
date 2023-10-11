@@ -44,13 +44,12 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         In init we construct other classes and inject necessary dependencies.
         This class is allowed to house project-dependent data and methods.
         """
-        # TODO Check how _properties_list is implemented in context. Maybe needs to be reset between classes, or deepdopied.
-        # Now there seems to be all properties in all classes, which is not the purpose of the _properties_list.
+
         context = Context(all_properties)
 
         # Get correct context attributes. Empty properties return all existing project
         # attributes to context. That is what we want for the project manager
-        self.context = context.set_context()
+        self.context = context.set_context(self)
 
         data_io = DataIO(context)
         self.data_io = data_io
@@ -95,8 +94,9 @@ class ProjectManager(ProjectBase, ProjectUtilities):
 
         self.viz = viz
 
-        # Fit will be initialized more than once in ConstructRetina, thus we need to inject the class.
-        self.construct_retina = ConstructRetina(context, data_io, viz, Fit)
+        fit = Fit(context, data_io)
+
+        self.construct_retina = ConstructRetina(context, data_io, viz, fit)
         self.viz.construct_retina = self.construct_retina
 
         self.working_retina = WorkingRetina(context, data_io, viz)

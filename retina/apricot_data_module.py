@@ -29,8 +29,6 @@ class ApricotData:
         self.gc_type = gc_type
         self.response_type = response_type
 
-        self.DATA_PIXEL_LEN = 0.06  # in mm; pixel length 60 micrometers in dataset
-
         # Define filenames
         # Spatial data are read from a separate mat file that have been derived from the originals.
         # Non-spatial data are read from the original data files.

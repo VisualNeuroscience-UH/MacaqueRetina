@@ -408,8 +408,8 @@ if __name__ == "__main__":
     """
     Housekeeping. Do not comment out.
 
-    All ProjectManager input parameters go to context.
-    Init methods ask for these parameters by _properties_list class attribute.
+    All ProjectManager input parameters go to context. These are validated by the context object, and returned 
+    to the class instance by set_context() method. They are available by class_instance.context.attribute. 
     """
     PM = ProjectManager(
         path=path,

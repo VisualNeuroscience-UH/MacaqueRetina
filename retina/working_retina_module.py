@@ -34,18 +34,8 @@ b2.prefs["logging.display_brian_error_message"] = False
 
 
 class WorkingRetina(RetinaMath):
-    _properties_list = [
-        "path",
-        "output_folder",
-        "my_retina",
-        "my_stimulus_metadata",
-        "my_stimulus_options",
-        "my_run_options",
-        "apricot_metadata",
-    ]
-
     def __init__(self, context, data_io, viz) -> None:
-        self._context = context.set_context(self._properties_list)
+        self._context = context.set_context(self)
         self._data_io = data_io
         # viz.client_object = self  # injecting client object pointer into viz object
         self._viz = viz
@@ -1855,17 +1845,9 @@ class PhotoReceptor:
     """
 
     # self.context. attributes
-    _properties_list = [
-        "path",
-        "input_folder",
-        "output_folder",
-        "my_retina",
-        "my_stimulus_metadata",
-        "my_stimulus_options",
-    ]
 
     def __init__(self, context, data_io) -> None:
-        self._context = context.set_context(self._properties_list)
+        self._context = context.set_context(self)
         self._data_io = data_io
 
         self.optical_aberration = self.context.my_retina["optical_aberration"]

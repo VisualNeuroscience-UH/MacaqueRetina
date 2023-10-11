@@ -44,13 +44,9 @@ class Viz:
     """
 
     cmap = "gist_earth"  # viridis or cividis would be best for color-blind
-    _properties_list = [
-        "path",
-        "output_folder",
-    ]
 
     def __init__(self, context, data_io, ana, **kwargs) -> None:
-        self._context = context.set_context(self._properties_list)
+        self._context = context.set_context(self)
         self._data_io = data_io
         self._ana = ana
 

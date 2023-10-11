@@ -24,16 +24,31 @@ from retina.apricot_data_module import ApricotData
 import pdb
 
 
-class Fit(ApricotData, RetinaMath):
+class Fit(RetinaMath):
     """
-    This class contains methods for deriving spatial and temporal receptive field parameters from the
-    apricot dataset (Field_2010). Use the get_experimental_fits or get_generated_spatial_fits method to
-    return the fits from the instance object, self.all_data_fits_df and other data for visualization.
+    This class contains methods for fitting elliptical and circularly symmetric
+    difference of Gaussians (DoG) models to experimental  (Field_2010) and generated data.
+    In addition, it contains methods for fitting experimental impulse response magnitude to
+    a function consisting of cascade of two lowpass filters and for adding the tonic drive .
     """
 
-    def __init__(
+    def __init__(self, context, data_io):
+        # Dependency injection at ProjectManager construction
+        self._context = context.set_context(self)
+        self._data_io = data_io
+
+        self.metadata = self.context.apricot_metadata
+
+    @property
+    def context(self):
+        return self._context
+
+    @property
+    def data_io(self):
+        return self._data_io
+
+    def initialize(
         self,
-        apricot_metadata,
         gc_type,
         response_type,
         fit_type="experimental",  # "experimental", "generated" or "concentric_rings"
@@ -41,7 +56,7 @@ class Fit(ApricotData, RetinaMath):
         new_um_per_pix=None,
     ):
         """
-        Initialize the Fit class.
+        Initialize the fit_dog object.
 
         Parameters
         ----------
@@ -66,7 +81,6 @@ class Fit(ApricotData, RetinaMath):
         AssertionError
             If fit_type is 'generated' and spatial_data is not provided.
         """
-        super().__init__(apricot_metadata, gc_type, response_type)
 
         assert (
             fit_type == "experimental" or new_um_per_pix is not None
@@ -74,6 +88,13 @@ class Fit(ApricotData, RetinaMath):
         assert (
             fit_type == "experimental" or spatial_data is not None
         ), "If fit_type is 'generated', spatial_data must be provided"
+
+        self.gc_type = gc_type
+        self.response_type = response_type
+
+        self.apricot_data = ApricotData(self.metadata, gc_type, response_type)
+        self.bad_data_idx = self.apricot_data.manually_picked_bad_data_idx
+        self.n_cells = self.apricot_data.n_cells
 
         match fit_type:
             case "experimental":
@@ -131,11 +152,13 @@ class Fit(ApricotData, RetinaMath):
 
         # shape (n_cells, 15); 15 time points @ 30 Hz (500 ms)
         if normalize_before_fit is True:
-            temporal_filters = self.read_temporal_filter_data(
+            temporal_filters = self.apricot_data.read_temporal_filter_data(
                 flip_negs=True, normalize=True
             )
         else:
-            temporal_filters = self.read_temporal_filter_data(flip_negs=True)
+            temporal_filters = self.apricot_data.read_temporal_filter_data(
+                flip_negs=True
+            )
 
         data_fps = self.metadata["data_fps"]
         data_n_samples = self.metadata["data_temporalfilter_samples"]
@@ -640,7 +663,7 @@ class Fit(ApricotData, RetinaMath):
         (
             spatial_data,
             cen_rot_rad_all,
-        ) = self.read_spatial_filter_data()
+        ) = self.apricot_data.read_spatial_filter_data()
 
         # Get original Apricot data spatial resolution
         apricot_data_resolution_hw = spatial_data.shape[1:3]
@@ -648,12 +671,12 @@ class Fit(ApricotData, RetinaMath):
         spatial_fits, spat_filt_to_viz, good_mask = self._fit_spatial_filters(
             spat_data_array=spatial_data,
             cen_rot_rad_all=cen_rot_rad_all,
-            bad_idx_for_spatial_fit=self.manually_picked_bad_data_idx,
+            bad_idx_for_spatial_fit=self.bad_data_idx,
             DoG_model_type=1,
             semi_x_always_major=True,
         )
 
-        spatial_filter_sums = self.compute_spatial_filter_sums()
+        spatial_filter_sums = self.apricot_data.compute_spatial_filter_sums()
 
         good_idx_experimental = np.where(good_mask == 1)[0]
         temporal_fits, temp_filt_to_viz = self._fit_temporal_filters(
@@ -662,9 +685,11 @@ class Fit(ApricotData, RetinaMath):
 
         # Note that this ignores only manually picked bad data indices,
         # if remove_bad_data_idx=True.
-        temporal_filter_sums = self.compute_temporal_filter_sums()
+        temporal_filter_sums = self.apricot_data.compute_temporal_filter_sums()
 
-        tonicdrives = pd.DataFrame(self.read_tonicdrive(), columns=["tonicdrive"])
+        tonicdrives = pd.DataFrame(
+            self.apricot_data.read_tonicdrive(), columns=["tonicdrive"]
+        )
 
         # Collect everything into one big dataframe
         all_data_fits_df = pd.concat(
@@ -1021,11 +1046,12 @@ class Fit(ApricotData, RetinaMath):
         """
         df = self.all_data_fits_df.iloc[good_data_fit_idx]
 
+        data_pix_len_mm = self.metadata["data_microm_per_pix"] / 1000
         # Get mean center and surround RF size from data in millimeters
-        mean_center_sd = np.mean(np.sqrt(df.semi_xc * df.semi_yc)) * self.DATA_PIXEL_LEN
+        mean_center_sd = np.mean(np.sqrt(df.semi_xc * df.semi_yc)) * data_pix_len_mm
         mean_surround_sd = (
             np.mean(np.sqrt((df.relat_sur_diam**2 * df.semi_xc * df.semi_yc)))
-            * self.DATA_PIXEL_LEN
+            * data_pix_len_mm
         )
         return mean_center_sd, mean_surround_sd
 

@@ -19,18 +19,10 @@ class Experiment(VideoBaseClass):
     Build your experiment here
     """
 
-    _properties_list = [
-        "path",
-        "output_folder",
-        "input_folder",
-        "my_stimulus_options",
-        "my_stimulus_metadata",
-    ]
-
     def __init__(self, context, data_io):
         super().__init__()
 
-        self._context = context.set_context(self._properties_list)
+        self._context = context.set_context(self)
         self._data_io = data_io
 
     @property

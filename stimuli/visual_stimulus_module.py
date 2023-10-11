@@ -599,18 +599,10 @@ class ConstructStimulus(VideoBaseClass):
     Create stimulus video and save
     """
 
-    _properties_list = [
-        "path",
-        "output_folder",
-        "input_folder",
-        "my_stimulus_options",
-        "my_stimulus_metadata",
-    ]
-
     def __init__(self, context, data_io, cones):
         super().__init__()
 
-        self._context = context.set_context(self._properties_list)
+        self._context = context.set_context(self)
         self._data_io = data_io
         self._cones = cones
 
@@ -776,18 +768,10 @@ class AnalogInput:
     frameduration assumes milliseconds
     """
 
-    _properties_list = [
-        "path",
-        "output_folder",
-        "input_folder",
-        "my_stimulus_options",
-        "my_stimulus_metadata",
-    ]
-
     def __init__(self, context, data_io, viz, **kwargs):
         super().__init__()
 
-        self._context = context.set_context(self._properties_list)
+        self._context = context.set_context(self)
         self._data_io = data_io
         self._viz = viz
 
