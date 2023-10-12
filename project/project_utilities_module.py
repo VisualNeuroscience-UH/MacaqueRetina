@@ -192,7 +192,7 @@ class ProjectUtilities:
         # Counts lines in folder .py files.
         # From https://stackoverflow.com/questions/38543709/count-lines-of-code-in-directory-using-python
 
-        startpath = Path(startpath)
+        startpath = Path(startpath).resolve()
 
         if header:
             print("{:>10} |{:>10} | {:<20}".format("ADDED", "TOTAL", "FILE"))
