@@ -209,7 +209,7 @@ class Viz:
         data_all_viable_cells = spat_filt["data_all_viable_cells"]
         x_grid = spat_filt["x_grid"]
         y_grid = spat_filt["y_grid"]
-        DoG_model_type = spat_filt["DoG_model_type"]
+        DoG_model = spat_filt["DoG_model"]
         pixel_array_shape_x = spat_filt["num_pix_x"]
         pixel_array_shape_y = spat_filt["num_pix_y"]
 
@@ -246,8 +246,8 @@ class Viz:
             )
             fig.colorbar(cen, ax=axes[idx, 0])
 
-            # Ellipses for DoG2D_fixed_surround
-            if DoG_model_type == 1:
+            # Ellipses for DoG2D_fixed_surround. Circular params are mapped to ellipse_fixed params
+            if DoG_model == "ellipse_fixed":
                 data_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
                 e1 = Ellipse(
                     (popt[np.array([1, 2])]),
@@ -269,7 +269,7 @@ class Viz:
                     linestyle="--",
                 )
 
-            else:
+            elif DoG_model == "ellipse_independent":
                 data_fitted = self.DoG2D_independent_surround((x_grid, y_grid), *popt)
                 e1 = Ellipse(
                     (popt[np.array([1, 2])]),
@@ -285,6 +285,27 @@ class Viz:
                     popt[9],
                     popt[10],
                     -popt[11] * 180 / np.pi,
+                    edgecolor=ellipse_edgecolor,
+                    linewidth=2,
+                    fill=False,
+                    linestyle="--",
+                )
+            elif DoG_model == "circular":
+                data_fitted = self.DoG2D_circular((x_grid, y_grid), *popt)
+                e1 = Ellipse(
+                    (popt[np.array([1, 2])]),
+                    popt[3],
+                    popt[3],
+                    0.0,
+                    edgecolor=ellipse_edgecolor,
+                    linewidth=2,
+                    fill=False,
+                )
+                e2 = Ellipse(
+                    (popt[np.array([1, 2])]),
+                    popt[5],
+                    popt[5],
+                    0.0,
                     edgecolor=ellipse_edgecolor,
                     linewidth=2,
                     fill=False,

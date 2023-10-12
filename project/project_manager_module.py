@@ -100,6 +100,7 @@ class ProjectManager(ProjectBase, ProjectUtilities):
             round_to_n_significant=self.round_to_n_significant,
             DoG2D_fixed_surround=retina_math.DoG2D_fixed_surround,
             DoG2D_independent_surround=retina_math.DoG2D_independent_surround,
+            DoG2D_circular=retina_math.DoG2D_circular,
             pol2cart=retina_math.pol2cart,
             gauss_plus_baseline=retina_math.gauss_plus_baseline,
             sector2area=retina_math.sector2area,

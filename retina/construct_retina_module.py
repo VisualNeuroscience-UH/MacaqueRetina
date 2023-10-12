@@ -213,12 +213,12 @@ class ConstructRetina(RetinaMath):
             gc_type,
             response_type,
             fit_type="experimental",
+            DoG_model=self.context.my_retina["DoG_model"],
         )
         (
             self.exp_stat_df,
             self.exp_spat_cen_sd_mm,
             self.exp_spat_sur_sd_mm,
-            self.apricot_data_resolution_hw,
         ) = self.fit.get_experimental_fits()
 
         self.initialized = True
@@ -256,6 +256,12 @@ class ConstructRetina(RetinaMath):
             "skewnorm",
             "triang",
         ], "Distribution not supported, aborting..."
+
+        # Check if any of the shape, loc, scale parameters are np.nan
+        # If so, set distribution_parameters to np.nan and return
+        if np.isnan(shape) or np.isnan(loc) or np.isnan(scale):
+            distribution_parameters = np.nan * np.ones(n_cells)
+            return distribution_parameters
 
         # Waiting times between events are relevant for gamma distribution
         if distribution == "gamma":
@@ -490,9 +496,15 @@ class ConstructRetina(RetinaMath):
 
         # Calculate RF diameter scaling factor for all ganglion cells
         # Area of RF = Scaling_factor * Random_factor * Area of ellipse(semi_xc,semi_yc), solve Scaling_factor.
-        area_of_ellipse = self.ellipse2area(
-            self.gc_df["semi_xc"], self.gc_df["semi_yc"]
-        )  # Units are pixels for the Chichilnisky data
+        if self.context.my_retina["DoG_model"] in [
+            "ellipse_independent",
+            "ellipse_fixed",
+        ]:
+            area_of_ellipse = self.ellipse2area(
+                self.gc_df["semi_xc"], self.gc_df["semi_yc"]
+            )  # Units are pixels for the Chichilnisky data
+        elif self.context.my_retina["DoG_model"] == "circular":
+            area_of_ellipse = np.pi * self.gc_df["rad_c"] ** 2
 
         """
         The area_of_rf contains area for all model units. Its sum must fill the whole area (coverage factor = 1).
@@ -661,7 +673,7 @@ class ConstructRetina(RetinaMath):
             theta_rotated = theta - np.min(theta)
             angle = np.max(theta_rotated)  # The angle is now == max theta
 
-            # Calculate area
+            # Calculate area for this eccentricity group
             assert (
                 eccentricity_in_mm[0] < eccentricity_in_mm[1]
             ), "Radii in wrong order, give [min max], aborting"
@@ -1159,10 +1171,18 @@ class ConstructRetina(RetinaMath):
         # Add diameters to dataframe
         # Assumes semi_xc and semi_yc are in mm
         # TODO: make semi_xc and semi_yc to include units in all methods
-        gc_df["den_diam_um"] = self.ellipse2diam(
-            gc_df["semi_xc"].values * 1000,
-            gc_df["semi_yc"].values * 1000,
-        )
+
+        if self.context.my_retina["DoG_model"] == "circular":
+            gc_df["den_diam_um"] = gc_df["rad_c"] * 1000 * 2
+        elif self.context.my_retina["DoG_model"] in [
+            "ellipse_independent",
+            "ellipse_fixed",
+        ]:
+            gc_df["den_diam_um"] = self.ellipse2diam(
+                gc_df["semi_xc"].values * 1000,
+                gc_df["semi_yc"].values * 1000,
+            )
+
         dd_fit_x = gc_df["pos_ecc_mm"].values
         dd_fit_y = gc_df["den_diam_um"].values
 
@@ -1178,17 +1198,32 @@ class ConstructRetina(RetinaMath):
         gc_vae_df["pos_polar_deg"] = self.gc_df["pos_polar_deg"]
         gc_vae_df["ecc_group_idx"] = self.gc_df["ecc_group_idx"]
 
-        # Scale factor for semi_x and semi_y from pix to micrometers
-        gc_vae_df["semi_xc"] = gc_vae_df_in["semi_xc"] * new_microm_per_pix / 1000  # mm
-        gc_vae_df["semi_yc"] = gc_vae_df_in["semi_yc"] * new_microm_per_pix / 1000  # mm
+        if self.context.my_retina["DoG_model"] == "circular":
+            gc_vae_df["rad_c"] = gc_vae_df_in["rad_c"] * new_microm_per_pix / 1000  # mm
+            gc_vae_df["rad_s"] = gc_vae_df_in["rad_s"] * new_microm_per_pix / 1000  # mm
+            gc_vae_df["den_diam_um"] = gc_vae_df["rad_c"] * 2
 
-        gc_vae_df["den_diam_um"] = self.ellipse2diam(
-            gc_vae_df["semi_xc"].values * 1000, gc_vae_df["semi_yc"].values * 1000
-        )
+        elif self.context.my_retina["DoG_model"] in [
+            "ellipse_independent",
+            "ellipse_fixed",
+        ]:
+            # Scale factor for semi_x and semi_y from pix to micrometers
+            gc_vae_df["semi_xc"] = (
+                gc_vae_df_in["semi_xc"] * new_microm_per_pix / 1000
+            )  # mm
+            gc_vae_df["semi_yc"] = (
+                gc_vae_df_in["semi_yc"] * new_microm_per_pix / 1000
+            )  # mm
 
-        gc_vae_df["orient_cen_rad"] = gc_vae_df_in["orient_cen_rad"]
+            gc_vae_df["den_diam_um"] = self.ellipse2diam(
+                gc_vae_df["semi_xc"].values * 1000, gc_vae_df["semi_yc"].values * 1000
+            )
 
-        gc_vae_df["xy_aspect_ratio"] = gc_vae_df_in["semi_yc"] / gc_vae_df_in["semi_xc"]
+            gc_vae_df["orient_cen_rad"] = gc_vae_df_in["orient_cen_rad"]
+
+            gc_vae_df["xy_aspect_ratio"] = (
+                gc_vae_df_in["semi_yc"] / gc_vae_df_in["semi_xc"]
+            )
 
         gc_vae_df["ampl_c"] = gc_vae_df_in["ampl_c"]
         gc_vae_df["ampl_s"] = gc_vae_df_in["ampl_s"]
@@ -1555,8 +1590,9 @@ class ConstructRetina(RetinaMath):
         self.fit.initialize(
             self.gc_type,
             self.response_type,
-            spatial_data=img_processed,
             fit_type="generated",
+            DoG_model=self.context.my_retina["DoG_model"],
+            spatial_data=img_processed,
             new_um_per_pix=data_um_per_pix,
         )
         (
@@ -1743,8 +1779,9 @@ class ConstructRetina(RetinaMath):
             self.fit.initialize(
                 self.gc_type,
                 self.response_type,
-                spatial_data=img_rfs,  # Ellipse fit does not tolearate current adjustments
                 fit_type="generated",
+                DoG_model=self.context.my_retina["DoG_model"],
+                spatial_data=img_rfs,  # Ellipse fit does not tolearate current adjustments
                 new_um_per_pix=new_um_per_pix,
             )
             (

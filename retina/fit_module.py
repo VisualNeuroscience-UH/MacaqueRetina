@@ -56,7 +56,8 @@ class Fit(RetinaMath):
         self,
         gc_type,
         response_type,
-        fit_type="experimental",  # "experimental", "generated" or "concentric_rings"
+        fit_type="experimental",  # "experimental", "generated"
+        DoG_model="ellipse_fixed",  # "ellipse_independent", "ellipse_fixed", "circular"
         spatial_data=None,
         new_um_per_pix=None,
     ):
@@ -107,21 +108,16 @@ class Fit(RetinaMath):
                     self.all_data_fits_df,
                     self.exp_spat_filt,
                     self.exp_temp_filt,
-                    self.apricot_data_resolution_hw,
                     self.good_idx_experimental,
-                ) = self._fit_experimental_data()
+                    self.spat_DoG_fit_params,
+                ) = self._fit_experimental_data(DoG_model)
             case "generated":
                 (
                     self.all_data_fits_df,
                     self.gen_spat_filt,
                     self.good_idx_generated,
-                ) = self._fit_generated_data(spatial_data)
-            case "concentric_rings":
-                (
-                    self.all_data_fits_df,
-                    self.gen_spat_filt,
-                    self.good_idx_rings,
-                ) = self._fit_concentric_rings(spatial_data)
+                    self.spat_DoG_fit_params,
+                ) = self._fit_DoG_generated_data(DoG_model, spatial_data)
 
     def _fit_temporal_filters(self, good_idx_experimental, normalize_before_fit=False):
         """
@@ -247,7 +243,7 @@ class Fit(RetinaMath):
         spat_data_array,
         cen_rot_rad_all=None,
         bad_idx_for_spatial_fit=None,
-        DoG_model_type=1,
+        DoG_model="ellipse_fixed",
         semi_x_always_major=True,
     ):
         """
@@ -261,8 +257,10 @@ class Fit(RetinaMath):
             Array of shape `(n_cells,)` containing the rotation angle for each cell. If None, rotation is set to 0, by default None
         bad_idx_for_spatial_fit : numpy.ndarray or None, optional
             Indices of cells to exclude from fitting, by default None
-        DoG_model_type : int, optional
-           0 fit center and surround ellipses separately, 1 fix surround ellipse midpoint to center (default), 2 fit concentric, symmetric rings
+        DoG_model : str, optional
+           ellipse_independent : fit center and surround anisotropic elliptical Gaussians independently,
+           ellipse_fixed : fix anisotropic elliptical Gaussian surround midpoint and orientation to center (default),
+           circular : fit isotropic circular Gaussians
         semi_x_always_major : bool, optional
             Whether to rotate Gaussians so that semi_x is always the semimajor/longer axis, by default True
 
@@ -272,13 +270,14 @@ class Fit(RetinaMath):
             A dataframe with spatial parameters and errors for each cell, and a dictionary of spatial filters to show with visualization.
             The dataframe has shape `(n_cells, 13)` and columns:
             ['ampl_c', 'xoc', 'yoc', 'semi_xc', 'semi_yc', 'orient_cen_rad', 'ampl_s', 'xos', 'yos', 'semi_xs',
-            'semi_ys', 'orientation_surround', 'offset'] if DoG_model_type=0,
+            'semi_ys', 'orient_sur_rad', 'offset'] if DoG_model=ellipse_independent,
             or shape `(n_cells, 8)` and columns: ['ampl_c', 'xoc', 'yoc', 'semi_xc', 'semi_yc', 'orient_cen_rad',
-            'ampl_s', 'relat_sur_diam', 'offset'] if DoG_model_type=1.
+            'ampl_s', 'relat_sur_diam', 'offset'] if DoG_model=ellipse_fixed.
+            ['ampl_c', 'xoc', 'yoc', 'rad_c', 'ampl_s', 'rad_s', 'offset'] if DoG_model=circular.
             The dictionary spat_filt has keys:
                 'x_grid': numpy.ndarray of shape `(num_pix_y, num_pix_x)`, X-coordinates of the grid points
                 'y_grid': numpy.ndarray of shape `(num_pix_y, num_pix_x)`, Y-coordinates of the grid points
-                'DoG_model_type': int, the type of DoG model used (0, 1 or 2)
+                'DoG_model': str, the type of DoG model used ('ellipse_independent', 'ellipse_fixed' or 'circular')
                 'num_pix_x': int, the number of pixels in the x-dimension
                 'num_pix_y': int, the number of pixels in the y-dimension
                 'filters': numpy.ndarray of shape `(n_cells, num_pix_y, num_pix_x)`, containing the fitted spatial filters for each cell
@@ -302,7 +301,7 @@ class Fit(RetinaMath):
 
         all_viable_cells = np.setdiff1d(np.arange(n_cells), bad_idx_for_spatial_fit)
 
-        if DoG_model_type == 0:
+        if DoG_model == "ellipse_independent":
             parameter_names = [
                 "ampl_c",
                 "xoc",
@@ -315,12 +314,12 @@ class Fit(RetinaMath):
                 "yos",
                 "semi_xs",
                 "semi_ys",
-                "orientation_surround",
+                "orient_sur_rad",
                 "offset",
             ]
             data_all_viable_cells = np.zeros(np.array([n_cells, len(parameter_names)]))
             surround_status = "independent"
-        elif DoG_model_type == 1:
+        elif DoG_model == "ellipse_fixed":
             parameter_names = [
                 "ampl_c",
                 "xoc",
@@ -334,7 +333,7 @@ class Fit(RetinaMath):
             ]
             data_all_viable_cells = np.zeros(np.array([n_cells, len(parameter_names)]))
             surround_status = "fixed"
-        elif DoG_model_type == 2:
+        elif DoG_model == "circular":
             parameter_names = [
                 "ampl_c",
                 "xoc",
@@ -350,19 +349,20 @@ class Fit(RetinaMath):
         # Create error & other arrays
         error_all_viable_cells = np.zeros((n_cells, 1))
         dog_filtersum_array = np.zeros((n_cells, 4))
+        aspect_ratios = np.zeros(n_cells)
 
         spat_filt = {
             "x_grid": x_grid,
             "y_grid": y_grid,
-            "DoG_model_type": DoG_model_type,
+            "DoG_model": DoG_model,
             "num_pix_x": num_pix_x,
             "num_pix_y": num_pix_y,
         }
 
         # Set initial guess for fitting
         rot = 0.0
-        if DoG_model_type == 0:
-            # Build initial guess for (ampl_c, xoc, yoc, semi_xc, semi_yc, orient_cen_rad, ampl_s, xos, yos, semi_xs, semi_ys, orientation_surround, offset)
+        if DoG_model == "ellipse_independent":
+            # Build initial guess for (ampl_c, xoc, yoc, semi_xc, semi_yc, orient_cen_rad, ampl_s, xos, yos, semi_xs, semi_ys, orient_sur_rad, offset)
             p0 = np.array(
                 [
                     1,
@@ -416,7 +416,7 @@ class Fit(RetinaMath):
                     ]
                 ),
             )
-        elif DoG_model_type == 1:
+        elif DoG_model == "ellipse_fixed":
             # Build initial guess for (ampl_c, xoc, yoc, semi_xc, semi_yc, orient_cen_rad, ampl_s, relat_sur_diam, offset)
             p0 = np.array(
                 [
@@ -438,7 +438,7 @@ class Fit(RetinaMath):
                 ),
             )
 
-        elif DoG_model_type == 2:
+        elif DoG_model == "circular":
             # Build initial guess for (ampl_c, xoc, yoc, rad_c, ampl_s, rad_s, offset)
             p0 = np.array(
                 [
@@ -465,7 +465,7 @@ class Fit(RetinaMath):
             this_rf = spat_data_array[cell_idx, :, :]
 
             try:
-                if DoG_model_type == 0:
+                if DoG_model == "ellipse_independent":
                     rot = cen_rot_rad_all[cell_idx]
                     p0[5] = rot
                     p0[11] = rot
@@ -477,7 +477,7 @@ class Fit(RetinaMath):
                         bounds=boundaries,
                     )
                     data_all_viable_cells[cell_idx, :] = popt
-                elif DoG_model_type == 1:
+                elif DoG_model == "ellipse_fixed":
                     rot = cen_rot_rad_all[cell_idx]
                     p0[5] = rot
                     popt, pcov = opt.curve_fit(
@@ -488,9 +488,9 @@ class Fit(RetinaMath):
                         bounds=boundaries,
                     )
                     data_all_viable_cells[cell_idx, :] = popt
-                elif DoG_model_type == 2:
+                elif DoG_model == "circular":
                     popt, pcov = opt.curve_fit(
-                        self.DoG2D_concentric_rings,
+                        self.DoG2D_circular,
                         (x_grid, y_grid),
                         this_rf.ravel(),
                         p0=p0,
@@ -503,7 +503,7 @@ class Fit(RetinaMath):
                 bad_idx_for_spatial_fit.append(cell_idx)
                 continue
 
-            if DoG_model_type in [0, 1]:
+            if DoG_model in ["ellipse_independent", "ellipse_fixed"]:
                 # Set rotation angle between 0 and pi
                 data_all_viable_cells[cell_idx, 5] = (
                     data_all_viable_cells[cell_idx, 5] % np.pi
@@ -526,7 +526,7 @@ class Fit(RetinaMath):
                         ) % np.pi
 
                     # Rotate also the surround if it is defined separately
-                    if DoG_model_type == 0:
+                    if DoG_model == "ellipse_independent":
                         if (
                             data_all_viable_cells[cell_idx, 9]
                             < data_all_viable_cells[cell_idx, 10]
@@ -547,21 +547,24 @@ class Fit(RetinaMath):
                     data_all_viable_cells[cell_idx, 5] = rotation - np.pi
                 else:
                     data_all_viable_cells[cell_idx, 5] = rotation
+                # Check position of semi_xc and semi_yc in parameter array
+                semi_xc_idx = parameter_names.index("semi_xc")
+                semi_yc_idx = parameter_names.index("semi_yc")
+                aspect_ratios[cell_idx] = (
+                    data_all_viable_cells[cell_idx, semi_xc_idx]
+                    / data_all_viable_cells[cell_idx, semi_yc_idx]
+                )
 
             # Compute fitting error
-            if DoG_model_type == 0:
+            if DoG_model == "ellipse_independent":
                 data_fitted = self.DoG2D_independent_surround((x_grid, y_grid), *popt)
-            elif DoG_model_type == 1:
+            elif DoG_model == "ellipse_fixed":
                 data_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
-            elif DoG_model_type == 2:
-                data_fitted = self.DoG2D_concentric_rings((x_grid, y_grid), *popt)
+            elif DoG_model == "circular":
+                data_fitted = self.DoG2D_circular((x_grid, y_grid), *popt)
 
             data_fitted = data_fitted.reshape(num_pix_y, num_pix_x)
             fit_deviations = data_fitted - this_rf
-            # data_mean = np.mean(this_rf)
-            # Normalized mean square error
-            # Defn per https://se.mathworks.com/help/ident/ref/goodnessoffit.html without 1 - ...
-            # 0 = perfect fit, infty = bad fit
 
             # MSE
             fit_error = np.sum(fit_deviations**2) / np.prod(this_rf.shape)
@@ -584,27 +587,15 @@ class Fit(RetinaMath):
         # Fitted parameters are assigned to both a dictionary and a dataframe
         spat_filt["data_all_viable_cells"] = data_all_viable_cells
 
+        # Add aspect ratios to parameter_names and data_all_viable_cells
+        if DoG_model in ["ellipse_independent", "ellipse_fixed"]:
+            parameter_names.append("xy_aspect_ratio")
+            data_all_viable_cells = np.hstack(
+                (data_all_viable_cells, aspect_ratios.reshape(n_cells, 1))
+            )
+
         # Finally build a dataframe of the fitted parameters
         fits_df = pd.DataFrame(data_all_viable_cells, columns=parameter_names)
-
-        if DoG_model_type == 2:
-            # Map DoG_model_type 2 to type 1 parameters [ampl_c, xoc, yoc, semi_xc, semi_yc, orient_cen_rad, ampl_s, relat_sur_diam, offset]
-            # For compatibility with downstream analysis and visualization
-            fits_df_as_fixed = pd.DataFrame()
-            fits_df_as_fixed["ampl_c"] = fits_df["ampl_c"]
-            fits_df_as_fixed["xoc"] = fits_df["xoc"]
-            fits_df_as_fixed["yoc"] = fits_df["yoc"]
-            fits_df_as_fixed["semi_xc"] = fits_df["rad_c"]
-            fits_df_as_fixed["semi_yc"] = fits_df["rad_c"]
-            fits_df_as_fixed["orient_cen_rad"] = 0.0
-            fits_df_as_fixed["ampl_s"] = fits_df["ampl_s"]
-            fits_df_as_fixed["relat_sur_diam"] = fits_df["rad_s"] / fits_df["rad_c"]
-            fits_df_as_fixed["offset"] = fits_df["offset"]
-            fits_df = fits_df_as_fixed
-
-        aspect_ratios_df = pd.DataFrame(
-            fits_df.semi_xc / fits_df.semi_yc, columns=["aspect_ratio"]
-        ).fillna(0.0)
 
         dog_filtersum_df = pd.DataFrame(
             dog_filtersum_array,
@@ -632,7 +623,6 @@ class Fit(RetinaMath):
             pd.concat(
                 [
                     fits_df,
-                    aspect_ratios_df,
                     dog_filtersum_df,
                     error_df,
                     good_mask_df,
@@ -641,9 +631,10 @@ class Fit(RetinaMath):
             ),
             spat_filt,
             good_mask,
+            parameter_names,
         )
 
-    def _fit_experimental_data(self):
+    def _fit_experimental_data(self, DoG_model):
         """
         Fits spatial ellipse, temporal and tonic drive parameters to the experimental data.
 
@@ -657,8 +648,6 @@ class Fit(RetinaMath):
                 Array of spatial filters in the format required for visualization.
             temp_filt : numpy.ndarray
                 Array of temporal filters in the format required for visualization.
-            apricot_data_resolution_hw : Tuple[int, int]
-                Tuple containing the height and width of the original Apricot data.
             good_idx_experimental : numpy.ndarray
                 Array of indices of good data after manually picked bad data and
                 failed spatial fit indeces have been removed.
@@ -670,38 +659,47 @@ class Fit(RetinaMath):
             cen_rot_rad_all,
         ) = self.apricot_data.read_spatial_filter_data()
 
-        # Get original Apricot data spatial resolution
-        apricot_data_resolution_hw = spatial_data.shape[1:3]
+        # Check that original Apricot data spatial resolution match metadata given in project_conf_module.
+        assert (
+            spatial_data.shape[1] == self.metadata["data_spatialfilter_height"]
+        ), "Spatial data height does not match metadata"
+        assert (
+            spatial_data.shape[2] == self.metadata["data_spatialfilter_width"]
+        ), "Spatial data width does not match metadata"
 
-        spatial_fits, spat_filt, good_mask = self._fit_spatial_filters(
+        (
+            exp_spat_fits_df,
+            spat_filt,
+            good_mask,
+            spat_DoG_fit_params,
+        ) = self._fit_spatial_filters(
             spat_data_array=spatial_data,
             cen_rot_rad_all=cen_rot_rad_all,
             bad_idx_for_spatial_fit=self.bad_data_idx,
-            DoG_model_type=1,
-            semi_x_always_major=True,
+            DoG_model=DoG_model,
         )
 
         spatial_filter_sums = self.apricot_data.compute_spatial_filter_sums()
 
         good_idx_experimental = np.where(good_mask == 1)[0]
-        temporal_fits, temp_filt = self._fit_temporal_filters(good_idx_experimental)
+        temp_fits_df, temp_filt = self._fit_temporal_filters(good_idx_experimental)
 
         # Note that this ignores only manually picked bad data indices,
         # if remove_bad_data_idx=True.
         temporal_filter_sums = self.apricot_data.compute_temporal_filter_sums()
 
-        tonicdrives = pd.DataFrame(
+        tonicdrives_df = pd.DataFrame(
             self.apricot_data.read_tonicdrive(), columns=["tonicdrive"]
         )
 
         # Collect everything into one big dataframe
         all_data_fits_df = pd.concat(
             [
-                spatial_fits,
+                exp_spat_fits_df,
                 spatial_filter_sums,
-                temporal_fits,
+                temp_fits_df,
                 temporal_filter_sums,
-                tonicdrives,
+                tonicdrives_df,
             ],
             axis=1,
         )
@@ -713,16 +711,18 @@ class Fit(RetinaMath):
             all_data_fits_df,
             spat_filt,
             temp_filt,
-            apricot_data_resolution_hw,
             good_idx_experimental,
+            spat_DoG_fit_params,
         )
 
-    def _fit_generated_data(self, spatial_data):
+    def _fit_DoG_generated_data(self, DoG_model, spatial_data):
         """
-        Fits spatial ellipse parameters to the generated data.
+        Fits spatial DoG parameters to the generated data.
 
         Parameters:
         -----------
+        DoG_model : str
+            The type of DoG model used ('ellipse_independent', 'ellipse_fixed' or 'circular').
         spatial_data : numpy.ndarray
             Array of shape (n_samples, height, width) containing the generated spatial data.
 
@@ -738,62 +738,31 @@ class Fit(RetinaMath):
 
         cen_rot_rad_all = np.zeros(spatial_data.shape[0])
 
-        spatial_fits, spat_filt, good_mask = self._fit_spatial_filters(
+        (
+            gen_spat_fits_df,
+            spat_filt,
+            good_mask,
+            spat_DoG_fit_params,
+        ) = self._fit_spatial_filters(
             spat_data_array=spatial_data,
             cen_rot_rad_all=cen_rot_rad_all,
             bad_idx_for_spatial_fit=[],
-            DoG_model_type=1,
-            semi_x_always_major=True,
+            DoG_model=DoG_model,
         )
 
         # Collect everything into one big dataframe
-        all_data_fits_df = pd.concat([spatial_fits], axis=1)
+        all_data_fits_df = pd.concat([gen_spat_fits_df], axis=1)
 
         good_idx_generated = np.where(good_mask == 1)[0]
         # Set all_data_fits_df rows which are not part of good_idx_generated to zero
         all_data_fits_df.loc[~all_data_fits_df.index.isin(good_idx_generated)] = 0.0
 
-        return all_data_fits_df, spat_filt, good_idx_generated
-
-    def _fit_concentric_rings(self, spatial_data):
-        """
-        Fits symmetric DoG model parameters to the existing data.
-
-        Parameters:
-        -----------
-        spatial_data : numpy.ndarray
-            Array of shape (n_samples, height, width) containing the spatial data.
-
-        Returns:
-        --------
-        all_data_fits_df : pandas.DataFrame
-            A DataFrame containing the fitted parameters for the spatial filter.
-        spat_filt : numpy.ndarray
-            Array of shape (n_samples, height, width) containing the visualized spatial filters.
-        """
-
-        cen_rot_rad_all = np.zeros(spatial_data.shape[0])
-
-        spatial_fits, spat_filt, good_mask = self._fit_spatial_filters(
-            spat_data_array=spatial_data,
-            cen_rot_rad_all=cen_rot_rad_all,
-            bad_idx_for_spatial_fit=[],
-            DoG_model_type=2,
-        )
-
-        # Collect everything into one big dataframe
-        all_data_fits_df = pd.concat([spatial_fits], axis=1)
-
-        good_idx_rings = np.where(good_mask == 1)[0]
-        # Set all_data_fits_df rows which are not part of good_idx_rings to zero
-        all_data_fits_df.loc[~all_data_fits_df.index.isin(good_idx_rings)] = 0.0
-
-        return all_data_fits_df, spat_filt, good_idx_rings
+        return all_data_fits_df, spat_filt, good_idx_generated, spat_DoG_fit_params
 
     def _fit_spatial_statistics(self, good_data_fit_idx):
         """
         Fits gamma distribution parameters for the 'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s',
-        and 'relat_sur_diam' RF parameters, and fits vonmisees distribution parameters for the 'orient_cen_rad' RF parameter.
+        and 'relat_sur_diam' RF parameters, and fits vonmises distribution parameters for the 'orient_cen_rad' RF parameter.
 
         Parameters:
         -----------
@@ -803,12 +772,22 @@ class Fit(RetinaMath):
         Returns:
         --------
         spatial_stat_df : pandas DataFrame
-            A DataFrame containing gamma distribution parameters for the RF parameters 'semi_xc', 'semi_yc',
-            'xy_aspect_ratio', 'ampl_s', and 'relat_sur_diam', and vonmises   distribution parameters for the 'orient_cen_rad'.
+            A DataFrame containing distribution parameters for the RF parameters.
         spat_stat : dict
             A dictionary containing data that can be used to visualize the RF parameters' spatial statistics.
             Includes 'ydata', 'spatial_statistics_dict', and 'model_fit_data'.
         """
+
+        # 1. Define the lists of parameters for gamma and vonmises distributions
+        params_list = self.spat_DoG_fit_params
+        vonmises_strings = ["orient_cen_rad", "orient_sur_rad"]
+        vonmises_params = [param for param in params_list if param in vonmises_strings]
+        # Create a list of parameters for gamma distribution for all the other strings in the params_list
+        gamma_params = [param for param in params_list if param not in vonmises_strings]
+
+        # 2. Create a dictionary with parameter name: distribution
+        param_distribution_dict = {param: "gamma" for param in gamma_params}
+        param_distribution_dict.update({param: "vonmises" for param in vonmises_params})
 
         data_all_cells = np.array(self.all_data_fits_df)
         all_viable_cells = data_all_cells[good_data_fit_idx]
@@ -816,25 +795,7 @@ class Fit(RetinaMath):
         parameter_names = self.all_data_fits_df.columns.tolist()
         spatial_data_df = pd.DataFrame(data=all_viable_cells, columns=parameter_names)
 
-        # Calculate xy_aspect_ratio
-        xy_aspect_ratio_pd_series = (
-            spatial_data_df["semi_yc"] / spatial_data_df["semi_xc"]
-        )
-        xy_aspect_ratio_pd_series.rename("xy_aspect_ratio")
-        spatial_data_df["xy_aspect_ratio"] = xy_aspect_ratio_pd_series
-        rf_parameter_names = [
-            "semi_xc",
-            "semi_yc",
-            "xy_aspect_ratio",
-            "ampl_s",
-            "relat_sur_diam",
-            "orient_cen_rad",
-        ]
-
-        n_distributions = len(rf_parameter_names)
-        shape = np.zeros(
-            [n_distributions - 1]
-        )  # Orientation is modeled with a vonmises distribution below
+        n_distributions = len(param_distribution_dict)
         loc = np.zeros([n_distributions])
         scale = np.zeros([n_distributions])
         ydata = np.zeros([len(all_viable_cells), n_distributions])
@@ -844,74 +805,66 @@ class Fit(RetinaMath):
         # Create dict for statistical parameters
         spatial_statistics_dict = {}
 
-        # Model 'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','relat_sur_diam' rf_parameter_names with a gamma function.
-        for index, distribution in enumerate(rf_parameter_names[:-1]):
-            # fit the rf_parameter_names, get the PDF distribution using the parameters
-            ydata[:, index] = spatial_data_df[distribution]
-            shape[index], loc[index], scale[index] = stats.gamma.fit(
-                ydata[:, index], loc=0
-            )
-            x_model_fit[:, index] = np.linspace(
-                stats.gamma.ppf(
-                    0.001, shape[index], loc=loc[index], scale=scale[index]
-                ),
-                stats.gamma.ppf(
-                    0.999, shape[index], loc=loc[index], scale=scale[index]
-                ),
-                100,
-            )
-            y_model_fit[:, index] = stats.gamma.pdf(
-                x=x_model_fit[:, index],
-                a=shape[index],
-                loc=loc[index],
-                scale=scale[index],
-            )
+        # 3. Refactor the remaining code
+        for index, (param, dist) in enumerate(param_distribution_dict.items()):
+            ydata[:, index] = spatial_data_df[param]
 
-            # Collect parameters
-            spatial_statistics_dict[distribution] = {
-                "shape": shape[index],
-                "loc": loc[index],
-                "scale": scale[index],
-                "distribution": "gamma",
-            }
+            if dist == "gamma":
+                shape, loc[index], scale[index] = stats.gamma.fit(
+                    ydata[:, index], loc=0
+                )
+                x_model_fit[:, index] = np.linspace(
+                    stats.gamma.ppf(0.001, shape, loc=loc[index], scale=scale[index]),
+                    stats.gamma.ppf(0.999, shape, loc=loc[index], scale=scale[index]),
+                    100,
+                )
+                y_model_fit[:, index] = stats.gamma.pdf(
+                    x=x_model_fit[:, index],
+                    a=shape,
+                    loc=loc[index],
+                    scale=scale[index],
+                )
+                spatial_statistics_dict[param] = {
+                    "shape": shape,
+                    "loc": loc[index],
+                    "scale": scale[index],
+                    "distribution": "gamma",
+                }
 
-        # Model orientation distribution with vonmises function.
-        index += 1
-        ydata[:, index] = spatial_data_df[rf_parameter_names[-1]]
+            elif dist == "vonmises":
 
-        # The function to minimize. With the help of GPT4.
-        def neg_log_likelihood(params, data):
-            kappa, loc = params
-            return -np.sum(stats.vonmises.logpdf(data, kappa, loc=loc, scale=np.pi))
+                def neg_log_likelihood(params, data):
+                    kappa, loc = params
+                    return -np.sum(
+                        stats.vonmises.logpdf(data, kappa, loc=loc, scale=np.pi)
+                    )
 
-        # Initial guess
-        guess = [1.0, 0.0]  # kappa, loc
+                guess = [1.0, 0.0]  # kappa, loc
+                result = minimize(neg_log_likelihood, guess, args=(ydata[:, index],))
+                kappa, loc[index] = result.x
+                scale[index] = np.pi  # fixed
 
-        # Perform the optimization
-        result = minimize(neg_log_likelihood, guess, args=(ydata[:, index],))
-
-        kappa, loc[index] = result.x
-        scale[index] = np.pi  # fixed
-
-        # print("Fitted kappa and loc: ", kappa, loc[index])
-
-        x_model_fit[:, index] = np.linspace(
-            stats.vonmises.ppf(0.001, kappa, loc=loc[index], scale=scale[index]),
-            stats.vonmises.ppf(0.999, kappa, loc=loc[index], scale=scale[index]),
-            100,
-        )
-        y_model_fit[:, index] = stats.vonmises.pdf(
-            x=x_model_fit[:, index],
-            kappa=kappa,
-            loc=loc[index],
-            scale=scale[index],
-        )
-        spatial_statistics_dict[rf_parameter_names[-1]] = {
-            "shape": kappa,
-            "loc": loc[index],
-            "scale": scale[index],
-            "distribution": "vonmises",
-        }
+                x_model_fit[:, index] = np.linspace(
+                    stats.vonmises.ppf(
+                        0.001, kappa, loc=loc[index], scale=scale[index]
+                    ),
+                    stats.vonmises.ppf(
+                        0.999, kappa, loc=loc[index], scale=scale[index]
+                    ),
+                    100,
+                )
+                y_model_fit[:, index] = stats.vonmises.pdf(
+                    x=x_model_fit[:, index],
+                    kappa=kappa,
+                    loc=loc[index],
+                    scale=scale[index],
+                )
+                spatial_statistics_dict[param] = {
+                    "shape": kappa,
+                    "loc": loc[index],
+                    "scale": scale[index],
+                    "distribution": "vonmises",
+                }
 
         spat_stat = {
             "ydata": ydata,
@@ -1042,21 +995,32 @@ class Fit(RetinaMath):
 
         Returns
         -------
-        mean_center_sd : float
+        mean_cen_sd : float
             Mean center standard deviation in millimeters.
-        mean_surround_sd : float
+        mean_sur_sd : float
             Mean surround standard deviation in millimeters.
         """
         df = self.all_data_fits_df.iloc[good_data_fit_idx]
 
         data_pix_len_mm = self.metadata["data_microm_per_pix"] / 1000
-        # Get mean center and surround RF size from data in millimeters
-        mean_center_sd = np.mean(np.sqrt(df.semi_xc * df.semi_yc)) * data_pix_len_mm
-        mean_surround_sd = (
-            np.mean(np.sqrt((df.relat_sur_diam**2 * df.semi_xc * df.semi_yc)))
-            * data_pix_len_mm
-        )
-        return mean_center_sd, mean_surround_sd
+
+        if self.context.my_retina["DoG_model"] == "ellipse_fixed":
+            # Get mean center and surround RF size from data in millimeters
+            mean_cen_sd = np.mean(np.sqrt(df.semi_xc * df.semi_yc)) * data_pix_len_mm
+            mean_sur_sd = (
+                np.mean(np.sqrt((df.relat_sur_diam**2 * df.semi_xc * df.semi_yc)))
+                * data_pix_len_mm
+            )
+        elif self.context.my_retina["DoG_model"] == "ellipse_independent":
+            # Get mean center and surround RF size from data in millimeters
+            mean_cen_sd = np.mean(np.sqrt(df.semi_xc * df.semi_yc)) * data_pix_len_mm
+            mean_sur_sd = np.mean(np.sqrt((df.semi_xs * df.semi_ys))) * data_pix_len_mm
+        elif self.context.my_retina["DoG_model"] == "circular":
+            # Get mean center and surround RF size from data in millimeters
+            mean_cen_sd = np.mean(df.rad_c) * data_pix_len_mm
+            mean_sur_sd = np.mean(df.rad_s) * data_pix_len_mm
+
+        return mean_cen_sd, mean_sur_sd
 
     def get_experimental_fits(self):
         """
@@ -1086,8 +1050,6 @@ class Fit(RetinaMath):
             Dictionary with temporal filter statistics for visualization
         exp_tonic_dr : dict
             Dictionary with tonic drive statistics for visualization
-        apricot_data_resolution_hw : tuple
-            Tuple containing the height and width of the Apricot dataset in pixels
         """
 
         # Get good and bad data indeces from all_data_fits_df. The spatial fit
@@ -1134,7 +1096,6 @@ class Fit(RetinaMath):
             exp_stat_df,
             exp_spat_cen_sd_mm,
             exp_spat_sur_sd_mm,
-            self.apricot_data_resolution_hw,
         )
 
     def get_generated_spatial_fits(self):

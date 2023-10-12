@@ -169,6 +169,7 @@ my_retina = {
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
     "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder.
+    "DoG_model": "circular",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'.
     "rf_coverage_adjusted_to_1": True,  # False or True. Applies both to FIT and VAE models. Note that ellipse fit does not tolearate VAE adjustments => fit to nonadjusted generated rfs
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
     "model_file_name": "model_midget_on_20230927_133151.pt",  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only.
@@ -489,7 +490,7 @@ if __name__ == "__main__":
     # PM.viz.show_spatial_statistics(savefigname="spatial_stats.eps")
 
     # For VAE
-    # PM.viz.show_gen_exp_spatial_fit(n_samples=5, savefigname="DoG_ellipse_fit.eps")
+    PM.viz.show_gen_exp_spatial_fit(n_samples=5, savefigname="DoG_ellipse_fit.eps")
     # PM.viz.show_gen_exp_spatial_rf(ds_name="train_ds", n_samples=15, savefigname=None)
     # PM.viz.show_latent_tsne_space()
     # PM.viz.show_gen_spat_post_hist()

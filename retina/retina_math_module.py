@@ -144,7 +144,7 @@ class RetinaMath:
         yos,
         semi_xs,
         semi_ys,
-        orientation_surround,
+        orient_sur_rad,
         offset,
     ):
         """
@@ -162,14 +162,14 @@ class RetinaMath:
             np.cos(orient_cen_rad) ** 2
         ) / (2 * semi_yc**2)
 
-        asur = (np.cos(orientation_surround) ** 2) / (2 * semi_xs**2) + (
-            np.sin(orientation_surround) ** 2
+        asur = (np.cos(orient_sur_rad) ** 2) / (2 * semi_xs**2) + (
+            np.sin(orient_sur_rad) ** 2
         ) / (2 * semi_ys**2)
-        bsur = -(np.sin(2 * orientation_surround)) / (4 * semi_xs**2) + (
-            np.sin(2 * orientation_surround)
+        bsur = -(np.sin(2 * orient_sur_rad)) / (4 * semi_xs**2) + (
+            np.sin(2 * orient_sur_rad)
         ) / (4 * semi_ys**2)
-        csur = (np.sin(orientation_surround) ** 2) / (2 * semi_xs**2) + (
-            np.cos(orientation_surround) ** 2
+        csur = (np.sin(orient_sur_rad) ** 2) / (2 * semi_xs**2) + (
+            np.cos(orient_sur_rad) ** 2
         ) / (2 * semi_ys**2)
 
         ## Difference of gaussians
@@ -411,9 +411,7 @@ class RetinaMath:
         y = self.lowpass(t, n, p1, tau1) - self.lowpass(t, n, p2, tau2)
         return y
 
-    def DoG2D_concentric_rings(
-        self, xy_tuple, ampl_c, x0, y0, rad_c, ampl_s, rad_s, offset
-    ):
+    def DoG2D_circular(self, xy_tuple, ampl_c, x0, y0, rad_c, ampl_s, rad_s, offset):
         """
         DoG model with the center and surround as concentric circles and a shared center (x0, y0).
         """
