@@ -360,7 +360,6 @@ class DataSampler:
             namein = self.filename.stem + "_c.npz"
             data_filename_full = self.filename.parent / namein
             data = np.load(data_filename_full)
-            # pdb.set_trace()
             self.data_points = [(x, y) for x, y in zip(*[data["Xdata"], data["Ydata"]])]
             self.calibration_points = [
                 (x, y) for x, y in zip(*[data["calib_x"], data["calib_y"]])
