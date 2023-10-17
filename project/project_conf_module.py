@@ -158,8 +158,8 @@ response_type = "on"
 my_retina = {
     "gc_type": gc_type,
     "response_type": response_type,
-    "ecc_limits": [4.5, 5.5],  # degrees # parasol
-    "sector_limits": [-3, 3],  # polar angle in degrees # parasol
+    "ecc_limits": [3, 7],  # degrees # parasol
+    "sector_limits": [-6, 6],  # polar angle in degrees # parasol
     # "ecc_limits": [4.7, 5.3],  # midget
     # "sector_limits": [-1, 1],  # midget
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells

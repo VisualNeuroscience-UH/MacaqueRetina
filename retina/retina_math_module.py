@@ -129,7 +129,7 @@ class RetinaMath:
         y = radius * np.sin(theta)
         return (x, y)
 
-    def cart2pol(x, y, deg=True):
+    def cart2pol(self, x, y, deg=True):
         """
         Converts Cartesian coordinates to polar coordinates.
 

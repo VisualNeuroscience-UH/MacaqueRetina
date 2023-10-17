@@ -40,6 +40,7 @@ from retina.vae_module import RetinaVAE
 from pathlib import Path
 import pdb
 from copy import deepcopy
+import math
 
 
 class ConstructRetina(RetinaMath):
@@ -205,6 +206,8 @@ class ConstructRetina(RetinaMath):
         ) = self.fit.get_experimental_fits()
 
         self.gc_df = pd.DataFrame()
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.initialized = True
 
@@ -610,180 +613,399 @@ class ConstructRetina(RetinaMath):
     def _densfunc(self, r, d0, beta):
         return d0 * (1 + beta * r) ** (-2)
 
-    def _place_gc_units(self, gc_density_func_params):
+    def _initialize_positions_by_group(self, gc_density_func_params):
         """
-        Place ganglion cell center positions to retina
-
-        Creates self.gc_df: pandas.DataFrame with columns:
-            pos_ecc_mm (mm), pos_polar_deg (deg), ecc_group_idx
+        Initialize cell positions based on grouped eccentricities.
 
         Parameters
         ----------
-        gc_density_func_params: dict
-            Dictionary with parameters for the density function
+        gc_density_func_params : tuple
+            Parameters for the density function used to calculate cell density
+            at a given eccentricity.
+
+        Returns
+        -------
+        eccentricity_groups : list of ndarray
+            A list of arrays where each array contains group indices representing
+            eccentricity steps for cells.
+
+        initial_positions : list of ndarray
+            A list of arrays where each array contains cell positions for each
+            eccentricity group.
+
+        sector_surface_areas_mm2 : list of float
+            Area in mm^2 for each eccentricity step.
+
+        Notes
+        -----
+        The method divides the total eccentricity range into smaller steps,
+        calculates cell densities and positions for each step, and returns
+        group-wise cell positions and the corresponding sector surface areas.
         """
-
-        # Place cells inside one polar sector with density according to mid-ecc
-        eccentricity_in_mm_total = self.ecc_lim_mm
-        theta_deg = self.polar_lim_deg
-        randomize_position = self.randomize_position
-
         # Loop for reasonable delta ecc to get correct density in one hand and good cell distribution from the algo on the other
         # Lets fit close to 0.1 mm intervals, which makes sense up to some 15 deg. Thereafter longer jumps would do fine.
+        assert (
+            self.ecc_lim_mm[0] < self.ecc_lim_mm[1]
+        ), "Radii in wrong order, give [min max], aborting"
+        eccentricity_in_mm_total = self.ecc_lim_mm
         fit_interval = 0.1  # mm
-        n_steps = int(np.round(np.ptp(eccentricity_in_mm_total) / fit_interval))
+        n_steps = math.ceil(np.ptp(eccentricity_in_mm_total) / fit_interval)
         eccentricity_steps = np.linspace(
             eccentricity_in_mm_total[0], eccentricity_in_mm_total[1], 1 + n_steps
         )
 
-        # Initialize position arrays
-        matrix_polar_angle_randomized_all = np.asarray([])
-        matrix_eccentricity_randomized_all = np.asarray([])
-        gc_eccentricity_group_index = np.asarray([])
+        angle_deg = np.ptp(self.polar_lim_deg)  # The angle_deg is now == max theta_deg
 
-        true_eccentricity_end = []
+        eccentricity_groups = []
+        initial_positions = []
         sector_surface_areas_mm2 = []
-        for ecc_group_idx, current_step in enumerate(range(n_steps)):
-            if (
-                true_eccentricity_end
-            ):  # If the eccentricity has been adjusted below inside the loop
-                eccentricity_in_mm = np.asarray(
-                    [true_eccentricity_end, eccentricity_steps[current_step + 1]]
-                )
-            else:
-                eccentricity_in_mm = np.asarray(
-                    [
-                        eccentricity_steps[current_step],
-                        eccentricity_steps[current_step + 1],
-                    ]
-                )
-
-            # fetch center ecc in mm
-            center_ecc = np.mean(eccentricity_in_mm)
-
-            # rotate theta_deg to start from 0
-            theta_rotated = theta_deg - np.min(theta_deg)
-            angle_deg = np.max(theta_rotated)  # The angle_deg is now == max theta_deg
+        for group_idx in range(len(eccentricity_steps) - 1):
+            min_ecc = eccentricity_steps[group_idx]
+            max_ecc = eccentricity_steps[group_idx + 1]
+            avg_ecc = (min_ecc + max_ecc) / 2
+            density = self.gauss_plus_baseline(avg_ecc, *gc_density_func_params)
 
             # Calculate area for this eccentricity group
-            assert (
-                eccentricity_in_mm[0] < eccentricity_in_mm[1]
-            ), "Radii in wrong order, give [min max], aborting"
-            sector_area_remove = self.sector2area_mm2(eccentricity_in_mm[0], angle_deg)
-            sector_area_full = self.sector2area_mm2(eccentricity_in_mm[1], angle_deg)
+            sector_area_remove = self.sector2area_mm2(min_ecc, angle_deg)
+            sector_area_full = self.sector2area_mm2(max_ecc, angle_deg)
             sector_surface_area = sector_area_full - sector_area_remove  # in mm2
-            sector_surface_areas_mm2.append(
-                sector_surface_area
-            )  # collect sector area for each ecc step
+            # collect sector area for each ecc step
+            sector_surface_areas_mm2.append(sector_surface_area)
 
-            # N cells for given ecc
-            my_gaussian_fit = self.gauss_plus_baseline(
-                center_ecc, *gc_density_func_params
+            n_cells = math.ceil(sector_surface_area * density * self.gc_proportion)
+            positions = self._random_positions_within_group(min_ecc, max_ecc, n_cells)
+            eccentricity_groups.append(np.full(n_cells, group_idx))
+            initial_positions.append(positions)
+        return eccentricity_groups, initial_positions, sector_surface_areas_mm2
+
+    def _boundary_force(self, positions, rep, dist_th, clamp_min):
+        """
+        Calculate boundary repulsive forces for given positions.
+
+        Parameters
+        ----------
+        positions : torch.Tensor
+            A tensor of positions (shape: [N, 2], where N is number of nodes).
+        rep : float or torch.Tensor
+            Repulsion coefficient for boundary force.
+        dist_th : float or torch.Tensor
+            Distance threshold beyond which no force is applied.
+        clamp_min : float or torch.Tensor
+            Minimum distance value to avoid division by very small numbers.
+
+        Returns
+        -------
+        forces : torch.Tensor
+            A tensor of forces (shape: [N, 2]) for each position.
+
+        Notes
+        -----
+        This method calculates repulsive forces between the given positions and 
+        the defined boundaries. Repulsion is based on the inverse square law.
+        """        
+        # forces = torch.zeros_like(positions)
+        forces = torch.zeros_like(positions).to(self.device)
+        ecc_lim_mm = torch.tensor(self.ecc_lim_mm).to(self.device)
+        polar_lim_deg = torch.tensor(self.polar_lim_deg).to(self.device)
+
+        # Left border (eccentricity minimum)
+        left_distance = positions[:, 0] - ecc_lim_mm[0]
+        left_force = rep / (left_distance.clamp(min=clamp_min) ** 2)
+        left_force[left_distance > dist_th] = 0
+        forces[:, 0] -= left_force
+
+        # Right border (eccentricity maximum)
+        right_distance = ecc_lim_mm[1] - positions[:, 0]
+        right_force = rep / (right_distance.clamp(min=clamp_min) ** 2)
+        right_force[right_distance > dist_th] = 0
+        forces[:, 0] += right_force
+
+        # Transforming to Cartesian coordinates for bottom and top borders
+        bottom_x, bottom_y = self._pol2cart_torch(
+            ecc_lim_mm, [polar_lim_deg[0], polar_lim_deg[0]]
+        )
+
+        top_x, top_y = self._pol2cart_torch(
+            ecc_lim_mm, [polar_lim_deg[1], polar_lim_deg[1]]
+        )
+
+        # Calculating the equation of the line for bottom and top borders
+        m_bottom = (bottom_y[1] - bottom_y[0]) / (bottom_x[1] - bottom_x[0])
+        c_bottom = bottom_y[0] - m_bottom * bottom_x[0]
+
+        m_top = (top_y[1] - top_y[0]) / (top_x[1] - top_x[0])
+        c_top = top_y[0] - m_top * top_x[0]
+
+        # Calculating distance from the line for each position (corrected for perpendicular distance)
+        bottom_distance = torch.abs(
+            m_bottom * positions[:, 0] - positions[:, 1] + c_bottom
+        ) / torch.sqrt(m_bottom**2 + 1)
+        top_distance = torch.abs(
+            m_top * positions[:, 0] - positions[:, 1] + c_top
+        ) / torch.sqrt(m_top**2 + 1)
+
+        # Computing repulsive forces based on these distances
+        bottom_force = rep / (bottom_distance.clamp(min=clamp_min) ** 2)
+        bottom_force[bottom_distance > dist_th] = 0
+        forces[:, 1] -= bottom_force
+
+        top_force = rep / (top_distance.clamp(min=clamp_min) ** 2)
+        top_force[top_distance > dist_th] = 0
+        forces[:, 1] += top_force
+
+        return forces
+
+    def _pol2cart_torch(self, radius, phi, deg=True):
+        """
+        Convert polar coordinates to Cartesian coordinates using PyTorch tensors.
+
+        Parameters
+        ----------
+        radius : torch.Tensor
+            Tensor representing the radius value in real distance such as mm.
+        phi : list or torch.Tensor
+            Tensor or list representing the polar angle value.
+        deg : bool, optional
+            If True, the angle is given in degrees; if False, the angle is given 
+            in radians. Default is True.
+
+        Returns
+        -------
+        x, y : torch.Tensor
+            Cartesian coordinates corresponding to the input polar coordinates.
+        """
+
+        # Convert phi to tensor if it's a list
+        if isinstance(phi, list):
+            phi = torch.tensor(phi).to(radius.device)
+
+        if deg:
+            theta = phi * torch.pi / 180
+        else:
+            theta = phi
+
+        x = radius * torch.cos(theta)
+        y = radius * torch.sin(theta)
+        return (x, y)
+
+    def _apply_force_based_layout(
+        self,
+        all_positions,
+        n_iterations=1000,
+        learning_rate=0.001,
+        repulsion_coef=10,
+        max_dist=0.005,
+        noise_strength=0.01,
+    ):
+        """
+        Apply a force-based layout on the given positions.
+
+        Parameters
+        ----------
+        all_positions : list or ndarray
+            Initial positions of nodes.
+        n_iterations : int, optional
+            Number of iterations for the force-based optimization. Default is 1000.
+        learning_rate : float, optional
+            Learning rate for the optimization. Default is 0.001.
+        repulsion_coef : float, optional
+            Repulsion coefficient between nodes. Default is 10.
+        max_dist : float, optional
+            Maximum distance beyond which repulsion is not considered. Default is 0.005.
+        noise_strength : float, optional
+            Strength of noise to add for preventing local minima. Default is 0.01.
+
+        Returns
+        -------
+        positions : ndarray
+            New positions of nodes after the force-based optimization.
+
+        Notes
+        -----
+        This method applies a force-based layout to optimize node positions. 
+        It visualizes the progress of the layout optimization.
+        """
+
+        original_positions = deepcopy(all_positions)
+        positions = torch.tensor(
+            all_positions, requires_grad=True, dtype=torch.float64, device=self.device
+        )
+        learning_rate = torch.tensor(learning_rate).to(self.device)
+        optimizer = torch.optim.Adam([positions], lr=learning_rate)
+
+        # Init plotting
+        # Convert self.polar_lim_deg to Cartesian coordinates
+        bottom_x, bottom_y = self.pol2cart(
+            torch.tensor([self.ecc_lim_mm[0], self.ecc_lim_mm[1]]),
+            torch.tensor([self.polar_lim_deg[0], self.polar_lim_deg[0]]),
+        )
+        top_x, top_y = self.pol2cart(
+            torch.tensor([self.ecc_lim_mm[0], self.ecc_lim_mm[1]]),
+            torch.tensor([self.polar_lim_deg[1], self.polar_lim_deg[1]]),
+        )
+
+        # Concatenate to get the corner points
+        corners_x = torch.cat([bottom_x, top_x])
+        corners_y = torch.cat([bottom_y, top_y])
+
+        # Initialize the plot before the loop
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
+        ax1.scatter(corners_x, corners_y, color="black", marker="x", zorder=2)
+        ax2.scatter(corners_x, corners_y, color="black", marker="x", zorder=2)
+
+        ax1.set_aspect("equal")
+        ax2.set_aspect("equal")
+        scatter1 = ax1.scatter([], [], color="blue", marker="o")
+        scatter2 = ax2.scatter([], [], color="red", marker="o")
+
+        # Set axis limits to ensure corners are always visible
+        ax1.set_xlim(
+            self.ecc_lim_mm[0] - 0.1, self.ecc_lim_mm[1] + 0.1
+        )  # add a small buffer
+        ax1.set_ylim(min(corners_y) - 0.1, max(corners_y) + 0.1)  # add a small buffer
+        ax2.set_xlim(
+            self.ecc_lim_mm[0] - 0.1, self.ecc_lim_mm[1] + 0.1
+        )  # add a small buffer
+        ax2.set_ylim(min(corners_y) - 0.1, max(corners_y) + 0.1)  # add a small buffer
+
+        plt.ion()  # Turn on interactive mode
+        plt.show()
+        # End of init plotting
+
+        max_dist = torch.tensor(max_dist).to(self.device)
+        repulsion_coef = torch.tensor(repulsion_coef).to(self.device)
+        noise_strength = torch.tensor(noise_strength).to(self.device)
+        n_iterations = torch.tensor(n_iterations).to(self.device)
+
+        rep = torch.tensor(1.0).to(self.device)  # BORDER_REPULSION_STRENGTH
+        dist_th = torch.tensor(0.05).to(self.device)  # BORDER_DISTANCE_THRESHOLD
+        clamp_min = torch.tensor(0.0001).to(self.device)  # BORDER_CLAMP_MIN
+        # TÄHÄN JÄIT: TEE SOPIVAT PARAMETRIT ERIKSEEN PARASOL JA MIDGET.
+
+        for iteration in torch.range(0, n_iterations):
+            optimizer.zero_grad()
+
+            # Repulsive force between nodes
+            diff = positions[None, :, :] - positions[:, None, :]
+            dist = torch.norm(diff, dim=-1, p=2) + 1e-9
+
+            # Clip minimum distance to avoid very high repulsion
+            dist = torch.clamp(dist, min=0.0001)
+            # Clip max to inf (zero repulsion) above a certain distance
+            dist[dist > max_dist] = torch.inf
+            # Using inverse square for repulsion
+            repulsive_force = repulsion_coef * torch.sum(
+                diff / (dist[..., None] ** 3), dim=1
             )
-            Ncells = sector_surface_area * my_gaussian_fit * self.gc_proportion
 
-            # place cells in regular grid
-            # Vector of cell positions in radial and polar directions. Angle in degrees.
-            inner_arc_in_mm = (angle_deg / 360) * 2 * np.pi * eccentricity_in_mm[0]
-            delta_eccentricity_in_mm = eccentricity_in_mm[1] - eccentricity_in_mm[0]
+            # After calculating repulsive_force:
+            boundary_forces = self._boundary_force(positions, rep, dist_th, clamp_min)
+            total_force = repulsive_force + boundary_forces
 
-            # By assuming that the ratio of the number of points in x and y direction respects
-            # the sector's aspect ratio, ie.
-            # n_segments_arc / n_segments_eccentricity = inner_arc_in_mm / delta_eccentricity_in_mm
-            # we get:
-            n_segments_arc = np.sqrt(
-                Ncells * (inner_arc_in_mm / delta_eccentricity_in_mm)
-            )
-            n_segments_eccentricity = np.sqrt(
-                Ncells * (delta_eccentricity_in_mm / inner_arc_in_mm)
-            )
-            # Because n_segments_arc and n_segments_eccentricity can be floats, we round them to integers
-            int_n_segments_arc = int(round(n_segments_arc))
-            int_n_segments_eccentricity = int(round(n_segments_eccentricity))
+            force_strength = torch.norm(total_force, p=2, dim=1).mean()
+            noise = torch.randn_like(total_force) * noise_strength * force_strength
+            total_force = total_force + noise
 
-            # Recalc delta_eccentricity_in_mm given the n segments to avoid non-continuous cell densities
-            true_n_cells = int_n_segments_arc * int_n_segments_eccentricity
-            true_sector_area = true_n_cells / (my_gaussian_fit * self.gc_proportion)
-            true_delta_eccentricity_in_mm = (
-                int_n_segments_eccentricity / int_n_segments_arc
-            ) * inner_arc_in_mm
+            # Use the force as the "loss"
+            loss = torch.norm(total_force, p=2)
 
-            radius_segment_length = (
-                true_delta_eccentricity_in_mm / int_n_segments_eccentricity
-            )
-            theta_segment_angle = (
-                angle_deg / int_n_segments_arc
-            )  # Note that this is different from inner_arc_in_mm / int_n_segments_arc
+            loss.backward()
+            optimizer.step()
 
-            # Set the true_eccentricity_end
-            true_eccentricity_end = (
-                eccentricity_in_mm[0] + true_delta_eccentricity_in_mm
-            )
-
-            vector_polar_angle = np.linspace(
-                theta_deg[0], theta_deg[1], int_n_segments_arc
-            )
-            vector_eccentricity = np.linspace(
-                eccentricity_in_mm[0],
-                true_eccentricity_end - radius_segment_length,
-                int_n_segments_eccentricity,
-            )
-
-            # meshgrid and shift every second column to get good GC tiling
-            matrix_polar_angle, matrix_eccentricity = np.meshgrid(
-                vector_polar_angle, vector_eccentricity
-            )
-            matrix_polar_angle[::2] = matrix_polar_angle[::2] + (
-                angle_deg / (2 * n_segments_arc)
-            )  # shift half the inter-cell angle
-
-            # Randomization using normal distribution
-            matrix_polar_angle_randomized = (
-                matrix_polar_angle
-                + theta_segment_angle
-                * randomize_position
-                * (
-                    np.random.randn(
-                        matrix_polar_angle.shape[0], matrix_polar_angle.shape[1]
-                    )
+            # Update the visualization every 100 iterations for performance (or adjust as needed)
+            if iteration % 100 == 0:
+                positions_cpu = positions.detach().cpu().numpy()
+                self.visualize_positions(
+                    original_positions,
+                    positions_cpu,
+                    fig,
+                    ax1,
+                    ax2,
+                    scatter1,
+                    scatter2,
+                    iteration,
                 )
-            )
 
-            matrix_eccentricity_randomized = (
-                matrix_eccentricity
-                + radius_segment_length
-                * randomize_position
-                * (
-                    np.random.randn(
-                        matrix_eccentricity.shape[0], matrix_eccentricity.shape[1]
-                    )
-                )
-            )
+        plt.ioff()  # Turn off interactive mode
+        return positions.detach().cpu().numpy()
 
-            matrix_polar_angle_randomized_all = np.append(
-                matrix_polar_angle_randomized_all,
-                matrix_polar_angle_randomized.flatten(),
-            )
-            matrix_eccentricity_randomized_all = np.append(
-                matrix_eccentricity_randomized_all,
-                matrix_eccentricity_randomized.flatten(),
-            )
+    def visualize_positions(
+        self,
+        original_positions,
+        positions,
+        fig,
+        ax1,
+        ax2,
+        scatter1,
+        scatter2,
+        iteration,
+    ):
+        
+        """
+        Visualize the original and new positions during layout optimization.
 
-            assert true_n_cells == len(
-                matrix_eccentricity_randomized.flatten()
-            ), "N cells don't match, check the code"
-            gc_eccentricity_group_index = np.append(
-                gc_eccentricity_group_index,
-                np.ones(true_n_cells) * ecc_group_idx,
-            )
+        Parameters
+        ----------
+        original_positions : ndarray
+            Initial positions of nodes.
+        positions : ndarray
+            New positions of nodes after certain number of iterations.
+        fig : plt.Figure
+            Matplotlib figure object to plot on.
+        ax1, ax2 : plt.Axes
+            Matplotlib axes objects for the original and new positions.
+        scatter1, scatter2 : plt.Axes
+            Scatter plot objects for the original and new positions.
+        iteration : int
+            Current iteration number.
 
-        # Save cell position data to current ganglion cell object
-        self.gc_df["pos_ecc_mm"] = matrix_eccentricity_randomized_all
-        self.gc_df["pos_polar_deg"] = matrix_polar_angle_randomized_all
-        self.gc_df["ecc_group_idx"] = gc_eccentricity_group_index.astype(np.uint32)
-        self.sector_surface_areas_mm2 = np.asarray(sector_surface_areas_mm2)
+        Notes
+        -----
+        This method updates the scatter plots for visualizing the progress 
+        of the force-based layout optimization.
+        """
 
-        # Pass the GC object to self, because the Viz class is not inherited
+        scatter1.set_offsets(original_positions)
+        ax1.set_title(f"orig pos")
+
+        scatter2.set_offsets(positions)
+        ax2.set_title(f"new pos iteration {iteration}")
+
+        fig.canvas.flush_events()
+
+    def _random_positions_within_group(self, min_ecc, max_ecc, n_cells):
+        eccs = np.random.uniform(min_ecc, max_ecc, n_cells)
+        angles = np.random.uniform(
+            self.polar_lim_deg[0], self.polar_lim_deg[1], n_cells
+        )
+        return np.column_stack((eccs, angles))
+
+    def _place_gc_units(self, gc_density_func_params):
+        # 1. Initial Positioning by Group
+        (
+            eccentricity_groups,
+            initial_positions,
+            sector_surface_areas_mm2,
+        ) = self._initialize_positions_by_group(gc_density_func_params)
+
+        # 2. Merge the Groups
+        all_positions = np.vstack(initial_positions)
+
+        all_positions_tuple = self.pol2cart(all_positions[:, 0], all_positions[:, 1])
+        all_positions_mm = np.column_stack(all_positions_tuple)
+
+        # 3. Apply FBLA with Boundary Repulsion
+        optimized_positions_mm = self._apply_force_based_layout(all_positions_mm)
+        optimized_positions_tuple = self.cart2pol(
+            optimized_positions_mm[:, 0], optimized_positions_mm[:, 1]
+        )
+        optimized_positions = np.column_stack(optimized_positions_tuple)
+
+        # 4. Assign Output Variables
+        self.gc_df["pos_ecc_mm"] = optimized_positions[:, 0]
+        self.gc_df["pos_polar_deg"] = optimized_positions[:, 1]
+        self.gc_df["ecc_group_idx"] = np.concatenate(eccentricity_groups)
+        self.sector_surface_areas_mm2 = sector_surface_areas_mm2
         self.gc_density_func_params = gc_density_func_params
 
     def _create_fixed_temporal_rfs(self):
