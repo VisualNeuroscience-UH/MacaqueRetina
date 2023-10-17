@@ -106,7 +106,7 @@ class RetinaMath:
         Parameters
         ----------
         radius : float
-            The radius value in polar coordinates.
+            The radius value in real distance such as mm.
         phi : float
             The polar angle value.
         deg : bool, optional
@@ -128,6 +128,37 @@ class RetinaMath:
         x = radius * np.cos(theta)  # radians fed here
         y = radius * np.sin(theta)
         return (x, y)
+
+    def cart2pol(x, y, deg=True):
+        """
+        Converts Cartesian coordinates to polar coordinates.
+
+        Parameters
+        ----------
+        x : float
+            The x-coordinate in real distance such as mm.
+        y : float
+            The y-coordinate in real distance such as mm.
+        deg : bool, optional
+            Whether to return the polar angle in degrees or radians.
+            If True, the angle is returned in degrees; if False, the angle is returned in radians.
+            Default is True.
+
+        Returns
+        -------
+        tuple
+            A tuple containing the polar coordinates (radius, phi).
+        """
+
+        radius = np.sqrt(x**2 + y**2)
+        theta = np.arctan2(y, x)
+
+        if deg:
+            phi = theta * 180 / np.pi
+        else:
+            phi = theta
+
+        return (radius, phi)
 
     # Fit method
     def DoG2D_independent_surround(
