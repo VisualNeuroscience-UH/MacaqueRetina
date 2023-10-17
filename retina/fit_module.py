@@ -102,6 +102,7 @@ class Fit(RetinaMath):
         self.bad_data_idx = self.apricot_data.manually_picked_bad_data_idx
         self.n_cells = self.apricot_data.n_cells
 
+        # Spatial DoG units are pixels at this point
         match fit_type:
             case "experimental":
                 (
@@ -995,32 +996,34 @@ class Fit(RetinaMath):
 
         Returns
         -------
-        mean_cen_sd : float
+        mean_cen_sd_mm : float
             Mean center standard deviation in millimeters.
-        mean_sur_sd : float
+        mean_sur_sd_mm : float
             Mean surround standard deviation in millimeters.
         """
         df = self.all_data_fits_df.iloc[good_data_fit_idx]
 
-        data_pix_len_mm = self.metadata["data_microm_per_pix"] / 1000
+        data_mm_per_pix = self.metadata["data_microm_per_pix"] / 1000
 
         if self.context.my_retina["DoG_model"] == "ellipse_fixed":
             # Get mean center and surround RF size from data in millimeters
-            mean_cen_sd = np.mean(np.sqrt(df.semi_xc * df.semi_yc)) * data_pix_len_mm
-            mean_sur_sd = (
+            mean_cen_sd_mm = np.mean(np.sqrt(df.semi_xc * df.semi_yc)) * data_mm_per_pix
+            mean_sur_sd_mm = (
                 np.mean(np.sqrt((df.relat_sur_diam**2 * df.semi_xc * df.semi_yc)))
-                * data_pix_len_mm
+                * data_mm_per_pix
             )
         elif self.context.my_retina["DoG_model"] == "ellipse_independent":
             # Get mean center and surround RF size from data in millimeters
-            mean_cen_sd = np.mean(np.sqrt(df.semi_xc * df.semi_yc)) * data_pix_len_mm
-            mean_sur_sd = np.mean(np.sqrt((df.semi_xs * df.semi_ys))) * data_pix_len_mm
+            mean_cen_sd_mm = np.mean(np.sqrt(df.semi_xc * df.semi_yc)) * data_mm_per_pix
+            mean_sur_sd_mm = (
+                np.mean(np.sqrt((df.semi_xs * df.semi_ys))) * data_mm_per_pix
+            )
         elif self.context.my_retina["DoG_model"] == "circular":
             # Get mean center and surround RF size from data in millimeters
-            mean_cen_sd = np.mean(df.rad_c) * data_pix_len_mm
-            mean_sur_sd = np.mean(df.rad_s) * data_pix_len_mm
+            mean_cen_sd_mm = np.mean(df.rad_c) * data_mm_per_pix
+            mean_sur_sd_mm = np.mean(df.rad_s) * data_mm_per_pix
 
-        return mean_cen_sd, mean_sur_sd
+        return mean_cen_sd_mm, mean_sur_sd_mm
 
     def get_experimental_fits(self):
         """
@@ -1096,6 +1099,7 @@ class Fit(RetinaMath):
             exp_stat_df,
             exp_spat_cen_sd_mm,
             exp_spat_sur_sd_mm,
+            self.spat_DoG_fit_params,
         )
 
     def get_generated_spatial_fits(self):
@@ -1108,9 +1112,9 @@ class Fit(RetinaMath):
             Statistical model parameters for spatial, temporal, and tonic filters
             Indices are the parameter names
             Columns are shape, loc, scale, distribution ('gamma', 'vonmises'), domain ('spatial', 'temporal', 'tonic')
-        gen_mean_cen_sd : float
+        gen_mean_cen_sd_mm : float
             Mean center standard deviation in millimeters
-        gen_mean_sur_sd : float
+        gen_mean_sur_sd_mm : float
             Mean surround standard deviation in millimeters
         gen_spat_filt : dict
             Dictionary with spatial filter parameters and distributions
@@ -1126,7 +1130,7 @@ class Fit(RetinaMath):
         )
 
         # get center and surround sd
-        gen_mean_cen_sd, gen_mean_sur_sd = self._get_center_surround_sd(
+        gen_mean_cen_sd_mm, gen_mean_sur_sd_mm = self._get_center_surround_sd(
             good_idx_generated
         )
 
@@ -1141,8 +1145,8 @@ class Fit(RetinaMath):
 
         return (
             gen_stat_df,
-            gen_mean_cen_sd,
-            gen_mean_sur_sd,
+            gen_mean_cen_sd_mm,
+            gen_mean_sur_sd_mm,
             self.all_data_fits_df,
             good_idx_generated,
         )

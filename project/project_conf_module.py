@@ -484,13 +484,13 @@ if __name__ == "__main__":
 
     # For FIT (ellipse and DoG fits, temporal kernels and tonic drives)
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
-    # PM.viz.visualize_mosaic(savefigname="parasol_on_ellipses.eps")
-    # PM.viz.show_dendrite_diam_vs_ecc(savefigname="parasol_on_dd_ecc.eps")
+    # PM.viz.visualize_mosaic(savefigname=None)
+    # PM.viz.show_dendrite_diam_vs_ecc(savefigname=None)
     # PM.viz.show_temporal_filter_response(n_curves=3, savefigname="temporal_filters.eps")
     # PM.viz.show_spatial_statistics(savefigname="spatial_stats.eps")
 
     # For VAE
-    PM.viz.show_gen_exp_spatial_fit(n_samples=5, savefigname="DoG_ellipse_fit.eps")
+    # PM.viz.show_gen_exp_spatial_fit(n_samples=5, savefigname="DoG_ellipse_fit.eps")
     # PM.viz.show_gen_exp_spatial_rf(ds_name="train_ds", n_samples=15, savefigname=None)
     # PM.viz.show_latent_tsne_space()
     # PM.viz.show_gen_spat_post_hist()

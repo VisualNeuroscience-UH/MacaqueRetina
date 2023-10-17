@@ -34,6 +34,7 @@ from pathlib import Path
 import pdb
 import copy
 from functools import reduce
+import math
 
 
 class Viz:
@@ -333,6 +334,380 @@ class Viz:
             self._figsave(figurename=title + "_" + savefigname)
 
     # ConstructRetina visualization
+
+    def _get_imgs(
+        self,
+        df,
+        nsamples,
+        exp_spat_filt,
+        this_trial_idx,
+    ):
+        log_dir = df["logdir"][this_trial_idx]
+
+        # Get folder name starting "checkpoint"
+        checkpoint_folder_name = [f for f in os.listdir(log_dir) if "checkpoint" in f][
+            0
+        ]
+        checkpoint_path = Path(log_dir) / checkpoint_folder_name / "model.pth"
+
+        # Load the model
+        model = torch.load(checkpoint_path)
+
+        if hasattr(model, "test_data"):
+            test_data = model.test_data[:nsamples, :, :, :]
+        else:
+            # Make a list of dict keys starting "cell_ix_" from exp_spat_filt dictionary
+            keys = exp_spat_filt.keys()
+            cell_ix_names_list = [key for key in keys if "cell_ix_" in key]
+            # Make a numpy array of numbers following "cell_ix_"
+            cell_ix_array = np.array(
+                [int(key.split("cell_ix_")[1]) for key in cell_ix_names_list]
+            )
+
+            # Take first nsamples from cell_ix_array. They have to be constant,
+            # because we are showing multiple sets of images on top of each other.
+            samples = cell_ix_array[:nsamples]
+
+            test_data = np.zeros(
+                [
+                    nsamples,
+                    1,
+                    exp_spat_filt["num_pix_y"],
+                    exp_spat_filt["num_pix_x"],
+                ]
+            )
+            for idx, this_sample in enumerate(samples):
+                test_data[idx, 0, :, :] = exp_spat_filt[f"cell_ix_{this_sample}"][
+                    "spatial_data_array"
+                ]
+
+        # Hack to reuse the AugmentedDataset._feature_scaling method. Scales to [0,1]
+        test_data = AugmentedDataset._feature_scaling("", test_data)
+
+        test_data = torch.from_numpy(test_data).float()
+        img_size = model.decoder.unflatten.unflattened_size
+        test_data = TF.resize(test_data, img_size[-2:], antialias=True)
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        samples = range(0, nsamples)
+
+        model.eval()
+        model.to(self.device)
+
+        img = test_data.to(self.device)
+
+        with torch.no_grad():
+            rec_img = model(img)
+
+        img = img.cpu().squeeze().numpy()
+        rec_img = rec_img.cpu().squeeze().numpy()
+
+        return img, rec_img, samples
+
+    def _subplot_dependent_boxplots(self, axd, kw, df, dep_vars, config_vars_changed):
+        """Boxplot dependent variables for one ray tune experiment"""
+
+        # config_vars_changed list contain the varied columns in dataframe df
+        # From config_vars_changed, 'config/model_id' contain the replications of the same model
+        # Other config_vars_changed contain the models of interest
+        # Make an seaborn boxplot for each model of interest
+        config_vars_changed.remove("config/model_id")
+
+        # If there are more than one config_vars_changed,
+        # make a new dataframe column with the values of the config_vars_changed as strings
+        if len(config_vars_changed) > 1:
+            df["config_vars"] = (
+                df[config_vars_changed].astype(str).agg(",".join, axis=1)
+            )
+            # config_vars_changed = ["config_vars"]
+            config_vars_for_label = [
+                col.removeprefix("config/") for col in config_vars_changed
+            ]
+            # Combine the string listed in config_vars_changed to one string
+            config_vars_label = ",".join(config_vars_for_label)
+
+        else:
+            df["config_vars"] = df[config_vars_changed[0]]
+            config_vars_label = [
+                col.removeprefix("config/") for col in config_vars_changed
+            ][0]
+
+        # Make one subplot for each dependent variable
+        # Plot labels only after the last subplot
+        for idx, dep_var in enumerate(dep_vars):
+            ax = axd[f"{kw}{idx}"]
+
+            # Create the boxplot with seaborn
+            ax_sns = sns.boxplot(
+                x="config_vars", y=dep_var, data=df, ax=ax, whis=[0, 100]
+            )
+            # If any of the df["config_vars"] has length > 4, make x-label rotated 90 degrees
+            if any(df["config_vars"].astype(str).str.len() > 4):
+                ax_sns.set_xticklabels(ax.get_xticklabels(), rotation=90)
+
+            # Set the title of the subplot to be the dependent variable name
+            ax.set_title(dep_var)
+
+            # Set y-axis label
+            ax.set_ylabel("")
+
+            # Set x-axis label
+            if idx == 0:  # only the first subplot gets an x-axis label
+                ax.set_xlabel(config_vars_label)
+            else:
+                ax.set_xlabel("")
+
+    def _get_best_trials(self, df, dep_var, best_is, num_best_trials):
+        """
+        Get the indices of the best trials for a dependent variable.
+
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            Dataframe containing the results of the hyperparameter search.
+        dep_var : str
+            Name of the dependent variable.
+        best_is : str
+            Whether the best trials are the ones with the highest or lowest values.
+        num_best_trials : int
+            Number of best trials to return. Overrides frac_best.
+
+        Returns
+        -------
+        best_trials : list
+            List of indices of the best trials.
+        """
+
+        # get array of values for this dependent variable
+        dep_var_vals = df[dep_var].values
+
+        # get the indices of the num_best_trials
+        if best_is == "min":
+            best_trials = np.argsort(dep_var_vals)[:num_best_trials]
+        elif best_is == "max":
+            best_trials = np.argsort(dep_var_vals)[-num_best_trials:]
+
+        return best_trials, dep_var_vals
+
+    def _subplot_dependent_variables(self, axd, kw, result_grid, dep_vars, best_trials):
+        """Plot dependent variables as a function of epochs."""
+
+        df = result_grid.get_dataframe()
+        # Find all columns with string "config/"
+        config_cols = [x for x in df.columns if "config/" in x]
+
+        # From the config_cols, identify columns where there is more than one unique value
+        # These are the columns which were varied in the search space
+        varied_cols = []
+        for col in config_cols:
+            if len(df[col].unique()) > 1:
+                varied_cols.append(col)
+
+        # Drop the "config/" part from the column names
+        varied_cols = [x.replace("config/", "") for x in varied_cols]
+
+        # # remove "model_id" from the varied columns
+        # varied_cols.remove("model_id")
+
+        num_colors = len(best_trials)
+        colors = plt.cm.get_cmap("tab20", num_colors).colors
+
+        total_n_epochs = 0
+        # Make one subplot for each dependent variable
+        for idx, dep_var in enumerate(dep_vars):
+            # Create a new plot for each label
+            color_idx = 0
+            ax = axd[f"{kw}{idx}"]
+
+            for i, result in enumerate(result_grid):
+                if i not in best_trials:
+                    continue
+
+                if idx == 0:
+                    label = f"{dep_vars[color_idx]}: " + ",".join(
+                        f"{x}={result.config[x]}" for x in varied_cols
+                    )
+                    legend = True
+                    first_ax = ax
+
+                else:
+                    label = None
+                    legend = False
+
+                result.metrics_dataframe.plot(
+                    "training_iteration",
+                    dep_var,
+                    ax=ax,
+                    label=label,
+                    color=colors[color_idx],
+                    legend=legend,
+                )
+
+                if len(result.metrics_dataframe) > total_n_epochs:
+                    total_n_epochs = len(result.metrics_dataframe)
+
+                # At the end (+1) of the x-axis, add mean and SD of last 50 epochs as dot and vertical line, respectively
+                last_50 = result.metrics_dataframe.tail(50)
+                mean = last_50[dep_var].mean()
+                std = last_50[dep_var].std()
+                n_epochs = result.metrics_dataframe.tail(1)["training_iteration"]
+                ax.plot(
+                    n_epochs + n_epochs // 5,
+                    mean,
+                    "o",
+                    color=colors[color_idx],
+                )
+                ax.plot(
+                    [n_epochs + n_epochs // 5] * 2,
+                    [mean - std, mean + std],
+                    "-",
+                    color=colors[color_idx],
+                )
+
+                color_idx += 1
+
+            if idx == 0:
+                ax.set_ylabel("Metrics")
+
+            # Add legend and bring it to the front
+            leg = first_ax.legend(
+                loc="center left", bbox_to_anchor=((idx + 2.0), 0.5, 1.0, 0.2)
+            )
+            first_ax.set_zorder(1)
+
+            # change the line width for the legend
+            for line in leg.get_lines():
+                line.set_linewidth(3.0)
+
+            # Set x and y axis tick font size 8
+            ax.tick_params(axis="both", which="major", labelsize=8)
+
+            # Change legend font size to 8
+            for text in leg.get_texts():
+                text.set_fontsize(8)
+
+            ax.grid(True)
+
+            # set x axis labels off
+            ax.set_xlabel("")
+            # set x ticks off
+            ax.set_xticks([])
+
+        first_ax.set_title(
+            f"Evolution for best trials (ad {total_n_epochs} epochs)\nDot and vertical line indicate mean and SD of last 50 epochs",
+            loc="left",
+        )
+
+    def _subplot_img_recoimg(self, axd, kw, subidx, img, samples, title):
+        """
+        Plot sample images
+        """
+        for pos_idx, sample_idx in enumerate(samples):
+            if subidx is None:
+                ax = axd[f"{kw}{pos_idx}"]
+            else:
+                ax = axd[f"{kw}{subidx}{pos_idx}"]
+            ax.imshow(img[sample_idx], cmap="gist_gray")
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+            if pos_idx == 0:
+                # ax.set_title(title, fontsize=8, fontdict={'verticalalignment': 'baseline', 'horizontalalignment': 'left'})
+                # Print title to the left of the first image. The coordinates are in axes coordinates
+                ax.text(
+                    -1.0,
+                    0.5,
+                    title,
+                    fontsize=8,
+                    fontdict={
+                        "verticalalignment": "baseline",
+                        "horizontalalignment": "left",
+                    },
+                    transform=ax.transAxes,
+                )
+
+    def _show_tune_depvar_evolution(self, result_grid, dep_vars, highlight_trial=None):
+        """Plot results from ray tune"""
+
+        df = result_grid.get_dataframe()
+        # Find all columns with string "config/"
+        config_cols = [x for x in df.columns if "config/" in x]
+
+        # From the config_cols, identify columns where there is more than one unique value
+        # These are the columns which were varied in the search space
+        varied_cols = []
+        for col in config_cols:
+            if len(df[col].unique()) > 1:
+                varied_cols.append(col)
+
+        # Drop the "config/" part from the column names
+        varied_cols = [x.replace("config/", "") for x in varied_cols]
+
+        num_colors = len(result_grid.get_dataframe())
+        if highlight_trial is None:
+            colors = plt.cm.get_cmap("tab20", num_colors).colors
+            highlight_idx = None
+        else:
+            [highlight_idx] = [
+                idx
+                for idx, r in enumerate(result_grid)
+                if highlight_trial in r.metrics["trial_id"]
+            ]
+            # set all other colors low contrast gray, and the highlight color to red
+            colors = np.array(
+                ["gray" if idx != highlight_idx else "red" for idx in range(num_colors)]
+            )
+
+        # Make one subplot for each dependent variable
+        nrows = 2
+        ncols = len(dep_vars) // 2
+        plt.figure(figsize=(ncols * 5, nrows * 5))
+
+        for idx, dep_var in enumerate(dep_vars):
+            # Create a new plot for each label
+            color_idx = 0
+            ax = plt.subplot(nrows, ncols, idx + 1)
+            label = None
+
+            for result in result_grid:
+                # Too cluttered for a legend
+                # if idx == 0 and highlight_idx is None:
+                #     label = ",".join(f"{x}={result.config[x]}" for x in varied_cols)
+                #     legend = True
+                # else:
+                #     legend = False
+
+                ax_plot = result.metrics_dataframe.plot(
+                    "training_iteration",
+                    dep_var,
+                    ax=ax,
+                    label=label,
+                    color=colors[color_idx],
+                    legend=False,
+                )
+
+                # At the end (+1) of the x-axis, add mean and SD of last 50 epochs as dot and vertical line, respectively
+                last_50 = result.metrics_dataframe.tail(50)
+                mean = last_50[dep_var].mean()
+                std = last_50[dep_var].std()
+                n_epochs = result.metrics_dataframe.tail(1)["training_iteration"]
+                ax.plot(
+                    n_epochs + n_epochs // 5,
+                    mean,
+                    "o",
+                    color=colors[color_idx],
+                )
+                ax.plot(
+                    [n_epochs + n_epochs // 5] * 2,
+                    [mean - std, mean + std],
+                    "-",
+                    color=colors[color_idx],
+                )
+
+                color_idx += 1
+            ax.set_title(f"{dep_var}")
+            ax.set_ylabel(dep_var)
+            ax.grid(True)
+
     def show_gc_positions(self):
         """
         Show retina cell positions and receptive fields
@@ -392,8 +767,7 @@ class Viz:
             "b.",
             label=self.construct_retina.gc_type,
         )
-
-        if self.construct_retina.surround_fixed:
+        if self.context.my_retina["DoG_model"] == "ellipse_fixed":
             # gc_rf_models parameters:'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','relat_sur_diam', 'orient_cen_rad'
             # Ellipse parameters: Ellipse(xy, width, height, angle=0, **kwargs). Only possible one at the time, unfortunately.
             for index in np.arange(len(xcoord)):
@@ -435,13 +809,16 @@ class Viz:
         spatial_statistics_dict = self.project_data.fit["exp_spat_stat"][
             "spatial_statistics_dict"
         ]
+        spatial_statistics_dict.pop("ampl_c", None)
         model_fit_data = self.project_data.fit["exp_spat_stat"]["model_fit_data"]
 
         distributions = [key for key in spatial_statistics_dict.keys()]
         n_distributions = len(spatial_statistics_dict)
 
         # plot the distributions and fits.
-        fig, axes = plt.subplots(2, 3, figsize=(13, 4))
+        n_ax_cols = 3
+        n_ax_rows = math.ceil(n_distributions / n_ax_cols)
+        fig, axes = plt.subplots(n_ax_rows, n_ax_cols, figsize=(13, 4))
         axes = axes.flatten()
         for index in np.arange(n_distributions):
             ax = axes[index]
@@ -485,8 +862,7 @@ class Viz:
             self._figsave(figurename=savefigname)
 
         # Check correlations
-        # distributions = ['semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','relat_sur_diam', 'orient_cen_rad']
-        fig2, axes2 = plt.subplots(2, 3, figsize=(13, 4))
+        fig2, axes2 = plt.subplots(n_ax_rows, n_ax_cols, figsize=(13, 4))
         axes2 = axes2.flatten()
         ref_index = 1
         for index in np.arange(n_distributions):
@@ -1083,379 +1459,6 @@ class Viz:
             title = f"Reco for \n{this_dep_var} = \n{dep_var_vals[this_trial]:.3f}, \nidx = {this_trial}"
             # Position idx in layout: enumerate starts at 0, so add 1.
             self._subplot_img_recoimg(axd, "re", idx + 1, rec_img, samples, title)
-
-    def _get_imgs(
-        self,
-        df,
-        nsamples,
-        exp_spat_filt,
-        this_trial_idx,
-    ):
-        log_dir = df["logdir"][this_trial_idx]
-
-        # Get folder name starting "checkpoint"
-        checkpoint_folder_name = [f for f in os.listdir(log_dir) if "checkpoint" in f][
-            0
-        ]
-        checkpoint_path = Path(log_dir) / checkpoint_folder_name / "model.pth"
-
-        # Load the model
-        model = torch.load(checkpoint_path)
-
-        if hasattr(model, "test_data"):
-            test_data = model.test_data[:nsamples, :, :, :]
-        else:
-            # Make a list of dict keys starting "cell_ix_" from exp_spat_filt dictionary
-            keys = exp_spat_filt.keys()
-            cell_ix_names_list = [key for key in keys if "cell_ix_" in key]
-            # Make a numpy array of numbers following "cell_ix_"
-            cell_ix_array = np.array(
-                [int(key.split("cell_ix_")[1]) for key in cell_ix_names_list]
-            )
-
-            # Take first nsamples from cell_ix_array. They have to be constant,
-            # because we are showing multiple sets of images on top of each other.
-            samples = cell_ix_array[:nsamples]
-
-            test_data = np.zeros(
-                [
-                    nsamples,
-                    1,
-                    exp_spat_filt["num_pix_y"],
-                    exp_spat_filt["num_pix_x"],
-                ]
-            )
-            for idx, this_sample in enumerate(samples):
-                test_data[idx, 0, :, :] = exp_spat_filt[f"cell_ix_{this_sample}"][
-                    "spatial_data_array"
-                ]
-
-        # Hack to reuse the AugmentedDataset._feature_scaling method. Scales to [0,1]
-        test_data = AugmentedDataset._feature_scaling("", test_data)
-
-        test_data = torch.from_numpy(test_data).float()
-        img_size = model.decoder.unflatten.unflattened_size
-        test_data = TF.resize(test_data, img_size[-2:], antialias=True)
-
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        samples = range(0, nsamples)
-
-        model.eval()
-        model.to(self.device)
-
-        img = test_data.to(self.device)
-
-        with torch.no_grad():
-            rec_img = model(img)
-
-        img = img.cpu().squeeze().numpy()
-        rec_img = rec_img.cpu().squeeze().numpy()
-
-        return img, rec_img, samples
-
-    def _subplot_dependent_boxplots(self, axd, kw, df, dep_vars, config_vars_changed):
-        """Boxplot dependent variables for one ray tune experiment"""
-
-        # config_vars_changed list contain the varied columns in dataframe df
-        # From config_vars_changed, 'config/model_id' contain the replications of the same model
-        # Other config_vars_changed contain the models of interest
-        # Make an seaborn boxplot for each model of interest
-        config_vars_changed.remove("config/model_id")
-
-        # If there are more than one config_vars_changed,
-        # make a new dataframe column with the values of the config_vars_changed as strings
-        if len(config_vars_changed) > 1:
-            df["config_vars"] = (
-                df[config_vars_changed].astype(str).agg(",".join, axis=1)
-            )
-            # config_vars_changed = ["config_vars"]
-            config_vars_for_label = [
-                col.removeprefix("config/") for col in config_vars_changed
-            ]
-            # Combine the string listed in config_vars_changed to one string
-            config_vars_label = ",".join(config_vars_for_label)
-
-        else:
-            df["config_vars"] = df[config_vars_changed[0]]
-            config_vars_label = [
-                col.removeprefix("config/") for col in config_vars_changed
-            ][0]
-
-        # Make one subplot for each dependent variable
-        # Plot labels only after the last subplot
-        for idx, dep_var in enumerate(dep_vars):
-            ax = axd[f"{kw}{idx}"]
-
-            # Create the boxplot with seaborn
-            ax_sns = sns.boxplot(
-                x="config_vars", y=dep_var, data=df, ax=ax, whis=[0, 100]
-            )
-            # If any of the df["config_vars"] has length > 4, make x-label rotated 90 degrees
-            if any(df["config_vars"].astype(str).str.len() > 4):
-                ax_sns.set_xticklabels(ax.get_xticklabels(), rotation=90)
-
-            # Set the title of the subplot to be the dependent variable name
-            ax.set_title(dep_var)
-
-            # Set y-axis label
-            ax.set_ylabel("")
-
-            # Set x-axis label
-            if idx == 0:  # only the first subplot gets an x-axis label
-                ax.set_xlabel(config_vars_label)
-            else:
-                ax.set_xlabel("")
-
-    def _get_best_trials(self, df, dep_var, best_is, num_best_trials):
-        """
-        Get the indices of the best trials for a dependent variable.
-
-        Parameters
-        ----------
-        df : pandas.DataFrame
-            Dataframe containing the results of the hyperparameter search.
-        dep_var : str
-            Name of the dependent variable.
-        best_is : str
-            Whether the best trials are the ones with the highest or lowest values.
-        num_best_trials : int
-            Number of best trials to return. Overrides frac_best.
-
-        Returns
-        -------
-        best_trials : list
-            List of indices of the best trials.
-        """
-
-        # get array of values for this dependent variable
-        dep_var_vals = df[dep_var].values
-
-        # get the indices of the num_best_trials
-        if best_is == "min":
-            best_trials = np.argsort(dep_var_vals)[:num_best_trials]
-        elif best_is == "max":
-            best_trials = np.argsort(dep_var_vals)[-num_best_trials:]
-
-        return best_trials, dep_var_vals
-
-    def _subplot_dependent_variables(self, axd, kw, result_grid, dep_vars, best_trials):
-        """Plot dependent variables as a function of epochs."""
-
-        df = result_grid.get_dataframe()
-        # Find all columns with string "config/"
-        config_cols = [x for x in df.columns if "config/" in x]
-
-        # From the config_cols, identify columns where there is more than one unique value
-        # These are the columns which were varied in the search space
-        varied_cols = []
-        for col in config_cols:
-            if len(df[col].unique()) > 1:
-                varied_cols.append(col)
-
-        # Drop the "config/" part from the column names
-        varied_cols = [x.replace("config/", "") for x in varied_cols]
-
-        # # remove "model_id" from the varied columns
-        # varied_cols.remove("model_id")
-
-        num_colors = len(best_trials)
-        colors = plt.cm.get_cmap("tab20", num_colors).colors
-
-        total_n_epochs = 0
-        # Make one subplot for each dependent variable
-        for idx, dep_var in enumerate(dep_vars):
-            # Create a new plot for each label
-            color_idx = 0
-            ax = axd[f"{kw}{idx}"]
-
-            for i, result in enumerate(result_grid):
-                if i not in best_trials:
-                    continue
-
-                if idx == 0:
-                    label = f"{dep_vars[color_idx]}: " + ",".join(
-                        f"{x}={result.config[x]}" for x in varied_cols
-                    )
-                    legend = True
-                    first_ax = ax
-
-                else:
-                    label = None
-                    legend = False
-
-                result.metrics_dataframe.plot(
-                    "training_iteration",
-                    dep_var,
-                    ax=ax,
-                    label=label,
-                    color=colors[color_idx],
-                    legend=legend,
-                )
-
-                if len(result.metrics_dataframe) > total_n_epochs:
-                    total_n_epochs = len(result.metrics_dataframe)
-
-                # At the end (+1) of the x-axis, add mean and SD of last 50 epochs as dot and vertical line, respectively
-                last_50 = result.metrics_dataframe.tail(50)
-                mean = last_50[dep_var].mean()
-                std = last_50[dep_var].std()
-                n_epochs = result.metrics_dataframe.tail(1)["training_iteration"]
-                ax.plot(
-                    n_epochs + n_epochs // 5,
-                    mean,
-                    "o",
-                    color=colors[color_idx],
-                )
-                ax.plot(
-                    [n_epochs + n_epochs // 5] * 2,
-                    [mean - std, mean + std],
-                    "-",
-                    color=colors[color_idx],
-                )
-
-                color_idx += 1
-
-            if idx == 0:
-                ax.set_ylabel("Metrics")
-
-            # Add legend and bring it to the front
-            leg = first_ax.legend(
-                loc="center left", bbox_to_anchor=((idx + 2.0), 0.5, 1.0, 0.2)
-            )
-            first_ax.set_zorder(1)
-
-            # change the line width for the legend
-            for line in leg.get_lines():
-                line.set_linewidth(3.0)
-
-            # Set x and y axis tick font size 8
-            ax.tick_params(axis="both", which="major", labelsize=8)
-
-            # Change legend font size to 8
-            for text in leg.get_texts():
-                text.set_fontsize(8)
-
-            ax.grid(True)
-
-            # set x axis labels off
-            ax.set_xlabel("")
-            # set x ticks off
-            ax.set_xticks([])
-
-        first_ax.set_title(
-            f"Evolution for best trials (ad {total_n_epochs} epochs)\nDot and vertical line indicate mean and SD of last 50 epochs",
-            loc="left",
-        )
-
-    def _subplot_img_recoimg(self, axd, kw, subidx, img, samples, title):
-        """
-        Plot sample images
-        """
-        for pos_idx, sample_idx in enumerate(samples):
-            if subidx is None:
-                ax = axd[f"{kw}{pos_idx}"]
-            else:
-                ax = axd[f"{kw}{subidx}{pos_idx}"]
-            ax.imshow(img[sample_idx], cmap="gist_gray")
-            ax.get_xaxis().set_visible(False)
-            ax.get_yaxis().set_visible(False)
-            if pos_idx == 0:
-                # ax.set_title(title, fontsize=8, fontdict={'verticalalignment': 'baseline', 'horizontalalignment': 'left'})
-                # Print title to the left of the first image. The coordinates are in axes coordinates
-                ax.text(
-                    -1.0,
-                    0.5,
-                    title,
-                    fontsize=8,
-                    fontdict={
-                        "verticalalignment": "baseline",
-                        "horizontalalignment": "left",
-                    },
-                    transform=ax.transAxes,
-                )
-
-    def _show_tune_depvar_evolution(self, result_grid, dep_vars, highlight_trial=None):
-        """Plot results from ray tune"""
-
-        df = result_grid.get_dataframe()
-        # Find all columns with string "config/"
-        config_cols = [x for x in df.columns if "config/" in x]
-
-        # From the config_cols, identify columns where there is more than one unique value
-        # These are the columns which were varied in the search space
-        varied_cols = []
-        for col in config_cols:
-            if len(df[col].unique()) > 1:
-                varied_cols.append(col)
-
-        # Drop the "config/" part from the column names
-        varied_cols = [x.replace("config/", "") for x in varied_cols]
-
-        num_colors = len(result_grid.get_dataframe())
-        if highlight_trial is None:
-            colors = plt.cm.get_cmap("tab20", num_colors).colors
-            highlight_idx = None
-        else:
-            [highlight_idx] = [
-                idx
-                for idx, r in enumerate(result_grid)
-                if highlight_trial in r.metrics["trial_id"]
-            ]
-            # set all other colors low contrast gray, and the highlight color to red
-            colors = np.array(
-                ["gray" if idx != highlight_idx else "red" for idx in range(num_colors)]
-            )
-
-        # Make one subplot for each dependent variable
-        nrows = 2
-        ncols = len(dep_vars) // 2
-        plt.figure(figsize=(ncols * 5, nrows * 5))
-
-        for idx, dep_var in enumerate(dep_vars):
-            # Create a new plot for each label
-            color_idx = 0
-            ax = plt.subplot(nrows, ncols, idx + 1)
-            label = None
-
-            for result in result_grid:
-                # Too cluttered for a legend
-                # if idx == 0 and highlight_idx is None:
-                #     label = ",".join(f"{x}={result.config[x]}" for x in varied_cols)
-                #     legend = True
-                # else:
-                #     legend = False
-
-                ax_plot = result.metrics_dataframe.plot(
-                    "training_iteration",
-                    dep_var,
-                    ax=ax,
-                    label=label,
-                    color=colors[color_idx],
-                    legend=False,
-                )
-
-                # At the end (+1) of the x-axis, add mean and SD of last 50 epochs as dot and vertical line, respectively
-                last_50 = result.metrics_dataframe.tail(50)
-                mean = last_50[dep_var].mean()
-                std = last_50[dep_var].std()
-                n_epochs = result.metrics_dataframe.tail(1)["training_iteration"]
-                ax.plot(
-                    n_epochs + n_epochs // 5,
-                    mean,
-                    "o",
-                    color=colors[color_idx],
-                )
-                ax.plot(
-                    [n_epochs + n_epochs // 5] * 2,
-                    [mean - std, mean + std],
-                    "-",
-                    color=colors[color_idx],
-                )
-
-                color_idx += 1
-            ax.set_title(f"{dep_var}")
-            ax.set_ylabel(dep_var)
-            ax.grid(True)
 
     # WorkingRetina visualization
     def show_stimulus_with_gcs(
@@ -2448,89 +2451,6 @@ class Viz:
             self._figsave(figurename=savefigname)
 
     # Validation viz
-    def validate_gc_rf_size(self, savefigname=None):
-        gen_rfs = self.project_data.construct_retina["gen_rfs"]
-
-        if self.context.my_retina["spatial_model"] == "VAE":
-            gen_rfs = gen_rfs
-            img_rf = gen_rfs["img_rf"]
-
-            new_um_per_pix = self.construct_retina.updated_vae_um_per_pix
-
-            # Get ellipse FIT and VAE FIT values
-            gc_df = self.construct_retina.gc_df_original
-            gc_vae_df = self.construct_retina.gc_vae_df
-
-            fit = self.construct_retina.Fit(
-                self.context.apricot_metadata,
-                self.construct_retina.gc_type,
-                self.construct_retina.response_type,
-                spatial_data=img_rf,
-                fit_type="concentric_rings",
-                new_um_per_pix=new_um_per_pix,
-            )
-
-            all_data_fits_df = fit.all_data_fits_df
-            gen_spat_filt = fit.gen_spat_filt
-            good_idx_rings = fit.good_idx_rings
-        else:
-            raise ValueError(
-                "Only VAE spatial_model is supported for validate_gc_rf_size, it shows FIT values, too."
-            )
-
-        # cr for concentric rings, i.e. the symmetric DoG model
-        # Scales pix to mm for semi_xc i.e. central radius for cd fits
-        gc_vae_cr_df = self.construct_retina._update_gc_vae_df(
-            all_data_fits_df, new_um_per_pix
-        )
-
-        # Center radius and eccentricity for cr
-        deg_per_mm = self.construct_retina.deg_per_mm
-        cen_mm_cr = gc_vae_cr_df["semi_xc"].values
-        cen_deg_cr = cen_mm_cr * deg_per_mm
-        cen_min_arc_cr = cen_deg_cr * 60
-        ecc_mm_cr = self.construct_retina.gc_vae_df["pos_ecc_mm"].values
-        ecc_deg_cr = ecc_mm_cr * deg_per_mm
-
-        # Center radius and eccentricity for ellipse fit
-        cen_mm_fit = np.sqrt(gc_df["semi_xc"].values * gc_df["semi_yc"].values)
-        cen_deg_fit = cen_mm_fit * deg_per_mm
-        cen_min_arc_fit = cen_deg_fit * 60
-        ecc_mm_fit = gc_df["pos_ecc_mm"].values
-        ecc_deg_fit = ecc_mm_fit * deg_per_mm
-
-        # Center radius and eccentricity for vae ellipse fit
-        cen_mm_vae = np.sqrt(gc_vae_df["semi_xc"].values * gc_vae_df["semi_yc"].values)
-        cen_deg_vae = cen_mm_vae * deg_per_mm
-        cen_min_arc_vae = cen_deg_vae * 60
-        ecc_mm_vae = gc_vae_df["pos_ecc_mm"].values
-        ecc_deg_vae = ecc_mm_vae * deg_per_mm
-
-        # Read in corresponding data from literature
-        spatial_DoG_fullpath = self.context.literature_data_files[
-            "spatial_DoG_fullpath"
-        ]
-        spatial_DoG_data = self.data_io.get_data(spatial_DoG_fullpath)
-
-        lit_ecc_deg = spatial_DoG_data["Xdata"]  # ecc (deg)
-        lit_cen_min_arc = spatial_DoG_data["Ydata"]  # rf center radius (min of arc)
-
-        # Plot the results
-        fig, ax = plt.subplots(1, 1, figsize=(5, 5))
-        plt.plot(ecc_deg_fit, cen_min_arc_fit, "o", label="Ellipse fit")
-        plt.plot(ecc_deg_vae, cen_min_arc_vae, "o", label="VAE ellipse fit")
-        plt.plot(ecc_deg_cr, cen_min_arc_cr, "o", label="VAE concentric rings fit")
-        plt.plot(lit_ecc_deg, lit_cen_min_arc, "o", label="Schottdorf_2021_JPhysiol")
-        plt.xlabel("Eccentricity (deg)")
-        plt.ylabel("Center radius (min of arc)")
-        plt.legend()
-        plt.title(
-            f"GC dendritic diameter vs eccentricity, {self.construct_retina.gc_type} type"
-        )
-
-        if savefigname:
-            self._figsave(figurename=savefigname)
-
     def _build_param_plot(self, coll_ana_df_in, param_plot_dict, to_spa_dict_in):
         """
         Prepare for parametric plotting of multiple conditions.
@@ -2630,6 +2550,89 @@ class Viz:
             data_name_list,
             outer_name_list,
         )
+
+    def validate_gc_rf_size(self, savefigname=None):
+        gen_rfs = self.project_data.construct_retina["gen_rfs"]
+
+        if self.context.my_retina["spatial_model"] == "VAE":
+            gen_rfs = gen_rfs
+            img_rf = gen_rfs["img_rf"]
+
+            new_um_per_pix = self.construct_retina.updated_vae_um_per_pix
+
+            # Get ellipse FIT and VAE FIT values
+            gc_df = self.construct_retina.gc_df_original
+            gc_vae_df = self.construct_retina.gc_vae_df
+
+            fit = self.construct_retina.Fit(
+                self.context.apricot_metadata,
+                self.construct_retina.gc_type,
+                self.construct_retina.response_type,
+                spatial_data=img_rf,
+                fit_type="concentric_rings",
+                new_um_per_pix=new_um_per_pix,
+            )
+
+            all_data_fits_df = fit.all_data_fits_df
+            gen_spat_filt = fit.gen_spat_filt
+            good_idx_rings = fit.good_idx_rings
+        else:
+            raise ValueError(
+                "Only VAE spatial_model is supported for validate_gc_rf_size, it shows FIT values, too."
+            )
+
+        # cr for concentric rings, i.e. the symmetric DoG model
+        # Scales pix to mm for semi_xc i.e. central radius for cd fits
+        gc_vae_cr_df = self.construct_retina._update_gc_vae_df(
+            all_data_fits_df, new_um_per_pix
+        )
+
+        # Center radius and eccentricity for cr
+        deg_per_mm = self.construct_retina.deg_per_mm
+        cen_mm_cr = gc_vae_cr_df["semi_xc"].values
+        cen_deg_cr = cen_mm_cr * deg_per_mm
+        cen_min_arc_cr = cen_deg_cr * 60
+        ecc_mm_cr = self.construct_retina.gc_vae_df["pos_ecc_mm"].values
+        ecc_deg_cr = ecc_mm_cr * deg_per_mm
+
+        # Center radius and eccentricity for ellipse fit
+        cen_mm_fit = np.sqrt(gc_df["semi_xc"].values * gc_df["semi_yc"].values)
+        cen_deg_fit = cen_mm_fit * deg_per_mm
+        cen_min_arc_fit = cen_deg_fit * 60
+        ecc_mm_fit = gc_df["pos_ecc_mm"].values
+        ecc_deg_fit = ecc_mm_fit * deg_per_mm
+
+        # Center radius and eccentricity for vae ellipse fit
+        cen_mm_vae = np.sqrt(gc_vae_df["semi_xc"].values * gc_vae_df["semi_yc"].values)
+        cen_deg_vae = cen_mm_vae * deg_per_mm
+        cen_min_arc_vae = cen_deg_vae * 60
+        ecc_mm_vae = gc_vae_df["pos_ecc_mm"].values
+        ecc_deg_vae = ecc_mm_vae * deg_per_mm
+
+        # Read in corresponding data from literature
+        spatial_DoG_fullpath = self.context.literature_data_files[
+            "spatial_DoG_fullpath"
+        ]
+        spatial_DoG_data = self.data_io.get_data(spatial_DoG_fullpath)
+
+        lit_ecc_deg = spatial_DoG_data["Xdata"]  # ecc (deg)
+        lit_cen_min_arc = spatial_DoG_data["Ydata"]  # rf center radius (min of arc)
+
+        # Plot the results
+        fig, ax = plt.subplots(1, 1, figsize=(5, 5))
+        plt.plot(ecc_deg_fit, cen_min_arc_fit, "o", label="Ellipse fit")
+        plt.plot(ecc_deg_vae, cen_min_arc_vae, "o", label="VAE ellipse fit")
+        plt.plot(ecc_deg_cr, cen_min_arc_cr, "o", label="VAE concentric rings fit")
+        plt.plot(lit_ecc_deg, lit_cen_min_arc, "o", label="Schottdorf_2021_JPhysiol")
+        plt.xlabel("Eccentricity (deg)")
+        plt.ylabel("Center radius (min of arc)")
+        plt.legend()
+        plt.title(
+            f"GC dendritic diameter vs eccentricity, {self.construct_retina.gc_type} type"
+        )
+
+        if savefigname:
+            self._figsave(figurename=savefigname)
 
     def show_catplot(self, param_plot_dict):
         """
@@ -2735,7 +2738,6 @@ class Viz:
                 ]
 
                 # Get the index of the frequency names
-                # pdb.set_trace()
                 out_fr_idx = np.array([], dtype=int)
                 for out_idx, this_name in enumerate(outer_name_list):
                     if this_name in frequency_names_list:

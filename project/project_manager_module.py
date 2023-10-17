@@ -103,7 +103,7 @@ class ProjectManager(ProjectBase, ProjectUtilities):
             DoG2D_circular=retina_math.DoG2D_circular,
             pol2cart=retina_math.pol2cart,
             gauss_plus_baseline=retina_math.gauss_plus_baseline,
-            sector2area=retina_math.sector2area,
+            sector2area_mm2=retina_math.sector2area_mm2,
         )
 
         self.viz = viz

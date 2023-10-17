@@ -961,7 +961,7 @@ class WorkingRetina(RetinaMath):
 
         return generator_potential
 
-    def _create_temporal_signal_gc(
+    def _create_temporal_signal_cg(
         self, tvec, svec, dt, params, device, show_impulse=False, impulse_contrast=1.0
     ):
         """
@@ -1282,7 +1282,7 @@ class WorkingRetina(RetinaMath):
                     unit_params = params_t[idx, :]
 
                     for contrast in contrasts_for_impulse:
-                        yvec = self._create_temporal_signal_gc(
+                        yvec = self._create_temporal_signal_cg(
                             tvec_t,
                             svec_t,
                             video_dt_t,
@@ -1560,7 +1560,7 @@ class WorkingRetina(RetinaMath):
             ):
                 if self.gc_type == "parasol":
                     unit_params = params_t[idx, :]
-                    generator_potential = self._create_temporal_signal_gc(
+                    generator_potential = self._create_temporal_signal_cg(
                         tvec_t,
                         svecs_t[idx, :],
                         video_dt_t,

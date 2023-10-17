@@ -25,7 +25,7 @@ class RetinaMath:
         """
         return a * np.exp(-((x - x0) ** 2) / (2 * sigma**2)) + baseline
 
-    def sector2area(
+    def sector2area_mm2(
         self, radius, angle
     ):  # Calculate sector area. Angle in deg, radius in mm
         pi = np.pi
