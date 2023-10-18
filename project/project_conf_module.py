@@ -137,7 +137,7 @@ output_folder = "parasol_on_stim"  # "parasol_on_stim_sine_grating_sf2p0_crf_14_
 """
 Remove random variations by setting the numpy random seed
 """
-numpy_seed = 42  # random.randint(0, 1000000)  # 42
+numpy_seed = random.randint(0, 1000000)  # 42
 
 """
 ### Housekeeping ###. Do not comment out.
@@ -158,8 +158,8 @@ response_type = "on"
 my_retina = {
     "gc_type": gc_type,
     "response_type": response_type,
-    "ecc_limits": [3, 7],  # degrees # parasol
-    "sector_limits": [-6, 6],  # polar angle in degrees # parasol
+    "ecc_limits": [7, 20],  # degrees # parasol
+    "sector_limits": [-4, 4],  # polar angle in degrees # parasol
     # "ecc_limits": [4.7, 5.3],  # midget
     # "sector_limits": [-1, 1],  # midget
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
@@ -168,7 +168,7 @@ my_retina = {
     "randomize_position": 0.2,  # between 0 and 1
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
-    "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder.
+    "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder.
     "DoG_model": "circular",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'.
     "rf_coverage_adjusted_to_1": True,  # False or True. Applies both to FIT and VAE models. Note that ellipse fit does not tolearate VAE adjustments => fit to nonadjusted generated rfs
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
@@ -321,14 +321,14 @@ refractory_params = {
 }
 
 gc_placement_params = {
-    "n_iterations": 1000,
+    "n_iterations": 5000,
     "change_rate": 0.001,
-    "repulsion_stregth": 10,
-    "unit_distance_threshold": 0.01,  # 0.005
-    "noise_strength": 0.01,
-    "border_repulsion_stength": 0.5,  # 1.0
-    "border_max_effect_distance": 0.05,
-    "border_min_distance_clamp": 0.0001,
+    "unit_repulsion_stregth": 5,  # 10
+    "unit_distance_threshold": 0.03,  # 0.005
+    "noise_strength": 0.1,  # 0.01
+    "border_repulsion_stength": 10,  # 1.0
+    "border_distance_threshold": 0.01,  # 0.05
+    "border_min_distance_clamp": 0.00001,
     "show_placing_progress": True,
 }
 

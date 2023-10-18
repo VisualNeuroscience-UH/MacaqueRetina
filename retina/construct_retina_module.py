@@ -10,6 +10,7 @@ from scipy import ndimage
 
 import torch
 import torch.nn.functional as F
+import torch.autograd.profiler as profiler
 
 # from torch.utils.data import DataLoader
 
@@ -208,6 +209,7 @@ class ConstructRetina(RetinaMath):
         self.gc_df = pd.DataFrame()
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # self.device = "cpu"
 
         self.initialized = True
 
@@ -679,7 +681,9 @@ class ConstructRetina(RetinaMath):
             initial_positions.append(positions)
         return eccentricity_groups, initial_positions, sector_surface_areas_mm2
 
-    def _boundary_force(self, positions, rep, dist_th, clamp_min):
+    def _boundary_force(
+        self, positions, rep, dist_th, clamp_min, ecc_lim_mm, polar_lim_deg
+    ):
         """
         Calculate boundary repulsive forces for given positions.
 
@@ -704,30 +708,34 @@ class ConstructRetina(RetinaMath):
         This method calculates repulsive forces between the given positions and
         the defined boundaries. Repulsion is based on the inverse square law.
         """
-        # forces = torch.zeros_like(positions)
-        forces = torch.zeros_like(positions).to(self.device)
-        ecc_lim_mm = torch.tensor(self.ecc_lim_mm).to(self.device)
-        polar_lim_deg = torch.tensor(self.polar_lim_deg).to(self.device)
+
+        forces = torch.zeros_like(positions)
 
         # Left border (eccentricity minimum)
         left_distance = positions[:, 0] - ecc_lim_mm[0]
-        left_force = rep / (left_distance.clamp(min=clamp_min) ** 2)
+        left_force = rep / (left_distance.clamp(min=clamp_min) ** 3)
         left_force[left_distance > dist_th] = 0
         forces[:, 0] -= left_force
 
         # Right border (eccentricity maximum)
         right_distance = ecc_lim_mm[1] - positions[:, 0]
-        right_force = rep / (right_distance.clamp(min=clamp_min) ** 2)
+        right_force = rep / (right_distance.clamp(min=clamp_min) ** 3)
         right_force[right_distance > dist_th] = 0
         forces[:, 0] += right_force
 
         # Transforming to Cartesian coordinates for bottom and top borders
+        # bottom_x, bottom_y = self._pol2cart_torch(
+        #     ecc_lim_mm, [polar_lim_deg[0], polar_lim_deg[0]]
+        # )
         bottom_x, bottom_y = self._pol2cart_torch(
-            ecc_lim_mm, [polar_lim_deg[0], polar_lim_deg[0]]
+            ecc_lim_mm, polar_lim_deg[0].expand_as(ecc_lim_mm)
         )
 
+        # top_x, top_y = self._pol2cart_torch(
+        #     ecc_lim_mm, [polar_lim_deg[1], polar_lim_deg[1]]
+        # )
         top_x, top_y = self._pol2cart_torch(
-            ecc_lim_mm, [polar_lim_deg[1], polar_lim_deg[1]]
+            ecc_lim_mm, polar_lim_deg[1].expand_as(ecc_lim_mm)
         )
 
         # Calculating the equation of the line for bottom and top borders
@@ -746,11 +754,11 @@ class ConstructRetina(RetinaMath):
         ) / torch.sqrt(m_top**2 + 1)
 
         # Computing repulsive forces based on these distances
-        bottom_force = rep / (bottom_distance.clamp(min=clamp_min) ** 2)
+        bottom_force = rep / (bottom_distance.clamp(min=clamp_min) ** 3)
         bottom_force[bottom_distance > dist_th] = 0
         forces[:, 1] -= bottom_force
 
-        top_force = rep / (top_distance.clamp(min=clamp_min) ** 2)
+        top_force = rep / (top_distance.clamp(min=clamp_min) ** 3)
         top_force[top_distance > dist_th] = 0
         forces[:, 1] += top_force
 
@@ -776,10 +784,6 @@ class ConstructRetina(RetinaMath):
             Cartesian coordinates corresponding to the input polar coordinates.
         """
 
-        # Convert phi to tensor if it's a list
-        if isinstance(phi, list):
-            phi = torch.tensor(phi).to(radius.device)
-
         if deg:
             theta = phi * torch.pi / 180
         else:
@@ -804,7 +808,7 @@ class ConstructRetina(RetinaMath):
             Number of iterations for the force-based optimization. Default is 1000.
         change_rate : float, optional
             Learning rate for the optimization. Default is 0.001.
-        repulsion_stregth : float, optional
+        unit_repulsion_stregth : float, optional
             Repulsion coefficient between nodes. Default is 10.
         unit_distance_threshold : float, optional
             Maximum distance beyond which repulsion is not considered. Default is 0.005.
@@ -825,21 +829,21 @@ class ConstructRetina(RetinaMath):
         gc_placement_params = self.context.my_retina["gc_placement_params"]
         n_iterations = gc_placement_params["n_iterations"]
         change_rate = gc_placement_params["change_rate"]
-        repulsion_stregth = gc_placement_params["repulsion_stregth"]
+        unit_repulsion_stregth = gc_placement_params["unit_repulsion_stregth"]
         unit_distance_threshold = gc_placement_params["unit_distance_threshold"]
         noise_strength = gc_placement_params["noise_strength"]
         border_repulsion_stength = gc_placement_params["border_repulsion_stength"]
-        border_max_effect_distance = gc_placement_params["border_max_effect_distance"]
+        border_distance_threshold = gc_placement_params["border_distance_threshold"]
         border_min_distance_clamp = gc_placement_params["border_min_distance_clamp"]
         show_placing_progress = gc_placement_params["show_placing_progress"]
 
         unit_distance_threshold = torch.tensor(unit_distance_threshold).to(self.device)
-        repulsion_stregth = torch.tensor(repulsion_stregth).to(self.device)
+        unit_repulsion_stregth = torch.tensor(unit_repulsion_stregth).to(self.device)
         noise_strength = torch.tensor(noise_strength).to(self.device)
         n_iterations = torch.tensor(n_iterations).to(self.device)
 
         rep = torch.tensor(border_repulsion_stength).to(self.device)
-        dist_th = torch.tensor(border_max_effect_distance).to(self.device)
+        dist_th = torch.tensor(border_distance_threshold).to(self.device)
         clamp_min = torch.tensor(border_min_distance_clamp).to(self.device)
 
         original_positions = deepcopy(all_positions)
@@ -848,6 +852,9 @@ class ConstructRetina(RetinaMath):
         )
         change_rate = torch.tensor(change_rate).to(self.device)
         optimizer = torch.optim.Adam([positions], lr=change_rate)
+
+        ecc_lim_mm = torch.tensor(self.ecc_lim_mm).to(self.device)
+        polar_lim_deg = torch.tensor(self.polar_lim_deg).to(self.device)
 
         if show_placing_progress is True:
             # Init plotting
@@ -891,24 +898,27 @@ class ConstructRetina(RetinaMath):
             plt.show()
             # End of init plotting
 
+        # show_placing_progress = torch.tensor(show_placing_progress).to(self.device)
+
         for iteration in torch.range(0, n_iterations):
             optimizer.zero_grad()
-
             # Repulsive force between nodes
             diff = positions[None, :, :] - positions[:, None, :]
             dist = torch.norm(diff, dim=-1, p=2) + 1e-9
 
             # Clip minimum distance to avoid very high repulsion
-            dist = torch.clamp(dist, min=0.0001)
+            dist = torch.clamp(dist, min=0.00001)
             # Clip max to inf (zero repulsion) above a certain distance
             dist[dist > unit_distance_threshold] = torch.inf
             # Using inverse square for repulsion
-            repulsive_force = repulsion_stregth * torch.sum(
+            repulsive_force = unit_repulsion_stregth * torch.sum(
                 diff / (dist[..., None] ** 3), dim=1
             )
 
             # After calculating repulsive_force:
-            boundary_forces = self._boundary_force(positions, rep, dist_th, clamp_min)
+            boundary_forces = self._boundary_force(
+                positions, rep, dist_th, clamp_min, ecc_lim_mm, polar_lim_deg
+            )
             total_force = repulsive_force + boundary_forces
 
             force_strength = torch.norm(total_force, p=2, dim=1).mean()
