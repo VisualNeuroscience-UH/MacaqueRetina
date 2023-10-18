@@ -613,6 +613,7 @@ class ConstructRetina(RetinaMath):
     def _densfunc(self, r, d0, beta):
         return d0 * (1 + beta * r) ** (-2)
 
+    # GC placement functions
     def _initialize_positions_by_group(self, gc_density_func_params):
         """
         Initialize cell positions based on grouped eccentricities.
@@ -700,9 +701,9 @@ class ConstructRetina(RetinaMath):
 
         Notes
         -----
-        This method calculates repulsive forces between the given positions and 
+        This method calculates repulsive forces between the given positions and
         the defined boundaries. Repulsion is based on the inverse square law.
-        """        
+        """
         # forces = torch.zeros_like(positions)
         forces = torch.zeros_like(positions).to(self.device)
         ecc_lim_mm = torch.tensor(self.ecc_lim_mm).to(self.device)
@@ -766,7 +767,7 @@ class ConstructRetina(RetinaMath):
         phi : list or torch.Tensor
             Tensor or list representing the polar angle value.
         deg : bool, optional
-            If True, the angle is given in degrees; if False, the angle is given 
+            If True, the angle is given in degrees; if False, the angle is given
             in radians. Default is True.
 
         Returns
@@ -791,11 +792,6 @@ class ConstructRetina(RetinaMath):
     def _apply_force_based_layout(
         self,
         all_positions,
-        n_iterations=1000,
-        learning_rate=0.001,
-        repulsion_coef=10,
-        max_dist=0.005,
-        noise_strength=0.01,
     ):
         """
         Apply a force-based layout on the given positions.
@@ -806,11 +802,11 @@ class ConstructRetina(RetinaMath):
             Initial positions of nodes.
         n_iterations : int, optional
             Number of iterations for the force-based optimization. Default is 1000.
-        learning_rate : float, optional
+        change_rate : float, optional
             Learning rate for the optimization. Default is 0.001.
-        repulsion_coef : float, optional
+        repulsion_stregth : float, optional
             Repulsion coefficient between nodes. Default is 10.
-        max_dist : float, optional
+        unit_distance_threshold : float, optional
             Maximum distance beyond which repulsion is not considered. Default is 0.005.
         noise_strength : float, optional
             Strength of noise to add for preventing local minima. Default is 0.01.
@@ -822,65 +818,78 @@ class ConstructRetina(RetinaMath):
 
         Notes
         -----
-        This method applies a force-based layout to optimize node positions. 
+        This method applies a force-based layout to optimize node positions.
         It visualizes the progress of the layout optimization.
         """
+
+        gc_placement_params = self.context.my_retina["gc_placement_params"]
+        n_iterations = gc_placement_params["n_iterations"]
+        change_rate = gc_placement_params["change_rate"]
+        repulsion_stregth = gc_placement_params["repulsion_stregth"]
+        unit_distance_threshold = gc_placement_params["unit_distance_threshold"]
+        noise_strength = gc_placement_params["noise_strength"]
+        border_repulsion_stength = gc_placement_params["border_repulsion_stength"]
+        border_max_effect_distance = gc_placement_params["border_max_effect_distance"]
+        border_min_distance_clamp = gc_placement_params["border_min_distance_clamp"]
+        show_placing_progress = gc_placement_params["show_placing_progress"]
+
+        unit_distance_threshold = torch.tensor(unit_distance_threshold).to(self.device)
+        repulsion_stregth = torch.tensor(repulsion_stregth).to(self.device)
+        noise_strength = torch.tensor(noise_strength).to(self.device)
+        n_iterations = torch.tensor(n_iterations).to(self.device)
+
+        rep = torch.tensor(border_repulsion_stength).to(self.device)
+        dist_th = torch.tensor(border_max_effect_distance).to(self.device)
+        clamp_min = torch.tensor(border_min_distance_clamp).to(self.device)
 
         original_positions = deepcopy(all_positions)
         positions = torch.tensor(
             all_positions, requires_grad=True, dtype=torch.float64, device=self.device
         )
-        learning_rate = torch.tensor(learning_rate).to(self.device)
-        optimizer = torch.optim.Adam([positions], lr=learning_rate)
+        change_rate = torch.tensor(change_rate).to(self.device)
+        optimizer = torch.optim.Adam([positions], lr=change_rate)
 
-        # Init plotting
-        # Convert self.polar_lim_deg to Cartesian coordinates
-        bottom_x, bottom_y = self.pol2cart(
-            torch.tensor([self.ecc_lim_mm[0], self.ecc_lim_mm[1]]),
-            torch.tensor([self.polar_lim_deg[0], self.polar_lim_deg[0]]),
-        )
-        top_x, top_y = self.pol2cart(
-            torch.tensor([self.ecc_lim_mm[0], self.ecc_lim_mm[1]]),
-            torch.tensor([self.polar_lim_deg[1], self.polar_lim_deg[1]]),
-        )
+        if show_placing_progress is True:
+            # Init plotting
+            # Convert self.polar_lim_deg to Cartesian coordinates
+            bottom_x, bottom_y = self.pol2cart(
+                torch.tensor([self.ecc_lim_mm[0], self.ecc_lim_mm[1]]),
+                torch.tensor([self.polar_lim_deg[0], self.polar_lim_deg[0]]),
+            )
+            top_x, top_y = self.pol2cart(
+                torch.tensor([self.ecc_lim_mm[0], self.ecc_lim_mm[1]]),
+                torch.tensor([self.polar_lim_deg[1], self.polar_lim_deg[1]]),
+            )
 
-        # Concatenate to get the corner points
-        corners_x = torch.cat([bottom_x, top_x])
-        corners_y = torch.cat([bottom_y, top_y])
+            # Concatenate to get the corner points
+            corners_x = torch.cat([bottom_x, top_x])
+            corners_y = torch.cat([bottom_y, top_y])
 
-        # Initialize the plot before the loop
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
-        ax1.scatter(corners_x, corners_y, color="black", marker="x", zorder=2)
-        ax2.scatter(corners_x, corners_y, color="black", marker="x", zorder=2)
+            # Initialize the plot before the loop
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
+            ax1.scatter(corners_x, corners_y, color="black", marker="x", zorder=2)
+            ax2.scatter(corners_x, corners_y, color="black", marker="x", zorder=2)
 
-        ax1.set_aspect("equal")
-        ax2.set_aspect("equal")
-        scatter1 = ax1.scatter([], [], color="blue", marker="o")
-        scatter2 = ax2.scatter([], [], color="red", marker="o")
+            ax1.set_aspect("equal")
+            ax2.set_aspect("equal")
+            scatter1 = ax1.scatter([], [], color="blue", marker="o")
+            scatter2 = ax2.scatter([], [], color="red", marker="o")
 
-        # Set axis limits to ensure corners are always visible
-        ax1.set_xlim(
-            self.ecc_lim_mm[0] - 0.1, self.ecc_lim_mm[1] + 0.1
-        )  # add a small buffer
-        ax1.set_ylim(min(corners_y) - 0.1, max(corners_y) + 0.1)  # add a small buffer
-        ax2.set_xlim(
-            self.ecc_lim_mm[0] - 0.1, self.ecc_lim_mm[1] + 0.1
-        )  # add a small buffer
-        ax2.set_ylim(min(corners_y) - 0.1, max(corners_y) + 0.1)  # add a small buffer
+            # Set axis limits to ensure corners are always visible
+            ax1.set_xlim(self.ecc_lim_mm[0] - 0.1, self.ecc_lim_mm[1] + 0.1)
+            ax1.set_ylim(min(corners_y) - 0.1, max(corners_y) + 0.1)
+            ax2.set_xlim(self.ecc_lim_mm[0] - 0.1, self.ecc_lim_mm[1] + 0.1)
+            ax2.set_ylim(min(corners_y) - 0.1, max(corners_y) + 0.1)
 
-        plt.ion()  # Turn on interactive mode
-        plt.show()
-        # End of init plotting
+            # set horizontal (x) and vertical (y) units as mm for both plots
+            ax1.set_xlabel("horizontal (mm)")
+            ax1.set_ylabel("vertical (mm)")
+            ax2.set_xlabel("horizontal (mm)")
+            ax2.set_ylabel("vertical (mm)")
 
-        max_dist = torch.tensor(max_dist).to(self.device)
-        repulsion_coef = torch.tensor(repulsion_coef).to(self.device)
-        noise_strength = torch.tensor(noise_strength).to(self.device)
-        n_iterations = torch.tensor(n_iterations).to(self.device)
-
-        rep = torch.tensor(1.0).to(self.device)  # BORDER_REPULSION_STRENGTH
-        dist_th = torch.tensor(0.05).to(self.device)  # BORDER_DISTANCE_THRESHOLD
-        clamp_min = torch.tensor(0.0001).to(self.device)  # BORDER_CLAMP_MIN
-        # TÄHÄN JÄIT: TEE SOPIVAT PARAMETRIT ERIKSEEN PARASOL JA MIDGET.
+            plt.ion()  # Turn on interactive mode
+            plt.show()
+            # End of init plotting
 
         for iteration in torch.range(0, n_iterations):
             optimizer.zero_grad()
@@ -892,9 +901,9 @@ class ConstructRetina(RetinaMath):
             # Clip minimum distance to avoid very high repulsion
             dist = torch.clamp(dist, min=0.0001)
             # Clip max to inf (zero repulsion) above a certain distance
-            dist[dist > max_dist] = torch.inf
+            dist[dist > unit_distance_threshold] = torch.inf
             # Using inverse square for repulsion
-            repulsive_force = repulsion_coef * torch.sum(
+            repulsive_force = repulsion_stregth * torch.sum(
                 diff / (dist[..., None] ** 3), dim=1
             )
 
@@ -912,21 +921,24 @@ class ConstructRetina(RetinaMath):
             loss.backward()
             optimizer.step()
 
-            # Update the visualization every 100 iterations for performance (or adjust as needed)
-            if iteration % 100 == 0:
-                positions_cpu = positions.detach().cpu().numpy()
-                self.visualize_positions(
-                    original_positions,
-                    positions_cpu,
-                    fig,
-                    ax1,
-                    ax2,
-                    scatter1,
-                    scatter2,
-                    iteration,
-                )
+            if show_placing_progress is True:
+                # Update the visualization every 100 iterations for performance (or adjust as needed)
+                if iteration % 100 == 0:
+                    positions_cpu = positions.detach().cpu().numpy()
+                    self.visualize_positions(
+                        original_positions,
+                        positions_cpu,
+                        fig,
+                        ax1,
+                        ax2,
+                        scatter1,
+                        scatter2,
+                        iteration,
+                    )
 
-        plt.ioff()  # Turn off interactive mode
+        if show_placing_progress is True:
+            plt.ioff()  # Turn off interactive mode
+
         return positions.detach().cpu().numpy()
 
     def visualize_positions(
@@ -940,7 +952,6 @@ class ConstructRetina(RetinaMath):
         scatter2,
         iteration,
     ):
-        
         """
         Visualize the original and new positions during layout optimization.
 
@@ -961,7 +972,7 @@ class ConstructRetina(RetinaMath):
 
         Notes
         -----
-        This method updates the scatter plots for visualizing the progress 
+        This method updates the scatter plots for visualizing the progress
         of the force-based layout optimization.
         """
 

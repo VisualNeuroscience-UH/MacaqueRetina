@@ -320,6 +320,18 @@ refractory_params = {
     "clip_end": 100,
 }
 
+gc_placement_params = {
+    "n_iterations": 1000,
+    "change_rate": 0.001,
+    "repulsion_stregth": 10,
+    "unit_distance_threshold": 0.01,  # 0.005
+    "noise_strength": 0.01,
+    "border_repulsion_stength": 0.5,  # 1.0
+    "border_max_effect_distance": 0.05,
+    "border_min_distance_clamp": 0.0001,
+    "show_placing_progress": True,
+}
+
 my_retina_append = {
     "mosaic_file": gc_type + "_" + response_type + "_mosaic.csv",
     "spatial_rfs_file": gc_type + "_" + response_type + "_spatial_rfs.npy",
@@ -331,6 +343,7 @@ my_retina_append = {
     "optical_aberration": 2 / 60,  # unit is degree
     "cone_params": cone_params,
     "refractory_params": refractory_params,
+    "gc_placement_params": gc_placement_params,
 }
 
 my_retina.update(my_retina_append)
