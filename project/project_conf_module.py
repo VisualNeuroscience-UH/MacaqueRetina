@@ -137,7 +137,7 @@ output_folder = "parasol_on_stim"  # "parasol_on_stim_sine_grating_sf2p0_crf_14_
 """
 Remove random variations by setting the numpy random seed
 """
-numpy_seed = random.randint(0, 1000000)  # 42
+numpy_seed = 42  # random.randint(0, 1000000)  # 42
 
 """
 ### Housekeeping ###. Do not comment out.
@@ -158,10 +158,8 @@ response_type = "on"
 my_retina = {
     "gc_type": gc_type,
     "response_type": response_type,
-    "ecc_limits": [7, 20],  # degrees # parasol
-    "sector_limits": [-4, 4],  # polar angle in degrees # parasol
-    # "ecc_limits": [4.7, 5.3],  # midget
-    # "sector_limits": [-1, 1],  # midget
+    "ecc_limits": [4, 6],  # degrees # parasol
+    "sector_limits": [-22, 22],  # polar angle in degrees # parasol
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
     "dd_regr_model": "linear",  # linear, quadratic, cubic, exponential
     "visual_field_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
@@ -320,15 +318,17 @@ refractory_params = {
     "clip_end": 100,
 }
 
+# If you see patterning, reduce unit_distance_threshold
+# If you see clustering, increase increase diffusion_speed, unit_repulsion_stregth,
+# or carefully unit_distance_threshold
 gc_placement_params = {
     "n_iterations": 5000,
     "change_rate": 0.001,
-    "unit_repulsion_stregth": 5,  # 10
-    "unit_distance_threshold": 0.03,  # 0.005
-    "noise_strength": 0.1,  # 0.01
-    "border_repulsion_stength": 10,  # 1.0
-    "border_distance_threshold": 0.01,  # 0.05
-    "border_min_distance_clamp": 0.00001,
+    "unit_repulsion_stregth": 10,
+    "unit_distance_threshold": 0.02,  # Will be adjusted with ecc
+    "diffusion_speed": 0.0001,  # Will be adjusted with ecc
+    "border_repulsion_stength": 10,
+    "border_distance_threshold": 0.01,
     "show_placing_progress": True,
 }
 

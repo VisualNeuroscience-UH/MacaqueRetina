@@ -661,42 +661,52 @@ class ConstructRetina(RetinaMath):
 
         eccentricity_groups = []
         initial_positions = []
-        sector_surface_areas_mm2 = []
+        areas_all_mm2 = []
+        density_prop_all = []
         for group_idx in range(len(eccentricity_steps) - 1):
             min_ecc = eccentricity_steps[group_idx]
             max_ecc = eccentricity_steps[group_idx + 1]
             avg_ecc = (min_ecc + max_ecc) / 2
             density = self.gauss_plus_baseline(avg_ecc, *gc_density_func_params)
+            density_prop_all.append(density * self.gc_proportion)
 
             # Calculate area for this eccentricity group
             sector_area_remove = self.sector2area_mm2(min_ecc, angle_deg)
             sector_area_full = self.sector2area_mm2(max_ecc, angle_deg)
             sector_surface_area = sector_area_full - sector_area_remove  # in mm2
             # collect sector area for each ecc step
-            sector_surface_areas_mm2.append(sector_surface_area)
+            areas_all_mm2.append(sector_surface_area)
 
             n_cells = math.ceil(sector_surface_area * density * self.gc_proportion)
             positions = self._random_positions_within_group(min_ecc, max_ecc, n_cells)
             eccentricity_groups.append(np.full(n_cells, group_idx))
             initial_positions.append(positions)
-        return eccentricity_groups, initial_positions, sector_surface_areas_mm2
 
-    def _boundary_force(
-        self, positions, rep, dist_th, clamp_min, ecc_lim_mm, polar_lim_deg
-    ):
+        mean_density = np.mean(density_prop_all)
+
+        return eccentricity_groups, initial_positions, areas_all_mm2, mean_density
+
+    def _boundary_force(self, positions, rep, dist_th, ecc_lim_mm, polar_lim_deg):
         """
-        Calculate boundary repulsive forces for given positions.
+        Calculate boundary repulsive forces for given positions based on both
+        eccentricity (left-right) and polar (bottom-top) constraints.
 
         Parameters
         ----------
         positions : torch.Tensor
-            A tensor of positions (shape: [N, 2], where N is number of nodes).
+            A tensor of positions (shape: [N, 2], where N is the number of nodes).
         rep : float or torch.Tensor
             Repulsion coefficient for boundary force.
         dist_th : float or torch.Tensor
             Distance threshold beyond which no force is applied.
         clamp_min : float or torch.Tensor
             Minimum distance value to avoid division by very small numbers.
+        ecc_lim_mm : torch.Tensor
+            A tensor representing the eccentricity limits in millimeters for
+            left and right boundaries (shape: [2]).
+        polar_lim_deg : torch.Tensor
+            A tensor representing the polar angle limits in degrees for
+            bottom and top boundaries (shape: [2]).
 
         Returns
         -------
@@ -706,46 +716,30 @@ class ConstructRetina(RetinaMath):
         Notes
         -----
         This method calculates repulsive forces between the given positions and
-        the defined boundaries. Repulsion is based on the inverse square law.
+        the defined boundaries based on both eccentricity and polar constraints.
+        Repulsion is based on the inverse square law. The eccentricity boundaries
+        are treated as vertical lines, while the polar boundaries are treated as
+        general lines in the Cartesian plane. The method calculates the repulsive
+        forces by determining the distances of nodes to these boundaries and applying
+        the inverse square law based on those distances.
         """
 
         forces = torch.zeros_like(positions)
+        clamp_min = 1e-5
 
-        # Left border (eccentricity minimum)
-        left_distance = positions[:, 0] - ecc_lim_mm[0]
-        left_force = rep / (left_distance.clamp(min=clamp_min) ** 3)
-        left_force[left_distance > dist_th] = 0
-        forces[:, 0] -= left_force
-
-        # Right border (eccentricity maximum)
-        right_distance = ecc_lim_mm[1] - positions[:, 0]
-        right_force = rep / (right_distance.clamp(min=clamp_min) ** 3)
-        right_force[right_distance > dist_th] = 0
-        forces[:, 0] += right_force
-
-        # Transforming to Cartesian coordinates for bottom and top borders
-        # bottom_x, bottom_y = self._pol2cart_torch(
-        #     ecc_lim_mm, [polar_lim_deg[0], polar_lim_deg[0]]
-        # )
+        # Polar angle-based calculations for bottom and top boundaries
         bottom_x, bottom_y = self._pol2cart_torch(
             ecc_lim_mm, polar_lim_deg[0].expand_as(ecc_lim_mm)
         )
-
-        # top_x, top_y = self._pol2cart_torch(
-        #     ecc_lim_mm, [polar_lim_deg[1], polar_lim_deg[1]]
-        # )
         top_x, top_y = self._pol2cart_torch(
             ecc_lim_mm, polar_lim_deg[1].expand_as(ecc_lim_mm)
         )
-
-        # Calculating the equation of the line for bottom and top borders
         m_bottom = (bottom_y[1] - bottom_y[0]) / (bottom_x[1] - bottom_x[0])
         c_bottom = bottom_y[0] - m_bottom * bottom_x[0]
-
         m_top = (top_y[1] - top_y[0]) / (top_x[1] - top_x[0])
         c_top = top_y[0] - m_top * top_x[0]
 
-        # Calculating distance from the line for each position (corrected for perpendicular distance)
+        # Calculating distance from the line for each position
         bottom_distance = torch.abs(
             m_bottom * positions[:, 0] - positions[:, 1] + c_bottom
         ) / torch.sqrt(m_bottom**2 + 1)
@@ -761,6 +755,25 @@ class ConstructRetina(RetinaMath):
         top_force = rep / (top_distance.clamp(min=clamp_min) ** 3)
         top_force[top_distance > dist_th] = 0
         forces[:, 1] += top_force
+
+        # Eccentricity arc-based calculations for min and max arcs
+        distances_to_center = torch.norm(positions, dim=1)
+        min_ecc_distance = torch.abs(distances_to_center - ecc_lim_mm[0])
+        max_ecc_distance = torch.abs(distances_to_center - ecc_lim_mm[1])
+
+        # Compute forces based on these distances
+        min_ecc_force = rep / (min_ecc_distance.clamp(min=clamp_min) ** 3)
+        min_ecc_force[min_ecc_distance > dist_th] = 0
+
+        max_ecc_force = rep / (max_ecc_distance.clamp(min=clamp_min) ** 3)
+        max_ecc_force[max_ecc_distance > dist_th] = 0
+
+        # Calculate direction for the forces (from point to the origin)
+        directions = positions / distances_to_center.unsqueeze(1)
+
+        # Update forces using the computed repulsive forces and their directions
+        forces -= directions * min_ecc_force.unsqueeze(1)
+        forces += directions * max_ecc_force.unsqueeze(1)
 
         return forces
 
@@ -793,9 +806,60 @@ class ConstructRetina(RetinaMath):
         y = radius * torch.sin(theta)
         return (x, y)
 
+    def _cart2pol_torch(self, x, y, deg=True):
+        """
+        Convert Cartesian coordinates to polar coordinates using PyTorch tensors.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Tensor representing the x-coordinate in Cartesian coordinates.
+        y : torch.Tensor
+            Tensor representing the y-coordinate in Cartesian coordinates.
+        deg : bool, optional
+            If True, the returned angle is in degrees; if False, the angle is in
+            radians. Default is True.
+
+        Returns
+        -------
+        radius, phi : torch.Tensor
+            Polar coordinates corresponding to the input Cartesian coordinates.
+        """
+
+        radius = torch.sqrt(x**2 + y**2)
+        theta = torch.atan2(y, x)
+
+        if deg:
+            phi = theta * 180 / torch.pi
+        else:
+            phi = theta
+
+        return radius, phi
+
+    def _check_boundaries(self, node_positions, ecc_lim_mm, polar_lim_deg):
+        x, y = node_positions[:, 0], node_positions[:, 1]
+        min_eccentricity, max_eccentricity = ecc_lim_mm
+        min_polar, max_polar = polar_lim_deg
+
+        r, theta = self._cart2pol_torch(x, y)
+        r = torch.clamp(r, min=min_eccentricity, max=max_eccentricity)
+        theta = torch.clamp(
+            theta, min=min_polar, max=max_polar
+        )  # Guarding polar boundaries
+
+        new_x, new_y = self._pol2cart_torch(r, theta)
+
+        # return torch.stack([new_x, new_y], dim=1)
+
+        delta_x = new_x - x
+        delta_y = new_y - y
+
+        return torch.stack([delta_x, delta_y], dim=1)
+
     def _apply_force_based_layout(
         self,
         all_positions,
+        mean_density,
     ):
         """
         Apply a force-based layout on the given positions.
@@ -804,17 +868,8 @@ class ConstructRetina(RetinaMath):
         ----------
         all_positions : list or ndarray
             Initial positions of nodes.
-        n_iterations : int, optional
-            Number of iterations for the force-based optimization. Default is 1000.
-        change_rate : float, optional
-            Learning rate for the optimization. Default is 0.001.
-        unit_repulsion_stregth : float, optional
-            Repulsion coefficient between nodes. Default is 10.
-        unit_distance_threshold : float, optional
-            Maximum distance beyond which repulsion is not considered. Default is 0.005.
-        noise_strength : float, optional
-            Strength of noise to add for preventing local minima. Default is 0.01.
-
+        mean_density : float
+            Mean density of cells across the retina.
         Returns
         -------
         positions : ndarray
@@ -831,27 +886,26 @@ class ConstructRetina(RetinaMath):
         change_rate = gc_placement_params["change_rate"]
         unit_repulsion_stregth = gc_placement_params["unit_repulsion_stregth"]
         unit_distance_threshold = gc_placement_params["unit_distance_threshold"]
-        noise_strength = gc_placement_params["noise_strength"]
+        diffusion_speed = gc_placement_params["diffusion_speed"]
         border_repulsion_stength = gc_placement_params["border_repulsion_stength"]
         border_distance_threshold = gc_placement_params["border_distance_threshold"]
-        border_min_distance_clamp = gc_placement_params["border_min_distance_clamp"]
         show_placing_progress = gc_placement_params["show_placing_progress"]
 
         unit_distance_threshold = torch.tensor(unit_distance_threshold).to(self.device)
         unit_repulsion_stregth = torch.tensor(unit_repulsion_stregth).to(self.device)
-        noise_strength = torch.tensor(noise_strength).to(self.device)
+        diffusion_speed = torch.tensor(diffusion_speed).to(self.device)
         n_iterations = torch.tensor(n_iterations).to(self.device)
+        mean_density = torch.tensor(mean_density).to(self.device)
 
         rep = torch.tensor(border_repulsion_stength).to(self.device)
         dist_th = torch.tensor(border_distance_threshold).to(self.device)
-        clamp_min = torch.tensor(border_min_distance_clamp).to(self.device)
 
         original_positions = deepcopy(all_positions)
         positions = torch.tensor(
             all_positions, requires_grad=True, dtype=torch.float64, device=self.device
         )
         change_rate = torch.tensor(change_rate).to(self.device)
-        optimizer = torch.optim.Adam([positions], lr=change_rate)
+        optimizer = torch.optim.Adam([positions], lr=change_rate, betas=(0.95, 0.999))
 
         ecc_lim_mm = torch.tensor(self.ecc_lim_mm).to(self.device)
         polar_lim_deg = torch.tensor(self.polar_lim_deg).to(self.device)
@@ -882,11 +936,23 @@ class ConstructRetina(RetinaMath):
             scatter1 = ax1.scatter([], [], color="blue", marker="o")
             scatter2 = ax2.scatter([], [], color="red", marker="o")
 
-            # Set axis limits to ensure corners are always visible
-            ax1.set_xlim(self.ecc_lim_mm[0] - 0.1, self.ecc_lim_mm[1] + 0.1)
-            ax1.set_ylim(min(corners_y) - 0.1, max(corners_y) + 0.1)
-            ax2.set_xlim(self.ecc_lim_mm[0] - 0.1, self.ecc_lim_mm[1] + 0.1)
-            ax2.set_ylim(min(corners_y) - 0.1, max(corners_y) + 0.1)
+            
+            # Obtain corners based on current positions
+            min_x = torch.min(positions[:, 0]).item() - 0.1
+            max_x = torch.max(positions[:, 0]).item() + 0.1
+            min_y = torch.min(positions[:, 1]).item() - 0.1
+            max_y = torch.max(positions[:, 1]).item() + 0.1
+
+            # Set axis limits based on min and max values of positions
+            ax1.set_xlim(min_x, max_x)
+            ax1.set_ylim(min_y, max_y)
+            ax2.set_xlim(min_x, max_x)
+            ax2.set_ylim(min_y, max_y)
+            # # Set axis limits to ensure corners are always visible
+            # ax1.set_xlim(self.ecc_lim_mm[0] - 0.1, self.ecc_lim_mm[1] + 0.1)
+            # ax1.set_ylim(min(corners_y) - 0.1, max(corners_y) + 0.1)
+            # ax2.set_xlim(self.ecc_lim_mm[0] - 0.1, self.ecc_lim_mm[1] + 0.1)
+            # ax2.set_ylim(min(corners_y) - 0.1, max(corners_y) + 0.1)
 
             # set horizontal (x) and vertical (y) units as mm for both plots
             ax1.set_xlabel("horizontal (mm)")
@@ -898,7 +964,13 @@ class ConstructRetina(RetinaMath):
             plt.show()
             # End of init plotting
 
-        # show_placing_progress = torch.tensor(show_placing_progress).to(self.device)
+        # Adjust unit_distance_threshold and diffusion speed with mean eccentricity in mm
+        # This is necessary because the density of the units are adjusted with eccentricity
+        # The 1 mm ecc for parasol provides 952 units/mm2 density. This is the reference density.
+        unit_distance_threshold = unit_distance_threshold * (952 / mean_density)
+        diffusion_speed = diffusion_speed * (952 / mean_density)
+        print(f"Updated unit_distance_threshold: {unit_distance_threshold}")
+        print(f"Updated diffusion_speed: {diffusion_speed}")
 
         for iteration in torch.range(0, n_iterations):
             optimizer.zero_grad()
@@ -916,20 +988,34 @@ class ConstructRetina(RetinaMath):
             )
 
             # After calculating repulsive_force:
+            # print("boundary in")
             boundary_forces = self._boundary_force(
-                positions, rep, dist_th, clamp_min, ecc_lim_mm, polar_lim_deg
+                positions, rep, dist_th, ecc_lim_mm, polar_lim_deg
             )
+            # print("boundary out")
             total_force = repulsive_force + boundary_forces
 
-            force_strength = torch.norm(total_force, p=2, dim=1).mean()
-            noise = torch.randn_like(total_force) * noise_strength * force_strength
-            total_force = total_force + noise
+            # force_strength = torch.norm(total_force, p=2, dim=1).mean()
+            # noise = torch.randn_like(total_force) * diffusion_speed * force_strength
+
+            # total_force = total_force + noise
 
             # Use the force as the "loss"
             loss = torch.norm(total_force, p=2)
 
             loss.backward()
             optimizer.step()
+
+            # Update positions in-place
+            positions_delta = self._check_boundaries(
+                positions, ecc_lim_mm, polar_lim_deg
+            )
+
+            positions.data = (
+                positions
+                + torch.randn_like(positions) * diffusion_speed
+                + positions_delta
+            )
 
             if show_placing_progress is True:
                 # Update the visualization every 100 iterations for performance (or adjust as needed)
@@ -1007,6 +1093,7 @@ class ConstructRetina(RetinaMath):
             eccentricity_groups,
             initial_positions,
             sector_surface_areas_mm2,
+            mean_density,
         ) = self._initialize_positions_by_group(gc_density_func_params)
 
         # 2. Merge the Groups
@@ -1016,7 +1103,9 @@ class ConstructRetina(RetinaMath):
         all_positions_mm = np.column_stack(all_positions_tuple)
 
         # 3. Apply FBLA with Boundary Repulsion
-        optimized_positions_mm = self._apply_force_based_layout(all_positions_mm)
+        optimized_positions_mm = self._apply_force_based_layout(
+            all_positions_mm, mean_density
+        )
         optimized_positions_tuple = self.cart2pol(
             optimized_positions_mm[:, 0], optimized_positions_mm[:, 1]
         )
