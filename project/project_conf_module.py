@@ -166,7 +166,7 @@ my_retina = {
     "randomize_position": 0.2,  # between 0 and 1
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
-    "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder.
+    "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder.
     "DoG_model": "circular",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'.
     "rf_coverage_adjusted_to_1": True,  # False or True. Applies both to FIT and VAE models. Note that ellipse fit does not tolearate VAE adjustments => fit to nonadjusted generated rfs
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
@@ -322,8 +322,8 @@ refractory_params = {
 # If you see clustering, increase increase diffusion_speed, unit_repulsion_stregth,
 # or carefully unit_distance_threshold
 gc_placement_params = {
-    "n_iterations": 5000,
-    "change_rate": 0.001,
+    "n_iterations": 500,  # 5000
+    "change_rate": 0.01,  # 0.001
     "unit_repulsion_stregth": 10,
     "unit_distance_threshold": 0.02,  # Will be adjusted with ecc
     "diffusion_speed": 0.0001,  # Will be adjusted with ecc
@@ -497,8 +497,8 @@ if __name__ == "__main__":
 
     # For FIT (ellipse and DoG fits, temporal kernels and tonic drives)
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
-    # PM.viz.visualize_mosaic(savefigname=None)
-    # PM.viz.show_dendrite_diam_vs_ecc(savefigname=None)
+    PM.viz.visualize_mosaic(savefigname=None)
+    PM.viz.show_dendrite_diam_vs_ecc(savefigname=None)
     # PM.viz.show_temporal_filter_response(n_curves=3, savefigname="temporal_filters.eps")
     # PM.viz.show_spatial_statistics(savefigname="spatial_stats.eps")
 

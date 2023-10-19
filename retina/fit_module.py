@@ -98,13 +98,12 @@ class Fit(RetinaMath):
         self.gc_type = gc_type
         self.response_type = response_type
 
-        self.apricot_data = ApricotData(self.metadata, gc_type, response_type)
-        self.bad_data_idx = self.apricot_data.manually_picked_bad_data_idx
-        self.n_cells = self.apricot_data.n_cells
-
         # Spatial DoG units are pixels at this point
         match fit_type:
             case "experimental":
+                self.apricot_data = ApricotData(self.metadata, gc_type, response_type)
+                self.bad_data_idx = self.apricot_data.manually_picked_bad_data_idx
+                self.n_cells = self.apricot_data.n_cells
                 (
                     self.all_data_fits_df,
                     self.exp_spat_filt,
