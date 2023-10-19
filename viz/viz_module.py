@@ -747,16 +747,19 @@ class Viz:
         rho = self.construct_retina.gc_df["pos_ecc_mm"].to_numpy()
         phi = self.construct_retina.gc_df["pos_polar_deg"].to_numpy()
 
-        gc_rf_models = np.zeros((len(self.construct_retina.gc_df), 6))
-        gc_rf_models[:, 0] = self.construct_retina.gc_df["semi_xc"]
-        gc_rf_models[:, 1] = self.construct_retina.gc_df["semi_yc"]
-        gc_rf_models[:, 2] = self.construct_retina.gc_df["xy_aspect_ratio"]
-        gc_rf_models[:, 3] = self.construct_retina.gc_df["ampl_s"]
-        gc_rf_models[:, 4] = self.construct_retina.gc_df["relat_sur_diam"]
-        gc_rf_models[:, 5] = self.construct_retina.gc_df["orient_cen_rad"]
+        gc_rf_models = np.zeros((len(self.construct_retina.gc_df), 3))
 
-        gc_rf_models[:, 5] = gc_rf_models[:, 5] * 180 / np.pi
-
+        if self.context.my_retina["DoG_model"] == "circular":
+            gc_rf_models[:, 0] = self.construct_retina.gc_df["rad_c"]
+            gc_rf_models[:, 1] = self.construct_retina.gc_df["rad_c"]
+            gc_rf_models[:, 2] = 0.0
+        elif self.context.my_retina["DoG_model"] in [
+            "ellipse_independent",
+            "ellipse_fixed",
+        ]:
+            gc_rf_models[:, 0] = self.construct_retina.gc_df["semi_xc"]
+            gc_rf_models[:, 1] = self.construct_retina.gc_df["semi_yc"]
+            gc_rf_models[index, 2] = self.construct_retina.gc_df["orient_cen_rad"]
         # to cartesian
         xcoord, ycoord = self.pol2cart(rho, phi)
 
@@ -767,28 +770,27 @@ class Viz:
             "b.",
             label=self.construct_retina.gc_type,
         )
-        if self.context.my_retina["DoG_model"] == "ellipse_fixed":
-            # gc_rf_models parameters:'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','relat_sur_diam', 'orient_cen_rad'
-            # Ellipse parameters: Ellipse(xy, width, height, angle=0, **kwargs). Only possible one at the time, unfortunately.
-            for index in np.arange(len(xcoord)):
-                ellipse_center_x = xcoord[index]
-                ellipse_center_y = ycoord[index]
-                semi_xc = gc_rf_models[index, 0]
-                semi_yc = gc_rf_models[index, 1]
-                # angle_in_radians = gc_rf_models[index, 5]  # Orientation
-                angle_in_deg = gc_rf_models[index, 5]  # Orientation
-                diameter_xc = semi_xc * 2
-                diameter_yc = semi_yc * 2
-                e1 = Ellipse(
-                    (ellipse_center_x, ellipse_center_y),
-                    diameter_xc,
-                    diameter_yc,
-                    angle_in_deg,
-                    edgecolor="b",
-                    linewidth=0.5,
-                    fill=False,
-                )
-                ax.add_artist(e1)
+        # gc_rf_models parameters:'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','relat_sur_diam', 'orient_cen_rad'
+        # Ellipse parameters: Ellipse(xy, width, height, angle=0, **kwargs). Only possible one at the time, unfortunately.
+        for index in np.arange(len(xcoord)):
+            ellipse_center_x = xcoord[index]
+            ellipse_center_y = ycoord[index]
+            semi_xc = gc_rf_models[index, 0]
+            semi_yc = gc_rf_models[index, 1]
+            # angle_in_radians = gc_rf_models[index, 5]  # Orientation
+            angle_in_deg = gc_rf_models[index, 2]  # Orientation
+            diameter_xc = semi_xc * 2
+            diameter_yc = semi_yc * 2
+            e1 = Ellipse(
+                (ellipse_center_x, ellipse_center_y),
+                diameter_xc,
+                diameter_yc,
+                angle_in_deg,
+                edgecolor="b",
+                linewidth=0.5,
+                fill=False,
+            )
+            ax.add_artist(e1)
 
         ax.axis("equal")
         ax.legend()
