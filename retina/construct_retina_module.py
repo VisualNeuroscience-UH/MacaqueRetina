@@ -2021,15 +2021,14 @@ class ConstructRetina(RetinaMath):
         lit_dd_vs_ecc_params = self._fit_dd_vs_ecc(
             self.visual_field_limit_for_dd_fit_mm, dd_regr_model
         )
+
         # # Quality control: check that the fitted dendritic diameter is close to the original data
         # # Frechette_2005_JNeurophysiol datasets: 9.7 mm (45°); 9.0 mm (41°); 8.4 mm (38°)
         # # Estimate the orginal data eccentricity from the fit to full eccentricity range
+        # exp_rad = self.exp_cen_radius_mm * 2 * 1000
         # dd_ecc_params_full = self._fit_dd_vs_ecc(np.inf, dd_regr_model)
-        # data_ecc_mm = self._get_ecc_from_dd(
-        #     dd_ecc_params_full, dd_regr_model, self.exp_cen_radius_mm * 2 * 1000
-        # )
+        # data_ecc_mm = self._get_ecc_from_dd(dd_ecc_params_full, dd_regr_model, exp_rad)
         # data_ecc_deg = data_ecc_mm * self.deg_per_mm  # 37.7 deg
-        # pdb.set_trace()
 
         # Endow cells with spatial elliptical receptive fields.
         # Units become mm unless specified in column names.
@@ -2091,7 +2090,6 @@ class ConstructRetina(RetinaMath):
 
             idx_to_process = np.arange(nsamples)
             img_rfs = np.zeros((nsamples, new_sidelen, new_sidelen))
-            # gc_df = self.gc_df.copy()
             available_idx_mask = np.ones(nsamples_extra, dtype=bool)
             available_idx_mask[idx_to_process] = False
             img_to_resample = img_processed_extra[idx_to_process, :, :]
@@ -2139,7 +2137,8 @@ class ConstructRetina(RetinaMath):
                 else:
                     break
 
-            # Make the good fits to get the stats out
+            # Redo the good fits to get the stats out
+            # Now there is no need to discard any rfs
             self.fit.initialize(
                 self.gc_type,
                 self.response_type,
@@ -2147,6 +2146,7 @@ class ConstructRetina(RetinaMath):
                 DoG_model=self.context.my_retina["DoG_model"],
                 spatial_data=img_rfs,
                 new_um_per_pix=new_um_per_pix,
+                mark_outliers_bad=False,
             )
             (
                 self.gen_stat_df,
@@ -2158,7 +2158,6 @@ class ConstructRetina(RetinaMath):
             good_idx_compiled = np.where(good_mask_compiled)[0]
 
             # Update gc_vae_df to have the same columns as gc_df and to mm
-            # TÄHÄN JÄIT: VAE FIT SCALE ON PIX. OSA VAE FIT:STÄ EDELLEEN 0. FIT SCALE EI SKAALAUDU ECC MUKAAN
             self.gc_vae_df = self._update_gc_vae_df(self.gc_vae_df, new_um_per_pix)
             # Get center masks for the generated spatial rfs
             # Mask threshold is relative to max value in the image

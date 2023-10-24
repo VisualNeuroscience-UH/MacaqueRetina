@@ -60,6 +60,7 @@ class Fit(RetinaMath):
         DoG_model="ellipse_fixed",  # "ellipse_independent", "ellipse_fixed", "circular"
         spatial_data=None,
         new_um_per_pix=None,
+        mark_outliers_bad=True,
     ):
         """
         Initialize the fit_dog object.
@@ -117,7 +118,9 @@ class Fit(RetinaMath):
                     self.gen_spat_filt,
                     self.good_idx_generated,
                     self.spat_DoG_fit_params,
-                ) = self._fit_DoG_generated_data(DoG_model, spatial_data)
+                ) = self._fit_DoG_generated_data(
+                    DoG_model, spatial_data, mark_outliers_bad=mark_outliers_bad
+                )
 
     def _fit_temporal_filters(self, good_idx_experimental, normalize_before_fit=False):
         """
@@ -245,6 +248,7 @@ class Fit(RetinaMath):
         bad_idx_for_spatial_fit=None,
         DoG_model="ellipse_fixed",
         semi_x_always_major=True,
+        mark_outliers_bad=True,
     ):
         """
         Fit difference of Gaussians (DoG) model spatial filters using retinal spike triggered average (STA) data.
@@ -263,6 +267,8 @@ class Fit(RetinaMath):
            circular : fit isotropic circular Gaussians
         semi_x_always_major : bool, optional
             Whether to rotate Gaussians so that semi_x is always the semimajor/longer axis, by default True
+        mark_outliers_bad : bool, optional
+            Whether to mark outliers (> 3SD from mean) as bad, by default True
 
         Returns
         -------
@@ -610,13 +616,15 @@ class Fit(RetinaMath):
         error_df = pd.DataFrame(error_all_viable_cells, columns=["spatialfit_mse"])
         good_mask = np.ones(len(data_all_viable_cells))
 
-        # identify outliers (> 3SD from mean) and mark them bad
-        bad_idx_for_spatial_fit = self._get_fit_outliers(
-            fits_df, bad_idx_for_spatial_fit, columns=fits_df.columns
-        )
+        if mark_outliers_bad == True:
+            # identify outliers (> 3SD from mean) and mark them bad
+            bad_idx_for_spatial_fit = self._get_fit_outliers(
+                fits_df, bad_idx_for_spatial_fit, columns=fits_df.columns
+            )
 
-        for i in bad_idx_for_spatial_fit:
-            good_mask[i] = 0
+            for i in bad_idx_for_spatial_fit:
+                good_mask[i] = 0
+
         good_mask_df = pd.DataFrame(good_mask, columns=["good_filter_data"])
 
         return (
@@ -715,7 +723,7 @@ class Fit(RetinaMath):
             spat_DoG_fit_params,
         )
 
-    def _fit_DoG_generated_data(self, DoG_model, spatial_data):
+    def _fit_DoG_generated_data(self, DoG_model, spatial_data, mark_outliers_bad=True):
         """
         Fits spatial DoG parameters to the generated data.
 
@@ -748,6 +756,7 @@ class Fit(RetinaMath):
             cen_rot_rad_all=cen_rot_rad_all,
             bad_idx_for_spatial_fit=[],
             DoG_model=DoG_model,
+            mark_outliers_bad=mark_outliers_bad,
         )
 
         # Collect everything into one big dataframe
