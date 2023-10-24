@@ -746,7 +746,6 @@ class Viz:
 
         ecc_mm = self.construct_retina.gc_df["pos_ecc_mm"].to_numpy()
         pol_deg = self.construct_retina.gc_df["pos_polar_deg"].to_numpy()
-        gc_rf_models = np.zeros((len(self.construct_retina.gc_df), 3))
 
         if self.context.my_retina["DoG_model"] == "circular":
             semi_xc = self.construct_retina.gc_df["rad_c"]
@@ -758,7 +757,8 @@ class Viz:
         ]:
             semi_xc = self.construct_retina.gc_df["semi_xc"]
             semi_yc = self.construct_retina.gc_df["semi_yc"]
-            angle_in_deg = self.construct_retina.gc_df["orient_cen_rad"]
+            angle_in_deg = self.construct_retina.gc_df["orient_cen_rad"] * 180 / np.pi
+
         # to cartesian
         xcoord, ycoord = self.pol2cart(ecc_mm, pol_deg)
 
@@ -769,7 +769,6 @@ class Viz:
             "b.",
             label=self.construct_retina.gc_type,
         )
-        # gc_rf_models parameters:'semi_xc', 'semi_yc', 'orient_cen_rad'
         # Ellipse parameters: Ellipse(xy, width, height, angle=0, **kwargs). Only possible one at the time, unfortunately.
         for index in np.arange(len(xcoord)):
             ellipse_center_x = xcoord[index]

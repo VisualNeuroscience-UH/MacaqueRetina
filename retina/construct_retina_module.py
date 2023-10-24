@@ -2046,11 +2046,11 @@ class ConstructRetina(RetinaMath):
             # Add dendritic diameter for visualization, in micrometers
             self.gc_df["den_diam_um"] = self._get_dd_in_um(self.gc_df)
 
-        # At this point the fitted ellipse spatial receptive fields are ready. All parameters are in self.gc_df.
-        # The positions are in the columns 'pos_ecc_mm', 'pos_polar_deg', 'ecc_group_idx', 'xoc', 'yoc', and the rf parameters in either
-        # (elliptical DoG) 'semi_xc', 'semi_yc', 'ampl_s', 'relat_sur_diam', 'offset', 'xy_aspect_ratio', 'orient_cen_rad', 'den_diam_um', 'relat_sur_ampl'
-        # (circular DoG) 'ampl_c', 'rad_c', 'ampl_s', 'rad_s', 'offset', 'den_diam_um', 'relat_sur_ampl'.
-        # If units are not mentioned, they are in pixel space.
+            # At this point the fitted ellipse spatial receptive fields are ready. All parameters are in self.gc_df.
+            # The positions are in the columns 'pos_ecc_mm', 'pos_polar_deg', 'ecc_group_idx', 'xoc', 'yoc', and the rf parameters in either
+            # (elliptical DoG) 'semi_xc', 'semi_yc', 'ampl_s', 'relat_sur_diam', 'offset', 'xy_aspect_ratio', 'orient_cen_rad', 'den_diam_um', 'relat_sur_ampl'
+            # (circular DoG) 'ampl_c', 'rad_c', 'ampl_s', 'rad_s', 'offset', 'den_diam_um', 'relat_sur_ampl'.
+            # If units are not mentioned, they are in mm space.
 
         if self.spatial_model == "VAE":
             # Fit or load variational autoencoder to generate receptive fields
@@ -2111,6 +2111,7 @@ class ConstructRetina(RetinaMath):
                     DoG_model=self.context.my_retina["DoG_model"],
                     spatial_data=img_after_resample,
                     new_um_per_pix=new_um_per_pix,
+                    mark_outliers_bad=True,
                 )
                 # Some fo the fits might be bad. Discard them.
                 good_idx_this_iter = self.fit.good_idx_generated
