@@ -1483,7 +1483,6 @@ class ConstructRetina(RetinaMath):
         # and sidelen =  ceil(max(gc_um_per_pix) / min(gc_um_per_pix)) * original sidelen)
         # new_pix_size = min_um_per_pix
         new_sidelen = int((max_um_per_pix / min_um_per_pix) * exp_sidelen)
-        # pdb.set_trace()
 
         return gc_um_per_pix, new_sidelen, min_um_per_pix
 
@@ -1570,7 +1569,6 @@ class ConstructRetina(RetinaMath):
         Update the remaining pixel values to mm, unless unit in is in the column name
         """
 
-        # pdb.set_trace()
         gc_vae_df = gc_vae_df_in.reindex(columns=self.gc_df.columns)
         # These values come from _place_gc_units before _create_spatial_rfs in build()
         # They are independent from FIT.
@@ -2034,7 +2032,6 @@ class ConstructRetina(RetinaMath):
         # Units become mm unless specified in column names.
         if self.spatial_model == "FIT":
             # self.gc_df is updated silently
-
             if self.rf_coverage_adjusted_to_1 == True:
                 # Assumes that the dendritic field diameter is proportional to the coverage
                 self._fit_DoG_with_rf_coverage_one()
@@ -2054,6 +2051,7 @@ class ConstructRetina(RetinaMath):
 
         if self.spatial_model == "VAE":
             # Fit or load variational autoencoder to generate receptive fields
+            # self.gc_df is updated explicitly at the end of this if statement
             self.retina_vae = RetinaVAE(
                 self.gc_type,
                 self.response_type,
@@ -2239,13 +2237,11 @@ class ConstructRetina(RetinaMath):
             self.gc_df_original = self.gc_df.copy()
             # Apply the spatial VAE model to df
             self.gc_df = self.gc_vae_df
-            # pdb.set_trace()
 
         # Scale center and surround amplitude: center Gaussian volume in pixel space becomes one
         # Surround amplitude is scaled relative to center volume of one
         self.gc_df = self._scale_both_amplitudes(self.gc_df)
 
-        # pdb.set_trace()
         self.project_data.construct_retina["dd_vs_ecc"][
             "dd_DoG_x"
         ] = self.gc_df.pos_ecc_mm.values
