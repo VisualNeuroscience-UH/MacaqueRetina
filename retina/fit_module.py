@@ -1038,9 +1038,9 @@ class Fit(RetinaMath):
             List of good data indices after spatial fit
         bad_data_fit_idx : list
             List of bad data indices after spatial fit
-        exp_spat_cen_sd_mm : float
+        exp_cen_radius_mm : float
             Mean center standard deviation in millimeters
-        exp_spat_sur_sd_mm : float
+        exp_sur_radius_mm : float
             Mean surround standard deviation in millimeters
         exp_temp_filt : dict
             Dictionary with temporal filter parameters and distributions
@@ -1078,7 +1078,7 @@ class Fit(RetinaMath):
         )
 
         # get center and surround sd
-        exp_spat_cen_sd_mm, exp_spat_sur_sd_mm = self._get_center_surround_sd(
+        exp_cen_radius_mm, exp_sur_radius_mm = self._get_center_surround_sd(
             good_data_fit_idx
         )
 
@@ -1096,8 +1096,8 @@ class Fit(RetinaMath):
 
         return (
             exp_stat_df,
-            exp_spat_cen_sd_mm,
-            exp_spat_sur_sd_mm,
+            exp_cen_radius_mm,
+            exp_sur_radius_mm,
             self.spat_DoG_fit_params,
         )
 

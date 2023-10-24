@@ -158,15 +158,15 @@ response_type = "on"
 my_retina = {
     "gc_type": gc_type,
     "response_type": response_type,
-    "ecc_limits": [4, 6],  # degrees # parasol
-    "sector_limits": [-22, 22],  # polar angle in degrees # parasol
+    "ecc_limits": [4, 12],  # degrees # parasol
+    "sector_limits": [-6, 6],  # polar angle in degrees # parasol
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
     "dd_regr_model": "linear",  # linear, quadratic, cubic, exponential
     "visual_field_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
     "randomize_position": 0.2,  # between 0 and 1
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
-    "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder.
+    "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder.
     "DoG_model": "circular",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'.
     "rf_coverage_adjusted_to_1": True,  # False or True. Applies both to FIT and VAE models. Note that ellipse fit does not tolearate VAE adjustments => fit to nonadjusted generated rfs
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
@@ -329,7 +329,7 @@ gc_placement_params = {
     "diffusion_speed": 0.0001,  # Will be adjusted with ecc
     "border_repulsion_stength": 10,
     "border_distance_threshold": 0.01,
-    "show_placing_progress": True,
+    "show_placing_progress": False,
 }
 
 my_retina_append = {
@@ -508,7 +508,7 @@ if __name__ == "__main__":
     # PM.viz.show_latent_tsne_space()
     # PM.viz.show_gen_spat_post_hist()
     # PM.viz.show_latent_space_and_samples()
-    # PM.viz.show_retina_img(savefigname="parasol_on_vae_retina.eps")
+    # PM.viz.show_retina_img(savefigname=None)
     # PM.viz.show_rf_imgs(n_samples=10, savefigname="parasol_on_vae_gen_rf.eps")
     # PM.viz.show_rf_violinplot()  # Pixel values for each unit
 

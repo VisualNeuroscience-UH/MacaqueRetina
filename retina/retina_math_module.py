@@ -25,25 +25,32 @@ class RetinaMath:
         """
         return a * np.exp(-((x - x0) ** 2) / (2 * sigma**2)) + baseline
 
-    def sector2area_mm2(
-        self, radius, angle
-    ):  # Calculate sector area. Angle in deg, radius in mm
-        pi = np.pi
+    def sector2area_mm2(self, radius, angle):
+        """
+        Calculate sector area.
+
+        Parameters
+        ----------
+        radius : float
+            The radius of the sector in mm.
+        angle : float
+            The angle of the sector in degrees.
+
+        Returns
+        -------
+        sector_surface_area : float
+            The area of the sector in mm2.
+        """
         assert angle < 360, "Angle not possible, should be <360"
 
         # Calculating area of the sector
-        sector_surface_area = (pi * (radius**2)) * (angle / 360)  # in mm2
+        sector_surface_area = (np.pi * (radius**2)) * (angle / 360)  # in mm2
         return sector_surface_area
 
     def area2circle_diameter(self, area_of_rf):
         diameter = np.sqrt(area_of_rf / np.pi) * 2
 
         return diameter
-
-    def ellipse2area(self, sigma_x, sigma_y):
-        area_of_ellipse = np.pi * sigma_x * sigma_y
-
-        return area_of_ellipse
 
     def ellipse2diam(self, semi_xc, semi_yc):
         """

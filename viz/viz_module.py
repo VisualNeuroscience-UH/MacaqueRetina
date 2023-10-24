@@ -715,12 +715,12 @@ class Viz:
         ConstructRetina call.
         """
 
-        rho = self.construct_retina.gc_df["pos_ecc_mm"].to_numpy()
-        phi = self.construct_retina.gc_df["pos_polar_deg"].to_numpy()
+        ecc_mm = self.construct_retina.gc_df["pos_ecc_mm"].to_numpy()
+        pol_deg = self.construct_retina.gc_df["pos_polar_deg"].to_numpy()
         gc_density_func_params = self.construct_retina.gc_density_func_params
 
         # to cartesian
-        xcoord, ycoord = self.pol2cart(rho, phi)
+        xcoord, ycoord = self.pol2cart(ecc_mm, pol_deg)
 
         fig, ax = plt.subplots(nrows=1, ncols=1)
         ax.plot(
@@ -744,24 +744,23 @@ class Viz:
         :return:
         """
 
-        rho = self.construct_retina.gc_df["pos_ecc_mm"].to_numpy()
-        phi = self.construct_retina.gc_df["pos_polar_deg"].to_numpy()
-
+        ecc_mm = self.construct_retina.gc_df["pos_ecc_mm"].to_numpy()
+        pol_deg = self.construct_retina.gc_df["pos_polar_deg"].to_numpy()
         gc_rf_models = np.zeros((len(self.construct_retina.gc_df), 3))
 
         if self.context.my_retina["DoG_model"] == "circular":
-            gc_rf_models[:, 0] = self.construct_retina.gc_df["rad_c"]
-            gc_rf_models[:, 1] = self.construct_retina.gc_df["rad_c"]
-            gc_rf_models[:, 2] = 0.0
+            semi_xc = self.construct_retina.gc_df["rad_c"]
+            semi_yc = self.construct_retina.gc_df["rad_c"]
+            angle_in_deg = np.zeros(len(self.construct_retina.gc_df))
         elif self.context.my_retina["DoG_model"] in [
             "ellipse_independent",
             "ellipse_fixed",
         ]:
-            gc_rf_models[:, 0] = self.construct_retina.gc_df["semi_xc"]
-            gc_rf_models[:, 1] = self.construct_retina.gc_df["semi_yc"]
-            gc_rf_models[index, 2] = self.construct_retina.gc_df["orient_cen_rad"]
+            semi_xc = self.construct_retina.gc_df["semi_xc"]
+            semi_yc = self.construct_retina.gc_df["semi_yc"]
+            angle_in_deg = self.construct_retina.gc_df["orient_cen_rad"]
         # to cartesian
-        xcoord, ycoord = self.pol2cart(rho, phi)
+        xcoord, ycoord = self.pol2cart(ecc_mm, pol_deg)
 
         fig, ax = plt.subplots(nrows=1, ncols=1)
         ax.plot(
@@ -770,22 +769,18 @@ class Viz:
             "b.",
             label=self.construct_retina.gc_type,
         )
-        # gc_rf_models parameters:'semi_xc', 'semi_yc', 'xy_aspect_ratio', 'ampl_s','relat_sur_diam', 'orient_cen_rad'
+        # gc_rf_models parameters:'semi_xc', 'semi_yc', 'orient_cen_rad'
         # Ellipse parameters: Ellipse(xy, width, height, angle=0, **kwargs). Only possible one at the time, unfortunately.
         for index in np.arange(len(xcoord)):
             ellipse_center_x = xcoord[index]
             ellipse_center_y = ycoord[index]
-            semi_xc = gc_rf_models[index, 0]
-            semi_yc = gc_rf_models[index, 1]
-            # angle_in_radians = gc_rf_models[index, 5]  # Orientation
-            angle_in_deg = gc_rf_models[index, 2]  # Orientation
-            diameter_xc = semi_xc * 2
-            diameter_yc = semi_yc * 2
+            diameter_xc = semi_xc[index] * 2
+            diameter_yc = semi_yc[index] * 2
             e1 = Ellipse(
                 (ellipse_center_x, ellipse_center_y),
                 diameter_xc,
                 diameter_yc,
-                angle_in_deg,
+                angle_in_deg[index],
                 edgecolor="b",
                 linewidth=0.5,
                 fill=False,
@@ -897,20 +892,15 @@ class Viz:
         dd_vs_ecc = self.project_data.construct_retina["dd_vs_ecc"]
         data_all_x = dd_vs_ecc["data_all_x"]
         data_all_y = dd_vs_ecc["data_all_y"]
-        dd_fit_x = dd_vs_ecc["dd_fit_x"]
-        dd_fit_y = dd_vs_ecc["dd_fit_y"]
-        if self.construct_retina.spatial_model == "VAE":
-            dd_vae_x = dd_vs_ecc["dd_vae_x"]
-            dd_vae_y = dd_vs_ecc["dd_vae_y"]
+        dd_DoG_x = dd_vs_ecc["dd_DoG_x"]
+        dd_DoG_y = dd_vs_ecc["dd_DoG_y"]
         fit_parameters = dd_vs_ecc["fit_parameters"]
         dd_model_caption = dd_vs_ecc["dd_model_caption"]
         title = dd_vs_ecc["title"]
 
         fig, ax = plt.subplots(nrows=1, ncols=1)
         ax.plot(data_all_x, data_all_y, "b.", label="Data")
-        ax.plot(dd_fit_x, dd_fit_y, "r.", label="Fit")
-        if self.construct_retina.spatial_model == "VAE":
-            ax.plot(dd_vae_x, dd_vae_y, "k.", label="Vae")
+        ax.plot(dd_DoG_x, dd_DoG_y, "r.", label="DoG fit")
 
         ax.set_xlabel("Retinal eccentricity (mm)")
         ax.set_ylabel("Dendritic diameter (um)")
