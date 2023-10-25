@@ -323,13 +323,13 @@ refractory_params = {
 # or carefully unit_distance_threshold
 gc_placement_params = {
     "n_iterations": 500,  # 5000
-    "change_rate": 0.01,  # 0.001
+    "change_rate": 0.0001,  # 0.001
     "unit_repulsion_stregth": 10,
     "unit_distance_threshold": 0.02,  # 0.02 Will be adjusted with ecc
-    "diffusion_speed": 0.0001,  # Will be adjusted with ecc
-    "border_repulsion_stength": 10,
+    "diffusion_speed": 0.0001,  # 0.0001 Will be adjusted with ecc
+    "border_repulsion_stength": 10,  # 10
     "border_distance_threshold": 0.01,
-    "show_placing_progress": True,
+    "show_placing_progress": False,
 }
 
 my_retina_append = {

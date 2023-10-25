@@ -19,7 +19,7 @@ import brian2.units as b2u
 # Viz
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-from matplotlib.patches import Ellipse
+from matplotlib.patches import Ellipse, Polygon
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import seaborn as sns
 
@@ -1535,6 +1535,19 @@ class Viz:
             ax2.set_title(f"new pos iteration {iteration}")
 
             fig.canvas.flush_events()
+
+    def draw_polygon(self, polygon_vertices):
+        fig, ax = plt.subplots()
+        polygon = Polygon(polygon_vertices, closed=True, fill=None, edgecolor="r")
+        ax.add_patch(polygon)
+
+        # Setting aspect ratio to be equal, so the square looks like a square,
+        ax.set_aspect("equal", "box")
+
+        plt.xlim(min(polygon_vertices[:, 0]) - 0.1, max(polygon_vertices[:, 0]) + 0.1)
+        plt.ylim(min(polygon_vertices[:, 1]) - 0.1, max(polygon_vertices[:, 1]) + 0.1)
+
+        plt.show()
 
     # WorkingRetina visualization
     def show_stimulus_with_gcs(

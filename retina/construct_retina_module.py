@@ -744,11 +744,9 @@ class ConstructRetina(RetinaMath):
         -----
         This method calculates repulsive forces between the given positions and
         the defined boundaries based on both eccentricity and polar constraints.
-        Repulsion is based on the inverse square law. The eccentricity boundaries
-        are treated as vertical lines, while the polar boundaries are treated as
-        general lines in the Cartesian plane. The method calculates the repulsive
+        Repulsion is based on the inverse cube law. The method calculates the repulsive
         forces by determining the distances of nodes to these boundaries and applying
-        the inverse square law based on those distances.
+        the inverse cube law based on those distances.
         """
 
         forces = torch.zeros_like(positions)
@@ -803,6 +801,59 @@ class ConstructRetina(RetinaMath):
         forces += directions * max_ecc_force.unsqueeze(1)
 
         return forces
+
+    def _boundary_polygon(self, ecc_lim_mm, polar_lim_deg, n_points=100):
+        """
+        Create a boundary polygon based on given eccentricity and polar angle limits.
+
+        Parameters
+        ----------
+        ecc_lim_mm : np.ndarray
+            An array representing the eccentricity limits in millimeters for
+            left and right boundaries (shape: [2]).
+        polar_lim_deg : np.ndarray
+            An array representing the polar angle limits in degrees for
+            bottom and top boundaries (shape: [2]).
+        n_points : int
+            Number of points to generate along each arc.
+
+        Returns
+        -------
+        boundary_polygon : np.ndarray
+            Array of Cartesian coordinates forming the vertices of the boundary polygon.
+        """
+
+        # Generate points for bottom and top polar angle limits
+        bottom_x, bottom_y = self.pol2cart(
+            np.full(n_points, ecc_lim_mm[0]),
+            np.linspace(polar_lim_deg[0], polar_lim_deg[1], n_points),
+        )
+        top_x, top_y = self.pol2cart(
+            np.full(n_points, ecc_lim_mm[1]),
+            np.linspace(polar_lim_deg[0], polar_lim_deg[1], n_points),
+        )
+
+        # Generate points along the arcs for min and max eccentricities
+        theta_range = np.linspace(polar_lim_deg[0], polar_lim_deg[1], n_points)
+        min_ecc_x, min_ecc_y = self.pol2cart(
+            np.full_like(theta_range, ecc_lim_mm[0]), theta_range
+        )
+        max_ecc_x, max_ecc_y = self.pol2cart(
+            np.full_like(theta_range, ecc_lim_mm[1]), theta_range
+        )
+
+        # Combine them to form the vertices of the bounding polygon
+        boundary_polygon = []
+
+        # Add points from bottom arc
+        for bx, by in zip(min_ecc_x, min_ecc_y):
+            boundary_polygon.append((bx, by))
+
+        # Add points from top arc (in reverse order)
+        for tx, ty in reversed(list(zip(max_ecc_x, max_ecc_y))):
+            boundary_polygon.append((tx, ty))
+
+        return np.array(boundary_polygon)
 
     def _pol2cart_torch(self, radius, phi, deg=True):
         """
@@ -1026,6 +1077,7 @@ class ConstructRetina(RetinaMath):
         gc_placement_params = self.context.my_retina["gc_placement_params"]
         n_iterations = gc_placement_params["n_iterations"]
         show_placing_progress = gc_placement_params["show_placing_progress"]
+        change_rate = gc_placement_params["change_rate"]
 
         if show_placing_progress:
             fig_args = self.viz.show_gc_placement_progress(all_positions, init=True)
@@ -1045,38 +1097,48 @@ class ConstructRetina(RetinaMath):
             )
             return np.array([C_x, C_y])
 
-        # Initialize positions
-        min_x, max_x = np.min(all_positions[:, 0]), np.max(all_positions[:, 0])
-        min_y, max_y = np.min(all_positions[:, 1]), np.max(all_positions[:, 1])
-        positions = np.column_stack(
-            [
-                np.random.uniform(min_x, max_x, len(gc_density)),
-                np.random.uniform(min_y, max_y, len(gc_density)),
-            ]
-        )
-
-        original_positions = positions.copy()
-
+        ecc_lim_mm = self.ecc_lim_mm
+        polar_lim_deg = self.polar_lim_deg
+        boundary_polygon = self._boundary_polygon(ecc_lim_mm, polar_lim_deg)
+        self.viz.draw_polygon(boundary_polygon)
+        pdb.set_trace()
+        original_positions = all_positions.copy()
+        positions = all_positions.copy()
+        tmp_count = 0  # Temporary counter for debugging
         for iteration in range(n_iterations):
+            # print(f"len(positions) = {len(positions)}")
             vor = Voronoi(positions)
             new_positions = []
 
-            for region, original_seed in zip(vor.regions, original_positions):
+            for idx, (region, original_seed) in enumerate(
+                zip(vor.regions, original_positions)
+            ):
+                if -1 in region:
+                    tmp_count += 1
+                    print(f"tmp_count = {tmp_count}")
+                    print(f"idx = {idx}")
                 if not -1 in region and len(region) > 0:
                     polygon = np.array([vor.vertices[i] for i in region])
                     new_seed = polygon_centroid(polygon)
+                    diff = new_seed - original_seed
+                    partial_diff = diff * change_rate
+                    new_seed = original_seed + partial_diff
                     new_positions.append(new_seed)
                 else:
                     new_positions.append(original_seed)
 
             positions = np.array(new_positions)
 
+            # Convert to torch tensor for boundary force calculations
             positions_torch = torch.tensor(positions, dtype=torch.float32).to("cpu")
+
+            # Check boundaries and adjust positions if needed
             position_deltas = self._check_boundaries(
                 positions_torch,
                 torch.tensor(self.ecc_lim_mm),
                 torch.tensor(self.polar_lim_deg),
             )
+
             positions = (positions_torch + position_deltas).numpy()
 
             if show_placing_progress and iteration % 1 == 0:
@@ -1087,123 +1149,12 @@ class ConstructRetina(RetinaMath):
                     **fig_args,
                 )
 
+                # wait = input("Press enter to continue")
+
         if show_placing_progress:
             plt.ioff()
 
         return positions
-
-    # def _apply_voronoi_layout(self, all_positions, gc_density):
-    #     """
-    #     Apply a Voronoi-based layout on the given positions.
-
-    #     Parameters
-    #     ----------
-    #     all_positions : list or ndarray
-    #         Initial positions of nodes.
-    #     gc_density : ndarray of floats
-    #         Unit local density according to eccentricity group.
-
-    #     Returns
-    #     -------
-    #     positions : ndarray
-    #         New positions of nodes after the Voronoi-based optimization.
-
-    #     Notes
-    #     -----
-    #     This method applies a Voronoi diagram to optimize node positions.
-    #     """
-    #     gc_placement_params = self.context.my_retina["gc_placement_params"]
-    #     n_iterations = gc_placement_params["n_iterations"]
-    #     change_rate = gc_placement_params["change_rate"]
-    #     unit_repulsion_stregth = gc_placement_params["unit_repulsion_stregth"]
-    #     unit_distance_threshold = gc_placement_params["unit_distance_threshold"]
-    #     diffusion_speed = gc_placement_params["diffusion_speed"]
-    #     border_repulsion_stength = gc_placement_params["border_repulsion_stength"]
-    #     border_distance_threshold = gc_placement_params["border_distance_threshold"]
-    #     show_placing_progress = gc_placement_params["show_placing_progress"]
-
-    #     if show_placing_progress is True:
-    #         # Init plotting
-    #         fig_args = self.viz.show_gc_placement_progress(all_positions, init=True)
-
-    #     # n_decimals = 3
-
-    #     def polygon_centroid(polygon):
-    #         """Compute the centroid of a polygon."""
-    #         A = 0.5 * np.sum(
-    #             polygon[:-1, 0] * polygon[1:, 1] - polygon[1:, 0] * polygon[:-1, 1]
-    #         )
-    #         C_x = (1 / (6 * A)) * np.sum(
-    #             (polygon[:-1, 0] + polygon[1:, 0])
-    #             * (polygon[:-1, 0] * polygon[1:, 1] - polygon[1:, 0] * polygon[:-1, 1])
-    #         )
-    #         C_y = (1 / (6 * A)) * np.sum(
-    #             (polygon[:-1, 1] + polygon[1:, 1])
-    #             * (polygon[:-1, 0] * polygon[1:, 1] - polygon[1:, 0] * polygon[:-1, 1])
-    #         )
-    #         return np.array([C_x, C_y])
-
-    #     # Use the given densities to compute the number of seed points for Voronoi
-    #     total_seeds = len(gc_density)
-
-    #     # Initial random seeding within the given bounds
-    #     min_x, max_x = np.min(all_positions[:, 0]), np.max(all_positions[:, 0])
-    #     min_y, max_y = np.min(all_positions[:, 1]), np.max(all_positions[:, 1])
-    #     positions = np.column_stack(
-    #         [
-    #             np.random.uniform(min_x, max_x, total_seeds),
-    #             np.random.uniform(min_y, max_y, total_seeds),
-    #         ]
-    #     )
-
-    #     # Store initial positions
-    #     # original_positions = deepcopy(all_positions)
-    #     original_positions = positions.copy()
-    #     # initial_seeds = np.round(initial_seeds, n_decimals).astype(np.float32)
-    #     ecc_lim_mm = torch.tensor(self.ecc_lim_mm).to("cpu")
-    #     polar_lim_deg = torch.tensor(self.polar_lim_deg).to("cpu")
-    #     # pdb.set_trace()
-    #     # Iteratively adjust seed points (Lloyd's relaxation)
-    #     for iteration in range(n_iterations):
-    #         # print(f"len(seeds): {len(seeds)}")
-    #         vor = Voronoi(positions)
-    #         new_positions = []
-    #         for region, original_seed in zip(vor.regions, original_positions):
-    #             if not -1 in region and len(region) > 0:
-    #                 polygon = [vor.vertices[i] for i in region]
-    #                 new_seed = polygon_centroid(np.array(polygon))
-    #                 new_positions.append(new_seed)
-    #             else:
-    #                 # If the region is not valid, keep the original seed
-    #                 new_positions.append(original_seed)
-
-    #         positions = np.array(new_positions)
-
-    #         # Check positions against boundaries
-    #         positions_torch = torch.tensor(positions, dtype=torch.float32)
-    #         position_deltas = self._check_boundaries(
-    #             positions_torch, ecc_lim_mm, polar_lim_deg
-    #         )
-    #         positions_torch = positions_torch + position_deltas
-    #         positions = positions_torch.numpy()
-
-    #         if show_placing_progress is True:
-    #             # Update the visualization every 100 iterations for performance (or adjust as needed)
-    #             if iteration % 1 == 0:
-    #                 # positions_cpu = positions.detach().cpu().numpy()
-    #                 self.viz.show_gc_placement_progress(
-    #                     original_positions=original_positions,
-    #                     positions=positions,
-    #                     iteration=iteration,
-    #                     **fig_args,
-    #                 )
-    #             # wait = input("PRESS ENTER TO CONTINUE.")
-
-    #     if show_placing_progress is True:
-    #         plt.ioff()  # Turn off interactive mode
-
-    #     # pdb.set_trace()
-    #     return positions
 
     def _random_positions_within_group(self, min_ecc, max_ecc, n_cells):
         eccs = np.random.uniform(min_ecc, max_ecc, n_cells)
