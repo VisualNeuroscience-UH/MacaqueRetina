@@ -2,7 +2,8 @@
 import numpy as np
 import numpy.ma as ma
 import scipy.optimize as opt
-import scipy.io as sio
+
+# import scipy.io as sio
 import scipy.stats as stats
 from scipy.optimize import root
 import pandas as pd
@@ -10,8 +11,9 @@ from scipy import ndimage
 from scipy.spatial import Voronoi, voronoi_plot_2d
 
 import torch
-import torch.nn.functional as F
-import torch.autograd.profiler as profiler
+
+# import torch.nn.functional as F
+# import torch.autograd.profiler as profiler
 
 # from torch.utils.data import DataLoader
 
@@ -19,16 +21,16 @@ import torch.autograd.profiler as profiler
 # from scipy.interpolate import interp1d
 
 # Image analysis
-from skimage import measure
-from skimage.transform import resize
+# from skimage import measure
+# from skimage.transform import resize
 import matplotlib.pyplot as plt
 
 # Data IO
-import cv2
-from PIL import Image
+# import cv2
+# from PIL import Image
 
 # Viz
-from tqdm import tqdm
+# from tqdm import tqdm
 
 # Comput Neurosci
 # import brian2 as b2
@@ -1017,22 +1019,16 @@ class ConstructRetina(RetinaMath):
         Notes
         -----
         This method applies a Voronoi diagram to optimize node positions.
+        It uses Lloyd's relaxation for iteratively adjusting seed points.
         """
+
+        # Extract parameters from context
         gc_placement_params = self.context.my_retina["gc_placement_params"]
         n_iterations = gc_placement_params["n_iterations"]
-        change_rate = gc_placement_params["change_rate"]
-        unit_repulsion_stregth = gc_placement_params["unit_repulsion_stregth"]
-        unit_distance_threshold = gc_placement_params["unit_distance_threshold"]
-        diffusion_speed = gc_placement_params["diffusion_speed"]
-        border_repulsion_stength = gc_placement_params["border_repulsion_stength"]
-        border_distance_threshold = gc_placement_params["border_distance_threshold"]
         show_placing_progress = gc_placement_params["show_placing_progress"]
 
-        if show_placing_progress is True:
-            # Init plotting
+        if show_placing_progress:
             fig_args = self.viz.show_gc_placement_progress(all_positions, init=True)
-
-        # n_decimals = 3
 
         def polygon_centroid(polygon):
             """Compute the centroid of a polygon."""
@@ -1049,67 +1045,165 @@ class ConstructRetina(RetinaMath):
             )
             return np.array([C_x, C_y])
 
-        # Use the given densities to compute the number of seed points for Voronoi
-        total_seeds = len(gc_density)
-
-        # Initial random seeding within the given bounds
+        # Initialize positions
         min_x, max_x = np.min(all_positions[:, 0]), np.max(all_positions[:, 0])
         min_y, max_y = np.min(all_positions[:, 1]), np.max(all_positions[:, 1])
         positions = np.column_stack(
             [
-                np.random.uniform(min_x, max_x, total_seeds),
-                np.random.uniform(min_y, max_y, total_seeds),
+                np.random.uniform(min_x, max_x, len(gc_density)),
+                np.random.uniform(min_y, max_y, len(gc_density)),
             ]
         )
 
-        # Store initial positions
-        # original_positions = deepcopy(all_positions)
         original_positions = positions.copy()
-        # initial_seeds = np.round(initial_seeds, n_decimals).astype(np.float32)
-        ecc_lim_mm = torch.tensor(self.ecc_lim_mm).to("cpu")
-        polar_lim_deg = torch.tensor(self.polar_lim_deg).to("cpu")
-        # pdb.set_trace()
-        # Iteratively adjust seed points (Lloyd's relaxation)
+
         for iteration in range(n_iterations):
-            # print(f"len(seeds): {len(seeds)}")
             vor = Voronoi(positions)
             new_positions = []
+
             for region, original_seed in zip(vor.regions, original_positions):
                 if not -1 in region and len(region) > 0:
-                    polygon = [vor.vertices[i] for i in region]
-                    new_seed = polygon_centroid(np.array(polygon))
+                    polygon = np.array([vor.vertices[i] for i in region])
+                    new_seed = polygon_centroid(polygon)
                     new_positions.append(new_seed)
                 else:
-                    # If the region is not valid, keep the original seed
                     new_positions.append(original_seed)
 
             positions = np.array(new_positions)
 
-            # Check positions against boundaries
-            positions_torch = torch.tensor(positions, dtype=torch.float32)
+            positions_torch = torch.tensor(positions, dtype=torch.float32).to("cpu")
             position_deltas = self._check_boundaries(
-                positions_torch, ecc_lim_mm, polar_lim_deg
+                positions_torch,
+                torch.tensor(self.ecc_lim_mm),
+                torch.tensor(self.polar_lim_deg),
             )
-            positions_torch = positions_torch + position_deltas
-            positions = positions_torch.numpy()
+            positions = (positions_torch + position_deltas).numpy()
 
-            if show_placing_progress is True:
-                # Update the visualization every 100 iterations for performance (or adjust as needed)
-                if iteration % 1 == 0:
-                    # positions_cpu = positions.detach().cpu().numpy()
-                    self.viz.show_gc_placement_progress(
-                        original_positions=original_positions,
-                        positions=positions,
-                        iteration=iteration,
-                        **fig_args,
-                    )
-                # wait = input("PRESS ENTER TO CONTINUE.")
+            if show_placing_progress and iteration % 1 == 0:
+                self.viz.show_gc_placement_progress(
+                    original_positions=original_positions,
+                    positions=positions,
+                    iteration=iteration,
+                    **fig_args,
+                )
 
-        if show_placing_progress is True:
-            plt.ioff()  # Turn off interactive mode
+        if show_placing_progress:
+            plt.ioff()
 
-        # pdb.set_trace()
         return positions
+
+    # def _apply_voronoi_layout(self, all_positions, gc_density):
+    #     """
+    #     Apply a Voronoi-based layout on the given positions.
+
+    #     Parameters
+    #     ----------
+    #     all_positions : list or ndarray
+    #         Initial positions of nodes.
+    #     gc_density : ndarray of floats
+    #         Unit local density according to eccentricity group.
+
+    #     Returns
+    #     -------
+    #     positions : ndarray
+    #         New positions of nodes after the Voronoi-based optimization.
+
+    #     Notes
+    #     -----
+    #     This method applies a Voronoi diagram to optimize node positions.
+    #     """
+    #     gc_placement_params = self.context.my_retina["gc_placement_params"]
+    #     n_iterations = gc_placement_params["n_iterations"]
+    #     change_rate = gc_placement_params["change_rate"]
+    #     unit_repulsion_stregth = gc_placement_params["unit_repulsion_stregth"]
+    #     unit_distance_threshold = gc_placement_params["unit_distance_threshold"]
+    #     diffusion_speed = gc_placement_params["diffusion_speed"]
+    #     border_repulsion_stength = gc_placement_params["border_repulsion_stength"]
+    #     border_distance_threshold = gc_placement_params["border_distance_threshold"]
+    #     show_placing_progress = gc_placement_params["show_placing_progress"]
+
+    #     if show_placing_progress is True:
+    #         # Init plotting
+    #         fig_args = self.viz.show_gc_placement_progress(all_positions, init=True)
+
+    #     # n_decimals = 3
+
+    #     def polygon_centroid(polygon):
+    #         """Compute the centroid of a polygon."""
+    #         A = 0.5 * np.sum(
+    #             polygon[:-1, 0] * polygon[1:, 1] - polygon[1:, 0] * polygon[:-1, 1]
+    #         )
+    #         C_x = (1 / (6 * A)) * np.sum(
+    #             (polygon[:-1, 0] + polygon[1:, 0])
+    #             * (polygon[:-1, 0] * polygon[1:, 1] - polygon[1:, 0] * polygon[:-1, 1])
+    #         )
+    #         C_y = (1 / (6 * A)) * np.sum(
+    #             (polygon[:-1, 1] + polygon[1:, 1])
+    #             * (polygon[:-1, 0] * polygon[1:, 1] - polygon[1:, 0] * polygon[:-1, 1])
+    #         )
+    #         return np.array([C_x, C_y])
+
+    #     # Use the given densities to compute the number of seed points for Voronoi
+    #     total_seeds = len(gc_density)
+
+    #     # Initial random seeding within the given bounds
+    #     min_x, max_x = np.min(all_positions[:, 0]), np.max(all_positions[:, 0])
+    #     min_y, max_y = np.min(all_positions[:, 1]), np.max(all_positions[:, 1])
+    #     positions = np.column_stack(
+    #         [
+    #             np.random.uniform(min_x, max_x, total_seeds),
+    #             np.random.uniform(min_y, max_y, total_seeds),
+    #         ]
+    #     )
+
+    #     # Store initial positions
+    #     # original_positions = deepcopy(all_positions)
+    #     original_positions = positions.copy()
+    #     # initial_seeds = np.round(initial_seeds, n_decimals).astype(np.float32)
+    #     ecc_lim_mm = torch.tensor(self.ecc_lim_mm).to("cpu")
+    #     polar_lim_deg = torch.tensor(self.polar_lim_deg).to("cpu")
+    #     # pdb.set_trace()
+    #     # Iteratively adjust seed points (Lloyd's relaxation)
+    #     for iteration in range(n_iterations):
+    #         # print(f"len(seeds): {len(seeds)}")
+    #         vor = Voronoi(positions)
+    #         new_positions = []
+    #         for region, original_seed in zip(vor.regions, original_positions):
+    #             if not -1 in region and len(region) > 0:
+    #                 polygon = [vor.vertices[i] for i in region]
+    #                 new_seed = polygon_centroid(np.array(polygon))
+    #                 new_positions.append(new_seed)
+    #             else:
+    #                 # If the region is not valid, keep the original seed
+    #                 new_positions.append(original_seed)
+
+    #         positions = np.array(new_positions)
+
+    #         # Check positions against boundaries
+    #         positions_torch = torch.tensor(positions, dtype=torch.float32)
+    #         position_deltas = self._check_boundaries(
+    #             positions_torch, ecc_lim_mm, polar_lim_deg
+    #         )
+    #         positions_torch = positions_torch + position_deltas
+    #         positions = positions_torch.numpy()
+
+    #         if show_placing_progress is True:
+    #             # Update the visualization every 100 iterations for performance (or adjust as needed)
+    #             if iteration % 1 == 0:
+    #                 # positions_cpu = positions.detach().cpu().numpy()
+    #                 self.viz.show_gc_placement_progress(
+    #                     original_positions=original_positions,
+    #                     positions=positions,
+    #                     iteration=iteration,
+    #                     **fig_args,
+    #                 )
+    #             # wait = input("PRESS ENTER TO CONTINUE.")
+
+    #     if show_placing_progress is True:
+    #         plt.ioff()  # Turn off interactive mode
+
+    #     # pdb.set_trace()
+    #     return positions
 
     def _random_positions_within_group(self, min_ecc, max_ecc, n_cells):
         eccs = np.random.uniform(min_ecc, max_ecc, n_cells)
