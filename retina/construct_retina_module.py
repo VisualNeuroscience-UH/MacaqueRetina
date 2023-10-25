@@ -1079,6 +1079,7 @@ class ConstructRetina(RetinaMath):
         n_iterations = gc_placement_params["n_iterations"]
         show_placing_progress = gc_placement_params["show_placing_progress"]
         change_rate = gc_placement_params["change_rate"]
+        loops_btw_viz_updates = 100
 
         if show_placing_progress:
             fig_args = self.viz.show_gc_placement_progress(all_positions, init=True)
@@ -1125,26 +1126,35 @@ class ConstructRetina(RetinaMath):
                         boundary_polygon_shape
                     )
 
-                    intersection_polygon = np.array(intersection_shape.exterior.coords)
-                    intersected_polygons.append(intersection_polygon)
-
                     if intersection_shape.is_empty:
                         new_positions.append(original_seed)
                         continue
 
+                    intersection_polygon = np.array(intersection_shape.exterior.coords)
+
+                    if show_placing_progress and iteration % loops_btw_viz_updates == 0:
+                        # Take polygons for viz.
+                        intersected_polygons.append(intersection_polygon)
+
                     # Convert intersection result to a NumPy array
                     intersection_polygon = np.array(intersection_shape.exterior.coords)
 
+                    # Wannabe centroid
                     new_seed = polygon_centroid(intersection_polygon)
 
+                    # We cool things down a bit by moving the centroid only the change_rate of the way
                     diff = new_seed - original_seed
                     partial_diff = diff * change_rate
                     new_seed = original_seed + partial_diff
+
                     new_positions.append(new_seed)
 
                 else:
                     new_positions.append(original_seed)
 
+            if show_placing_progress and iteration % loops_btw_viz_updates == 0:
+                # Positions will be updated before calling viz.
+                old_positions = positions.copy()
             # Convert to torch tensor for boundary check
             positions_torch = torch.tensor(new_positions, dtype=torch.float32).to("cpu")
 
@@ -1157,16 +1167,16 @@ class ConstructRetina(RetinaMath):
 
             positions = (positions_torch + position_deltas).numpy()
 
-            if show_placing_progress and iteration % 1 == 0:
+            if show_placing_progress and iteration % loops_btw_viz_updates == 0:
                 self.viz.show_gc_placement_progress(
                     original_positions=original_positions,
-                    positions=positions,
+                    positions=old_positions,
                     iteration=iteration,
                     intersected_polygons=intersected_polygons,
                     **fig_args,
                 )
 
-                wait = input("Press enter to continue")
+                # wait = input("Press enter to continue")
 
         if show_placing_progress:
             plt.ioff()

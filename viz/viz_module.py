@@ -1482,7 +1482,7 @@ class Viz:
             corners_y = np.concatenate([bottom_y, top_y])
 
             # Initialize the plot before the loop
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(30, 15))
             ax1.scatter(corners_x, corners_y, color="black", marker="x", zorder=2)
             ax2.scatter(corners_x, corners_y, color="black", marker="x", zorder=2)
 

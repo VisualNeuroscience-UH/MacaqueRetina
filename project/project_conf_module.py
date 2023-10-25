@@ -158,8 +158,8 @@ response_type = "on"
 my_retina = {
     "gc_type": gc_type,
     "response_type": response_type,
-    "ecc_limits": [4, 6],  # degrees # parasol
-    "sector_limits": [-6, 6],  # polar angle in degrees # parasol
+    "ecc_limits": [4, 20],  # degrees # parasol
+    "sector_limits": [-12, 12],  # polar angle in degrees # parasol
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
     "dd_regr_model": "linear",  # linear, quadratic, cubic, exponential
     "visual_field_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
@@ -323,7 +323,7 @@ refractory_params = {
 # or carefully unit_distance_threshold
 gc_placement_params = {
     "n_iterations": 5000,  # 5000
-    "change_rate": 0.05,  # 0.001
+    "change_rate": 0.03,  # 0.001
     "unit_repulsion_stregth": 10,
     "unit_distance_threshold": 0.02,  # 0.02 Will be adjusted with ecc
     "diffusion_speed": 0.0001,  # 0.0001 Will be adjusted with ecc
