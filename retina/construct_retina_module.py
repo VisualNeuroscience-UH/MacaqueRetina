@@ -914,6 +914,10 @@ class ConstructRetina(RetinaMath):
         border_distance_threshold = gc_placement_params["border_distance_threshold"]
         show_placing_progress = gc_placement_params["show_placing_progress"]
 
+        if show_placing_progress is True:
+            # Init plotting
+            fig_args = self.viz.show_gc_placement_progress(all_positions, init=True)
+
         unit_distance_threshold = torch.tensor(unit_distance_threshold).to(self.device)
         unit_repulsion_stregth = torch.tensor(unit_repulsion_stregth).to(self.device)
         diffusion_speed = torch.tensor(diffusion_speed).to(self.device)
@@ -932,54 +936,6 @@ class ConstructRetina(RetinaMath):
 
         ecc_lim_mm = torch.tensor(self.ecc_lim_mm).to(self.device)
         polar_lim_deg = torch.tensor(self.polar_lim_deg).to(self.device)
-
-        if show_placing_progress is True:
-            # Init plotting
-            # Convert self.polar_lim_deg to Cartesian coordinates
-            bottom_x, bottom_y = self.pol2cart(
-                torch.tensor([self.ecc_lim_mm[0], self.ecc_lim_mm[1]]),
-                torch.tensor([self.polar_lim_deg[0], self.polar_lim_deg[0]]),
-            )
-            top_x, top_y = self.pol2cart(
-                torch.tensor([self.ecc_lim_mm[0], self.ecc_lim_mm[1]]),
-                torch.tensor([self.polar_lim_deg[1], self.polar_lim_deg[1]]),
-            )
-
-            # Concatenate to get the corner points
-            corners_x = torch.cat([bottom_x, top_x])
-            corners_y = torch.cat([bottom_y, top_y])
-
-            # Initialize the plot before the loop
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
-            ax1.scatter(corners_x, corners_y, color="black", marker="x", zorder=2)
-            ax2.scatter(corners_x, corners_y, color="black", marker="x", zorder=2)
-
-            ax1.set_aspect("equal")
-            ax2.set_aspect("equal")
-            scatter1 = ax1.scatter([], [], color="blue", marker="o")
-            scatter2 = ax2.scatter([], [], color="red", marker="o")
-
-            # Obtain corners based on current positions
-            min_x = torch.min(positions[:, 0]).item() - 0.1
-            max_x = torch.max(positions[:, 0]).item() + 0.1
-            min_y = torch.min(positions[:, 1]).item() - 0.1
-            max_y = torch.max(positions[:, 1]).item() + 0.1
-
-            # Set axis limits based on min and max values of positions
-            ax1.set_xlim(min_x, max_x)
-            ax1.set_ylim(min_y, max_y)
-            ax2.set_xlim(min_x, max_x)
-            ax2.set_ylim(min_y, max_y)
-
-            # set horizontal (x) and vertical (y) units as mm for both plots
-            ax1.set_xlabel("horizontal (mm)")
-            ax1.set_ylabel("vertical (mm)")
-            ax2.set_xlabel("horizontal (mm)")
-            ax2.set_ylabel("vertical (mm)")
-
-            plt.ion()  # Turn on interactive mode
-            plt.show()
-            # End of init plotting
 
         # Adjust unit_distance_threshold and diffusion speed with density of the units
         # This is necessary because the density of the units are adjusted with eccentricity
@@ -1030,15 +986,11 @@ class ConstructRetina(RetinaMath):
                 # Update the visualization every 100 iterations for performance (or adjust as needed)
                 if iteration % 100 == 0:
                     positions_cpu = positions.detach().cpu().numpy()
-                    self.visualize_positions(
-                        original_positions,
-                        positions_cpu,
-                        fig,
-                        ax1,
-                        ax2,
-                        scatter1,
-                        scatter2,
-                        iteration,
+                    self.viz.show_gc_placement_progress(
+                        original_positions=original_positions,
+                        positions=positions_cpu,
+                        iteration=iteration,
+                        **fig_args,
                     )
 
         if show_placing_progress is True:
@@ -1066,8 +1018,21 @@ class ConstructRetina(RetinaMath):
         -----
         This method applies a Voronoi diagram to optimize node positions.
         """
+        gc_placement_params = self.context.my_retina["gc_placement_params"]
+        n_iterations = gc_placement_params["n_iterations"]
+        change_rate = gc_placement_params["change_rate"]
+        unit_repulsion_stregth = gc_placement_params["unit_repulsion_stregth"]
+        unit_distance_threshold = gc_placement_params["unit_distance_threshold"]
+        diffusion_speed = gc_placement_params["diffusion_speed"]
+        border_repulsion_stength = gc_placement_params["border_repulsion_stength"]
+        border_distance_threshold = gc_placement_params["border_distance_threshold"]
+        show_placing_progress = gc_placement_params["show_placing_progress"]
 
-        n_decimals = 3
+        if show_placing_progress is True:
+            # Init plotting
+            fig_args = self.viz.show_gc_placement_progress(all_positions, init=True)
+
+        # n_decimals = 3
 
         def polygon_centroid(polygon):
             """Compute the centroid of a polygon."""
@@ -1090,88 +1055,61 @@ class ConstructRetina(RetinaMath):
         # Initial random seeding within the given bounds
         min_x, max_x = np.min(all_positions[:, 0]), np.max(all_positions[:, 0])
         min_y, max_y = np.min(all_positions[:, 1]), np.max(all_positions[:, 1])
-        seeds = np.column_stack(
+        positions = np.column_stack(
             [
                 np.random.uniform(min_x, max_x, total_seeds),
                 np.random.uniform(min_y, max_y, total_seeds),
             ]
         )
 
-        # Store initial seeds
-        initial_seeds = seeds.copy()
-        initial_seeds = np.round(initial_seeds, n_decimals).astype(np.float32)
+        # Store initial positions
+        # original_positions = deepcopy(all_positions)
+        original_positions = positions.copy()
+        # initial_seeds = np.round(initial_seeds, n_decimals).astype(np.float32)
         ecc_lim_mm = torch.tensor(self.ecc_lim_mm).to("cpu")
         polar_lim_deg = torch.tensor(self.polar_lim_deg).to("cpu")
         # pdb.set_trace()
         # Iteratively adjust seed points (Lloyd's relaxation)
-        for _ in range(500):
+        for iteration in range(n_iterations):
             # print(f"len(seeds): {len(seeds)}")
-            vor = Voronoi(seeds)
-            new_seeds = []
-            for region, original_seed in zip(vor.regions, initial_seeds):
+            vor = Voronoi(positions)
+            new_positions = []
+            for region, original_seed in zip(vor.regions, original_positions):
                 if not -1 in region and len(region) > 0:
                     polygon = [vor.vertices[i] for i in region]
                     new_seed = polygon_centroid(np.array(polygon))
-                    new_seeds.append(new_seed)
+                    new_positions.append(new_seed)
                 else:
                     # If the region is not valid, keep the original seed
-                    new_seeds.append(original_seed)
+                    new_positions.append(original_seed)
 
-            seeds = np.array(new_seeds)
+            positions = np.array(new_positions)
 
-            # Check seeds against boundaries
-            seeds_torch = torch.tensor(seeds, dtype=torch.float32)
+            # Check positions against boundaries
+            positions_torch = torch.tensor(positions, dtype=torch.float32)
             position_deltas = self._check_boundaries(
-                seeds_torch, ecc_lim_mm, polar_lim_deg
+                positions_torch, ecc_lim_mm, polar_lim_deg
             )
-            seeds_torch = seeds_torch + position_deltas
-            seeds = seeds_torch.numpy()
+            positions_torch = positions_torch + position_deltas
+            positions = positions_torch.numpy()
+
+            if show_placing_progress is True:
+                # Update the visualization every 100 iterations for performance (or adjust as needed)
+                if iteration % 1 == 0:
+                    # positions_cpu = positions.detach().cpu().numpy()
+                    self.viz.show_gc_placement_progress(
+                        original_positions=original_positions,
+                        positions=positions,
+                        iteration=iteration,
+                        **fig_args,
+                    )
+                # wait = input("PRESS ENTER TO CONTINUE.")
+
+        if show_placing_progress is True:
+            plt.ioff()  # Turn off interactive mode
 
         # pdb.set_trace()
-        return seeds
-
-    def visualize_positions(
-        self,
-        original_positions,
-        positions,
-        fig,
-        ax1,
-        ax2,
-        scatter1,
-        scatter2,
-        iteration,
-    ):
-        """
-        Visualize the original and new positions during layout optimization.
-
-        Parameters
-        ----------
-        original_positions : ndarray
-            Initial positions of nodes.
-        positions : ndarray
-            New positions of nodes after certain number of iterations.
-        fig : plt.Figure
-            Matplotlib figure object to plot on.
-        ax1, ax2 : plt.Axes
-            Matplotlib axes objects for the original and new positions.
-        scatter1, scatter2 : plt.Axes
-            Scatter plot objects for the original and new positions.
-        iteration : int
-            Current iteration number.
-
-        Notes
-        -----
-        This method updates the scatter plots for visualizing the progress
-        of the force-based layout optimization.
-        """
-
-        scatter1.set_offsets(original_positions)
-        ax1.set_title(f"orig pos")
-
-        scatter2.set_offsets(positions)
-        ax2.set_title(f"new pos iteration {iteration}")
-
-        fig.canvas.flush_events()
+        return positions
 
     def _random_positions_within_group(self, min_ecc, max_ecc, n_cells):
         eccs = np.random.uniform(min_ecc, max_ecc, n_cells)

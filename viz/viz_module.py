@@ -1451,6 +1451,91 @@ class Viz:
             # Position idx in layout: enumerate starts at 0, so add 1.
             self._subplot_img_recoimg(axd, "re", idx + 1, rec_img, samples, title)
 
+    # def show_gc_placement_progress(
+    #     self, original_positions, positions=None, init=False, iteration=0, *fig_args
+    # ):
+    def show_gc_placement_progress(
+        self,
+        original_positions,
+        positions=None,
+        init=False,
+        iteration=0,
+        fig=None,
+        ax1=None,
+        ax2=None,
+        scatter1=None,
+        scatter2=None,
+    ):
+        if init is True:
+            ecc_lim_mm = self.construct_retina.ecc_lim_mm
+            polar_lim_deg = self.construct_retina.polar_lim_deg
+
+            # Init plotting
+            # Convert self.polar_lim_deg to Cartesian coordinates
+            pol2cart = self.construct_retina.pol2cart
+
+            bottom_x, bottom_y = pol2cart(
+                np.array([ecc_lim_mm[0], ecc_lim_mm[1]]),
+                np.array([polar_lim_deg[0], polar_lim_deg[0]]),
+            )
+            top_x, top_y = pol2cart(
+                np.array([ecc_lim_mm[0], ecc_lim_mm[1]]),
+                np.array([polar_lim_deg[1], polar_lim_deg[1]]),
+            )
+
+            # Concatenate to get the corner points
+            corners_x = np.concatenate([bottom_x, top_x])
+            corners_y = np.concatenate([bottom_y, top_y])
+
+            # Initialize the plot before the loop
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
+            ax1.scatter(corners_x, corners_y, color="black", marker="x", zorder=2)
+            ax2.scatter(corners_x, corners_y, color="black", marker="x", zorder=2)
+
+            ax1.set_aspect("equal")
+            ax2.set_aspect("equal")
+            scatter1 = ax1.scatter([], [], color="blue", marker="o")
+            scatter2 = ax2.scatter([], [], color="red", marker="o")
+
+            # Obtain corners based on original_positions
+            min_x = np.min(original_positions[:, 0]) - 0.1
+            max_x = np.max(original_positions[:, 0]) + 0.1
+            min_y = np.min(original_positions[:, 1]) - 0.1
+            max_y = np.max(original_positions[:, 1]) + 0.1
+
+            # Set axis limits based on min and max values of original_positions
+            ax1.set_xlim(min_x, max_x)
+            ax1.set_ylim(min_y, max_y)
+            ax2.set_xlim(min_x, max_x)
+            ax2.set_ylim(min_y, max_y)
+
+            # set horizontal (x) and vertical (y) units as mm for both plots
+            ax1.set_xlabel("horizontal (mm)")
+            ax1.set_ylabel("vertical (mm)")
+            ax2.set_xlabel("horizontal (mm)")
+            ax2.set_ylabel("vertical (mm)")
+
+            plt.ion()  # Turn on interactive mode
+            plt.show()
+
+            return {
+                "fig": fig,
+                "ax1": ax1,
+                "ax2": ax2,
+                "scatter1": scatter1,
+                "scatter2": scatter2,
+            }
+
+        else:
+            # fig, ax1, ax2, scatter1, scatter2 = fig_args
+            scatter1.set_offsets(original_positions)
+            ax1.set_title(f"orig pos")
+
+            scatter2.set_offsets(positions)
+            ax2.set_title(f"new pos iteration {iteration}")
+
+            fig.canvas.flush_events()
+
     # WorkingRetina visualization
     def show_stimulus_with_gcs(
         self,

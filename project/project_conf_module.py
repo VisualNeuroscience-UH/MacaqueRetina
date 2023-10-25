@@ -158,7 +158,7 @@ response_type = "on"
 my_retina = {
     "gc_type": gc_type,
     "response_type": response_type,
-    "ecc_limits": [16, 20],  # degrees # parasol
+    "ecc_limits": [4, 6],  # degrees # parasol
     "sector_limits": [-6, 6],  # polar angle in degrees # parasol
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
     "dd_regr_model": "linear",  # linear, quadratic, cubic, exponential
@@ -322,14 +322,14 @@ refractory_params = {
 # If you see clustering, increase increase diffusion_speed, unit_repulsion_stregth,
 # or carefully unit_distance_threshold
 gc_placement_params = {
-    "n_iterations": 5000,  # 5000
-    "change_rate": 0.001,  # 0.001
+    "n_iterations": 500,  # 5000
+    "change_rate": 0.01,  # 0.001
     "unit_repulsion_stregth": 10,
-    "unit_distance_threshold": 0.01,  # 0.02 Will be adjusted with ecc
+    "unit_distance_threshold": 0.02,  # 0.02 Will be adjusted with ecc
     "diffusion_speed": 0.0001,  # Will be adjusted with ecc
     "border_repulsion_stength": 10,
     "border_distance_threshold": 0.01,
-    "show_placing_progress": False,
+    "show_placing_progress": True,
 }
 
 my_retina_append = {
