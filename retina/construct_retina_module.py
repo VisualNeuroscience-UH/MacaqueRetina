@@ -967,6 +967,7 @@ class ConstructRetina(RetinaMath):
         border_repulsion_stength = gc_placement_params["border_repulsion_stength"]
         border_distance_threshold = gc_placement_params["border_distance_threshold"]
         show_placing_progress = gc_placement_params["show_placing_progress"]
+        show_skip_steps = gc_placement_params["show_skip_steps"]
 
         if show_placing_progress is True:
             # Init plotting
@@ -1007,15 +1008,23 @@ class ConstructRetina(RetinaMath):
             dist = torch.clamp(dist, min=0.00001)
             # Clip max to inf (zero repulsion) above a certain distance
             dist[dist > gc_distance_threshold] = torch.inf
-            # Using inverse square for repulsion
+            # Using inverse cube for repulsion
             repulsive_force = unit_repulsion_stregth * torch.sum(
                 diff / (dist[..., None] ** 3), dim=1
             )
+
+            # # Using inverse cube for attraction
+            # attractive_force = (
+            #     0.999
+            #     * unit_repulsion_stregth
+            #     * torch.sum(diff / ((0.999 * dist[..., None]) ** 3), dim=1)
+            # )
 
             # After calculating repulsive_force:
             boundary_forces = self._boundary_force(
                 positions, rep, dist_th, ecc_lim_mm, polar_lim_deg
             )
+            # total_force = repulsive_force - attractive_force + boundary_forces
             total_force = repulsive_force + boundary_forces
 
             # Use the force as the "loss"
@@ -1038,7 +1047,7 @@ class ConstructRetina(RetinaMath):
 
             if show_placing_progress is True:
                 # Update the visualization every 100 iterations for performance (or adjust as needed)
-                if iteration % 100 == 0:
+                if iteration % show_skip_steps == 0:
                     positions_cpu = positions.detach().cpu().numpy()
                     self.viz.show_gc_placement_progress(
                         original_positions=original_positions,
@@ -1079,7 +1088,7 @@ class ConstructRetina(RetinaMath):
         n_iterations = gc_placement_params["n_iterations"]
         show_placing_progress = gc_placement_params["show_placing_progress"]
         change_rate = gc_placement_params["change_rate"]
-        loops_btw_viz_updates = 100
+        show_skip_steps = gc_placement_params["show_skip_steps"]
 
         if show_placing_progress:
             fig_args = self.viz.show_gc_placement_progress(all_positions, init=True)
@@ -1102,21 +1111,17 @@ class ConstructRetina(RetinaMath):
         ecc_lim_mm = self.ecc_lim_mm
         polar_lim_deg = self.polar_lim_deg
         boundary_polygon = self._boundary_polygon(ecc_lim_mm, polar_lim_deg)
-        # self.viz.draw_polygon(boundary_polygon)
-        # pdb.set_trace()
         original_positions = all_positions.copy()
         positions = all_positions.copy()
-        # tmp_count = 0  # Temporary counter for debugging
         boundary_polygon_shape = ShapelyPolygon(boundary_polygon)
 
         for iteration in range(n_iterations):
             vor = Voronoi(positions)
             new_positions = []
+            old_positions = []
             intersected_polygons = []
 
-            for idx, (region, original_seed) in enumerate(
-                zip(vor.regions, original_positions)
-            ):
+            for region, original_seed in zip(vor.regions, original_positions):
                 if not -1 in region and len(region) > 0:
                     polygon = np.array([vor.vertices[i] for i in region])
                     voronoi_cell_shape = ShapelyPolygon(polygon)
@@ -1132,29 +1137,23 @@ class ConstructRetina(RetinaMath):
 
                     intersection_polygon = np.array(intersection_shape.exterior.coords)
 
-                    if show_placing_progress and iteration % loops_btw_viz_updates == 0:
-                        # Take polygons for viz.
-                        intersected_polygons.append(intersection_polygon)
-
-                    # Convert intersection result to a NumPy array
-                    intersection_polygon = np.array(intersection_shape.exterior.coords)
-
                     # Wannabe centroid
                     new_seed = polygon_centroid(intersection_polygon)
+
+                    if show_placing_progress and iteration % show_skip_steps == 0:
+                        # Take polygons for viz.
+                        intersected_polygons.append(intersection_polygon)
+                        old_positions.append(new_seed)
 
                     # We cool things down a bit by moving the centroid only the change_rate of the way
                     diff = new_seed - original_seed
                     partial_diff = diff * change_rate
                     new_seed = original_seed + partial_diff
-
                     new_positions.append(new_seed)
 
                 else:
                     new_positions.append(original_seed)
 
-            if show_placing_progress and iteration % loops_btw_viz_updates == 0:
-                # Positions will be updated before calling viz.
-                old_positions = positions.copy()
             # Convert to torch tensor for boundary check
             positions_torch = torch.tensor(new_positions, dtype=torch.float32).to("cpu")
 
@@ -1167,12 +1166,13 @@ class ConstructRetina(RetinaMath):
 
             positions = (positions_torch + position_deltas).numpy()
 
-            if show_placing_progress and iteration % loops_btw_viz_updates == 0:
+            if show_placing_progress and iteration % show_skip_steps == 0:
                 self.viz.show_gc_placement_progress(
                     original_positions=original_positions,
-                    positions=old_positions,
+                    positions=np.array(old_positions),
                     iteration=iteration,
                     intersected_polygons=intersected_polygons,
+                    boundary_polygon=boundary_polygon,
                     **fig_args,
                 )
 
@@ -1205,14 +1205,18 @@ class ConstructRetina(RetinaMath):
         all_positions_tuple = self.pol2cart(all_positions[:, 0], all_positions[:, 1])
         all_positions_mm = np.column_stack(all_positions_tuple)
 
-        # # 3. Apply FBLA with Boundary Repulsion
-        # optimized_positions_mm = self._apply_force_based_layout(
-        #     all_positions_mm, gc_density
-        # )
-        # 3. Apply Voronoi-based Layout
-        optimized_positions_mm = self._apply_voronoi_layout(
-            all_positions_mm, gc_density
-        )
+        # 3 Optimize positions
+        optim_algorithm = self.context.my_retina["gc_placement_params"]["alorithm"]
+        if optim_algorithm == "force":
+            # Apply FBLA with Boundary Repulsion
+            optimized_positions_mm = self._apply_force_based_layout(
+                all_positions_mm, gc_density
+            )
+        elif optim_algorithm == "voronoi":
+            # Apply Voronoi-based Layout
+            optimized_positions_mm = self._apply_voronoi_layout(
+                all_positions_mm, gc_density
+            )
         optimized_positions_tuple = self.cart2pol(
             optimized_positions_mm[:, 0], optimized_positions_mm[:, 1]
         )

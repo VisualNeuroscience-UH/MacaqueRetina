@@ -1458,6 +1458,7 @@ class Viz:
         init=False,
         iteration=0,
         intersected_polygons=None,
+        boundary_polygon=None,
         **fig_args,
     ):
         if init is True:
@@ -1533,6 +1534,13 @@ class Viz:
 
             scatter2.set_offsets(positions)
             ax2.set_title(f"new pos iteration {iteration}")
+
+            # Draw boundary polygon with no fill
+            if boundary_polygon is not None:
+                polygon = Polygon(
+                    boundary_polygon, closed=True, fill=None, edgecolor="r"
+                )
+                ax2.add_patch(polygon)
 
             if intersected_polygons is not None:
                 if fig_args["intersected_voronoi_polygons"] is not None:
