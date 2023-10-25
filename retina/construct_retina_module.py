@@ -7,6 +7,7 @@ import scipy.stats as stats
 from scipy.optimize import root
 import pandas as pd
 from scipy import ndimage
+from scipy.spatial import Voronoi, voronoi_plot_2d
 
 import torch
 import torch.nn.functional as F
@@ -689,7 +690,7 @@ class ConstructRetina(RetinaMath):
             max_ecc = eccentricity_steps[group_idx + 1]
             avg_ecc = (min_ecc + max_ecc) / 2
             density = self.gauss_plus_baseline(avg_ecc, *gc_density_func_params)
-            density_prop_all.append(density * self.gc_proportion)
+            # density_prop_all.append(density * self.gc_proportion)
 
             # Calculate area for this eccentricity group
             sector_area_remove = self.sector2area_mm2(min_ecc, angle_deg)
@@ -701,11 +702,14 @@ class ConstructRetina(RetinaMath):
             n_cells = math.ceil(sector_surface_area * density * self.gc_proportion)
             positions = self._random_positions_within_group(min_ecc, max_ecc, n_cells)
             eccentricity_groups.append(np.full(n_cells, group_idx))
+            density_prop_all.append(np.full(n_cells, density * self.gc_proportion))
             initial_positions.append(positions)
 
-        mean_density = np.mean(density_prop_all)
+        # pdb.set_trace()
+        # gc_density = np.mean(density_prop_all)
+        gc_density = np.concatenate(density_prop_all)
 
-        return eccentricity_groups, initial_positions, areas_all_mm2, mean_density
+        return eccentricity_groups, initial_positions, areas_all_mm2, gc_density
 
     def _boundary_force(self, positions, rep, dist_th, ecc_lim_mm, polar_lim_deg):
         """
@@ -863,14 +867,12 @@ class ConstructRetina(RetinaMath):
         min_polar, max_polar = polar_lim_deg
 
         r, theta = self._cart2pol_torch(x, y)
+        # Guarding eccentricity boundaries
         r = torch.clamp(r, min=min_eccentricity, max=max_eccentricity)
-        theta = torch.clamp(
-            theta, min=min_polar, max=max_polar
-        )  # Guarding polar boundaries
+        # Guarding polar boundaries
+        theta = torch.clamp(theta, min=min_polar, max=max_polar)
 
         new_x, new_y = self._pol2cart_torch(r, theta)
-
-        # return torch.stack([new_x, new_y], dim=1)
 
         delta_x = new_x - x
         delta_y = new_y - y
@@ -880,7 +882,7 @@ class ConstructRetina(RetinaMath):
     def _apply_force_based_layout(
         self,
         all_positions,
-        mean_density,
+        gc_density,
     ):
         """
         Apply a force-based layout on the given positions.
@@ -889,8 +891,8 @@ class ConstructRetina(RetinaMath):
         ----------
         all_positions : list or ndarray
             Initial positions of nodes.
-        mean_density : float
-            Mean density of cells across the retina.
+        gc_density : float
+            One local density according to eccentricity group.
         Returns
         -------
         positions : ndarray
@@ -916,7 +918,7 @@ class ConstructRetina(RetinaMath):
         unit_repulsion_stregth = torch.tensor(unit_repulsion_stregth).to(self.device)
         diffusion_speed = torch.tensor(diffusion_speed).to(self.device)
         n_iterations = torch.tensor(n_iterations).to(self.device)
-        mean_density = torch.tensor(mean_density).to(self.device)
+        gc_density = torch.tensor(gc_density).to(self.device)
 
         rep = torch.tensor(border_repulsion_stength).to(self.device)
         dist_th = torch.tensor(border_distance_threshold).to(self.device)
@@ -968,11 +970,6 @@ class ConstructRetina(RetinaMath):
             ax1.set_ylim(min_y, max_y)
             ax2.set_xlim(min_x, max_x)
             ax2.set_ylim(min_y, max_y)
-            # # Set axis limits to ensure corners are always visible
-            # ax1.set_xlim(self.ecc_lim_mm[0] - 0.1, self.ecc_lim_mm[1] + 0.1)
-            # ax1.set_ylim(min(corners_y) - 0.1, max(corners_y) + 0.1)
-            # ax2.set_xlim(self.ecc_lim_mm[0] - 0.1, self.ecc_lim_mm[1] + 0.1)
-            # ax2.set_ylim(min(corners_y) - 0.1, max(corners_y) + 0.1)
 
             # set horizontal (x) and vertical (y) units as mm for both plots
             ax1.set_xlabel("horizontal (mm)")
@@ -984,13 +981,11 @@ class ConstructRetina(RetinaMath):
             plt.show()
             # End of init plotting
 
-        # Adjust unit_distance_threshold and diffusion speed with mean eccentricity in mm
+        # Adjust unit_distance_threshold and diffusion speed with density of the units
         # This is necessary because the density of the units are adjusted with eccentricity
         # The 1 mm ecc for parasol provides 952 units/mm2 density. This is the reference density.
-        unit_distance_threshold = unit_distance_threshold * (952 / mean_density)
-        diffusion_speed = diffusion_speed * (952 / mean_density)
-        print(f"Updated unit_distance_threshold: {unit_distance_threshold}")
-        print(f"Updated diffusion_speed: {diffusion_speed}")
+        gc_distance_threshold = unit_distance_threshold * (952 / gc_density)
+        gc_diffusion_speed = diffusion_speed * (952 / gc_density)
 
         for iteration in torch.range(0, n_iterations):
             optimizer.zero_grad()
@@ -1001,24 +996,17 @@ class ConstructRetina(RetinaMath):
             # Clip minimum distance to avoid very high repulsion
             dist = torch.clamp(dist, min=0.00001)
             # Clip max to inf (zero repulsion) above a certain distance
-            dist[dist > unit_distance_threshold] = torch.inf
+            dist[dist > gc_distance_threshold] = torch.inf
             # Using inverse square for repulsion
             repulsive_force = unit_repulsion_stregth * torch.sum(
                 diff / (dist[..., None] ** 3), dim=1
             )
 
             # After calculating repulsive_force:
-            # print("boundary in")
             boundary_forces = self._boundary_force(
                 positions, rep, dist_th, ecc_lim_mm, polar_lim_deg
             )
-            # print("boundary out")
             total_force = repulsive_force + boundary_forces
-
-            # force_strength = torch.norm(total_force, p=2, dim=1).mean()
-            # noise = torch.randn_like(total_force) * diffusion_speed * force_strength
-
-            # total_force = total_force + noise
 
             # Use the force as the "loss"
             loss = torch.norm(total_force, p=2)
@@ -1031,11 +1019,12 @@ class ConstructRetina(RetinaMath):
                 positions, ecc_lim_mm, polar_lim_deg
             )
 
-            positions.data = (
-                positions
-                + torch.randn_like(positions) * diffusion_speed
+            gc_diffusion_speed_reshaped = gc_diffusion_speed.view(-1, 1)
+            new_data = (
+                torch.randn_like(positions) * gc_diffusion_speed_reshaped
                 + positions_delta
             )
+            positions.data = positions + new_data
 
             if show_placing_progress is True:
                 # Update the visualization every 100 iterations for performance (or adjust as needed)
@@ -1056,6 +1045,90 @@ class ConstructRetina(RetinaMath):
             plt.ioff()  # Turn off interactive mode
 
         return positions.detach().cpu().numpy()
+
+    def _apply_voronoi_layout(self, all_positions, gc_density):
+        """
+        Apply a Voronoi-based layout on the given positions.
+
+        Parameters
+        ----------
+        all_positions : list or ndarray
+            Initial positions of nodes.
+        gc_density : ndarray of floats
+            Unit local density according to eccentricity group.
+
+        Returns
+        -------
+        positions : ndarray
+            New positions of nodes after the Voronoi-based optimization.
+
+        Notes
+        -----
+        This method applies a Voronoi diagram to optimize node positions.
+        """
+
+        n_decimals = 3
+
+        def polygon_centroid(polygon):
+            """Compute the centroid of a polygon."""
+            A = 0.5 * np.sum(
+                polygon[:-1, 0] * polygon[1:, 1] - polygon[1:, 0] * polygon[:-1, 1]
+            )
+            C_x = (1 / (6 * A)) * np.sum(
+                (polygon[:-1, 0] + polygon[1:, 0])
+                * (polygon[:-1, 0] * polygon[1:, 1] - polygon[1:, 0] * polygon[:-1, 1])
+            )
+            C_y = (1 / (6 * A)) * np.sum(
+                (polygon[:-1, 1] + polygon[1:, 1])
+                * (polygon[:-1, 0] * polygon[1:, 1] - polygon[1:, 0] * polygon[:-1, 1])
+            )
+            return np.array([C_x, C_y])
+
+        # Use the given densities to compute the number of seed points for Voronoi
+        total_seeds = len(gc_density)
+
+        # Initial random seeding within the given bounds
+        min_x, max_x = np.min(all_positions[:, 0]), np.max(all_positions[:, 0])
+        min_y, max_y = np.min(all_positions[:, 1]), np.max(all_positions[:, 1])
+        seeds = np.column_stack(
+            [
+                np.random.uniform(min_x, max_x, total_seeds),
+                np.random.uniform(min_y, max_y, total_seeds),
+            ]
+        )
+
+        # Store initial seeds
+        initial_seeds = seeds.copy()
+        initial_seeds = np.round(initial_seeds, n_decimals).astype(np.float32)
+        ecc_lim_mm = torch.tensor(self.ecc_lim_mm).to("cpu")
+        polar_lim_deg = torch.tensor(self.polar_lim_deg).to("cpu")
+        # pdb.set_trace()
+        # Iteratively adjust seed points (Lloyd's relaxation)
+        for _ in range(500):
+            # print(f"len(seeds): {len(seeds)}")
+            vor = Voronoi(seeds)
+            new_seeds = []
+            for region, original_seed in zip(vor.regions, initial_seeds):
+                if not -1 in region and len(region) > 0:
+                    polygon = [vor.vertices[i] for i in region]
+                    new_seed = polygon_centroid(np.array(polygon))
+                    new_seeds.append(new_seed)
+                else:
+                    # If the region is not valid, keep the original seed
+                    new_seeds.append(original_seed)
+
+            seeds = np.array(new_seeds)
+
+            # Check seeds against boundaries
+            seeds_torch = torch.tensor(seeds, dtype=torch.float32)
+            position_deltas = self._check_boundaries(
+                seeds_torch, ecc_lim_mm, polar_lim_deg
+            )
+            seeds_torch = seeds_torch + position_deltas
+            seeds = seeds_torch.numpy()
+
+        # pdb.set_trace()
+        return seeds
 
     def visualize_positions(
         self,
@@ -1113,7 +1186,7 @@ class ConstructRetina(RetinaMath):
             eccentricity_groups,
             initial_positions,
             sector_surface_areas_mm2,
-            mean_density,
+            gc_density,
         ) = self._initialize_positions_by_group(gc_density_func_params)
 
         # 2. Merge the Groups
@@ -1122,9 +1195,13 @@ class ConstructRetina(RetinaMath):
         all_positions_tuple = self.pol2cart(all_positions[:, 0], all_positions[:, 1])
         all_positions_mm = np.column_stack(all_positions_tuple)
 
-        # 3. Apply FBLA with Boundary Repulsion
-        optimized_positions_mm = self._apply_force_based_layout(
-            all_positions_mm, mean_density
+        # # 3. Apply FBLA with Boundary Repulsion
+        # optimized_positions_mm = self._apply_force_based_layout(
+        #     all_positions_mm, gc_density
+        # )
+        # 3. Apply Voronoi-based Layout
+        optimized_positions_mm = self._apply_voronoi_layout(
+            all_positions_mm, gc_density
         )
         optimized_positions_tuple = self.cart2pol(
             optimized_positions_mm[:, 0], optimized_positions_mm[:, 1]
