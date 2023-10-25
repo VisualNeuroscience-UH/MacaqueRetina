@@ -24,6 +24,7 @@ import torch
 # from skimage import measure
 # from skimage.transform import resize
 import matplotlib.pyplot as plt
+from shapely.geometry import Polygon as ShapelyPolygon
 
 # Data IO
 # import cv2
@@ -1100,37 +1101,52 @@ class ConstructRetina(RetinaMath):
         ecc_lim_mm = self.ecc_lim_mm
         polar_lim_deg = self.polar_lim_deg
         boundary_polygon = self._boundary_polygon(ecc_lim_mm, polar_lim_deg)
-        self.viz.draw_polygon(boundary_polygon)
-        pdb.set_trace()
+        # self.viz.draw_polygon(boundary_polygon)
+        # pdb.set_trace()
         original_positions = all_positions.copy()
         positions = all_positions.copy()
-        tmp_count = 0  # Temporary counter for debugging
+        # tmp_count = 0  # Temporary counter for debugging
+        boundary_polygon_shape = ShapelyPolygon(boundary_polygon)
+
         for iteration in range(n_iterations):
-            # print(f"len(positions) = {len(positions)}")
             vor = Voronoi(positions)
             new_positions = []
+            intersected_polygons = []
 
             for idx, (region, original_seed) in enumerate(
                 zip(vor.regions, original_positions)
             ):
-                if -1 in region:
-                    tmp_count += 1
-                    print(f"tmp_count = {tmp_count}")
-                    print(f"idx = {idx}")
                 if not -1 in region and len(region) > 0:
                     polygon = np.array([vor.vertices[i] for i in region])
-                    new_seed = polygon_centroid(polygon)
+                    voronoi_cell_shape = ShapelyPolygon(polygon)
+
+                    # Find the intersection between the Voronoi cell and the boundary polygon
+                    intersection_shape = voronoi_cell_shape.intersection(
+                        boundary_polygon_shape
+                    )
+
+                    intersection_polygon = np.array(intersection_shape.exterior.coords)
+                    intersected_polygons.append(intersection_polygon)
+
+                    if intersection_shape.is_empty:
+                        new_positions.append(original_seed)
+                        continue
+
+                    # Convert intersection result to a NumPy array
+                    intersection_polygon = np.array(intersection_shape.exterior.coords)
+
+                    new_seed = polygon_centroid(intersection_polygon)
+
                     diff = new_seed - original_seed
                     partial_diff = diff * change_rate
                     new_seed = original_seed + partial_diff
                     new_positions.append(new_seed)
+
                 else:
                     new_positions.append(original_seed)
 
-            positions = np.array(new_positions)
-
-            # Convert to torch tensor for boundary force calculations
-            positions_torch = torch.tensor(positions, dtype=torch.float32).to("cpu")
+            # Convert to torch tensor for boundary check
+            positions_torch = torch.tensor(new_positions, dtype=torch.float32).to("cpu")
 
             # Check boundaries and adjust positions if needed
             position_deltas = self._check_boundaries(
@@ -1146,10 +1162,11 @@ class ConstructRetina(RetinaMath):
                     original_positions=original_positions,
                     positions=positions,
                     iteration=iteration,
+                    intersected_polygons=intersected_polygons,
                     **fig_args,
                 )
 
-                # wait = input("Press enter to continue")
+                wait = input("Press enter to continue")
 
         if show_placing_progress:
             plt.ioff()

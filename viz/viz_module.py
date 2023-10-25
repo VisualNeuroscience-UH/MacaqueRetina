@@ -1451,20 +1451,14 @@ class Viz:
             # Position idx in layout: enumerate starts at 0, so add 1.
             self._subplot_img_recoimg(axd, "re", idx + 1, rec_img, samples, title)
 
-    # def show_gc_placement_progress(
-    #     self, original_positions, positions=None, init=False, iteration=0, *fig_args
-    # ):
     def show_gc_placement_progress(
         self,
         original_positions,
         positions=None,
         init=False,
         iteration=0,
-        fig=None,
-        ax1=None,
-        ax2=None,
-        scatter1=None,
-        scatter2=None,
+        intersected_polygons=None,
+        **fig_args,
     ):
         if init is True:
             ecc_lim_mm = self.construct_retina.ecc_lim_mm
@@ -1524,16 +1518,34 @@ class Viz:
                 "ax2": ax2,
                 "scatter1": scatter1,
                 "scatter2": scatter2,
+                "intersected_voronoi_polygons": [],
             }
 
         else:
-            # fig, ax1, ax2, scatter1, scatter2 = fig_args
+            fig = fig_args["fig"]
+            ax1 = fig_args["ax1"]
+            ax2 = fig_args["ax2"]
+            scatter1 = fig_args["scatter1"]
+            scatter2 = fig_args["scatter2"]
+
             scatter1.set_offsets(original_positions)
             ax1.set_title(f"orig pos")
 
             scatter2.set_offsets(positions)
             ax2.set_title(f"new pos iteration {iteration}")
 
+            if intersected_polygons is not None:
+                if fig_args["intersected_voronoi_polygons"] is not None:
+                    # Remove old polygons
+                    for poly in fig_args["intersected_voronoi_polygons"]:
+                        poly.remove()
+                    fig_args["intersected_voronoi_polygons"].clear()
+
+                # Plot intersected Voronoi polygons
+                for polygon in intersected_polygons:
+                    poly = ax2.fill(*zip(*polygon), alpha=0.4, edgecolor="black")
+                    fig_args["intersected_voronoi_polygons"].extend(poly)
+            # Update the plot
             fig.canvas.flush_events()
 
     def draw_polygon(self, polygon_vertices):
@@ -1546,8 +1558,6 @@ class Viz:
 
         plt.xlim(min(polygon_vertices[:, 0]) - 0.1, max(polygon_vertices[:, 0]) + 0.1)
         plt.ylim(min(polygon_vertices[:, 1]) - 0.1, max(polygon_vertices[:, 1]) + 0.1)
-
-        plt.show()
 
     # WorkingRetina visualization
     def show_stimulus_with_gcs(
