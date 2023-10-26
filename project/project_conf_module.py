@@ -159,7 +159,7 @@ my_retina = {
     "gc_type": gc_type,
     "response_type": response_type,
     "ecc_limits": [4, 6],  # degrees # parasol
-    "sector_limits": [-12, 12],  # polar angle in degrees # parasol
+    "sector_limits": [-22, 22],  # polar angle in degrees # parasol
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
     "dd_regr_model": "linear",  # linear, quadratic, cubic, exponential
     "visual_field_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
@@ -321,17 +321,22 @@ refractory_params = {
 # If you see patterning, reduce unit_distance_threshold
 # If you see clustering, increase increase diffusion_speed, unit_repulsion_stregth,
 # or carefully unit_distance_threshold
+# Algorithms are
+# Voronoi-based Layout with Loyd's Relaxation
+# "voronoi" (v) : better for big retinas, fast
+# Force Based Layout Algorithm with Boundary Repulsion
+# "force" (f) : better for small retinas, slow
 gc_placement_params = {
-    "alorithm": "force",  # "voronoi" or "force"
-    "n_iterations": 5000,  # 5000
-    "change_rate": 0.001,  # force 0.001, voronoi 0.05
-    "unit_repulsion_stregth": 5,  # 10
-    "unit_distance_threshold": 0.02,  # 0.02 Will be adjusted with ecc
-    "diffusion_speed": 0.0001,  # 0.0001 Will be adjusted with ecc
-    "border_repulsion_stength": 10,
-    "border_distance_threshold": 0.01,  # 0.01
+    "alorithm": "voronoi",  # "voronoi" or "force"
+    "n_iterations": 20,  # v 20, f 5000
+    "change_rate": 0.5,  # f 0.001, v 0.5
+    "unit_repulsion_stregth": 5,  # 10 f only
+    "unit_distance_threshold": 0.02,  # f only, adjusted with ecc
+    "diffusion_speed": 0.0001,  # f only, adjusted with ecc
+    "border_repulsion_stength": 10,  # f only
+    "border_distance_threshold": 0.01,  # f only
     "show_placing_progress": True,
-    "show_skip_steps": 100,
+    "show_skip_steps": 1,
 }
 
 my_retina_append = {

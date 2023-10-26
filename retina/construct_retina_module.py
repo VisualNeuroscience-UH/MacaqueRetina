@@ -1013,18 +1013,11 @@ class ConstructRetina(RetinaMath):
                 diff / (dist[..., None] ** 3), dim=1
             )
 
-            # # Using inverse cube for attraction
-            # attractive_force = (
-            #     0.999
-            #     * unit_repulsion_stregth
-            #     * torch.sum(diff / ((0.999 * dist[..., None]) ** 3), dim=1)
-            # )
-
             # After calculating repulsive_force:
             boundary_forces = self._boundary_force(
                 positions, rep, dist_th, ecc_lim_mm, polar_lim_deg
             )
-            # total_force = repulsive_force - attractive_force + boundary_forces
+
             total_force = repulsive_force + boundary_forces
 
             # Use the force as the "loss"
@@ -1061,7 +1054,7 @@ class ConstructRetina(RetinaMath):
 
         return positions.detach().cpu().numpy()
 
-    def _apply_voronoi_layout(self, all_positions, gc_density):
+    def _apply_voronoi_layout(self, all_positions):
         """
         Apply a Voronoi-based layout on the given positions.
 
@@ -1069,8 +1062,6 @@ class ConstructRetina(RetinaMath):
         ----------
         all_positions : list or ndarray
             Initial positions of nodes.
-        gc_density : ndarray of floats
-            Unit local density according to eccentricity group.
 
         Returns
         -------
@@ -1086,8 +1077,8 @@ class ConstructRetina(RetinaMath):
         # Extract parameters from context
         gc_placement_params = self.context.my_retina["gc_placement_params"]
         n_iterations = gc_placement_params["n_iterations"]
-        show_placing_progress = gc_placement_params["show_placing_progress"]
         change_rate = gc_placement_params["change_rate"]
+        show_placing_progress = gc_placement_params["show_placing_progress"]
         show_skip_steps = gc_placement_params["show_skip_steps"]
 
         if show_placing_progress:
@@ -1208,15 +1199,13 @@ class ConstructRetina(RetinaMath):
         # 3 Optimize positions
         optim_algorithm = self.context.my_retina["gc_placement_params"]["alorithm"]
         if optim_algorithm == "force":
-            # Apply FBLA with Boundary Repulsion
+            # Apply Force Based Layout Algorithm with Boundary Repulsion
             optimized_positions_mm = self._apply_force_based_layout(
                 all_positions_mm, gc_density
             )
         elif optim_algorithm == "voronoi":
-            # Apply Voronoi-based Layout
-            optimized_positions_mm = self._apply_voronoi_layout(
-                all_positions_mm, gc_density
-            )
+            # Apply Voronoi-based Layout with Loyd's Relaxation
+            optimized_positions_mm = self._apply_voronoi_layout(all_positions_mm)
         optimized_positions_tuple = self.cart2pol(
             optimized_positions_mm[:, 0], optimized_positions_mm[:, 1]
         )
