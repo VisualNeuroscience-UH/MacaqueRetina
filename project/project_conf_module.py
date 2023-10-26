@@ -157,7 +157,7 @@ numpy_seed = 42  # random.randint(0, 1000000)  # 42
 Computing device
 For small retinas cpu is faster
 """
-device = "cpu"  # "cpu" or "cuda"
+device = "cuda"  # "cpu" or "cuda"
 
 """
 ### Housekeeping ###. Do not comment out.
@@ -187,7 +187,7 @@ my_retina = {
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
     "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder.
-    "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'.
+    "DoG_model": "ellipse_independent",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'.
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models. Note that ellipse fit does not tolearate VAE adjustments => fit to nonadjusted generated rfs
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
     "model_file_name": "model_midget_on_20230927_133151.pt",  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only.
@@ -286,7 +286,9 @@ n_files = 1
 my_run_options = {
     "cell_index": None,  # list of ints or None for all cells
     "n_trials": 1,  # For each of the response files
-    "spike_generator_model": "poisson",  # poisson or refractory
+    # "cell_index": 2,  # list of ints or None for all cells
+    # "n_trials": 10,  # For each of the response files
+    "spike_generator_model": "refractory",  # poisson or refractory
     "save_data": True,
     "gc_response_filenames": [f"gc_response_{x:02}" for x in range(n_files)],
     "simulation_dt": 0.0001,  # in sec 0.001 = 1 ms
@@ -349,14 +351,14 @@ refractory_params = {
 # "force" (f) : better for small retinas, slow
 gc_placement_params = {
     "alorithm": "force",  # "voronoi" or "force"
-    "n_iterations": 5000,  # v 20, f 5000
-    "change_rate": 0.001,  # f 0.001, v 0.5
+    "n_iterations": 500,  # v 20, f 5000
+    "change_rate": 0.01,  # f 0.001, v 0.5
     "unit_repulsion_stregth": 5,  # 10 f only
     "unit_distance_threshold": 0.02,  # f only, adjusted with ecc
     "diffusion_speed": 0.0001,  # f only, adjusted with ecc
     "border_repulsion_stength": 10,  # f only
     "border_distance_threshold": 0.01,  # f only
-    "show_placing_progress": True,
+    "show_placing_progress": False,
     "show_skip_steps": 100,  # v 1, f 100
 }
 
@@ -563,7 +565,7 @@ if __name__ == "__main__":
     ########################
 
     # Based on my_stimulus_options above
-    PM.stimulate.make_stimulus_video()
+    # PM.stimulate.make_stimulus_video()
 
     ###########################################
     ### Load stimulus to get working retina ###

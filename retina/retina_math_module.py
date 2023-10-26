@@ -124,7 +124,7 @@ class RetinaMath:
         Returns
         -------
         tuple
-            A tuple containing the Cartesian coordinates (x, y).
+            A tuple containing the Cartesian coordinates (x, y) in same units as the radius.
         """
 
         if deg is True:
@@ -168,71 +168,6 @@ class RetinaMath:
         return (radius, phi)
 
     # Fit method
-    def DoG2D_independent_surround(
-        self,
-        xy_tuple,
-        ampl_c,
-        xoc,
-        yoc,
-        semi_xc,
-        semi_yc,
-        orient_cen_rad,
-        ampl_s,
-        xos,
-        yos,
-        semi_xs,
-        semi_ys,
-        orient_sur_rad,
-        offset,
-    ):
-        """
-        DoG model with xo, yo, theta for surround independent from center.
-        """
-
-        (x_fit, y_fit) = xy_tuple
-        acen = (np.cos(orient_cen_rad) ** 2) / (2 * semi_xc**2) + (
-            np.sin(orient_cen_rad) ** 2
-        ) / (2 * semi_yc**2)
-        bcen = -(np.sin(2 * orient_cen_rad)) / (4 * semi_xc**2) + (
-            np.sin(2 * orient_cen_rad)
-        ) / (4 * semi_yc**2)
-        ccen = (np.sin(orient_cen_rad) ** 2) / (2 * semi_xc**2) + (
-            np.cos(orient_cen_rad) ** 2
-        ) / (2 * semi_yc**2)
-
-        asur = (np.cos(orient_sur_rad) ** 2) / (2 * semi_xs**2) + (
-            np.sin(orient_sur_rad) ** 2
-        ) / (2 * semi_ys**2)
-        bsur = -(np.sin(2 * orient_sur_rad)) / (4 * semi_xs**2) + (
-            np.sin(2 * orient_sur_rad)
-        ) / (4 * semi_ys**2)
-        csur = (np.sin(orient_sur_rad) ** 2) / (2 * semi_xs**2) + (
-            np.cos(orient_sur_rad) ** 2
-        ) / (2 * semi_ys**2)
-
-        ## Difference of gaussians
-        model_fit = (
-            offset
-            + ampl_c
-            * np.exp(
-                -(
-                    acen * ((x_fit - xoc) ** 2)
-                    + 2 * bcen * (x_fit - xoc) * (y_fit - yoc)
-                    + ccen * ((y_fit - yoc) ** 2)
-                )
-            )
-            - ampl_s
-            * np.exp(
-                -(
-                    asur * ((x_fit - xos) ** 2)
-                    + 2 * bsur * (x_fit - xos) * (y_fit - yos)
-                    + csur * ((y_fit - yos) ** 2)
-                )
-            )
-        )
-
-        return model_fit.ravel()
-
     def lowpass(self, t, n, p, tau):
         """
         Returns a lowpass filter kernel with a given time constant and order.
@@ -426,6 +361,92 @@ class RetinaMath:
 
         return model_fit.ravel()
 
+    def DoG2D_independent_surround(
+        self,
+        xy_tuple,
+        ampl_c,
+        xoc,
+        yoc,
+        semi_xc,
+        semi_yc,
+        orient_cen_rad,
+        ampl_s,
+        xos,
+        yos,
+        semi_xs,
+        semi_ys,
+        orient_sur_rad,
+        offset,
+    ):
+        """
+        DoG model with xo, yo, theta for surround independent from center.
+        """
+
+        (x_fit, y_fit) = xy_tuple
+        acen = (np.cos(orient_cen_rad) ** 2) / (2 * semi_xc**2) + (
+            np.sin(orient_cen_rad) ** 2
+        ) / (2 * semi_yc**2)
+        bcen = -(np.sin(2 * orient_cen_rad)) / (4 * semi_xc**2) + (
+            np.sin(2 * orient_cen_rad)
+        ) / (4 * semi_yc**2)
+        ccen = (np.sin(orient_cen_rad) ** 2) / (2 * semi_xc**2) + (
+            np.cos(orient_cen_rad) ** 2
+        ) / (2 * semi_yc**2)
+
+        asur = (np.cos(orient_sur_rad) ** 2) / (2 * semi_xs**2) + (
+            np.sin(orient_sur_rad) ** 2
+        ) / (2 * semi_ys**2)
+        bsur = -(np.sin(2 * orient_sur_rad)) / (4 * semi_xs**2) + (
+            np.sin(2 * orient_sur_rad)
+        ) / (4 * semi_ys**2)
+        csur = (np.sin(orient_sur_rad) ** 2) / (2 * semi_xs**2) + (
+            np.cos(orient_sur_rad) ** 2
+        ) / (2 * semi_ys**2)
+
+        ## Difference of gaussians
+        model_fit = (
+            offset
+            + ampl_c
+            * np.exp(
+                -(
+                    acen * ((x_fit - xoc) ** 2)
+                    + 2 * bcen * (x_fit - xoc) * (y_fit - yoc)
+                    + ccen * ((y_fit - yoc) ** 2)
+                )
+            )
+            - ampl_s
+            * np.exp(
+                -(
+                    asur * ((x_fit - xos) ** 2)
+                    + 2 * bsur * (x_fit - xos) * (y_fit - yos)
+                    + csur * ((y_fit - yos) ** 2)
+                )
+            )
+        )
+
+        return model_fit.ravel()
+
+    def DoG2D_circular(self, xy_tuple, ampl_c, x0, y0, rad_c, ampl_s, rad_s, offset):
+        """
+        DoG model with the center and surround as concentric circles and a shared center (x0, y0).
+        """
+
+        (x_fit, y_fit) = xy_tuple
+
+        # Distance squared from the center for the given (x_fit, y_fit) points
+        distance_sq = (x_fit - x0) ** 2 + (y_fit - y0) ** 2
+
+        # Gaussian for the center
+        center_gaussian = ampl_c * np.exp(-distance_sq / (2 * rad_c**2))
+
+        # Gaussian for the surround
+        surround_gaussian = ampl_s * np.exp(-distance_sq / (2 * rad_s**2))
+
+        # Difference of gaussians
+        model_fit = offset + center_gaussian - surround_gaussian
+
+        return model_fit.ravel()
+
     def diff_of_lowpass_filters(self, t, n, p1, p2, tau1, tau2):
         """
         Returns the difference between two lowpass filters with different time constants and orders.
@@ -448,27 +469,6 @@ class RetinaMath:
         #
         y = self.lowpass(t, n, p1, tau1) - self.lowpass(t, n, p2, tau2)
         return y
-
-    def DoG2D_circular(self, xy_tuple, ampl_c, x0, y0, rad_c, ampl_s, rad_s, offset):
-        """
-        DoG model with the center and surround as concentric circles and a shared center (x0, y0).
-        """
-
-        (x_fit, y_fit) = xy_tuple
-
-        # Distance squared from the center for the given (x_fit, y_fit) points
-        distance_sq = (x_fit - x0) ** 2 + (y_fit - y0) ** 2
-
-        # Gaussian for the center
-        center_gaussian = ampl_c * np.exp(-distance_sq / (2 * rad_c**2))
-
-        # Gaussian for the surround
-        surround_gaussian = ampl_s * np.exp(-distance_sq / (2 * rad_s**2))
-
-        # Difference of gaussians
-        model_fit = offset + center_gaussian - surround_gaussian
-
-        return model_fit.ravel()
 
     # Not in use
     def generator2firing(self, generator=0, show_generator_vs_fr=True):

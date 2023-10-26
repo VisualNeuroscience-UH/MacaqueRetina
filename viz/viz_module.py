@@ -1601,6 +1601,8 @@ class Viz:
         deg_per_mm = stim_to_show["deg_per_mm"]
         stimulus_center = stim_to_show["stimulus_center"]
 
+        DoG_model = self.context.my_retina["DoG_model"]
+
         fig = plt.figure()
         ax = ax or plt.gca()
         ax.imshow(stimulus_video.frames[:, :, frame_number], vmin=0, vmax=255)
@@ -1614,14 +1616,25 @@ class Viz:
             else:
                 facecolor = "None"
 
-            circ = Ellipse(
-                (gc.q_pix, gc.r_pix),
-                width=2 * gc.semi_xc,
-                height=2 * gc.semi_yc,
-                angle=gc_rot_deg[index],  # Rotation in degrees anti-clockwise.
-                edgecolor="blue",
-                facecolor=facecolor,
-            )
+            if DoG_model in ["ellipse_independent", "ellipse_fixed"]:
+                circ = Ellipse(
+                    (gc.q_pix, gc.r_pix),
+                    width=2 * gc.semi_xc,
+                    height=2 * gc.semi_yc,
+                    angle=gc_rot_deg[index],  # Rotation in degrees anti-clockwise.
+                    edgecolor="blue",
+                    facecolor=facecolor,
+                )
+            elif DoG_model == "circular":
+                circ = Ellipse(
+                    (gc.q_pix, gc.r_pix),
+                    width=2 * gc.rad_c,
+                    height=2 * gc.rad_c,
+                    angle=gc_rot_deg[index],  # Rotation in degrees anti-clockwise.
+                    edgecolor="blue",
+                    facecolor=facecolor,
+                )
+
             ax.add_patch(circ)
 
             # If show_rf_id is True, annotate each ellipse with the index

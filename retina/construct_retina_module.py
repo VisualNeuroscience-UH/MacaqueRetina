@@ -1655,6 +1655,9 @@ class ConstructRetina(RetinaMath):
         gc_vae_df["pos_polar_deg"] = self.gc_df["pos_polar_deg"]
         gc_vae_df["ecc_group_idx"] = self.gc_df["ecc_group_idx"]
 
+        if self.context.my_retina["DoG_model"] == "ellipse_fixed":
+            gc_vae_df["relat_sur_diam"] = gc_vae_df_in["relat_sur_diam"]
+
         if self.context.my_retina["DoG_model"] == "circular":
             # Scale factor for rad_c and rad_s from pix to millimeters
             gc_vae_df["rad_c"] = gc_vae_df_in["rad_c"] * new_microm_per_pix / 1000  # mm
