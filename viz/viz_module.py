@@ -1876,9 +1876,19 @@ class Viz:
 
     def show_all_gc_responses(self, savefigname=None):
         """
-        WorkingRetina call.
-        """
+        Visualize ganglion cell (gc) responses based on the data in the WorkingRetina object.
 
+        Parameters
+        ----------
+        savefigname : str, optional
+            The name of the file where the figure will be saved. If None, the figure is not saved.
+
+        Attributes Accessed
+        --------------------
+        project_data.working_retina : dict
+            Dictionary attached to ProjectData class instance containing the gc responses
+            and other information to show.
+        """
         gc_responses_to_show = self.project_data.working_retina["gc_responses_to_show"]
         n_trials = gc_responses_to_show["n_trials"]
         n_cells = gc_responses_to_show["n_cells"]
@@ -1906,38 +1916,47 @@ class Viz:
                 """You attempted to visualize gc activity, but either n_trials or n_cells must be 1, and the other > 1"""
             )
 
-        plt.subplots(2, 1, sharex=True)
-        plt.subplot(211)
-        # plt.eventplot(spiketrains)
-        plt.eventplot(for_eventplot)
-        plt.xlim([0, duration / b2u.second])
-        # plt.ylabel('Trials')
-        plt.ylabel(sample_name)
+        # Create subplots
+        fig, ax = plt.subplots(2, 1, sharex=True)
 
-        plt.subplot(212)
-        # Plot the generator and the average firing rate
+        # Event plot on first subplot
+        ax[0].eventplot(for_eventplot)
+        ax[0].set_xlim([0, duration / b2u.second])
+        ax[0].set_ylabel(sample_name)
+
+        # Generator potential and average firing rate on second subplot
         tvec = np.arange(0, generator_potential.shape[-1], 1) * video_dt
+        ax[1].plot(tvec, for_generatorplot, label="Generator")
+        ax[1].set_xlim([0, duration / b2u.second])
 
-        plt.plot(tvec, for_generatorplot, label="Generator")
-        plt.xlim([0, duration / b2u.second])
+        # pdb.set_trace()
+        # Given bin_width in ms, convert it to the correct unit
+        bin_width = 10 * b2u.ms
 
-        # Compute average firing rate over trials (should approximately follow generator)
-        hist_dt = self.context.my_run_options["simulation_dt"] * b2u.second
-        bin_edges = np.append(
-            tvec_new, [duration / b2u.second]
-        )  # Append the rightmost edge
+        # Find the nearest integer number of simulation_dt units for hist_dt
+        simulation_dt = self.context.my_run_options["simulation_dt"] * b2u.second
+        hist_dt = np.round(bin_width / simulation_dt) * simulation_dt
+
+        # Update bin_edges based on the new hist_dt
+        num_bins = int(np.ceil(duration / hist_dt))
+        bin_edges = np.linspace(0, duration / b2u.second, num_bins + 1)
+
+        # Compute histogram with the new hist_dt
         hist, _ = np.histogram(for_histogram, bins=bin_edges)
+
+        # Update average firing rate calculation based on the new hist_dt
         avg_fr = hist / n_samples / (hist_dt / b2u.second)
 
-        xsmooth = np.arange(-15, 15 + 1)
-        smoothing = stats.norm.pdf(xsmooth, scale=5)  # Gaussian with SD=5*simulation_dt
+        # Smoothing remains the same
+        xsmooth = np.arange(-3, 3 + 1)
+        smoothing = stats.norm.pdf(xsmooth, scale=1)
         smoothed_avg_fr = np.convolve(smoothing, avg_fr, mode="same")
 
-        plt.plot(bin_edges[:-1], smoothed_avg_fr, label="Measured")
-        plt.ylabel("Firing rate (Hz)")
-        plt.xlabel("Time (s)")
+        ax[1].plot(bin_edges[:-1], smoothed_avg_fr, label="Measured")
 
-        plt.legend()
+        ax[1].set_ylabel("Firing rate (Hz)")
+        ax[1].set_xlabel("Time (s)")
+        ax[1].legend()
 
         if savefigname is not None:
             self._figsave(figurename=savefigname)
