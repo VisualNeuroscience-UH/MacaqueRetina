@@ -34,11 +34,12 @@ b2.prefs["logging.display_brian_error_message"] = False
 
 
 class WorkingRetina(RetinaMath):
-    def __init__(self, context, data_io, viz) -> None:
+    def __init__(self, context, data_io, viz, project_data) -> None:
         self._context = context.set_context(self)
         self._data_io = data_io
         # viz.client_object = self  # injecting client object pointer into viz object
         self._viz = viz
+        self._project_data = project_data
 
         self.initialized = False
 
@@ -53,6 +54,10 @@ class WorkingRetina(RetinaMath):
     @property
     def viz(self):
         return self._viz
+
+    @property
+    def project_data(self):
+        return self._project_data
 
     def _initialize(self):
         """
@@ -231,9 +236,8 @@ class WorkingRetina(RetinaMath):
         q_center = np.round(gc.q_pix).astype(int).values
         r_center = np.round(gc.r_pix).astype(int).values
 
-        side_halflen = (
-            self.spatial_filter_sidelen - 1
-        ) // 2  # crops have width = height
+        # crops have width = height
+        side_halflen = (self.spatial_filter_sidelen - 1) // 2
 
         qmin = q_center - side_halflen
         qmax = q_center + side_halflen
@@ -428,41 +432,6 @@ class WorkingRetina(RetinaMath):
 
         return firing_rates
 
-    def _save_for_cxsystem(
-        self, spike_mons, n_units, filename=None, analog_signal=None, dt=None
-    ):
-        self.w_coord, self.z_coord = self.get_w_z_coords()
-
-        # Copied from CxSystem2\cxsystem2\core\stimuli.py The Stimuli class does not support reuse
-        print(" -  Saving spikes, rgc coordinates and analog signal (if not None)...")
-
-        data_to_save = {}
-        for ii in range(len(spike_mons)):
-            data_to_save["spikes_" + str(ii)] = []
-            # units, i in cxsystem2
-            data_to_save["spikes_" + str(ii)].append(spike_mons[ii][0])
-            # times, t in cxsystem2
-            data_to_save["spikes_" + str(ii)].append(spike_mons[ii][1])
-        data_to_save["w_coord"] = self.w_coord
-        data_to_save["z_coord"] = self.z_coord
-
-        data_to_save["n_units"] = n_units
-
-        if analog_signal is not None:
-            data_to_save["analog_signal"] = analog_signal
-
-        if dt is not None:
-            data_to_save["dt"] = dt
-
-        if filename is None:
-            save_path = self.context.output_folder.joinpath("most_recent_spikes")
-        else:
-            save_path = self.context.output_folder.joinpath(filename)
-        self.output_file_extension = ".gz"
-
-        filename_full = Path(str(save_path) + self.output_file_extension)
-        self.data_io.write_to_file(filename_full, data_to_save)
-
     def _get_extents_deg(self):
         """
         Get the stimulus/screen extents in degrees
@@ -539,18 +508,18 @@ class WorkingRetina(RetinaMath):
         # self.video_fps = self.stimulus_video.fps
         self.temporal_filter_len = int(self.data_filter_duration / (1000 / self.fps))
 
-    def _get_spatially_cropped_video(self, cell_index, contrast=True, reshape=False):
+    def _get_spatially_cropped_video(self, cell_indices, contrast=True, reshape=False):
         """
         Crops the video to the surroundings of the specified Retinal Ganglion Cells (RGCs).
 
         The function works by first determining the pixel range to be cropped for each cell
-        in cell_index, and then selecting those pixels from the original video. The cropping
+        in cell_indices, and then selecting those pixels from the original video. The cropping
         is done for each frame of the video. If the contrast option is set to True, the video
         is also rescaled to have pixel values between -1 and 1.
 
         Parameters
         ----------
-        cell_index : array of ints
+        cell_indices : array of ints
             Indices for the RGCs. The function will crop the video around each cell
             specified in this array.
 
@@ -572,12 +541,20 @@ class WorkingRetina(RetinaMath):
             if reshape is False, and
             (number_of_cells, number_of_pixels, number_of_time_points)
             if reshape is True.
+
+        Notes
+        -----
+        qmin and qmax specify the range in the q-dimension (horizontal),
+        and rmin and rmax specify the range in the r-dimension (vertical).
         """
 
-        qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
-        # video_copy = self.stimulus_video.frames.copy()
+        if isinstance(cell_indices, (int, np.int32, np.int64)):
+            cell_indices = np.array([cell_indices])
+
+        qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_indices)
+
         video_copy = np.tile(
-            self.stimulus_video.frames.copy(), (len(cell_index), 1, 1, 1)
+            self.stimulus_video.frames.copy(), (len(cell_indices), 1, 1, 1)
         )
 
         sidelen = self.spatial_filter_sidelen
@@ -606,20 +583,20 @@ class WorkingRetina(RetinaMath):
         r_matrix, q_matrix = np.broadcast_arrays(r_indices, q_indices)
 
         # create a cell index array and a time_points index array
+        # shape: (len(cell_indices), 1, 1, 1)
         cell_indices = (
-            np.arange(len(cell_index)).astype(np.int32).reshape(-1, 1, 1, 1)
-        )  # shape: (len(cell_index), 1, 1, 1)
-        time_points_indices = np.arange(video_copy.shape[-1]).astype(
-            np.int32
-        )  # shape: (n_time_points,)
+            np.arange(len(cell_indices)).astype(np.int32).reshape(-1, 1, 1, 1)
+        )
+        # shape: (n_time_points,)
+        time_points_indices = np.arange(video_copy.shape[-1]).astype(np.int32)
 
         # expand the indices arrays to the shape of r_matrix and q_matrix using broadcasting
-        cell_indices = cell_indices + np.zeros_like(
-            r_matrix, dtype=np.int32
-        )  # shape: (len(cell_index), sidelen, sidelen)
+        # shape: (len(cell_indices), sidelen, sidelen)
+        cell_indices = cell_indices + np.zeros_like(r_matrix, dtype=np.int32)
+        # shape: (1, 1, 1, n_time_points)
         time_points_indices = time_points_indices + np.zeros(
             (1, 1, 1, video_copy.shape[-1]), dtype=np.int32
-        )  # shape: (1, 1, 1, n_time_points)
+        )
 
         # use the index arrays to select the elements from video_copy
         stimulus_cropped = video_copy[
@@ -636,7 +613,7 @@ class WorkingRetina(RetinaMath):
             n_frames = np.shape(self.stimulus_video.frames)[-1]
             # reshape the video
             stimulus_cropped = stimulus_cropped.reshape(
-                (len(cell_index), sidelen**2, n_frames)
+                (len(cell_indices), sidelen**2, n_frames)
             )
 
         return stimulus_cropped
@@ -729,9 +706,10 @@ class WorkingRetina(RetinaMath):
             ):
                 self.gc_df.iloc[index] = 0.0  # all columns set as zero
 
-    def create_spatiotemporal_filter(self, cell_index, called_from_loop=False):
+    def create_spatiotemporal_filter(self, cell_index):
         """
         Returns the outer product of the spatial and temporal filters in stimulus space.
+        This is a legacy function, and is not used in the current version of the code.
 
         Parameters
         ----------
@@ -762,13 +740,6 @@ class WorkingRetina(RetinaMath):
         spatiotemporal_filter = (
             spatial_filter_1d * temporal_filter
         )  # (Nx1) * (1xT) = NxT
-
-        if called_from_loop is False:
-            self.spatiotemporal_filter_to_show = {
-                "spatial_filter": spatial_filter,
-                "temporal_filter": temporal_filter,
-                "cell_index": cell_index,
-            }
 
         return spatiotemporal_filter
 
@@ -1260,13 +1231,8 @@ class WorkingRetina(RetinaMath):
             # Spatial OFF filters have been inverted to max upwards for construction of RFs.
             svec = -svec
 
-        impulse_for_viz_dict = {
-            "tvec": tvec / b2u.second,
-            "svec": svec,
-        }
-        impulse_for_viz_dict["start_delay"] = start_delay
         stim_len_tp = len(tvec)
-        # Append to impulse_for_viz_dict a key str(contrast) for each contrast,
+        # Append to impulse_to_show a key str(contrast) for each contrast,
         # holding empty array for impulse response
 
         assert contrasts_for_impulse is not None and isinstance(
@@ -1366,11 +1332,19 @@ class WorkingRetina(RetinaMath):
             # cut the impulse response to the desired length
             yvecs = yvecs[:, :, :-idx_start_delay]
 
-        impulse_for_viz_dict["contrasts"] = contrasts_for_impulse
-        impulse_for_viz_dict["impulse_responses"] = yvecs
-        impulse_for_viz_dict["Unit idx"] = list(cell_index)
+        impulse_to_show = {
+            "tvec": tvec / b2u.second,
+            "svec": svec,
+        }
+        impulse_to_show["start_delay"] = start_delay
+        impulse_to_show["contrasts"] = contrasts_for_impulse
+        impulse_to_show["impulse_responses"] = yvecs
+        impulse_to_show["Unit idx"] = list(cell_index)
+        impulse_to_show["gc_type"] = self.gc_type
+        impulse_to_show["response_type"] = self.response_type
+        impulse_to_show["temporal_model"] = self.temporal_model
 
-        self.impulse_for_viz_dict = impulse_for_viz_dict
+        self.impulse_to_show = impulse_to_show
 
     def run_cells(
         self,
@@ -1462,10 +1436,13 @@ class WorkingRetina(RetinaMath):
             n_cells = len(self.gc_df.index)  # all cells
             cell_indices = np.arange(n_cells)
         # Run one or a subset of cells
-        elif isinstance(cell_index, (int, list)):
+        elif isinstance(cell_index, (list)):
             cell_indices = np.array(cell_index)
             n_cells = len(cell_indices)
-
+        # Run one or a subset of cells
+        elif isinstance(cell_index, (int)):
+            cell_indices = np.array([cell_index])
+            n_cells = len(cell_indices)
         else:
             raise AssertionError(
                 "cell_index must be None, an integer or list, aborting..."
@@ -1473,6 +1450,7 @@ class WorkingRetina(RetinaMath):
 
         if get_impulse_response is True:
             self._get_impulse_response(cell_index, contrasts_for_impulse, video_dt)
+            self.project_data.working_retina["impulse_to_show"] = self.impulse_to_show
             return
 
         cell_indices = np.atleast_1d(cell_indices)  # make sure it's an array
@@ -1749,27 +1727,59 @@ class WorkingRetina(RetinaMath):
             )
 
         if save_data is True:
-            self._save_for_cxsystem(
+            self.w_coord, self.z_coord = self.get_w_z_coords()
+            self.data_io.save_spikes_for_cxsystem(
                 spikearrays,
-                n_units=n_cells,
+                n_cells,
+                self.w_coord,
+                self.z_coord,
                 filename=filename,
                 analog_signal=interpolated_rates_array,
                 dt=simulation_dt,
             )
+            self.data_io.save_spikes_csv(all_spiketrains, n_cells, filename=filename)
+            rgc_coords = self.gc_df[["x_deg", "y_deg"]].copy()
+            self.data_io.save_structure_csv(rgc_coords, filename=filename)
 
-        # For save_spikes_csv. Only 1st trial is saved.
-        self.simulated_spiketrains = all_spiketrains[0]
+        spat_temp_filter_to_show = {
+            "spatial_filters": spatial_filters,
+            "temporal_filters": self.get_temporal_filters(cell_indices),
+            "data_filter_duration": self.data_filter_duration,
+            "temporal_filter_len": self.temporal_filter_len,
+            "gc_type": self.gc_type,
+            "response_type": self.response_type,
+            "temporal_model": self.temporal_model,
+            "spatial_filter_sidelen": self.spatial_filter_sidelen,
+        }
 
-        self.gc_responses_to_show = {
+        stim_to_show = {
+            "stimulus_video": self.stimulus_video,
+            "gc_df_pixspace": self.gc_df_pixspace,
+            "stimulus_height_pix": self.stimulus_height_pix,
+            "pix_per_deg": self.pix_per_deg,
+            "deg_per_mm": self.deg_per_mm,
+            "stimulus_center": self.stimulus_center,
+            "qr_min_max": self._get_crop_pixels(cell_indices),
+            "spatial_filter_sidelen": self.spatial_filter_sidelen,
+            "stimulus_cropped": self._get_spatially_cropped_video(cell_indices),
+        }
+
+        gc_responses_to_show = {
             "n_trials": n_trials,
             "n_cells": n_cells,
             "all_spiketrains": all_spiketrains,
-            "exp_generator_potential": firing_rates,
             "duration": duration,
             "generator_potential": firing_rates,
             "video_dt": video_dt,
             "tvec_new": tvec_new,
         }
+
+        # Attach data requested by other classes to project_data
+        self.project_data.working_retina["stim_to_show"] = stim_to_show
+        self.project_data.working_retina["gc_responses_to_show"] = gc_responses_to_show
+        self.project_data.working_retina[
+            "spat_temp_filter_to_show"
+        ] = spat_temp_filter_to_show
 
         if return_monitor is True:
             return spike_monitor
@@ -1799,61 +1809,6 @@ class WorkingRetina(RetinaMath):
                 filename=filename,
                 simulation_dt=simulation_dt,
             )
-
-    def save_spikes_csv(self, filename=None):
-        """
-        Saves spikes as a csv file with rows of the form cell_index, spike_time.
-        This file can be used in ViSimpl:
-        visimpl.AppImage -csv parasol_structure.csv parasol_spikes.csv
-
-        Parameters
-        ----------
-        filename: str, optional
-            Name of the file to save the spikes to. If None, the filename will be
-            generated automatically.
-        """
-        assert (
-            len(self.simulated_spiketrains) > 0
-        ), "There are no simulated spiketrains to save"
-
-        if filename is None:
-            filename = self.gc_type + "_" + self.response_type + "_spikes.csv"
-
-        filename_full = self.context.output_folder.joinpath(filename)
-
-        spikes_df = pd.DataFrame(columns=["cell_index", "spike_time"])
-        for cell_index in range(len(self.gc_df)):
-            spiketrain = self.simulated_spiketrains[cell_index]
-            index_array = cell_index * np.ones(len(spiketrain))
-            temp_df = pd.DataFrame(
-                np.column_stack((index_array, spiketrain)),
-                columns=["cell_index", "spike_time"],
-            )
-            spikes_df = pd.concat([spikes_df, temp_df], axis=0)
-
-        spikes_df["cell_index"] = spikes_df["cell_index"].astype(int)
-        spikes_df = spikes_df.sort_values(by="spike_time")
-        spikes_df.to_csv(filename_full, index=False, header=False)
-
-    def save_structure_csv(self, filename=None):
-        """
-        Saves x,y coordinates of model cells to a csv file (for use in ViSimpl).
-
-        Parameters
-        ----------
-        filename: str, optional
-            Name of the file to save the structure to. If None, the filename will be
-            generated automatically.
-        """
-        if filename is None:
-            filename = self.gc_type + "_" + self.response_type + "_structure.csv"
-
-        filename_full = self.context.output_folder.joinpath(filename)
-
-        rgc_coords = self.gc_df[["x_deg", "y_deg"]].copy()
-        rgc_coords["z_deg"] = 0.0
-
-        rgc_coords.to_csv(filename_full, header=False, index=False)
 
 
 class PhotoReceptor:

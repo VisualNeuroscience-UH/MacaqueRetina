@@ -129,7 +129,8 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         )
         self.viz.construct_retina = self.construct_retina
 
-        self.working_retina = WorkingRetina(context, data_io, viz)
+        self.working_retina = WorkingRetina(context, data_io, viz, project_data)
+        # self.viz.working_retina = self.working_retina
 
         experiment = Experiment(context, data_io)
         self.experiment = experiment

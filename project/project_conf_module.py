@@ -155,7 +155,7 @@ numpy_seed = 42  # random.randint(0, 1000000)  # 42
 
 """
 Computing device
-For small retinas cpu may be faster
+For small retinas cpu is faster
 """
 device = "cpu"  # "cpu" or "cuda"
 
@@ -178,8 +178,8 @@ response_type = "on"
 my_retina = {
     "gc_type": gc_type,
     "response_type": response_type,
-    "ecc_limits": [4, 6],  # degrees # parasol
-    "sector_limits": [-12, 12],  # polar angle in degrees # parasol
+    "ecc_limits": [4.5, 5.5],  # degrees # parasol
+    "sector_limits": [-3, 3],  # polar angle in degrees # parasol
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
     "dd_regr_model": "linear",  # linear, quadratic, cubic, exponential
     "visual_field_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
@@ -282,6 +282,7 @@ my_stimulus_options = {
 n_files = 1
 
 # Either n_trials or n_cells must be 1, and the other > 1
+# Running multiple trials on multiple cells is not supported
 my_run_options = {
     "cell_index": None,  # list of ints or None for all cells
     "n_trials": 1,  # For each of the response files
@@ -561,7 +562,7 @@ if __name__ == "__main__":
     ### Create stimulus ###
     ########################
 
-    # See my_stimulus_options for valid stimulus_options
+    # Based on my_stimulus_options above
     PM.stimulate.make_stimulus_video()
 
     ###########################################
@@ -570,22 +571,26 @@ if __name__ == "__main__":
 
     PM.working_retina.load_stimulus()
 
+    ####################################
+    ### Run multiple trials or cells ###
+    ####################################
+
+    PM.working_retina.run_with_my_run_options()
+
     ##########################################
-    ### Show single ganglion cell response ###
+    ### Show single ganglion cell features ###
     ##########################################
 
-    # example_gc = 0  # int or 'None'
-    # PM.working_retina.convolve_stimulus(example_gc)
+    # PM.viz.show_spatiotemporal_filter(cell_index=2, savefigname=None)
+    # PM.viz.show_temporal_kernel_frequency_response(cell_index=2, savefigname=None)
+    # PM.viz.plot_midpoint_contrast(cell_index=2, savefigname=None)
+    # PM.viz.plot_local_rms_contrast(cell_index=2, savefigname=None)
+    # PM.viz.plot_local_michelson_contrast(cell_index=2, savefigname=None)
+    # PM.viz.show_single_gc_view(cell_index=2, frame_number=300, savefigname=None)
 
-    # # # PM.viz.show_spatiotemporal_filter(PM.working_retina)
-    # PM.viz.show_convolved_stimulus(PM.working_retina)
-
-    ########################################
-    # Show impulse response and exit
-    ########################################
-
-    # # contrast for impulse response applies only for parasol cells with dynamic model
-    # # Use [1.0] for others, or any other single value (multiple values will plot on top of each other)
+    # # Activate the following block for impulse response
+    # #
+    # # Contrast applies only for parasol cells with dynamic model, use [1.0] for others
     # contrasts_for_impulse = [0.01, 1.0]
     # PM.working_retina.run_cells(
     #     cell_index=[16],  # list of ints
@@ -595,52 +600,25 @@ if __name__ == "__main__":
     # savename = (
     #     f"{gc_type}_{response_type}_{my_retina['temporal_model']}_impulse" + ".eps"
     # )
-    # PM.viz.show_impulse_response(PM.working_retina, savefigname=savename)
+    # # The PM.working_retina load_stimulus and run_cells must be active for impulse response viz
+    # PM.viz.show_impulse_response(savefigname=None)
+    # #
+    # # Impulse response block end
 
-    ####################################
-    ### Run multiple trials or cells ###
-    ####################################
+    ################################################
+    ###   Show multiple trials for single cell,  ###
+    ###   or multiple cells for single trial     ###
+    ################################################
 
-    PM.working_retina.run_with_my_run_options()
+    # Based on my_run_options above
+    PM.viz.show_all_gc_responses(savefigname=f"{output_folder}.eps")
 
-    PM.viz.show_gc_responses(PM.working_retina, savefigname=f"{output_folder}.eps")
-
-    # PM.viz.show_stimulus_with_gcs(
-    #     PM.working_retina,
-    #     example_gc=my_run_options["cell_index"],
-    #     frame_number=300, # depends on fps, and video and baseline lengths
-    #     show_rf_id=True,
-    #     savefigname=f"{output_folder}_rfs_stimulus.eps",
-    # )
-
-    # TODO: visualization
-    # VISUALISOI VAE RF ÄRSYKKEEN KANSSA, TARKISTA ETTEI OLE JO YLLÄ KUN RF LUODAAN
-    # VISUALISOI SOLUJEN VASTEET YKSITELLEN HARMAINA KÄPPYRÖINÄ KUN AJETAAN KOKONAINEN KOE
-    # REFAKTOROI WORKING RETINA OBJEKTI VIZ IIN PROJECT MANAGERISSA JA POISTA FUNKTIOSIGNATUUREISTA
-
-    # PM.viz.show_single_gc_view(
-    #     PM.working_retina, cell_index=example_gc, frame_number=21
-    # )
-
-    # PM.viz.plot_tf_amplitude_response(PM.working_retina, my_run_options["cell_index"])
-
-    # PM.viz.plot_midpoint_contrast(PM.working_retina, example_gc)
-    # plt.show(block=False)
-
-    # PM.viz.plot_local_rms_contrast(PM.working_retina, example_gc)
-    # plt.show(block=False)
-
-    # PM.viz.plot_local_michelson_contrast(PM.working_retina, example_gc)
-    # plt.show(block=False)
-
-    #####################
-    ### Run all cells ###
-    #####################
-
-    # PM.viz.show_gc_responses(PM.working_retina)
-
-    # PM.working_retina.save_spikes_csv(filename='testi_spikes.csv') # => METADATA
-    # PM.working_retina.save_structure_csv(filename='testi_structure.csv') # => METADATA
+    PM.viz.show_stimulus_with_gcs(
+        example_gc=2,  # or my_run_options["cell_index"]
+        frame_number=300,  # depends on fps, and video and baseline lengths
+        show_rf_id=True,
+        savefigname=f"{output_folder}_rfs_stimulus.eps",
+    )
 
     ###############################################
     ###############################################

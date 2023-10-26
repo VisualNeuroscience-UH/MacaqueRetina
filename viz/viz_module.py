@@ -1570,7 +1570,6 @@ class Viz:
     # WorkingRetina visualization
     def show_stimulus_with_gcs(
         self,
-        retina,
         frame_number=0,
         ax=None,
         example_gc=5,
@@ -1593,12 +1592,14 @@ class Viz:
         show_rf_id : bool, optional
             If True, the index of each ganglion cell will be printed at the center of its ellipse. Default is False..
         """
-        stimulus_video = retina.stimulus_video
-        gc_df_pixspace = retina.gc_df_pixspace
-        stimulus_height_pix = retina.stimulus_height_pix
-        pix_per_deg = retina.pix_per_deg
-        deg_per_mm = retina.deg_per_mm
-        stimulus_center = retina.stimulus_center
+        stim_to_show = self.project_data.working_retina["stim_to_show"]
+
+        stimulus_video = stim_to_show["stimulus_video"]
+        gc_df_pixspace = stim_to_show["gc_df_pixspace"]
+        stimulus_height_pix = stim_to_show["stimulus_height_pix"]
+        pix_per_deg = stim_to_show["pix_per_deg"]
+        deg_per_mm = stim_to_show["deg_per_mm"]
+        stimulus_center = stim_to_show["stimulus_center"]
 
         fig = plt.figure()
         ax = ax or plt.gca()
@@ -1662,23 +1663,34 @@ class Viz:
         if savefigname:
             self._figsave(figurename=savefigname)
 
-    def show_single_gc_view(self, retina, cell_index, frame_number=0, ax=None):
+    def show_single_gc_view(
+        self, cell_index, frame_number=0, ax=None, savefigname=None
+    ):
         """
-        Plots the stimulus frame cropped to RGC surroundings
+        Overlays the receptive field center of the specified retinal ganglion cell (RGC) on top of
+        a given stimulus frame. whoch is cropped around the RGC.
 
-        WorkingRetina call.
-
-        :param cell_index: int
-        :param frame_number: int
-        :param ax: matplotlib Axes object
-        :return:
+        Parameters
+        ----------
+        cell_index : int
+            Index of the RGC for which the view is to be shown.
+        frame_number : int, optional
+            Frame number of the stimulus to display. Default is 0.
+        ax : matplotlib.axes.Axes, optional
+            Matplotlib Axes object to plot on. If not provided, uses the current axis.
         """
 
-        stimulus_video = retina.stimulus_video
-        gc_df_pixspace = retina.gc_df_pixspace
-        qmin, qmax, rmin, rmax = retina._get_crop_pixels(cell_index)
+        stim_to_show = self.project_data.working_retina["stim_to_show"]
+        stimulus_video = stim_to_show["stimulus_video"]
+        gc_df_pixspace = stim_to_show["gc_df_pixspace"]
+        qmin_all, qmax_all, rmin_all, rmax_all = stim_to_show["qr_min_max"]
+        qmin = qmin_all[cell_index]
+        qmax = qmax_all[cell_index]
+        rmin = rmin_all[cell_index]
+        rmax = rmax_all[cell_index]
 
-        ax = ax or plt.gca()
+        if ax is None:
+            fig, ax = plt.subplots()
 
         gc = gc_df_pixspace.iloc[cell_index]
 
@@ -1707,14 +1719,32 @@ class Viz:
         plt.xticks([])
         plt.yticks([])
 
-    def plot_tf_amplitude_response(self, retina, cell_index, ax=None):
-        """
-        WorkingRetina call.
-        """
-        tf = retina._create_temporal_filter(cell_index)
-        data_filter_duration = retina.data_filter_duration
+        if savefigname is not None:
+            self._figsave(figurename=savefigname)
 
-        ax = ax or plt.gca()
+    def show_temporal_kernel_frequency_response(
+        self, cell_index=0, ax=None, savefigname=None
+    ):
+        """
+        Plot the frequency response of the temporal kernel for a specified or all retinal ganglion cells (RGCs).
+
+        Parameters
+        ----------
+        cell_index : int, optional
+            Index of the RGC for which the frequency response is to be shown.
+        ax : matplotlib.axes.Axes, optional
+            Matplotlib Axes object to plot on. If not provided, uses the current axis.
+        """
+        spat_temp_filter_to_show = self.project_data.working_retina[
+            "spat_temp_filter_to_show"
+        ]
+        temporal_filters = spat_temp_filter_to_show["temporal_filters"]
+        data_filter_duration = spat_temp_filter_to_show["data_filter_duration"]
+
+        tf = temporal_filters[cell_index, :]
+
+        if ax is None:
+            fig, ax = plt.subplots()
 
         ft_tf = np.fft.fft(tf)
         timestep = data_filter_duration / len(tf) / 1000  # in seconds
@@ -1727,18 +1757,26 @@ class Viz:
         plt.ylabel("Gain")
         ax.plot(freqs, ampl_s, ".")
 
-    def plot_midpoint_contrast(self, retina, cell_index, ax=None):
-        """
-        Plots the contrast in the mid-pixel of the stimulus cropped to RGC surroundings
+        if savefigname is not None:
+            self._figsave(figurename=savefigname)
 
-        WorkingRetina call.
-
-        :param cell_index:
-        :return:
+    def plot_midpoint_contrast(self, cell_index=0, ax=None, savefigname=None):
         """
-        stimulus_cropped = retina._get_spatially_cropped_video(cell_index)
-        spatial_filter_sidelen = retina.spatial_filter_sidelen
-        stimulus_video = retina.stimulus_video
+        Plot the contrast at the midpoint pixel of the stimulus cropped to a specified RGC's surroundings.
+
+        Parameters
+        ----------
+        cell_index : int, optional
+            Index of the RGC for which to plot the contrast. Default is 0.
+        ax : matplotlib.axes.Axes, optional
+            Matplotlib Axes object to plot on. If not provided, uses the current axis.
+
+        """
+        stim_to_show = self.project_data.working_retina["stim_to_show"]
+        spatial_filter_sidelen = stim_to_show["spatial_filter_sidelen"]
+        stimulus_video = stim_to_show["stimulus_video"]
+        stimulus_cropped_all = stim_to_show["stimulus_cropped"]
+        stimulus_cropped = stimulus_cropped_all[cell_index]
 
         midpoint_ix = (spatial_filter_sidelen - 1) // 2
         signal = stimulus_cropped[midpoint_ix, midpoint_ix, :]
@@ -1746,26 +1784,33 @@ class Viz:
         video_dt = (1 / stimulus_video.fps) * b2u.second
         tvec = np.arange(0, len(signal)) * video_dt
 
-        ax = ax or plt.gca()
+        if ax is None:
+            fig, ax = plt.subplots()
+
         ax.plot(tvec, signal)
         ax.set_ylim([-1, 1])
 
-    def plot_local_rms_contrast(self, retina, cell_index, ax=None):
-        """
-        Plots local RMS contrast in the stimulus cropped to RGC surroundings.
-        Note that is just a frame-by-frame computation, no averaging here
+        if savefigname is not None:
+            self._figsave(figurename=savefigname)
 
-        WorkingRetina call.
-
-        :param cell_index:
-        :return:
+    def plot_local_rms_contrast(self, cell_index=0, ax=None, savefigname=None):
         """
-        # get stimulus intensities
-        stimulus_cropped = retina._get_spatially_cropped_video(
-            cell_index, contrast=False
-        )
-        stimulus_video = retina.stimulus_video
-        spatial_filter_sidelen = retina.spatial_filter_sidelen
+        Plot the local RMS contrast for the stimulus cropped to a specified RGC's surroundings.
+
+        Parameters
+        ----------
+        cell_index : int, optional
+            Index of the RGC for which to plot the local RMS contrast. Default is 0.
+        ax : matplotlib.axes.Axes, optional
+            Matplotlib Axes object to plot on. If not provided, uses the current axis.
+        """
+        stim_to_show = self.project_data.working_retina["stim_to_show"]
+        stimulus_cropped_all = stim_to_show["stimulus_cropped"]
+        stimulus_cropped = stimulus_cropped_all[cell_index]
+        stimulus_video = stim_to_show["stimulus_video"]
+        spatial_filter_sidelen = stim_to_show["spatial_filter_sidelen"]
+        # Invert from Weber contrast
+        stimulus_cropped = 127.5 * (stimulus_cropped + 1.0)
 
         n_frames = stimulus_video.video_n_frames
         sidelen = spatial_filter_sidelen
@@ -1779,25 +1824,33 @@ class Viz:
         video_dt = (1 / stimulus_video.fps) * b2u.second
         tvec = np.arange(0, len(signal)) * video_dt
 
-        ax = ax or plt.gca()
+        if ax is None:
+            fig, ax = plt.subplots()
+
         ax.plot(tvec, signal)
         ax.set_ylim([0, 1])
 
-    def plot_local_michelson_contrast(self, retina, cell_index, ax=None):
-        """
-        Plots local RMS contrast in the stimulus cropped to RGC surroundings.
-        Note that is just a frame-by-frame computation, no averaging here
+        if savefigname is not None:
+            self._figsave(figurename=savefigname)
 
-        WorkingRetina call.
-
-        :param cell_index:
-        :return:
+    def plot_local_michelson_contrast(self, cell_index=0, ax=None, savefigname=None):
         """
-        # get stimulus intensities
-        stimulus_cropped = retina._get_spatially_cropped_video(
-            cell_index, contrast=False
-        )
-        stimulus_video = retina.stimulus_video
+        Plot the local Michelson contrast for the stimulus cropped to a specified RGC's surroundings.
+
+        Parameters
+        ----------
+        cell_index : int, optional
+            Index of the RGC for which to plot the local Michelson contrast. Default is 0.
+        ax : matplotlib.axes.Axes, optional
+            Matplotlib Axes object to plot on. If not provided, uses the current axis.
+        """
+        stim_to_show = self.project_data.working_retina["stim_to_show"]
+        stimulus_cropped_all = stim_to_show["stimulus_cropped"]
+        stimulus_cropped = stimulus_cropped_all[cell_index]
+        stimulus_video = stim_to_show["stimulus_video"]
+
+        # Invert from Weber contrast
+        stimulus_cropped = 127.5 * (stimulus_cropped + 1.0)
 
         n_frames = stimulus_video.video_n_frames
         signal = np.zeros(n_frames)
@@ -1811,34 +1864,41 @@ class Viz:
 
         video_dt = (1 / stimulus_video.fps) * b2u.second
         tvec = np.arange(0, len(signal)) * video_dt
-        ax = ax or plt.gca()
+
+        if ax is None:
+            fig, ax = plt.subplots()
+
         ax.plot(tvec, signal)
         ax.set_ylim([0, 1])
 
-    def show_gc_responses(self, retina, savefigname=None):
+        if savefigname is not None:
+            self._figsave(figurename=savefigname)
+
+    def show_all_gc_responses(self, savefigname=None):
         """
         WorkingRetina call.
         """
-        n_trials = retina.gc_responses_to_show["n_trials"]
-        n_cells = retina.gc_responses_to_show["n_cells"]
-        all_spiketrains = retina.gc_responses_to_show["all_spiketrains"]
-        exp_generator_potential = retina.gc_responses_to_show["exp_generator_potential"]
-        duration = retina.gc_responses_to_show["duration"]
-        generator_potential = retina.gc_responses_to_show["generator_potential"]
-        video_dt = retina.gc_responses_to_show["video_dt"]
-        tvec_new = retina.gc_responses_to_show["tvec_new"]
+
+        gc_responses_to_show = self.project_data.working_retina["gc_responses_to_show"]
+        n_trials = gc_responses_to_show["n_trials"]
+        n_cells = gc_responses_to_show["n_cells"]
+        all_spiketrains = gc_responses_to_show["all_spiketrains"]
+        duration = gc_responses_to_show["duration"]
+        generator_potential = gc_responses_to_show["generator_potential"]
+        video_dt = gc_responses_to_show["video_dt"]
+        tvec_new = gc_responses_to_show["tvec_new"]
 
         # Prepare data for manual visualization
         if n_trials > 1 and n_cells == 1:
             for_eventplot = all_spiketrains  # list of different leght arrays
             for_histogram = np.concatenate(all_spiketrains)
-            for_generatorplot = exp_generator_potential.flatten()
+            for_generatorplot = generator_potential.flatten()
             n_samples = n_trials
             sample_name = "Trials"
         elif n_trials == 1 and n_cells > 1:
             for_eventplot = all_spiketrains
             for_histogram = np.concatenate(all_spiketrains)
-            for_generatorplot = np.mean(exp_generator_potential, axis=0)
+            for_generatorplot = np.mean(generator_potential, axis=0)
             n_samples = n_cells
             sample_name = "Cell #"
         else:
@@ -1882,62 +1942,50 @@ class Viz:
         if savefigname is not None:
             self._figsave(figurename=savefigname)
 
-    def show_spatiotemporal_filter(self, retina):
+    def show_spatiotemporal_filter(self, cell_index=0, savefigname=None):
         """
         WorkingRetina call.
         """
+        spat_temp_filter_to_show = self.project_data.working_retina[
+            "spat_temp_filter_to_show"
+        ]
+        spatial_filters = spat_temp_filter_to_show["spatial_filters"]
+        temporal_filters = spat_temp_filter_to_show["temporal_filters"]
+        gc_type = spat_temp_filter_to_show["gc_type"]
+        response_type = spat_temp_filter_to_show["response_type"]
+        temporal_filter_len = spat_temp_filter_to_show["temporal_filter_len"]
+        spatial_filter_sidelen = spat_temp_filter_to_show["spatial_filter_sidelen"]
 
-        spatial_filter = retina.spatiotemporal_filter_to_show["spatial_filter"]
-        cell_index = retina.spatiotemporal_filter_to_show["cell_index"]
-        temporal_filter = retina.spatiotemporal_filter_to_show["temporal_filter"]
-        gc_type = retina.gc_type
-        response_type = retina.response_type
-        temporal_filter_len = retina.temporal_filter_len
+        temporal_filter = temporal_filters[cell_index, :]
+        spatial_filter = spatial_filters[cell_index, :]
+        spatial_filter = spatial_filter.reshape(
+            (spatial_filter_sidelen, spatial_filter_sidelen)
+        )
 
         vmax = np.max(np.abs(spatial_filter))
         vmin = -vmax
 
-        plt.subplots(1, 2, figsize=(10, 4))
+        fig, ax = plt.subplots(1, 2, figsize=(10, 4))
+
         plt.suptitle(gc_type + " " + response_type + " / cell ix " + str(cell_index))
         plt.subplot(121)
-        plt.imshow(spatial_filter, cmap=self.cmap_spatial_filter, vmin=vmin, vmax=vmax)
-        plt.colorbar()
+        im = ax[0].imshow(
+            spatial_filter, cmap=self.cmap_spatial_filter, vmin=vmin, vmax=vmax
+        )
+        plt.colorbar(im, ax=ax[0])
 
         plt.subplot(122)
-        plt.plot(range(temporal_filter_len), np.flip(temporal_filter))
+        ax[1].plot(range(temporal_filter_len), np.flip(temporal_filter))
 
         plt.tight_layout()
 
-    def show_convolved_stimulus(self, retina):
-        """
-        WorkingRetina call.
-        """
+        if savefigname is not None:
+            self._figsave(figurename=savefigname)
 
-        cell_index = retina.convolved_stimulus_to_show["cell_index"]
-        generator_potential = retina.convolved_stimulus_to_show["generator_potential"]
-        video_dt = retina.convolved_stimulus_to_show["video_dt"]
-        tonic_drive = retina.convolved_stimulus_to_show["tonic_drive"]
-        firing_rate = retina.convolved_stimulus_to_show["firing_rate"]
-        gc_type = retina.gc_type
-        response_type = retina.response_type
+    def show_impulse_response(self, savefigname=None):
+        viz_dict = self.project_data.working_retina["impulse_to_show"]
 
-        tvec = np.arange(0, len(generator_potential), 1) * video_dt
-
-        plt.subplots(2, 1, sharex=True)
-        plt.subplot(211)
-        plt.plot(tvec, generator_potential + tonic_drive)
-        plt.ylabel("Generator [a.u.]")
-
-        plt.title(gc_type + " " + response_type + " / cell ix " + str(cell_index))
-
-        plt.subplot(212)
-        plt.plot(tvec, firing_rate)
-        plt.xlabel("Time (s)]")
-        plt.ylabel("Firing rate (Hz)]")
-
-    def show_impulse_response(self, retina, savefigname=None):
-        viz_dict = retina.impulse_for_viz_dict
-        tvec = viz_dict["tvec"]  # in secods
+        tvec = viz_dict["tvec"]  # in seconds
         svec = viz_dict["svec"]
 
         contrasts = viz_dict["contrasts"]  # contrasts_for_impulse
@@ -1968,8 +2016,13 @@ class Viz:
         plt.axvline(x=tvec[np.argmax(np.abs(svec))], color="k", linestyle="--")
         plt.legend()
         plt.ylim(ylims[0] * 1.1, ylims[1] * 1.1)
+
+        gc_type = viz_dict["gc_type"]
+        response_type = viz_dict["response_type"]
+        temporal_model = viz_dict["temporal_model"]
+
         plt.title(
-            f"{retina.gc_type} {retina.response_type} ({retina.temporal_model} model) impulse response(s)"
+            f"{gc_type} {response_type} ({temporal_model} model) impulse response(s)"
         )
         plt.xlabel("Time (ms)")
         plt.ylabel("Normalized response")
@@ -2118,7 +2171,6 @@ class Viz:
         axs[1].grid(True)
 
     # Results visualization
-
     def _string_on_plot(
         self, ax, variable_name=None, variable_value=None, variable_unit=None
     ):

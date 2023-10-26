@@ -755,3 +755,108 @@ class DataIO(DataIOBase):
         np.save(
             stack_filename, img_stack
         )  # or pickle.dump(img_stack, open(stack_filename, "wb"))
+
+    def save_spikes_for_cxsystem(
+        self,
+        spikearrays,
+        n_units,
+        w_coord,
+        z_coord,
+        filename=None,
+        analog_signal=None,
+        dt=None,
+    ):
+        # Copied from CxSystem2\cxsystem2\core\stimuli.py The Stimuli class does not support reuse
+        print(" -  Saving spikes, rgc coordinates and analog signal (if not None)...")
+
+        data_to_save = {}
+        for ii in range(len(spikearrays)):
+            data_to_save["spikes_" + str(ii)] = []
+            # units, i in cxsystem2
+            data_to_save["spikes_" + str(ii)].append(spikearrays[ii][0])
+            # times, t in cxsystem2
+            data_to_save["spikes_" + str(ii)].append(spikearrays[ii][1])
+        data_to_save["w_coord"] = w_coord
+        data_to_save["z_coord"] = z_coord
+
+        data_to_save["n_units"] = n_units
+
+        if analog_signal is not None:
+            data_to_save["analog_signal"] = analog_signal
+
+        if dt is not None:
+            data_to_save["dt"] = dt
+
+        if filename is None:
+            save_path = self.context.output_folder.joinpath("most_recent_spikes")
+        else:
+            save_path = self.context.output_folder.joinpath(filename)
+
+        filename_full = save_path.with_suffix(".gz")
+
+        write_to_file(filename_full, data_to_save)
+
+    def save_spikes_csv(self, simulated_spiketrains, n_cells, filename=None):
+        """
+        Saves spikes as a csv file with rows of the form cell_index and spike_time.
+        This file can be used in ViSimpl:
+        visimpl.AppImage -csv parasol_structure.csv parasol_spikes.csv
+
+        Parameters
+        ----------
+        filename: str, optional
+            Name of the file to save the spikes to. If None, the filename will be
+            generated automatically.
+
+        Notes
+        -----
+        With multiple trials and one cell, the cell_index is the trial_index.
+        This is due to uncertainty whether "cell_index" is necessary string for ViSimpl.
+        I promise to correct this when I am reborn as a better programmer.
+        """
+        if len(simulated_spiketrains) == 0:
+            print("There are no simulated spiketrains to save")
+            return
+
+        spikes_df = pd.DataFrame(columns=["cell_index", "spike_time"])
+        for cell_index in range(n_cells):
+            spiketrain = simulated_spiketrains[cell_index]
+            index_array = cell_index * np.ones(len(spiketrain))
+            temp_df = pd.DataFrame(
+                np.column_stack((index_array, spiketrain)),
+                columns=["cell_index", "spike_time"],
+            )
+            spikes_df = pd.concat([spikes_df, temp_df], axis=0)
+
+        spikes_df["cell_index"] = spikes_df["cell_index"].astype(int)
+        spikes_df = spikes_df.sort_values(by="spike_time")
+
+        if filename is None:
+            save_path = self.context.output_folder.joinpath("most_recent_spikes")
+        else:
+            save_path = self.context.output_folder.joinpath(filename)
+        filename_full = save_path.with_suffix(".csv")
+
+        spikes_df.to_csv(filename_full, index=False, header=False)
+
+    def save_structure_csv(self, rgc_coords, filename=None):
+        """
+        Saves x,y coordinates of model cells to a csv file (for use in ViSimpl).
+
+        Parameters
+        ----------
+        filename: str, optional
+            Name of the file to save the structure to. If None, the filename will be
+            generated automatically.
+        """
+        if filename is None:
+            save_path = self.context.output_folder.joinpath("most_recent_structure")
+        else:
+            save_path = self.context.output_folder.joinpath(
+                str(filename) + "_structure"
+            )
+        filename_full = save_path.with_suffix(".csv")
+
+        rgc_coords["z_deg"] = 0.0
+
+        rgc_coords.to_csv(filename_full, header=False, index=False)
