@@ -15,6 +15,10 @@ from stimuli.experiment_module import Experiment
 # Numerical
 import numpy as np
 
+# Compute
+import torch
+
+
 # Builtin
 import pdb
 
@@ -57,6 +61,16 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         """
 
         context = Context(all_properties)
+
+        # Set computing device
+        if context.validated_properties["device"] == "cuda":
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        elif context.validated_properties["device"] == "cpu":
+            device = torch.device("cpu")
+        else:
+            device = torch.device("cpu")
+        print(f"Using device: {device}")
+        context.validated_properties["device"] = device
 
         # Set context attributes for project manager
         self.context = context.set_context(self)
