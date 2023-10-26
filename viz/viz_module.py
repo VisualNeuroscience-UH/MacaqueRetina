@@ -388,7 +388,7 @@ class Viz:
         img_size = model.decoder.unflatten.unflattened_size
         test_data = TF.resize(test_data, img_size[-2:], antialias=True)
 
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = self.context.device
         samples = range(0, nsamples)
 
         model.eval()

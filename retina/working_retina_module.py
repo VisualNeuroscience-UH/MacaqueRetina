@@ -355,7 +355,7 @@ class WorkingRetina(RetinaMath):
 
         return temporal_filter
 
-    def _generator_to_firing_rate(self, cell_indices, generator_potential):
+    def _generator_to_firing_rate_fixed(self, cell_indices, generator_potential):
         """
         Turn generator potential to action potential firing rate.
 
@@ -597,10 +597,10 @@ class WorkingRetina(RetinaMath):
         # Assert that the indices are within the video dimensions
         assert np.all(
             (r_indices >= 0) & (r_indices < video_copy.shape[1])
-        ), "r_indices out of bounds, retina is too large for the stimulus video"
+        ), "r_indices out of bounds, stimulus video is too small for the retina"
         assert np.all(
             (q_indices >= 0) & (q_indices < video_copy.shape[2])
-        ), "q_indices out of bounds, retina is too large for the stimulus video"
+        ), "q_indices out of bounds, stimulus video is too small for the retina"
 
         # Create r_matrix and q_matrix by broadcasting r_indices and q_indices
         r_matrix, q_matrix = np.broadcast_arrays(r_indices, q_indices)
@@ -900,8 +900,8 @@ class WorkingRetina(RetinaMath):
         video_dt = (1 / self.stimulus_video.fps) * b2u.second
 
         # Move to GPU if possible. Both give the same result, but PyTorch@GPU is faster.
-        if "torch" in sys.modules:  # 0:  #
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        if "torch" in sys.modules:
+            device = self.context.device
 
             # Dimensions are [batch_size, num_channels, time_steps]. We use pixels as channels.
             stimulus_cropped = torch.tensor(stimulus_cropped).float().to(device)
@@ -1275,6 +1275,7 @@ class WorkingRetina(RetinaMath):
 
         yvecs = np.empty((len(cell_index), len(contrasts_for_impulse), stim_len_tp))
         if self.temporal_model == "dynamic":
+            # cpu on purpose, less issues, very fast anyway
             device = torch.device("cpu")
             svec_t = torch.tensor(svec, device=device)
             tvec_t = torch.tensor(tvec / b2u.ms, device=device)
@@ -1434,6 +1435,17 @@ class WorkingRetina(RetinaMath):
         - If `save_data` is True, the function saves the spike data and possibly
         the interpolated rates (analog signal) into a file.
         - If `return_monitor` is True, only the Brian2 SpikeMonitor is returned.
+
+        References
+        ----------
+        Dynamic contrast gain control
+        .. [1] Victor (1987) Journal of Physiology
+        .. [2] Benardete & Kaplan (1997) Visual Neuroscience
+        .. [3] Kaplan & Benardete (1999) Journal of Physiology
+        Fixed temporal kernel
+        .. [4] Chichilnisky (2001) Network
+        .. [5] Chichilnisky (2002) Journal of Neuroscience
+        .. [6] Field (2010) Nature
         """
 
         # Save spike generation model
@@ -1484,6 +1496,7 @@ class WorkingRetina(RetinaMath):
         if self.response_type == "off":
             spatial_filters = -spatial_filters
 
+        # Get instantaneous firing rates
         if self.temporal_model == "dynamic":
             # Contrast gain control depends dynamically on contrast
             num_cells = len(cell_indices)
@@ -1514,8 +1527,7 @@ class WorkingRetina(RetinaMath):
                 )
 
             # Get generator potentials
-            # Put data to gpu, if applicable
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            device = self.context.device
 
             # Dummy variables to avoid jump to cpu. Impulse response is called above.
             get_impulse_response = torch.tensor(False, device=device)
@@ -1577,23 +1589,27 @@ class WorkingRetina(RetinaMath):
                         show_impulse=get_impulse_response,
                         impulse_contrast=contrasts_for_impulse,
                     )
-                    # generator_potentials are individually delayed from the beginning of the stimulus
+                    # generator_potentials were unitwise delayed at start of the stimulus
                     generator_potential = generator_potential[:stim_len_tp]
                     generator_potentials_t[idx, :] = generator_potential
+
                 elif self.gc_type == "midget":
+                    # Migdet cells' surrounds are delayed in comparison to centre.
+                    # Thus, we need to run cen and the sur separately.
+
+                    # Low-passing impulse response for center and surround
                     unit_params_cen = params_cen_t[idx, :]
                     lp_cen = self._create_lowpass_response(tvec_t, unit_params_cen)
 
                     unit_params_sur = params_sur_t[idx, :]
                     lp_sur = self._create_lowpass_response(tvec_t, unit_params_sur)
 
-                    # Scale the show_impulse response to have unit area. This corresponds to
-                    # unit gain for DC signals. However, here we run cen first and the sur in the next call.
-                    # So, we need to scale the impulse response to have unit area across both calls.
+                    # Scale the show_impulse response to have unit area in both calls for high-pass.
                     # This corresponds to summation before high-pass stage, as in Schottdorf_2021_JPhysiol
                     h_cen = lp_cen / torch.sum(lp_cen + lp_sur)
                     h_sur = lp_sur / torch.sum(lp_cen + lp_sur)
 
+                    # Convolve stimulus with the low-pass filter and apply high-pass stage
                     gen_pot_cen = self._create_temporal_signal(
                         tvec_t,
                         svecs_cen_t[idx, :],
@@ -1613,8 +1629,7 @@ class WorkingRetina(RetinaMath):
                         show_impulse=get_impulse_response,
                     )
                     # generator_potentials are individually delayed from the beginning of the stimulus
-                    # This may result in diffrerent vector lengths, so we need to crop them to the same length
-                    # before summing them
+                    # This results in varying vector lengths, so we need to crop
                     gen_pot_cen = gen_pot_cen[:stim_len_tp_t]
                     gen_pot_sur = gen_pot_sur[:stim_len_tp_t]
 
@@ -1626,6 +1641,7 @@ class WorkingRetina(RetinaMath):
             # has no separate nonlinearity, so we can use the generator potential directly
             params_all = self.gc_df.loc[cell_indices]
 
+            # Here, spontaneous firing rates are added as tonic_drive**2 from Chichilnisky data
             firing_rates = self._generator_to_firing_rate_dynamic(
                 params_all, generator_potentials
             )
@@ -1645,7 +1661,7 @@ class WorkingRetina(RetinaMath):
             )
 
             # Applies scaling and logistic function to instantaneous firing rates to get veridical ap firing
-            firing_rates = self._generator_to_firing_rate(
+            firing_rates = self._generator_to_firing_rate_fixed(
                 cell_indices, generator_potentials
             )
 
@@ -1660,9 +1676,9 @@ class WorkingRetina(RetinaMath):
         )
 
         tvec_new = np.arange(0, duration, simulation_dt)
-        interpolated_rates_array = rates_func(
-            tvec_new
-        )  # This needs to be 2D array for Brian
+
+        # This needs to be 2D array for Brian
+        interpolated_rates_array = rates_func(tvec_new)
 
         # Identical rates array for every trial; rows=time, columns=cell index
         inst_rates = b2.TimedArray(interpolated_rates_array.T * b2u.Hz, simulation_dt)
@@ -1716,10 +1732,8 @@ class WorkingRetina(RetinaMath):
         tqdm_desc = "Simulating " + self.response_type + " " + self.gc_type + " mosaic"
         for trial in tqdm(range(n_trials), desc=tqdm_desc):
             net.restore()  # Restore the initial state
-            # t_start.append((net.t / b2u.second) * b2u.second)  # pq => b2u
-            t_start.append(net.t)  # pq => b2u
+            t_start.append(net.t)
             net.run(duration)
-            # t_end.append((net.t / b2u.second) * b2u.second)
             t_end.append(net.t)
 
             spiketrains = list(spike_monitor.spike_trains().values())

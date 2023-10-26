@@ -81,11 +81,25 @@ Path structure is assumed to be model_root_path/project/experiment/output_folder
 
 Abbreviations:
 ana : analysis
+cen : center
 col : column
 dd : dendritic diameter
+exp : experimental
 full : full absolute path 
+gc : ganglion cell
+gen : generated
+lit : literature
 param : parameter
+sur : surround
 viz : visualization
+
+Custom suffixes:
+_df : pandas dataframe
+_mm : millimeter
+_np : numpy array
+_pix : pixel
+_t : tensor
+_um : micrometer
 """
 
 """
@@ -140,6 +154,12 @@ Remove random variations by setting the numpy random seed
 numpy_seed = 42  # random.randint(0, 1000000)  # 42
 
 """
+Computing device
+For small retinas cpu may be faster
+"""
+device = "cpu"  # "cpu" or "cuda"
+
+"""
 ### Housekeeping ###. Do not comment out.
 """
 model_root_path = Path(model_root_path)
@@ -159,7 +179,7 @@ my_retina = {
     "gc_type": gc_type,
     "response_type": response_type,
     "ecc_limits": [4, 6],  # degrees # parasol
-    "sector_limits": [-22, 22],  # polar angle in degrees # parasol
+    "sector_limits": [-12, 12],  # polar angle in degrees # parasol
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
     "dd_regr_model": "linear",  # linear, quadratic, cubic, exponential
     "visual_field_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
@@ -167,8 +187,8 @@ my_retina = {
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
     "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder.
-    "DoG_model": "ellipse_independent",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'.
-    "rf_coverage_adjusted_to_1": True,  # False or True. Applies both to FIT and VAE models. Note that ellipse fit does not tolearate VAE adjustments => fit to nonadjusted generated rfs
+    "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'.
+    "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models. Note that ellipse fit does not tolearate VAE adjustments => fit to nonadjusted generated rfs
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
     "model_file_name": "model_midget_on_20230927_133151.pt",  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only.
     "ray_tune_trial_id": None,  # Trial_id for tune, None for loading single run after "train_model". Applies to VAE "load_model" only.
@@ -265,7 +285,7 @@ n_files = 1
 my_run_options = {
     "cell_index": None,  # list of ints or None for all cells
     "n_trials": 1,  # For each of the response files
-    "spike_generator_model": "refractory",  # poisson or refractory
+    "spike_generator_model": "poisson",  # poisson or refractory
     "save_data": True,
     "gc_response_filenames": [f"gc_response_{x:02}" for x in range(n_files)],
     "simulation_dt": 0.0001,  # in sec 0.001 = 1 ms
@@ -327,16 +347,16 @@ refractory_params = {
 # Force Based Layout Algorithm with Boundary Repulsion
 # "force" (f) : better for small retinas, slow
 gc_placement_params = {
-    "alorithm": "voronoi",  # "voronoi" or "force"
-    "n_iterations": 20,  # v 20, f 5000
-    "change_rate": 0.5,  # f 0.001, v 0.5
+    "alorithm": "force",  # "voronoi" or "force"
+    "n_iterations": 5000,  # v 20, f 5000
+    "change_rate": 0.001,  # f 0.001, v 0.5
     "unit_repulsion_stregth": 5,  # 10 f only
     "unit_distance_threshold": 0.02,  # f only, adjusted with ecc
     "diffusion_speed": 0.0001,  # f only, adjusted with ecc
     "border_repulsion_stength": 10,  # f only
     "border_distance_threshold": 0.01,  # f only
     "show_placing_progress": True,
-    "show_skip_steps": 1,
+    "show_skip_steps": 100,  # v 1, f 100
 }
 
 my_retina_append = {
@@ -440,6 +460,7 @@ if __name__ == "__main__":
         project=project,
         experiment=experiment,
         ray_root_path=ray_root_path,
+        device=device,
         my_retina=my_retina,
         my_stimulus_metadata=my_stimulus_metadata,
         my_stimulus_options=my_stimulus_options,
@@ -492,11 +513,10 @@ if __name__ == "__main__":
     Build and test your retina here, one gc type at a time. Temporal hemiretina of macaques.
     """
 
-    # # Main retina construction method. This method calls all other methods in the retina construction process.
-    PM.construct_retina.build()
+    PM.construct_retina.build()  # Main method for building the retina
 
-    # The following visualizations are dependent on the ConstructRetina instance. Thus, they are called after the
-    # retina is built.
+    # The following visualizations are dependent on the ConstructRetina instance.
+    # Thus, they are called after the retina is built.
 
     # The show_exp_build_process method visualizes the spatial and temporal filter responses, ganglion cell positions and density,
     # mosaic layout, spatial and temporal statistics, dendrite diameter versus eccentricity, and tonic drives
@@ -504,8 +524,8 @@ if __name__ == "__main__":
 
     # For FIT (ellipse and DoG fits, temporal kernels and tonic drives)
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
-    PM.viz.visualize_mosaic(savefigname=None)
-    PM.viz.show_dendrite_diam_vs_ecc(savefigname=None)
+    # PM.viz.visualize_mosaic(savefigname=None)
+    # PM.viz.show_dendrite_diam_vs_ecc(savefigname=None)
     # PM.viz.show_temporal_filter_response(n_curves=3, savefigname="temporal_filters.eps")
     # PM.viz.show_spatial_statistics(savefigname="spatial_stats.eps")
 
@@ -542,13 +562,13 @@ if __name__ == "__main__":
     ########################
 
     # See my_stimulus_options for valid stimulus_options
-    # PM.stimulate.make_stimulus_video()
+    PM.stimulate.make_stimulus_video()
 
     ###########################################
     ### Load stimulus to get working retina ###
     ###########################################
 
-    # PM.working_retina.load_stimulus()
+    PM.working_retina.load_stimulus()
 
     ##########################################
     ### Show single ganglion cell response ###
@@ -581,14 +601,14 @@ if __name__ == "__main__":
     ### Run multiple trials or cells ###
     ####################################
 
-    # PM.working_retina.run_with_my_run_options()
+    PM.working_retina.run_with_my_run_options()
 
-    # PM.viz.show_gc_responses(PM.working_retina, savefigname=f"{output_folder}.eps")
+    PM.viz.show_gc_responses(PM.working_retina, savefigname=f"{output_folder}.eps")
 
     # PM.viz.show_stimulus_with_gcs(
     #     PM.working_retina,
     #     example_gc=my_run_options["cell_index"],
-    #     frame_number=300,
+    #     frame_number=300, # depends on fps, and video and baseline lengths
     #     show_rf_id=True,
     #     savefigname=f"{output_folder}_rfs_stimulus.eps",
     # )

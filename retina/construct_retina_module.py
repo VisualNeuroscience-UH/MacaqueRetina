@@ -212,8 +212,7 @@ class ConstructRetina(RetinaMath):
 
         self.gc_df = pd.DataFrame()
 
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        # self.device = "cpu"
+        self.device = self.context.device
 
         self.initialized = True
 

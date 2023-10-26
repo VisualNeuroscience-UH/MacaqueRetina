@@ -935,9 +935,7 @@ class RetinaVAE(RetinaMath):
             "kid_mean",
         ]
 
-        self.device = (
-            torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-        )
+        self.device = context.device
 
         # # Visualize the augmentation effects and exit
         # self._visualize_augmentation_and_exit()
