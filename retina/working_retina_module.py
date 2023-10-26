@@ -594,6 +594,14 @@ class WorkingRetina(RetinaMath):
             .reshape(-1, sidelen, 1, 1)
         )
 
+        # Assert that the indices are within the video dimensions
+        assert np.all(
+            (r_indices >= 0) & (r_indices < video_copy.shape[1])
+        ), "r_indices out of bounds, retina is too large for the stimulus video"
+        assert np.all(
+            (q_indices >= 0) & (q_indices < video_copy.shape[2])
+        ), "q_indices out of bounds, retina is too large for the stimulus video"
+
         # Create r_matrix and q_matrix by broadcasting r_indices and q_indices
         r_matrix, q_matrix = np.broadcast_arrays(r_indices, q_indices)
 
@@ -1457,7 +1465,7 @@ class WorkingRetina(RetinaMath):
 
         cell_indices = np.atleast_1d(cell_indices)  # make sure it's an array
 
-        # Get cropped stimulus, vectorized. Time to crop:  7.05 seconds
+        # Get cropped stimulus, vectorized.
         stimulus_cropped = self._get_spatially_cropped_video(cell_indices, reshape=True)
 
         # Get center masks
@@ -1480,7 +1488,7 @@ class WorkingRetina(RetinaMath):
             # Contrast gain control depends dynamically on contrast
             num_cells = len(cell_indices)
 
-            # Get stimulus contrast vector:  Time to get stimulus contrast:  4.34 seconds
+            # Get stimulus contrast vector:
             if self.gc_type == "parasol":
                 svecs = self._create_dynamic_contrast(
                     stimulus_cropped,
@@ -1681,7 +1689,7 @@ class WorkingRetina(RetinaMath):
                 threshold="rand()<lambda_ttlast",
                 refractory="(t-lastspike) < abs_refractory",
                 dt=simulation_dt,
-            )  # This is necessary for brian2 to generate lastspike variable. Does not affect refractory behavior
+            )
 
             spike_monitor = b2.SpikeMonitor(neuron_group)
             net = b2.Network(neuron_group, spike_monitor)
