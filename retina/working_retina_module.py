@@ -419,6 +419,10 @@ class WorkingRetina(RetinaMath):
             return logistic_function(0, max_fr=fr, k=k, x0=1) - td
 
         tonic_drives = self.gc_df.iloc[cell_indices].tonicdrive
+        # Check that generator potential is 2D, if not, add 0th dimension
+        if len(generator_potential.shape) == 1:
+            generator_potential = generator_potential[np.newaxis, :]
+
         firing_rates = np.zeros((len(cell_indices), generator_potential.shape[1]))
 
         for idx, cell_idx in enumerate(cell_indices):
