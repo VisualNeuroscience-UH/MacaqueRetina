@@ -1595,7 +1595,7 @@ class Viz:
         stim_to_show = self.project_data.working_retina["stim_to_show"]
 
         stimulus_video = stim_to_show["stimulus_video"]
-        gc_df_pixspace = stim_to_show["gc_df_pixspace"]
+        gc_df_pix = stim_to_show["gc_df_pix"]
         stimulus_height_pix = stim_to_show["stimulus_height_pix"]
         pix_per_deg = stim_to_show["pix_per_deg"]
         deg_per_mm = stim_to_show["deg_per_mm"]
@@ -1608,9 +1608,9 @@ class Viz:
         ax.imshow(stimulus_video.frames[:, :, frame_number], vmin=0, vmax=255)
         ax = plt.gca()
 
-        gc_rot_deg = gc_df_pixspace["orient_cen_rad"] * (-1) * 180 / np.pi
+        gc_rot_deg = gc_df_pix["orient_cen_rad"] * (-1) * 180 / np.pi
 
-        for index, gc in gc_df_pixspace.iterrows():
+        for index, gc in gc_df_pix.iterrows():
             if index == example_gc:
                 facecolor = "yellow"
             else:
@@ -1695,7 +1695,7 @@ class Viz:
 
         stim_to_show = self.project_data.working_retina["stim_to_show"]
         stimulus_video = stim_to_show["stimulus_video"]
-        gc_df_pixspace = stim_to_show["gc_df_pixspace"]
+        gc_df_pix = stim_to_show["gc_df_pix"]
         qmin_all, qmax_all, rmin_all, rmax_all = stim_to_show["qr_min_max"]
         qmin = qmin_all[cell_index]
         qmax = qmax_all[cell_index]
@@ -1705,7 +1705,7 @@ class Viz:
         if ax is None:
             fig, ax = plt.subplots()
 
-        gc = gc_df_pixspace.iloc[cell_index]
+        gc = gc_df_pix.iloc[cell_index]
 
         # Show stimulus frame cropped to RGC surroundings & overlay 1SD center RF on top of that
         ax.imshow(
@@ -1921,12 +1921,13 @@ class Viz:
         elif n_trials == 1 and n_cells > 1:
             for_eventplot = all_spiketrains
             for_histogram = np.concatenate(all_spiketrains)
-            for_generatorplot = np.mean(generator_potential, axis=0)
+            for_generatorplot = np.nanmean(generator_potential, axis=0)
             n_samples = n_cells
             sample_name = "Cell #"
         else:
             raise ValueError(
-                """You attempted to visualize gc activity, but either n_trials or n_cells must be 1, and the other > 1"""
+                """You attempted to visualize gc activity, but either n_trials or n_cells must be 1, 
+                and the other > 1"""
             )
 
         # Create subplots
@@ -1942,7 +1943,6 @@ class Viz:
         ax[1].plot(tvec, for_generatorplot, label="Generator")
         ax[1].set_xlim([0, duration / b2u.second])
 
-        # pdb.set_trace()
         # Given bin_width in ms, convert it to the correct unit
         bin_width = 10 * b2u.ms
 
@@ -1960,12 +1960,13 @@ class Viz:
         # Update average firing rate calculation based on the new hist_dt
         avg_fr = hist / n_samples / (hist_dt / b2u.second)
 
-        # Smoothing remains the same
-        xsmooth = np.arange(-3, 3 + 1)
-        smoothing = stats.norm.pdf(xsmooth, scale=1)
-        smoothed_avg_fr = np.convolve(smoothing, avg_fr, mode="same")
+        # # Smoothing remains the same
+        # xsmooth = np.arange(-3, 3 + 1)
+        # smoothing = stats.norm.pdf(xsmooth, scale=1)
+        # smoothed_avg_fr = np.convolve(smoothing, avg_fr, mode="same")
 
-        ax[1].plot(bin_edges[:-1], smoothed_avg_fr, label="Measured")
+        # ax[1].plot(bin_edges[:-1], smoothed_avg_fr, label="Measured")
+        ax[1].plot(bin_edges[:-1], avg_fr, label="Measured")
 
         ax[1].set_ylabel("Firing rate (Hz)")
         ax[1].set_xlabel("Time (s)")
