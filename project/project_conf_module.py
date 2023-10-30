@@ -155,7 +155,7 @@ numpy_seed = 42  # random.randint(0, 1000000)  # 42
 
 """
 Computing device
-For small retinas cpu is faster
+For small retinas cpu is faster. Use cpu if you do not have cuda.
 """
 device = "cuda"  # "cpu" or "cuda"
 
@@ -165,7 +165,7 @@ device = "cuda"  # "cpu" or "cuda"
 model_root_path = Path(model_root_path)
 path = Path.joinpath(model_root_path, Path(project), experiment)
 
-# When training or tuning generative models, multiple hyperparameters are set at the RetinaVAE class.
+# When training or tuning generative VAE model, multiple hyperparameters are set at the RetinaVAE class.
 # For training, see __init__ method. For tuning, the __init__ contains search space and
 # _set_ray_tuner contains the starting point.
 
@@ -190,7 +190,7 @@ my_retina = {
     "DoG_model": "ellipse_independent",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'.
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models. Note that ellipse fit does not tolearate VAE adjustments => fit to nonadjusted generated rfs
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
-    "model_file_name": "model_midget_on_20230927_133151.pt",  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only.
+    "model_file_name": "model_parasol_on_20230923_193921.pt",  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only.
     "ray_tune_trial_id": None,  # Trial_id for tune, None for loading single run after "train_model". Applies to VAE "load_model" only.
 }
 
@@ -288,7 +288,7 @@ my_run_options = {
     "n_trials": 1,  # For each of the response files
     # "cell_index": 2,  # list of ints or None for all cells
     # "n_trials": 10,  # For each of the response files
-    "spike_generator_model": "refractory",  # poisson or refractory
+    "spike_generator_model": "poisson",  # poisson or refractory
     "save_data": True,
     "gc_response_filenames": [f"gc_response_{x:02}" for x in range(n_files)],
     "simulation_dt": 0.0001,  # in sec 0.001 = 1 ms
@@ -613,7 +613,7 @@ if __name__ == "__main__":
     ################################################
 
     # Based on my_run_options above
-    PM.viz.show_all_gc_responses(savefigname=f"{output_folder}.eps")
+    PM.viz.show_all_gc_responses(savefigname=None)
 
     PM.viz.show_stimulus_with_gcs(
         example_gc=2,  # or my_run_options["cell_index"]

@@ -294,24 +294,6 @@ class WorkingRetina(RetinaMath):
                 offset,
             )
         elif self.DoG_model == "ellipse_independent":
-            #             def DoG2D_independent_surround(
-            #     self,
-            #     xy_tuple,
-            #     ampl_c,
-            #     xoc,
-            #     yoc,
-            #     semi_xc,
-            #     semi_yc,
-            #     orient_cen_rad,
-            #     ampl_s,
-            #     xos,
-            #     yos,
-            #     semi_xs,
-            #     semi_ys,
-            #     orient_sur_rad,
-            #     offset,
-            # ):
-
             spatial_kernel = self.DoG2D_independent_surround(
                 (x_grid, y_grid),
                 gc.ampl_c,
@@ -329,7 +311,7 @@ class WorkingRetina(RetinaMath):
                 offset,
             )
         elif self.DoG_model == "circular":
-            spatial_kernel = self.DoG2D_circular_surround(
+            spatial_kernel = self.DoG2D_circular(
                 (x_grid, y_grid),
                 gc.ampl_c,
                 gc.q_pix,
@@ -547,6 +529,7 @@ class WorkingRetina(RetinaMath):
             # It would be an overkill to make pos_ecc_mm, pos_polar_deg forthe surround as well,
             # so we'll just compute the surround's pixel coordinates relative to the center's pixel coordinates.
             # 1) Get the experimental pixel coordinates of the center
+            pdb.set_trace()
             xoc = self.gc_df.xoc_pix.values
             yoc = self.gc_df.yoc_pix.values
             # 2) Get the experimental pixel coordinates of the surround
@@ -710,8 +693,8 @@ class WorkingRetina(RetinaMath):
         if contrast is True:
             # Returns Weber constrast
             stimulus_cropped = stimulus_cropped / 127.5 - 1.0
-        else:
-            stimulus_cropped = stimulus_cropped.astype(np.uint16)
+
+        stimulus_cropped = stimulus_cropped.astype(np.uint16)
 
         if reshape is True:
             n_frames = np.shape(self.stimulus_video.frames)[-1]
@@ -1556,7 +1539,7 @@ class WorkingRetina(RetinaMath):
             self.project_data.working_retina["impulse_to_show"] = self.impulse_to_show
             return
 
-        cell_indices = np.atleast_1d(cell_indices)  # make sure it's an array
+        cell_indices = np.atleast_1d(cell_indices)
 
         # Get cropped stimulus, vectorized.
         stimulus_cropped = self._get_spatially_cropped_video(cell_indices, reshape=True)
@@ -1564,9 +1547,10 @@ class WorkingRetina(RetinaMath):
         # Get center masks
         center_masks = self.get_spatial_filters(cell_indices, get_masks=True)
 
-        # Get spatiotemporal filters
+        # Get spatial filters
         spatial_filters = self.get_spatial_filters(cell_indices)
-
+        print("Spatial filters shape: ", spatial_filters.shape)
+        pdb.set_trace()
         # Scale spatial filters to sum one of centers for each unit to get veridical max contrast
         spatial_filters = (
             spatial_filters / np.sum(spatial_filters * center_masks, axis=1)[:, None]
