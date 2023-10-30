@@ -1647,7 +1647,7 @@ class ConstructRetina(RetinaMath):
         Update gc_vae_df to have the same columns as gc_df with corresponding values.
         Update the remaining pixel values to mm, unless unit in is in the column name
         """
-
+        # pdb.set_trace()
         gc_vae_df = gc_vae_df_in.reindex(columns=self.gc_df.columns)
         # These values come from _place_gc_units before _create_spatial_rfs in build()
         # They are independent from FIT.
@@ -1657,6 +1657,17 @@ class ConstructRetina(RetinaMath):
 
         if self.context.my_retina["DoG_model"] == "ellipse_fixed":
             gc_vae_df["relat_sur_diam"] = gc_vae_df_in["relat_sur_diam"]
+
+        if self.context.my_retina["DoG_model"] == "ellipse_independent":
+            gc_vae_df["xos_pix"] = gc_vae_df_in["xos"]
+            gc_vae_df["yos_pix"] = gc_vae_df_in["yos"]
+            # Scale factor for semi_x and semi_y from pix to millimeters
+            gc_vae_df["semi_xs"] = (
+                gc_vae_df_in["semi_xs"] * new_microm_per_pix / 1000
+            )  # mm
+            gc_vae_df["semi_ys"] = (
+                gc_vae_df_in["semi_ys"] * new_microm_per_pix / 1000
+            )  # mm
 
         if self.context.my_retina["DoG_model"] == "circular":
             # Scale factor for rad_c and rad_s from pix to millimeters
