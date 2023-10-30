@@ -82,7 +82,7 @@ class WorkingRetina(RetinaMath):
             data_filter_timesteps (int): Timesteps in data
             data_filter_duration (float): Filter duration
             gc_df (DataFrame): Ganglion cell parameters
-            gc_df_pix (DataFrame): Ganglion cell parameters in pixel space
+            gc_df_stimpix (DataFrame): Ganglion cell parameters in pixel space
             spatial_filter_sidelen (int): Spatial filter side length
             microm_per_pix (float): Micrometers per pixel
 
@@ -126,21 +126,31 @@ class WorkingRetina(RetinaMath):
         )
         self.gc_df = pd.concat([gc_dataframe, vspace_coords_deg], axis=1)
 
-        # pdb.set_trace()
-        if self.DoG_model in ["ellipse_independent", "ellipse_fixed"]:
+        if self.DoG_model in ["ellipse_fixed"]:
             # Convert RF center radii to degrees as well
-            self.gc_df.semi_xc = self.gc_df.semi_xc * self.deg_per_mm
-            self.gc_df.semi_yc = self.gc_df.semi_yc * self.deg_per_mm
-            # Drop rows (units) where semi_xc and semi_yc is zero.
+            self.gc_df["semi_xc_deg"] = self.gc_df.semi_xc_mm * self.deg_per_mm
+            self.gc_df["semi_yc_deg"] = self.gc_df.semi_yc_mm * self.deg_per_mm
+            # Drop rows (units) where semi_xc_deg and semi_yc_deg is zero.
             # These have bad (>3SD deviation in any ellipse parameter) fits
             self.gc_df = self.gc_df[
-                (self.gc_df.semi_xc != 0) & (self.gc_df.semi_yc != 0)
+                (self.gc_df.semi_xc_deg != 0) & (self.gc_df.semi_yc_deg != 0)
+            ].reset_index(drop=True)
+        if self.DoG_model in ["ellipse_independent"]:
+            # Convert RF center radii to degrees as well
+            self.gc_df["semi_xc_deg"] = self.gc_df.semi_xc_mm * self.deg_per_mm
+            self.gc_df["semi_yc_deg"] = self.gc_df.semi_yc_mm * self.deg_per_mm
+            self.gc_df["semi_xs_deg"] = self.gc_df.semi_xs_mm * self.deg_per_mm
+            self.gc_df["semi_ys_deg"] = self.gc_df.semi_ys_mm * self.deg_per_mm
+            # Drop rows (units) where semi_xc_deg and semi_yc_deg is zero.
+            # These have bad (>3SD deviation in any ellipse parameter) fits
+            self.gc_df = self.gc_df[
+                (self.gc_df.semi_xc_deg != 0) & (self.gc_df.semi_yc_deg != 0)
             ].reset_index(drop=True)
         elif self.DoG_model == "circular":
-            self.gc_df.rad_c = self.gc_df.rad_c * self.deg_per_mm
-            self.gc_df.rad_s = self.gc_df.rad_s * self.deg_per_mm
+            self.gc_df["rad_c_deg"] = self.gc_df.rad_c_mm * self.deg_per_mm
+            self.gc_df["rad_s_deg"] = self.gc_df.rad_s_mm * self.deg_per_mm
             self.gc_df = self.gc_df[
-                (self.gc_df.rad_c != 0) & (self.gc_df.rad_s != 0)
+                (self.gc_df.rad_c_deg != 0) & (self.gc_df.rad_s_deg != 0)
             ].reset_index(drop=True)
 
         # Drop retinal positions from the df (so that they are not used by accident)
@@ -158,12 +168,16 @@ class WorkingRetina(RetinaMath):
         self.stimulus_height_deg = stimulus_height_pix / pix_per_deg
         self.pix_per_deg = pix_per_deg  # angular resolution (eg. van Hateren 1 arcmin/pix => 60 pix/deg)
         self.fps = fps
-        self.gc_df_pix = pd.DataFrame()
         self.spatial_filter_sidelen = 0
         self.microm_per_pix = 0
         self.temporal_filter_len = 0
 
-        self._initialize_digital_sampling()
+        self._initialize_stimulus_pixel_space()
+
+        self.microm_per_pix = (1 / self.deg_per_mm) / self.pix_per_deg * 1000
+
+        # Get temporal parameters from stimulus video
+        self.temporal_filter_len = int(self.data_filter_duration / (1000 / self.fps))
 
         self.spatial_model = self.context.my_retina["spatial_model"]
 
@@ -240,7 +254,7 @@ class WorkingRetina(RetinaMath):
 
         if isinstance(cell_index, (int, np.int32, np.int64)):
             cell_index = np.array([cell_index])
-        gc = self.gc_df_pix.iloc[cell_index]
+        gc = self.gc_df_stimpix.iloc[cell_index]
         q_center = np.round(gc.q_pix).astype(int).values
         r_center = np.round(gc.r_pix).astype(int).values
 
@@ -272,13 +286,12 @@ class WorkingRetina(RetinaMath):
         offset = 0.0
         s = self.spatial_filter_sidelen
 
-        gc = self.gc_df_pix.iloc[cell_index]
+        gc = self.gc_df_stimpix.iloc[cell_index]
         qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
 
         x_grid, y_grid = np.meshgrid(
             np.arange(qmin, qmax + 1, 1), np.arange(rmin, rmax + 1, 1)
         )
-
         # spatial_kernel is here 1-dim vector
         if self.DoG_model == "ellipse_fixed":
             spatial_kernel = self.DoG2D_fixed_surround(
@@ -346,17 +359,7 @@ class WorkingRetina(RetinaMath):
         spatial_filter : np.ndarray
             Spatial filter for the given cell
         """
-        # offset = 0.0
         s = self.spatial_filter_sidelen
-
-        # gc = self.gc_df_pix.iloc[cell_index]
-        # qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_index)
-
-        # x_grid, y_grid = np.meshgrid(
-        #     np.arange(qmin, qmax + 1, 1), np.arange(rmin, rmax + 1, 1)
-        # )
-
-        # orient_cen_rad = gc.orient_cen_rad * (np.pi / 180)
 
         if get_masks == True:
             spatial_kernel = resize(
@@ -502,13 +505,14 @@ class WorkingRetina(RetinaMath):
 
         return video_extent_deg
 
-    def _initialize_digital_sampling(self):
+    def _initialize_stimulus_pixel_space(self):
         """
         Endows RGCs with stimulus/pixel space coordinates.
 
-        Here we make a new dataframe gc_df_pix where everything is in pixels
+        Here we make a new dataframe gc_df_stimpix where everything is in pixels
         """
-        # pdb.set_trace()
+
+        self.gc_df_stimpix = pd.DataFrame()
 
         # Endow RGCs with pixel coordinates.
         pixspace_pos = np.array(
@@ -522,14 +526,10 @@ class WorkingRetina(RetinaMath):
                 {"q_pix": pixspace_pos[:, 0], "r_pix": pixspace_pos[:, 1]}
             )
         elif self.DoG_model == "ellipse_independent":
-            # TÄHÄN JÄIT: OLET RAKENTANUT WORKING RETINAAN CIRCULAR JA ELLIPSE_INDEPENDENT
-            # FIT OPTIOT. TESTAA FIT ERI KOMBINAATIOT.
-
             # We need to here compute the pixel coordinates of the surround as well.
             # It would be an overkill to make pos_ecc_mm, pos_polar_deg forthe surround as well,
             # so we'll just compute the surround's pixel coordinates relative to the center's pixel coordinates.
             # 1) Get the experimental pixel coordinates of the center
-            # pdb.set_trace()
             xoc = self.gc_df.xoc_pix.values
             yoc = self.gc_df.yoc_pix.values
             # 2) Get the experimental pixel coordinates of the surround
@@ -562,38 +562,58 @@ class WorkingRetina(RetinaMath):
                 }
             )
 
-        pix_df = self.gc_df_pix = pd.concat([self.gc_df, pixspace_coords], axis=1)
-
-        # Scale RF axes to pixel space
-        if self.DoG_model in ["ellipse_independent", "ellipse_fixed"]:
-            pix_df.semi_xc = self.gc_df.semi_xc * self.pix_per_deg
-            pix_df.semi_yc = self.gc_df.semi_yc * self.pix_per_deg
-
-        # Define spatial filter sidelength (based on angular resolution and widest semimajor axis)
-        # We use the general rule that the sidelength should be at least 5 times the SD
-        # Sidelength always odd number
+        # Scale RF axes to stimulus pixel space.
         if self.DoG_model == "ellipse_fixed":
-            rf_max_pix = max(
-                max(pix_df.semi_xc * pix_df.relat_sur_diam),
-                max(pix_df.semi_yc * pix_df.relat_sur_diam),
+            self.gc_df_stimpix["semi_xc"] = self.gc_df.semi_xc_deg * self.pix_per_deg
+            self.gc_df_stimpix["semi_yc"] = self.gc_df.semi_yc_deg * self.pix_per_deg
+            self.gc_df_stimpix["orient_cen_rad"] = self.gc_df.orient_cen_rad
+            self.gc_df_stimpix["relat_sur_diam"] = self.gc_df.relat_sur_diam
+        elif self.DoG_model == "ellipse_independent":
+            self.gc_df_stimpix["semi_xc"] = self.gc_df.semi_xc_deg * self.pix_per_deg
+            self.gc_df_stimpix["semi_yc"] = self.gc_df.semi_yc_deg * self.pix_per_deg
+            self.gc_df_stimpix["semi_xs"] = self.gc_df.semi_xs_deg * self.pix_per_deg
+            self.gc_df_stimpix["semi_ys"] = self.gc_df.semi_ys_deg * self.pix_per_deg
+            self.gc_df_stimpix["orient_cen_rad"] = self.gc_df.orient_cen_rad
+            self.gc_df_stimpix["orient_sur_rad"] = self.gc_df.orient_sur_rad
+        elif self.DoG_model == "circular":
+            self.gc_df_stimpix["rad_c"] = self.gc_df.rad_c_deg * self.pix_per_deg
+            self.gc_df_stimpix["rad_s"] = self.gc_df.rad_s_deg * self.pix_per_deg
+            self.gc_df_stimpix["orient_cen_rad"] = 0.0
+
+        self.gc_df_stimpix = pd.concat([self.gc_df_stimpix, pixspace_coords], axis=1)
+        pix_df = deepcopy(self.gc_df_stimpix)
+
+        if self.spatial_model == "FIT":
+            # Define spatial filter sidelength (based on angular resolution and widest semimajor axis)
+            # We use the general rule that the sidelength should be at least 5 times the SD
+            # Sidelength always odd number
+            if self.DoG_model == "ellipse_fixed":
+                rf_max_pix = max(
+                    max(pix_df.semi_xc * pix_df.relat_sur_diam),
+                    max(pix_df.semi_yc * pix_df.relat_sur_diam),
+                )
+
+            elif self.DoG_model == "ellipse_independent":
+                rf_max_pix = max(max(pix_df.semi_xs), max(pix_df.semi_ys))
+
+            elif self.DoG_model == "circular":
+                rf_max_pix = max(self.gc_df_stimpix.rad_s)
+
+            self.spatial_filter_sidelen = 2 * 3 * int(rf_max_pix) + 1
+
+        elif self.spatial_model == "VAE":
+            # Fixed spatial filter sidelength according to VAE RF pixel resolution
+            # at given eccentricity (calculated at construction)
+            stim_um_per_pix = 1000 / (self.pix_per_deg * self.deg_per_mm)
+            # Same metadata in all units, thus index [0]
+            self.spatial_filter_sidelen = int(
+                (self.gc_df.um_per_pix[0] / stim_um_per_pix) * self.gc_df.sidelen_pix[0]
             )
 
-        elif self.DoG_model == "ellipse_independent":
-            rf_max_pix = max(max(pix_df.semi_xs), max(pix_df.semi_ys))
-        elif self.DoG_model == "circular":
-            rf_max_pix = max(pix_df.rad_s)
-            # Add missing columns
-            self.gc_df_pix.rad_c = pix_df.rad_c * self.pix_per_deg
-            self.gc_df_pix.rad_s = pix_df.rad_s * self.pix_per_deg
-            self.gc_df_pix["orient_cen_rad"] = 0.0
+        print(f"Spatial filter sidelength: {self.spatial_filter_sidelen}")
 
-        self.spatial_filter_sidelen = 2 * 3 * int(rf_max_pix) + 1
-
-        self.microm_per_pix = (1 / self.deg_per_mm) / self.pix_per_deg * 1000
-
-        # Get temporal parameters from stimulus video
-        # self.video_fps = self.stimulus_video.fps
-        self.temporal_filter_len = int(self.data_filter_duration / (1000 / self.fps))
+        self.gc_df_stimpix["ampl_c"] = self.gc_df.ampl_c_norm
+        self.gc_df_stimpix["ampl_s"] = self.gc_df.ampl_s_norm
 
     def _get_spatially_cropped_video(self, cell_indices, contrast=True, reshape=False):
         """
@@ -781,9 +801,10 @@ class WorkingRetina(RetinaMath):
             np.min(stimulus_video.frames) >= 0 and np.max(stimulus_video.frames) <= 255
         ), "Stimulus pixel values must be between 0 and 255"
 
-        # Drop RGCs whose center is not inside the stimulus
+        # Drop RGCs whose center is not inside the stimulus.
+        # Note that we use the gc_df instead of gc_df_stimpix.
         xmin, xmax, ymin, ymax = self._get_extents_deg()
-        for index, gc in self.gc_df_pix.iterrows():
+        for index, gc in self.gc_df.iterrows():
             if (
                 (gc.x_deg < xmin)
                 | (gc.x_deg > xmax)
@@ -791,6 +812,7 @@ class WorkingRetina(RetinaMath):
                 | (gc.y_deg > ymax)
             ):
                 self.gc_df.iloc[index] = 0.0  # all columns set as zero
+                self.gc_df_stimpix.iloc[index] = 0.0  # all columns set as zero
 
     def create_spatiotemporal_filter(self, cell_index):
         """
@@ -1559,9 +1581,13 @@ class WorkingRetina(RetinaMath):
                 self.spatial_filter_sidelen,
             ),
         )
-        plt.imshow(tmp_for_imshow[0, :, :], interpolation="nearest")
-        plt.show()
-        pdb.set_trace()
+        if 1:
+            fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+            myim = 0
+            ax[0].imshow(tmp_for_imshow[myim, :, :], interpolation="nearest")
+            plt.colorbar(ax[0].imshow(tmp_for_imshow[myim, :, :]))
+            ax[1].hist(tmp_for_imshow[myim, :, :].flatten(), bins=100)
+            plt.show()
         # Scale spatial filters to sum one of centers for each unit to get veridical max contrast
         spatial_filters = (
             spatial_filters / np.sum(spatial_filters * center_masks, axis=1)[:, None]
@@ -1852,7 +1878,7 @@ class WorkingRetina(RetinaMath):
 
         stim_to_show = {
             "stimulus_video": self.stimulus_video,
-            "gc_df_pix": self.gc_df_pix,
+            "gc_df_stimpix": self.gc_df_stimpix,
             "stimulus_height_pix": self.stimulus_height_pix,
             "pix_per_deg": self.pix_per_deg,
             "deg_per_mm": self.deg_per_mm,
