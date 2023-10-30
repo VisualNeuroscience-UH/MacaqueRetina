@@ -694,7 +694,7 @@ class WorkingRetina(RetinaMath):
             # Returns Weber constrast
             stimulus_cropped = stimulus_cropped / 127.5 - 1.0
 
-        stimulus_cropped = stimulus_cropped.astype(np.uint16)
+        # stimulus_cropped = stimulus_cropped.astype(np.uint16)
 
         if reshape is True:
             n_frames = np.shape(self.stimulus_video.frames)[-1]

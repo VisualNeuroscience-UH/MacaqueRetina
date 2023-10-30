@@ -187,7 +187,7 @@ my_retina = {
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
     "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder.
-    "DoG_model": "ellipse_independent",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'.
+    "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'.
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models. Note that ellipse fit does not tolearate VAE adjustments => fit to nonadjusted generated rfs
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
     "model_file_name": "model_parasol_on_20230923_193921.pt",  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only.
