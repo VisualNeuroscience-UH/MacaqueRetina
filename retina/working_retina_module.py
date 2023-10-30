@@ -529,7 +529,7 @@ class WorkingRetina(RetinaMath):
             # It would be an overkill to make pos_ecc_mm, pos_polar_deg forthe surround as well,
             # so we'll just compute the surround's pixel coordinates relative to the center's pixel coordinates.
             # 1) Get the experimental pixel coordinates of the center
-            pdb.set_trace()
+            # pdb.set_trace()
             xoc = self.gc_df.xoc_pix.values
             yoc = self.gc_df.yoc_pix.values
             # 2) Get the experimental pixel coordinates of the surround
@@ -1550,6 +1550,17 @@ class WorkingRetina(RetinaMath):
         # Get spatial filters
         spatial_filters = self.get_spatial_filters(cell_indices)
         print("Spatial filters shape: ", spatial_filters.shape)
+        # reshape according to sidelen
+        tmp_for_imshow = np.reshape(
+            spatial_filters,
+            (
+                spatial_filters.shape[0],
+                self.spatial_filter_sidelen,
+                self.spatial_filter_sidelen,
+            ),
+        )
+        plt.imshow(tmp_for_imshow[0, :, :], interpolation="nearest")
+        plt.show()
         pdb.set_trace()
         # Scale spatial filters to sum one of centers for each unit to get veridical max contrast
         spatial_filters = (

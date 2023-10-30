@@ -1659,8 +1659,8 @@ class ConstructRetina(RetinaMath):
             gc_vae_df["relat_sur_diam"] = gc_vae_df_in["relat_sur_diam"]
 
         if self.context.my_retina["DoG_model"] == "ellipse_independent":
-            gc_vae_df["xos_pix"] = gc_vae_df_in["xos"]
-            gc_vae_df["yos_pix"] = gc_vae_df_in["yos"]
+            gc_vae_df["xos_pix"] = gc_vae_df_in["xos_pix"]
+            gc_vae_df["yos_pix"] = gc_vae_df_in["yos_pix"]
             # Scale factor for semi_x and semi_y from pix to millimeters
             gc_vae_df["semi_xs"] = (
                 gc_vae_df_in["semi_xs"] * new_microm_per_pix / 1000
@@ -1699,8 +1699,8 @@ class ConstructRetina(RetinaMath):
         gc_vae_df["ampl_c"] = gc_vae_df_in["ampl_c"]
         gc_vae_df["ampl_s"] = gc_vae_df_in["ampl_s"]
 
-        gc_vae_df["xoc_pix"] = gc_vae_df_in["xoc"]
-        gc_vae_df["yoc_pix"] = gc_vae_df_in["yoc"]
+        gc_vae_df["xoc_pix"] = gc_vae_df_in["xoc_pix"]
+        gc_vae_df["yoc_pix"] = gc_vae_df_in["yoc_pix"]
 
         return gc_vae_df
 

@@ -275,11 +275,11 @@ class Fit(RetinaMath):
         tuple
             A dataframe with spatial parameters and errors for each cell, and a dictionary of spatial filters to show with visualization.
             The dataframe has shape `(n_cells, 13)` and columns:
-            ['ampl_c', 'xoc', 'yoc', 'semi_xc', 'semi_yc', 'orient_cen_rad', 'ampl_s', 'xos', 'yos', 'semi_xs',
+            ['ampl_c', 'xoc_pix', 'yoc_pix', 'semi_xc', 'semi_yc', 'orient_cen_rad', 'ampl_s', 'xos_pix', 'yos_pix', 'semi_xs',
             'semi_ys', 'orient_sur_rad', 'offset'] if DoG_model=ellipse_independent,
-            or shape `(n_cells, 8)` and columns: ['ampl_c', 'xoc', 'yoc', 'semi_xc', 'semi_yc', 'orient_cen_rad',
+            or shape `(n_cells, 8)` and columns: ['ampl_c', 'xoc_pix', 'yoc_pix', 'semi_xc', 'semi_yc', 'orient_cen_rad',
             'ampl_s', 'relat_sur_diam', 'offset'] if DoG_model=ellipse_fixed.
-            ['ampl_c', 'xoc', 'yoc', 'rad_c', 'ampl_s', 'rad_s', 'offset'] if DoG_model=circular.
+            ['ampl_c', 'xoc_pix', 'yoc_pix', 'rad_c', 'ampl_s', 'rad_s', 'offset'] if DoG_model=circular.
             The dictionary spat_filt has keys:
                 'x_grid': numpy.ndarray of shape `(num_pix_y, num_pix_x)`, X-coordinates of the grid points
                 'y_grid': numpy.ndarray of shape `(num_pix_y, num_pix_x)`, Y-coordinates of the grid points
@@ -310,14 +310,14 @@ class Fit(RetinaMath):
         if DoG_model == "ellipse_independent":
             parameter_names = [
                 "ampl_c",
-                "xoc",
-                "yoc",
+                "xoc_pix",
+                "yoc_pix",
                 "semi_xc",
                 "semi_yc",
                 "orient_cen_rad",
                 "ampl_s",
-                "xos",
-                "yos",
+                "xos_pix",
+                "yos_pix",
                 "semi_xs",
                 "semi_ys",
                 "orient_sur_rad",
@@ -328,8 +328,8 @@ class Fit(RetinaMath):
         elif DoG_model == "ellipse_fixed":
             parameter_names = [
                 "ampl_c",
-                "xoc",
-                "yoc",
+                "xoc_pix",
+                "yoc_pix",
                 "semi_xc",
                 "semi_yc",
                 "orient_cen_rad",
@@ -342,8 +342,8 @@ class Fit(RetinaMath):
         elif DoG_model == "circular":
             parameter_names = [
                 "ampl_c",
-                "xoc",
-                "yoc",
+                "xoc_pix",
+                "yoc_pix",
                 "rad_c",
                 "ampl_s",
                 "rad_s",
@@ -368,7 +368,7 @@ class Fit(RetinaMath):
         # Set initial guess for fitting
         rot = 0.0
         if DoG_model == "ellipse_independent":
-            # Build initial guess for (ampl_c, xoc, yoc, semi_xc, semi_yc, orient_cen_rad, ampl_s, xos, yos, semi_xs, semi_ys, orient_sur_rad, offset)
+            # Build initial guess for (ampl_c, xoc_pix, yoc_pix, semi_xc, semi_yc, orient_cen_rad, ampl_s, xos_pix, yos_pix, semi_xs, semi_ys, orient_sur_rad, offset)
             p0 = np.array(
                 [
                     1,
@@ -423,7 +423,7 @@ class Fit(RetinaMath):
                 ),
             )
         elif DoG_model == "ellipse_fixed":
-            # Build initial guess for (ampl_c, xoc, yoc, semi_xc, semi_yc, orient_cen_rad, ampl_s, relat_sur_diam, offset)
+            # Build initial guess for (ampl_c, xoc_pix, yoc_pix, semi_xc, semi_yc, orient_cen_rad, ampl_s, relat_sur_diam, offset)
             p0 = np.array(
                 [
                     1,
@@ -445,7 +445,7 @@ class Fit(RetinaMath):
             )
 
         elif DoG_model == "circular":
-            # Build initial guess for (ampl_c, xoc, yoc, rad_c, ampl_s, rad_s, offset)
+            # Build initial guess for (ampl_c, xoc_pix, yoc_pix, rad_c, ampl_s, rad_s, offset)
             p0 = np.array(
                 [
                     1,
