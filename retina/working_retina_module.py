@@ -1535,7 +1535,6 @@ class WorkingRetina(RetinaMath):
 
         # Get spatial filters
         spatial_filters = self.get_spatial_filters(cell_indices)
-        print("Spatial filters shape: ", spatial_filters.shape)
 
         # Scale spatial filters to sum one of centers for each unit to get veridical max contrast
         spatial_filters = (
