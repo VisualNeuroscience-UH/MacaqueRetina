@@ -157,7 +157,7 @@ numpy_seed = 42  # random.randint(0, 1000000)  # 42
 Computing device
 For small retinas cpu is faster. Use cpu if you do not have cuda.
 """
-# TODO: check whether you can load cuda trained model with cpu. cuda appears in dataloader even if you use cpu.
+# After training with a device, the model must be loaded to same device. Seems to be a Pytorch quirk.
 device = "cuda"  # "cpu" or "cuda"
 
 """
@@ -199,10 +199,10 @@ my_retina = {
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
     "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder.
-    "DoG_model": "circular",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'.
+    "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'.
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models. Note that ellipse fit does not tolearate VAE adjustments => fit to nonadjusted generated rfs
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
-    "model_file_name": "model_parasol_on_20230923_193921.pt",  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only.
+    "model_file_name": "model_parasol_on_20231031_163038.pt",  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only.
     "ray_tune_trial_id": None,  # Trial_id for tune, None for loading single run after "train_model". Applies to VAE "load_model" only.
 }
 

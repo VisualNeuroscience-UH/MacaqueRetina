@@ -392,11 +392,13 @@ class VariationalEncoder(nn.Module):
                 self.linear3 = nn.Linear(128, latent_dims)  # sigma
                 self.sigmoid = nn.Sigmoid()  # Provides [0, 1] range
                 self.D = torch.distributions.uniform.Uniform(0, 1)
-                # self.D = torch.distributions.Logistic(loc=0, scale=1)
-                self.D.low = self.D.low.cuda()
-                self.D.high = self.D.high.cuda()
-                # self.D.loc = self.D.loc.cuda()
-                # self.D.scale = self.D.scale.cuda()
+                if device is not None and device.type == "cpu":
+                    self.D.low = self.D.low.cpu()
+                    self.D.high = self.D.high.cpu()
+                elif device is not None and device.type == "cuda":
+                    self.D.low = self.D.low.cuda()
+                    self.D.high = self.D.high.cuda()
+
         self.kl = 0
 
     def forward(self, x):
@@ -1107,8 +1109,6 @@ class RetinaVAE(RetinaMath):
                         "No output path (models_folder) or trial name given, cannot load model, aborting..."
                     )
 
-                # # Evoke new subprocess and run tensorboard at tb_dir folder
-                # self._run_tensorboard(tb_dir=tb_dir)
                 summary(
                     self.vae.to(self.device),
                     input_size=(1, self.resolution_hw, self.resolution_hw),
@@ -1936,11 +1936,6 @@ class RetinaVAE(RetinaMath):
 
                 vae.kid.update(x_expanded, real=True)  # KID
                 vae.kid.update(x_hat_expanded, real=False)  # KID
-
-        # # CUDA memory management
-        # del x, _, x_hat, loss, x_expanded, x_hat_expanded
-        # # # Delete attribute kl from vae.encoder.kl
-        # # delattr(vae.encoder, "kl")
 
         n_samples = len(dataloader.dataset)
         val_loss_epoch = val_loss / n_samples
