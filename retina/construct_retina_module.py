@@ -1257,7 +1257,7 @@ class ConstructRetina(RetinaMath):
         if optim_algorithm == None:
             # Initial random placement.
             # Use this for testing/speed/nonvarying placements.
-            pass
+            optimized_positions = all_positions
         else:
             if optim_algorithm == "force":
                 # Apply Force Based Layout Algorithm with Boundary Repulsion
@@ -1271,7 +1271,7 @@ class ConstructRetina(RetinaMath):
                 optimized_positions_mm[:, 0], optimized_positions_mm[:, 1]
             )
             optimized_positions = np.column_stack(optimized_positions_tuple)
-
+        pdb.set_trace()
         # 4. Assign Output Variables
         self.gc_df["pos_ecc_mm"] = optimized_positions[:, 0]
         self.gc_df["pos_polar_deg"] = optimized_positions[:, 1]
