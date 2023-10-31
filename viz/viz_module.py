@@ -205,7 +205,7 @@ class Viz:
             self._figsave(figurename=savefigname)
 
     def show_spatial_filter_response(
-        self, spat_filt, n_samples=1, title="", savefigname=None
+        self, spat_filt, n_samples=1, sample_list=None, title="", savefigname=None
     ):
         data_all_viable_cells = spat_filt["data_all_viable_cells"]
         x_grid = spat_filt["x_grid"]
@@ -216,9 +216,13 @@ class Viz:
 
         # get cell_ixs
         cell_ixs_list = [ci for ci in spat_filt.keys() if ci.startswith("cell_ix_")]
-
-        if n_samples < len(cell_ixs_list):
+        if sample_list is not None:
+            cell_ixs_list = [cell_ixs_list[i] for i in sample_list]
+            n_samples = len(cell_ixs_list)
+        elif n_samples < len(cell_ixs_list):
             cell_ixs_list = np.random.choice(cell_ixs_list, n_samples, replace=False)
+        elif n_samples == np.inf:
+            n_samples = len(cell_ixs_list)
 
         # Create a single figure for all the samples
         fig, axes = plt.subplots(figsize=(8, 2 * n_samples), nrows=n_samples, ncols=2)
@@ -1051,20 +1055,31 @@ class Viz:
         self.show_temp_stat()
         self.show_tonic_drives()
 
-    def show_DoG_model_fit(self, n_samples=2, savefigname=None):
+    def show_DoG_model_fit(self, n_samples=2, sample_list=None, savefigname=None):
         """
-        Show the experimental (fitted) and generated spatial receptive fields (VAE)
+        Show the experimental and generated spatial receptive fields. The type of
+        spatial model in use (VAE or other) determines what exactly is displayed.
 
         Parameters
         ----------
-        n_samples : int
-            Number of samples to show
+        n_samples : int, optional
+            Number of samples to show. Default is 2.
+        sample_list : list, optional
+            List of specific samples to display. Overrides n_samples if provided.
+        savefigname : str, optional
+            Name of the file to save the figure. If None, the figure won't be saved.
+
+        Notes
+        -----
+        - When the spatial model is VAE, the experimental title changes to indicate the
+        use of 'ellipse_fixed'.
         """
         if self.construct_retina.spatial_model == "VAE":
             spat_filt = self.project_data.fit["gen_spat_filt"]
             self.show_spatial_filter_response(
                 spat_filt,
                 n_samples=n_samples,
+                sample_list=sample_list,
                 title="Generated",
                 savefigname=savefigname,
             )
@@ -1082,6 +1097,7 @@ class Viz:
         self.show_spatial_filter_response(
             spat_filt,
             n_samples=n_samples,
+            sample_list=sample_list,
             title=exp_title,
             savefigname=savefigname,
         )
