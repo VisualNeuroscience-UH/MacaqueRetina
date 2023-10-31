@@ -207,6 +207,29 @@ class Viz:
     def show_spatial_filter_response(
         self, spat_filt, n_samples=1, sample_list=None, title="", savefigname=None
     ):
+        """
+        Display the spatial filter response of the selected cells, along with the corresponding DoG models.
+
+        Parameters
+        ----------
+        spat_filt : dict
+            Dictionary containing spatial filter data.
+            - 'data_all_viable_cells': numpy.ndarray
+            - 'x_grid', 'y_grid': numpy.ndarray
+            - 'DoG_model': str
+            - 'num_pix_x', 'num_pix_y': int
+            - Other keys starting with "cell_ix_" for individual cell data.
+        n_samples : int, optional
+            Number of cells to sample. The default is 1. np.inf will display all cells.
+        sample_list : list of int, optional
+            Indices of specific cells to display. Overrides n_samples if provided.
+        title : str, optional
+            Title for the plot. Default is an empty string.
+        savefigname : str, optional
+            If provided, saves the plot to a file with this name.
+
+        """
+
         data_all_viable_cells = spat_filt["data_all_viable_cells"]
         x_grid = spat_filt["x_grid"]
         y_grid = spat_filt["y_grid"]
@@ -235,6 +258,16 @@ class Viz:
 
         for idx, this_cell_ix in enumerate(cell_ixs_list):
             this_cell_ix_numerical = int(this_cell_ix.split("_")[-1])
+
+            # Add cell index text to the left side of each row
+            axes[idx, 0].text(
+                x_grid.min() - 5,  # Adjust the x-coordinate as needed
+                (y_grid.min() + y_grid.max()) / 2,  # Vertical centering
+                f"Cell Index: {this_cell_ix_numerical}",
+                verticalalignment="center",
+                horizontalalignment="right",
+            )
+
             # Get DoG model fit parameters to popt
             popt = data_all_viable_cells[this_cell_ix_numerical, :]
             spatial_data_array = spat_filt[this_cell_ix]["spatial_data_array"]
