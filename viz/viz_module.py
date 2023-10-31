@@ -743,21 +743,22 @@ class Viz:
 
         :return:
         """
+        gc_df = self.project_data.construct_retina["gc_df"]
+        ecc_mm = gc_df["pos_ecc_mm"].to_numpy()
+        pol_deg = gc_df["pos_polar_deg"].to_numpy()
 
-        ecc_mm = self.construct_retina.gc_df["pos_ecc_mm"].to_numpy()
-        pol_deg = self.construct_retina.gc_df["pos_polar_deg"].to_numpy()
-
+        # Obtain mm values
         if self.context.my_retina["DoG_model"] == "circular":
-            semi_xc = self.construct_retina.gc_df["rad_c"]
-            semi_yc = self.construct_retina.gc_df["rad_c"]
+            semi_xc = gc_df["rad_c_mm"]
+            semi_yc = gc_df["rad_c_mm"]
             angle_in_deg = np.zeros(len(self.construct_retina.gc_df))
         elif self.context.my_retina["DoG_model"] in [
             "ellipse_independent",
             "ellipse_fixed",
         ]:
-            semi_xc = self.construct_retina.gc_df["semi_xc"]
-            semi_yc = self.construct_retina.gc_df["semi_yc"]
-            angle_in_deg = self.construct_retina.gc_df["orient_cen_rad"] * 180 / np.pi
+            semi_xc = gc_df["semi_xc_mm"]
+            semi_yc = gc_df["semi_yc_mm"]
+            angle_in_deg = gc_df["orient_cen_rad"] * 180 / np.pi
 
         # to cartesian
         xcoord, ycoord = self.pol2cart(ecc_mm, pol_deg)
@@ -1050,7 +1051,7 @@ class Viz:
         self.show_temp_stat()
         self.show_tonic_drives()
 
-    def show_gen_exp_spatial_fit(self, n_samples=2, savefigname=None):
+    def show_DoG_model_fit(self, n_samples=2, savefigname=None):
         """
         Show the experimental (fitted) and generated spatial receptive fields (VAE)
 
@@ -1059,14 +1060,6 @@ class Viz:
         n_samples : int
             Number of samples to show
         """
-        spat_filt = self.project_data.fit["exp_spat_filt"]
-        self.show_spatial_filter_response(
-            spat_filt,
-            n_samples=n_samples,
-            title="Experimental",
-            savefigname=savefigname,
-        )
-
         if self.construct_retina.spatial_model == "VAE":
             spat_filt = self.project_data.fit["gen_spat_filt"]
             self.show_spatial_filter_response(
@@ -1075,6 +1068,23 @@ class Viz:
                 title="Generated",
                 savefigname=savefigname,
             )
+            # VAE RF is originally generated in experimental data space at peripheral retina.
+            # When eccentricity changes also the VAE RF sizes need to be scaled.
+            # The VAE RF sizes are scaled according to dendritic field diameter comparison between
+            # experimental data fit and literature data.
+            # Thus the experimental (first) fit for VAE is fixed to ellipse_fixed not to have the
+            # VAE RF resolution depend on DoG model.
+            exp_title = "Experimental shows ellipse_fixed when spatial_model: VAE"
+        else:
+            exp_title = "Experimental"
+
+        spat_filt = self.project_data.fit["exp_spat_filt"]
+        self.show_spatial_filter_response(
+            spat_filt,
+            n_samples=n_samples,
+            title=exp_title,
+            savefigname=savefigname,
+        )
 
     def show_latent_space_and_samples(self):
         """
@@ -1416,14 +1426,6 @@ class Viz:
         num_best_trials = int(len(df) * frac_best)
 
         self._subplot_dependent_boxplots(axd, "dh", df, dep_vars, config_vars_changed)
-
-        # if hasattr(self.construct_retina, "exp_spat_filt"):
-        #     exp_spat_filt = self.construct_retina.exp_spat_filt
-        #     print("construct_retina had attribute exp_spat_filt")
-        # else:
-        #     self.construct_retina._initialize()
-        #     exp_spat_filt = self.construct_retina.exp_spat_filt
-        #     print("construct_retina did not have attribute exp_spat_filt")
 
         exp_spat_filt = self.project_data.fit["exp_spat_filt"]
 
