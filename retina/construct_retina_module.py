@@ -617,6 +617,7 @@ class ConstructRetina(RetinaMath):
         # Scale factor for semi_x and semi_y from pix at data eccentricity to pix at the actual eccentricity
         # Units are pixels for the Chichilnisky data and they are at large eccentricity
         gc_scaling_factors = (lit_cen_diameter_um / 2) / (self.exp_cen_radius_mm * 1000)
+        self.gc_df["gc_scaling_factors"] = gc_scaling_factors
         um_per_pixel = self.context.apricot_metadata["data_microm_per_pix"]
         if self.context.my_retina["DoG_model"] == "ellipse_fixed":
             # Scale semi_x to pix at its actual eccentricity
