@@ -198,6 +198,10 @@ class ConstructRetina(RetinaMath):
 
         # Make or read fits
         if self.spatial_model == "VAE":
+            # VAE RF scaling with eccentricity is dependent of DoG fit (dendritic diameter)
+            # comparison btw literature and experimental data fit. We do not want the data fit
+            # to vary with the DoG model. Thus, we use the same DoG model for all for the initial
+            # experimental fit.
             DoG_model = "ellipse_fixed"
         elif self.spatial_model == "FIT":
             DoG_model = my_retina["DoG_model"]
@@ -990,11 +994,7 @@ class ConstructRetina(RetinaMath):
 
         return torch.stack([delta_x, delta_y], dim=1)
 
-    def _apply_force_based_layout(
-        self,
-        all_positions,
-        gc_density,
-    ):
+    def _apply_force_based_layout(self, all_positions, gc_density):
         """
         Apply a force-based layout on the given positions.
 
@@ -1668,20 +1668,6 @@ class ConstructRetina(RetinaMath):
                     img_temp.shape[1] / 2 + crop_length
                 ),
             ]
-
-            if 0:
-                print(f"Original shape: {img.shape}")
-                print(f"Padded shape: {img_padded.shape}")
-                print(f"shape after zoom: {img_temp.shape}")
-                print(f"shape after crop: {img_cropped.shape}")
-                print(f"zoom_factor: {zoom_factor}")
-                print(f"img_upsampled shape: {img_upsampled.shape}")
-                ecc = self.gc_df["pos_ecc_mm"].values[i]
-                print(f"ecc: {ecc}")
-                print(f"new_sidelen: {new_sidelen}\n")
-
-                plt.imshow(img_cropped)
-                plt.show()
 
             img_upsampled[i] = img_cropped
 
@@ -2448,6 +2434,10 @@ class ConstructRetina(RetinaMath):
 
         # Save the receptive field mosaic
         self.save_gc_csv()
+
+        # Save the project data
+        # Attach data requested by other classes to project_data
+        self.project_data.construct_retina["gc_df"] = self.gc_df
 
     def get_data_at_latent_space(self, retina_vae):
         """
