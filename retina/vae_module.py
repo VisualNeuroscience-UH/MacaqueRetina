@@ -1450,7 +1450,7 @@ class RetinaVAE(RetinaMath):
         """
         Save model for single trial, a.k.a. 'train_model' training_mode
         """
-        filename = f"model_{self.gc_type}_{self.response_type}_{self.timestamp}.pt"
+        filename = f"model_{self.gc_type}_{self.response_type}_{self.device}_{self.timestamp}.pt"
         model_path = f"{self.models_folder}/{filename}"
         # Create models folder if it does not exist using pathlib
 

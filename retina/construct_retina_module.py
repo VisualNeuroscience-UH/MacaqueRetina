@@ -66,8 +66,6 @@ class ConstructRetina(RetinaMath):
         List of two floats, the eccentricity limits in mm
     polar_lim_deg : list
         Numpy array two floats, the sector limits in degrees
-    randomize_position : bool
-        Whether to randomize the position of the ganglion cells
     deg_per_mm : float
         Degrees per mm
     spatial_model : str
@@ -130,7 +128,6 @@ class ConstructRetina(RetinaMath):
         model_density = my_retina["model_density"]
         self.rf_coverage_adjusted_to_1 = my_retina["rf_coverage_adjusted_to_1"]
         self.dd_regr_model = my_retina["dd_regr_model"]
-        randomize_position = my_retina["randomize_position"]
         self.deg_per_mm = my_retina["deg_per_mm"]
 
         self.gc_type = gc_type
@@ -195,7 +192,6 @@ class ConstructRetina(RetinaMath):
             visual_field_limit_for_dd_fit / self.deg_per_mm
         )
         self.polar_lim_deg = np.asarray(sector_limits)  # Turn list to numpy array
-        self.randomize_position = randomize_position
 
         # Make or read fits
         if self.spatial_model == "VAE":
