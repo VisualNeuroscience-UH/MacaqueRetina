@@ -1254,18 +1254,23 @@ class ConstructRetina(RetinaMath):
 
         # 3 Optimize positions
         optim_algorithm = self.context.my_retina["gc_placement_params"]["alorithm"]
-        if optim_algorithm == "force":
-            # Apply Force Based Layout Algorithm with Boundary Repulsion
-            optimized_positions_mm = self._apply_force_based_layout(
-                all_positions_mm, gc_density
+        if optim_algorithm == None:
+            # Initial random placement.
+            # Use this for testing/speed/nonvarying placements.
+            pass
+        else:
+            if optim_algorithm == "force":
+                # Apply Force Based Layout Algorithm with Boundary Repulsion
+                optimized_positions_mm = self._apply_force_based_layout(
+                    all_positions_mm, gc_density
+                )
+            elif optim_algorithm == "voronoi":
+                # Apply Voronoi-based Layout with Loyd's Relaxation
+                optimized_positions_mm = self._apply_voronoi_layout(all_positions_mm)
+            optimized_positions_tuple = self.cart2pol(
+                optimized_positions_mm[:, 0], optimized_positions_mm[:, 1]
             )
-        elif optim_algorithm == "voronoi":
-            # Apply Voronoi-based Layout with Loyd's Relaxation
-            optimized_positions_mm = self._apply_voronoi_layout(all_positions_mm)
-        optimized_positions_tuple = self.cart2pol(
-            optimized_positions_mm[:, 0], optimized_positions_mm[:, 1]
-        )
-        optimized_positions = np.column_stack(optimized_positions_tuple)
+            optimized_positions = np.column_stack(optimized_positions_tuple)
 
         # 4. Assign Output Variables
         self.gc_df["pos_ecc_mm"] = optimized_positions[:, 0]
