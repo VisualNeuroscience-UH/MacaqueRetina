@@ -184,6 +184,8 @@ response_type = "on"
 # The experimental (first) DoG_model fit for VAE is automatically changed to to ellipse_fixed. This way
 # the scaling is not dependent on the selected DoG_model. The final RF fit is what you call for in DoG_model.
 
+# The model_file_name must must be of correct gc_type and response_type.
+
 # These values are used for building a new retina
 my_retina = {
     "gc_type": gc_type,

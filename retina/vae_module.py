@@ -1089,6 +1089,7 @@ class RetinaVAE(RetinaMath):
                         self._load_logging()
                     else:
                         model_file_name = context.my_retina["model_file_name"]
+                        self._validate_model_file_name(model_file_name)
                         model_path_full = self.models_folder / model_file_name
                         self.vae = self._load_model(model_path=model_path_full)
                         self._load_logging(model_file_name=model_file_name)
@@ -1118,6 +1119,14 @@ class RetinaVAE(RetinaMath):
         self.test_loader = self._augment_and_get_dataloader(
             data_type="test", shuffle=False
         )
+
+    def _validate_model_file_name(self, model_file_name):
+        assert (
+            self.gc_type in model_file_name
+        ), "gc_type does not match model_file_name, aborting..."
+        assert (
+            self.response_type in model_file_name
+        ), "response_type not in model_file_name, aborting..."
 
     def _show_lr_decay(self, lr, gamma, step_size, epochs):
         lrs = np.zeros(epochs)
