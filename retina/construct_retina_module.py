@@ -767,8 +767,6 @@ class ConstructRetina(RetinaMath):
             density_prop_all.append(np.full(n_cells, density * self.gc_proportion))
             initial_positions.append(positions)
 
-        # pdb.set_trace()
-        # gc_density = np.mean(density_prop_all)
         gc_density = np.concatenate(density_prop_all)
 
         return eccentricity_groups, initial_positions, areas_all_mm2, gc_density
