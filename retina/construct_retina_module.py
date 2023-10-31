@@ -46,6 +46,7 @@ from pathlib import Path
 import pdb
 from copy import deepcopy
 import math
+import sys
 
 
 class ConstructRetina(RetinaMath):
@@ -502,7 +503,6 @@ class ConstructRetina(RetinaMath):
             self.gc_df["rad_c"] = self.gc_df["rad_c"] * data_microm_per_pix / 1000
 
         # Calculate RF diameter scaling factor for all ganglion cells
-        # Area of RF = gc_scaling_factors * Random_factor * Area of ellipse(semi_xc,semi_yc), solve gc_scaling_factors.
         # Units are pixels for the Chichilnisky data. We scale them to um2 at the actual eccentricity.
         if self.context.my_retina["DoG_model"] in [
             "ellipse_independent",
@@ -617,6 +617,7 @@ class ConstructRetina(RetinaMath):
         # Scale factor for semi_x and semi_y from pix at data eccentricity to pix at the actual eccentricity
         # Units are pixels for the Chichilnisky data and they are at large eccentricity
         gc_scaling_factors = (lit_cen_diameter_um / 2) / (self.exp_cen_radius_mm * 1000)
+        # Save scaling factors to gc_df for FIT model type
         self.gc_df["gc_scaling_factors"] = gc_scaling_factors
         um_per_pixel = self.context.apricot_metadata["data_microm_per_pix"]
         if self.context.my_retina["DoG_model"] == "ellipse_fixed":
@@ -1254,7 +1255,7 @@ class ConstructRetina(RetinaMath):
         all_positions_mm = np.column_stack(all_positions_tuple)
 
         # 3 Optimize positions
-        optim_algorithm = self.context.my_retina["gc_placement_params"]["alorithm"]
+        optim_algorithm = self.context.my_retina["gc_placement_params"]["algorithm"]
         if optim_algorithm == None:
             # Initial random placement.
             # Use this for testing/speed/nonvarying placements.
@@ -1615,7 +1616,6 @@ class ConstructRetina(RetinaMath):
 
         # Assuming the experimental data reflects the eccentricity for VAE generation
         gc_scaling_factors = lit_dd_at_gc_ecc_um / exp_dd_um
-
         gc_um_per_pix = gc_scaling_factors * exp_um_per_pix
 
         # Get min and max values of gc_um_per_pix
@@ -1627,7 +1627,7 @@ class ConstructRetina(RetinaMath):
         # new_pix_size = min_um_per_pix
         new_sidelen = int((max_um_per_pix / min_um_per_pix) * exp_sidelen)
 
-        return gc_um_per_pix, new_sidelen, min_um_per_pix
+        return gc_scaling_factors, gc_um_per_pix, new_sidelen, min_um_per_pix
 
     def _get_resampled_scaled_rfs(
         self,
@@ -2216,13 +2216,20 @@ class ConstructRetina(RetinaMath):
             exp_sidelen = self.context.apricot_metadata["data_spatialfilter_height"]
 
             # 2) Get resampling parameters
-            gc_um_per_pix, new_sidelen, new_um_per_pix = self._get_rf_resampling_params(
+            (
+                gc_scaling_factors,
+                gc_um_per_pix,
+                new_sidelen,
+                new_um_per_pix,
+            ) = self._get_rf_resampling_params(
                 exp_sidelen,
                 exp_um_per_pix,
                 exp_dd_um,
                 lit_dd_vs_ecc_params,
                 gc_pos_ecc_mm,
             )
+            # Save scaling factors to gc_df for VAE model type
+            self.gc_df["gc_scaling_factors"] = gc_scaling_factors
 
             # 3) Get samples. We take 50% extra samples to cover the bad fits
             nsamples_extra = int(nsamples * 1.5)  # 50% extra to account for outliers
@@ -2250,11 +2257,12 @@ class ConstructRetina(RetinaMath):
                 # 5) Fit elliptical gaussians to the img[idx_to_process]
                 # This is dependent metrics, not affecting the spatial RFs
                 # other than quality assurance (below)
+                # fixed DoG model type to exclude the effect on unit selection
                 self.fit.initialize(
                     self.gc_type,
                     self.response_type,
                     fit_type="generated",
-                    DoG_model=self.context.my_retina["DoG_model"],
+                    DoG_model="ellipse_fixed",
                     spatial_data=img_after_resample,
                     new_um_per_pix=new_um_per_pix,
                     mark_outliers_bad=True,
@@ -2272,7 +2280,7 @@ class ConstructRetina(RetinaMath):
 
                 # 7) Update idx_to_process for the loop
                 idx_to_process = np.setdiff1d(idx_to_process, good_idx_generated)
-
+                print(f"bad fits: {idx_to_process}")
                 if len(idx_to_process) > 0:
                     for this_miss in idx_to_process:
                         # Get next possible replacement index
