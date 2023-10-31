@@ -545,9 +545,10 @@ class WorkingRetina(RetinaMath):
             # 5) Transform the mm difference to degrees difference
             x_diff_deg = x_diff_mm * self.deg_per_mm
             y_diff_deg = y_diff_mm * self.deg_per_mm
-            # 6) Add the degrees difference to the center's degrees coordinates
-            x_deg_s = x_diff_deg + self.gc_df.x_deg
-            y_deg_s = y_diff_deg + self.gc_df.y_deg
+            # 6) Scale the degrees difference with eccentricity scaling factor and
+            # add to the center's degrees coordinates
+            x_deg_s = x_diff_deg * self.gc_df.gc_scaling_factors + self.gc_df.x_deg
+            y_deg_s = y_diff_deg * self.gc_df.gc_scaling_factors + self.gc_df.y_deg
             # 7) Transform the degrees coordinates to pixel coordinates in stimulus space
             pixspace_pos_s = np.array(
                 [self._vspace_to_pixspace(x, y) for x, y in zip(x_deg_s, y_deg_s)]
@@ -681,10 +682,10 @@ class WorkingRetina(RetinaMath):
         # Assert that the indices are within the video dimensions
         assert np.all(
             (r_indices >= 0) & (r_indices < video_copy.shape[1])
-        ), "r_indices out of bounds, stimulus video is too small for the retina"
+        ), "r_indices out of bounds, retina lands in part or in full outside stimulus video"
         assert np.all(
             (q_indices >= 0) & (q_indices < video_copy.shape[2])
-        ), "q_indices out of bounds, stimulus video is too small for the retina"
+        ), "q_indices out of bounds, retina lands in part or in full outside stimulus video"
 
         # Create r_matrix and q_matrix by broadcasting r_indices and q_indices
         r_matrix, q_matrix = np.broadcast_arrays(r_indices, q_indices)
@@ -813,43 +814,6 @@ class WorkingRetina(RetinaMath):
             ):
                 self.gc_df.iloc[index] = 0.0  # all columns set as zero
                 self.gc_df_stimpix.iloc[index] = 0.0  # all columns set as zero
-
-    def create_spatiotemporal_filter(self, cell_index):
-        """
-        Returns the outer product of the spatial and temporal filters in stimulus space.
-        This is a legacy function, and is not used in the current version of the code.
-
-        Parameters
-        ----------
-        cell_index : int
-            Index of the RGC whose filter is to be created
-        called_from_loop : bool, optional
-            If True, the function is called from a loop. The default is False.
-
-        Returns
-        -------
-        spatiotemporal_filter : np.ndarray
-            Outer product of the spatial and temporal filters
-            The row-dimension is the number of pixels in the stimulus
-            The column-dimension is the number of frames in the stimulus
-        """
-
-        if self.spatial_model == "FIT":
-            spatial_filter = self._create_spatial_filter_FIT(cell_index)
-        elif self.spatial_model == "VAE":
-            spatial_filter = self._create_spatial_filter_VAE(cell_index)
-        else:
-            raise ValueError("Unknown model type, aborting...")
-        s = self.spatial_filter_sidelen
-        spatial_filter_1d = np.array([np.reshape(spatial_filter, s**2)]).T
-
-        temporal_filter = self._create_temporal_filter(cell_index)
-
-        spatiotemporal_filter = (
-            spatial_filter_1d * temporal_filter
-        )  # (Nx1) * (1xT) = NxT
-
-        return spatiotemporal_filter
 
     def get_temporal_filters(self, cell_indices):
         """
@@ -1572,22 +1536,7 @@ class WorkingRetina(RetinaMath):
         # Get spatial filters
         spatial_filters = self.get_spatial_filters(cell_indices)
         print("Spatial filters shape: ", spatial_filters.shape)
-        # reshape according to sidelen
-        tmp_for_imshow = np.reshape(
-            spatial_filters,
-            (
-                spatial_filters.shape[0],
-                self.spatial_filter_sidelen,
-                self.spatial_filter_sidelen,
-            ),
-        )
-        if 1:
-            fig, ax = plt.subplots(1, 2, figsize=(10, 5))
-            myim = 0
-            ax[0].imshow(tmp_for_imshow[myim, :, :], interpolation="nearest")
-            plt.colorbar(ax[0].imshow(tmp_for_imshow[myim, :, :]))
-            ax[1].hist(tmp_for_imshow[myim, :, :].flatten(), bins=100)
-            plt.show()
+
         # Scale spatial filters to sum one of centers for each unit to get veridical max contrast
         spatial_filters = (
             spatial_filters / np.sum(spatial_filters * center_masks, axis=1)[:, None]
