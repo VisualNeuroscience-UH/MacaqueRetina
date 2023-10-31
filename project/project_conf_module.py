@@ -157,6 +157,7 @@ numpy_seed = 42  # random.randint(0, 1000000)  # 42
 Computing device
 For small retinas cpu is faster. Use cpu if you do not have cuda.
 """
+# TODO: check whether you can load cuda trained model with cpu. cuda appears in dataloader even if you use cpu.
 device = "cuda"  # "cpu" or "cuda"
 
 """
@@ -174,6 +175,15 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 gc_type = "parasol"
 response_type = "on"
 
+# VAE RF is generated in experimental data space originating from macaque peripheral retina.
+# VAE RF sizes need to be scaled according to eccentricity.
+# This scaling is based on dendritic field diameter (DoG model diameter) comparison between
+# experimental data fit and literature data on dendritic field diameter vs eccentricity.
+# When the spatial model is VAE, the DoG model is fitted twice. First, the experimental data is fitted
+# to get the RF scaling. Second, the scaled VAE RF is fitted to get a description of the final RF.
+# The experimental (first) DoG_model fit for VAE is automatically changed to to ellipse_fixed. This way
+# the scaling is not dependent on the selected DoG_model. The final RF fit is what you call for in DoG_model.
+
 # These values are used for building a new retina
 my_retina = {
     "gc_type": gc_type,
@@ -187,7 +197,7 @@ my_retina = {
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
     "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder.
-    "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'.
+    "DoG_model": "ellipse_independent",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'.
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models. Note that ellipse fit does not tolearate VAE adjustments => fit to nonadjusted generated rfs
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
     "model_file_name": "model_parasol_on_20230923_193921.pt",  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only.
@@ -534,7 +544,7 @@ if __name__ == "__main__":
     # PM.viz.show_spatial_statistics(savefigname="spatial_stats.eps")
 
     # For VAE
-    PM.viz.show_gen_exp_spatial_fit(n_samples=5, savefigname="DoG_ellipse_fit.eps")
+    PM.viz.show_DoG_model_fit(n_samples=5, savefigname=None)
     # PM.viz.show_gen_exp_spatial_rf(ds_name="train_ds", n_samples=15, savefigname=None)
     # PM.viz.show_latent_tsne_space()
     # PM.viz.show_gen_spat_post_hist()
@@ -609,15 +619,15 @@ if __name__ == "__main__":
     ###   or multiple cells for single trial     ###
     ################################################
 
-    # Based on my_run_options above
-    PM.viz.show_all_gc_responses(savefigname=None)
+    # # Based on my_run_options above
+    # PM.viz.show_all_gc_responses(savefigname=None)
 
-    PM.viz.show_stimulus_with_gcs(
-        example_gc=2,  # or my_run_options["cell_index"]
-        frame_number=300,  # depends on fps, and video and baseline lengths
-        show_rf_id=True,
-        savefigname=f"{output_folder}_rfs_stimulus.eps",
-    )
+    # PM.viz.show_stimulus_with_gcs(
+    #     example_gc=2,  # or my_run_options["cell_index"]
+    #     frame_number=300,  # depends on fps, and video and baseline lengths
+    #     show_rf_id=True,
+    #     savefigname=f"{output_folder}_rfs_stimulus.eps",
+    # )
 
     ###############################################
     ###############################################
