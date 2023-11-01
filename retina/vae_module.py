@@ -925,7 +925,6 @@ class RetinaVAE(RetinaMath):
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         self.models_folder = self._set_models_folder(context)
-        self.ray_dir = self._set_ray_folder(context)
         self.train_log_folder = self.models_folder / "train_logs"
 
         self.dependent_variables = [
@@ -986,6 +985,8 @@ class RetinaVAE(RetinaMath):
                 )
 
             case "tune_model":
+                self.ray_dir = self._set_ray_folder(context)
+
                 # This will be captured at _set_ray_tuner
                 # Search space of the tuning job. Both preprocessor and dataset can be tuned here.
                 # Use grid search to try out all values for each parameter. values: iterable
@@ -1071,9 +1072,10 @@ class RetinaVAE(RetinaMath):
                 if (
                     context.my_retina["ray_tune_trial_id"] is not None
                 ):  # After tune_model
+                    self.ray_dir = self._set_ray_folder(context)
                     trial_name = context.my_retina["ray_tune_trial_id"]
                     self.vae, result_grid, trial_folder = self._load_model(
-                        model_path=None, trial_name=trial_name
+                        trial_name=trial_name
                     )
 
                     [this_result] = [
