@@ -40,11 +40,11 @@ Next, follow the installation in linux, when you have the WSL2 up and you are in
 
 ## Install with Linux
 
-Run the following commands
+Run the following commands to create and activate virtual environment.
 
-- `python3.11 -m venv [your path to virtual environment root]/ret_pt`
+- `python3.11 -m venv [your path]/ret_pt`
   - Make a new virtual environment named *ret_pt*
-- `source [your path to virtual environment root]/ret_pt2/bin/activate`
+- `source [your root]/ret_pt2/bin/activate`
   - Activate the virtual environment
 
 ### Install pytorch
@@ -55,12 +55,12 @@ After activating the new environment, install Pytorch with your personal command
 
 Example: install Pytorch in windows WSL2 with cuda 12.1  
 `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121`
+- `[your system specific Pytorch installation command}`
 
 ### Install other dependencies
 
 In terminal run:
 
-- `[your system specific Pytorch installation command}`
 - `install_ret_pt_linux.sh`
   - Resides in the same directory as this file
   - You may need to append execute to the access rights by command `chmod ug+x install_ret_pt_linux.sh`
@@ -68,7 +68,7 @@ In terminal run:
 ## How to run
 
 Start by activating your environment  
-`source $install_path/ret_pt2/bin/activate`
+`source [your path]/ret_pt2/bin/activate`
 
 The main files are in the project directory.
 
