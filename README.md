@@ -55,6 +55,7 @@ After activating the new environment, install Pytorch with your personal command
 
 Example: install Pytorch in windows WSL2 with cuda 12.1  
 `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121`
+
 - `[your system specific Pytorch installation command}`
 
 ### Install other dependencies
