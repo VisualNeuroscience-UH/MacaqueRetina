@@ -24,8 +24,6 @@ warnings.simplefilter("ignore")
 This is code for building macaque retinal filters corresponding to midget and parasol cell responses
 for temporal hemiretina. We keep modular code structure, to be able to add new features at later phase.
 
-The cone photoreceptor sampling is approximated as achromatic (single) compressive cone response(Baylor_1987_JPhysiol).
-
 Visual angle (A) in degrees from previous studies (Croner and Kaplan, 1995) was approximated with relation 5 deg/mm. 
 This works fine up to 20 deg ecc, but underestimates the distance thereafter. If more peripheral representations are 
 necessary, the millimeters should be calculated by inverting the relation A = 0.1 + 4.21E + 0.038E^2 (Drasdo and Fowler, 1974;
@@ -72,6 +70,8 @@ For a review of physiological mechanisms, see Demb_2008_JPhysiol and Beaudoin_20
 The max firing rate, parameter "A" in the Victor model, comes from Benardete_1999_VisNeurosci for parasol cells and Benardete_1997_VisNeurosci_a for midget cells.
 To get firing rate from generator potential, we fit a logistic function. The firing_rate = A / (1 + exp(-k*(x-x0))) - tonic_drive, where k is 
 the steepness of the curve and x0 is the sigmoid's midpoint. 
+
+The cone photoreceptor sampling is approximated as achromatic (single) compressive cone response(Baylor_1987_JPhysiol).
 """
 
 """
@@ -158,7 +158,7 @@ Computing device
 For small retinas cpu is faster. Use cpu if you do not have cuda.
 """
 # After training with a device, the model must be loaded to same device. Seems to be a Pytorch quirk.
-device = "cuda"  # "cpu" or "cuda"
+device = "cpu"  # "cpu" or "cuda"
 
 """
 ### Housekeeping ###. Do not comment out.
@@ -172,8 +172,8 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 
 # For "load_model" training_mode, the model is loaded from model_file_name at output_folder (primary)
 # or input_folder. The correct model name (including time stamp) must be given in the model_file_name.
-gc_type = "midget"
-response_type = "off"
+gc_type = "parasol"
+response_type = "on"
 
 # VAE RF is generated in experimental data space originating from macaque peripheral retina.
 # VAE RF sizes need to be scaled according to eccentricity.

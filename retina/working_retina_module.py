@@ -611,8 +611,6 @@ class WorkingRetina(RetinaMath):
                 (self.gc_df.um_per_pix[0] / stim_um_per_pix) * self.gc_df.sidelen_pix[0]
             )
 
-        print(f"Spatial filter sidelength: {self.spatial_filter_sidelen}")
-
         self.gc_df_stimpix["ampl_c"] = self.gc_df.ampl_c_norm
         self.gc_df_stimpix["ampl_s"] = self.gc_df.ampl_s_norm
 

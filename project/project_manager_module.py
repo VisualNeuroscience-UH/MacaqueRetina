@@ -43,7 +43,7 @@ Simo Vanni 2022
 
 class ProjectData:
     """
-    This is a container for project data for internal use, such as visualizations.
+    This is a container for project piping data for internal use, such as visualizations.
     """
 
     def __init__(self) -> None:
