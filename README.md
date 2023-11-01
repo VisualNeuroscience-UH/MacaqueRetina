@@ -68,8 +68,7 @@ In terminal run:
 
 ## How to run
 
-Start by activating your environment  
-`source [your path]/ret_pt2/bin/activate`
+Start by activating your environment (see above)
 
 The main files are in the project directory.
 
