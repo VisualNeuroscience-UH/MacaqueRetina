@@ -44,7 +44,7 @@ Run the following commands to create and activate virtual environment.
 
 - `python3.11 -m venv [your path]/ret_pt`
   - Make a new virtual environment named *ret_pt*
-- `source [your root]/ret_pt2/bin/activate`
+- `source [your root]/ret_pt/bin/activate`
   - Activate the virtual environment
 
 ### Install pytorch
