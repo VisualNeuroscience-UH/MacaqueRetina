@@ -495,6 +495,7 @@ class StimulusPattern:
         self._raw_intensity_from_data()
 
     def natural_video(self):
+        # TODO: add cone filtering to video
         # self.cones.image2cone_response()
         # self.image = self.cones.cone_response
         video_file_name = self.context.my_stimulus_metadata["stimulus_file"]
@@ -532,8 +533,6 @@ class StimulusPattern:
 
         if self.context.my_stimulus_metadata["apply_cone_filter"] is True:
             pass
-        # MUUTA  PHOTORESEPTOR KÄYTTÄMÄÄN MYÖS VIDEOKUVAA.
-        # TILAA VIDEOFILTTERÖINTI TÄSSÄ
 
         self._raw_intensity_from_data()
         video_cap.release()
@@ -662,10 +661,9 @@ class VisualStimulus(VideoBaseClass):
         additional arguments are:
         spatial_band_pass: (cycles per degree min, cycles per degree max)
         temporal_band_pass: (Hz min, Hz max)
-        orientation: in degrees
 
         ------------------------
-        Output: saves the stimulus video file to output path if stimulus_video_name is not empty or None
+        Output: saves the stimulus video file to output path if stimulus_video_name is not empty str or None
         """
 
         # Set input arguments to video-object, updates the defaults from VideoBaseClass
@@ -753,9 +751,6 @@ class VisualStimulus(VideoBaseClass):
             self.video, (self.video_n_frames, self.video_height * self.video_width)
         ).T  # pixels as rows, time as cols
         return stim_video_2d
-
-    def set_test_image(self):
-        raise NotImplementedError
 
 
 class AnalogInput:

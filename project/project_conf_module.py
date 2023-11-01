@@ -489,6 +489,7 @@ if __name__ == "__main__":
     ###    Check cone response    ###
     #################################
 
+    # TODO: enable cone filtering to stimuli, partially not implemented
     """
     The Chichilnisky model receptive fields were measured from isolated retinas.
     Images were focused on photoreceptors. To account for the blur by the eye,
@@ -496,8 +497,6 @@ if __name__ == "__main__":
     """
     # PM.cones.image2cone_response()
     # PM.viz.show_cone_response(PM.cones.image, PM.cones.image_after_optics, PM.cones.cone_response)
-
-    # TODO take raw hdf5 image through cone response to working retina
 
     ###########################################
     ##   Sample figure data from literature  ##
