@@ -10,6 +10,9 @@ This project is under development.
 - You need git installed.  
 - Add the MacaqueRetina git repository root (the folder where this file resides) to the PYTHONPATH environment variable.
 
+If you have NVIDIA GPU, you can install CUDA for using GPU acceleration. This is available both on [WSL2](https://docs.nvidia.com/cuda/wsl-user-guide/index.html) and  [linux](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html)  
+You can work with just CPU, but training new VAE models is slow. Luckily the standard VAE model is rather small, taking only about an hour on CPU in a fast laptop.
+
 ### Install with Windows
 
 The python environment had issues in pure Windows, thus it is only supported under linux.  
@@ -19,7 +22,7 @@ The python environment had issues in pure Windows, thus it is only supported und
 You can configure WSL2 by running the following commands in windows powershell
 
 - `echo "[wsl2]" > ~/.wslconfig`
-  - Writes the WSL2 configuration file to the user's home directory in Windows. Settings apply across all Linux distros running on WSL 2 
+  - Writes the WSL2 configuration file to the user's home directory in Windows. Settings apply across all Linux distros running on WSL 2
   
 - `echo "memory=26GB" >> ~/.wslconfig`
   - Limits VM memory to use no more than 26 GB, this can be set as whole numbers using GB or MB
@@ -36,6 +39,8 @@ More examples and backgorund on WSL2 in [Microsoft pages](https://learn.microsof
 Next, follow the installation in linux, when you have the WSL2 up and you are in linux system.
 
 ## Install with Linux
+
+Run the following commands
 
 - `python3.11 -m venv [your path to virtual environment root]/ret_pt`
   - Make a new virtual environment named *ret_pt*
