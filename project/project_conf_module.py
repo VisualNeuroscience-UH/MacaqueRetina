@@ -124,7 +124,7 @@ project = "Retina"
 """
 Current experiment. Use distinct folders fo distinct stimuli.
 """
-experiment = "spatiotemporal"  # "luminance_onset"
+experiment = "dynamic_QA" 
 
 
 """
@@ -197,12 +197,12 @@ my_retina = {
     "visual_field_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
-    "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder.
-    "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'.
-    "rf_coverage_adjusted_to_1": True,  # False or True. Applies both to FIT and VAE models. Note that ellipse fit does not tolearate VAE adjustments => fit to nonadjusted generated rfs
-    "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only.
-    "model_file_name": "model_parasol_on_cpu_20231101_090048.pt",  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[DEVICE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only.
-    "ray_tune_trial_id": None,  # Trial_id for tune, None for loading single run after "train_model". Applies to VAE "load_model" only.
+    "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder
+    "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
+    "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models. Note that ellipse fit does not tolearate VAE adjustments => fit to nonadjusted generated rfs
+    "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
+    "model_file_name": "model_parasol_on_cpu_20231101_090048.pt",  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[DEVICE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only
+    "ray_tune_trial_id": None,  # Trial_id for tune, None for loading single run after "train_model". Applies to VAE "load_model" only
 }
 
 # For external video and image input. See visual_stimulus_module.VideoBaseClass for more options.
@@ -363,7 +363,7 @@ refractory_params = {
 # None : initial random placement. Use this for testing/speed/nonvarying placements.
 gc_placement_params = {
     "algorithm": "force",  # "voronoi" or "force" or None
-    "n_iterations": 5000,  # v 20, f 5000
+    "n_iterations": 1000,  # v 20, f 5000
     "change_rate": 0.001,  # f 0.001, v 0.5
     "unit_repulsion_stregth": 5,  # 10 f only
     "unit_distance_threshold": 0.02,  # f only, adjusted with ecc
@@ -542,7 +542,7 @@ if __name__ == "__main__":
     # For FIT (ellipse and DoG fits, temporal kernels and tonic drives)
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
     PM.viz.visualize_mosaic(savefigname=None)
-    PM.viz.show_dendrite_diam_vs_ecc(savefigname=None)
+    # PM.viz.show_dendrite_diam_vs_ecc(savefigname=None)
     # PM.viz.show_temporal_filter_response(n_curves=3, savefigname="temporal_filters.eps")
     # PM.viz.show_spatial_statistics(savefigname="spatial_stats.eps")
 
@@ -578,21 +578,21 @@ if __name__ == "__main__":
     ########################
 
     # Based on my_stimulus_options above
-    # PM.stimulate.make_stimulus_video()
+    PM.stimulate.make_stimulus_video()
 
     ####################################
     ### Run multiple trials or cells ###
     ####################################
 
-    # # Load stimulus to get working retina, necessary for running cells
-    # PM.working_retina.load_stimulus()
-    # PM.working_retina.run_with_my_run_options()
+    # Load stimulus to get working retina, necessary for running cells
+    PM.working_retina.load_stimulus()
+    PM.working_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
     ##########################################
 
-    # PM.viz.show_spatiotemporal_filter(cell_index=2, savefigname=None)
+    PM.viz.show_spatiotemporal_filter(cell_index=39, savefigname=None)
     # PM.viz.show_temporal_kernel_frequency_response(cell_index=2, savefigname=None)
     # PM.viz.plot_midpoint_contrast(cell_index=2, savefigname=None)
     # PM.viz.plot_local_rms_contrast(cell_index=2, savefigname=None)
@@ -621,15 +621,15 @@ if __name__ == "__main__":
     ###   or multiple cells for single trial     ###
     ################################################
 
-    # # Based on my_run_options above
-    # PM.viz.show_all_gc_responses(savefigname=None)
+    # Based on my_run_options above
+    PM.viz.show_all_gc_responses(savefigname=None)
 
-    # PM.viz.show_stimulus_with_gcs(
-    #     example_gc=2,  # or my_run_options["cell_index"]
-    #     frame_number=300,  # depends on fps, and video and baseline lengths
-    #     show_rf_id=True,
-    #     savefigname=f"{output_folder}_rfs_stimulus.eps",
-    # )
+    PM.viz.show_stimulus_with_gcs(
+        example_gc=39,  # or my_run_options["cell_index"]
+        frame_number=300,  # depends on fps, and video and baseline lengths
+        show_rf_id=True,
+        savefigname=f"{output_folder}_rfs_stimulus.eps",
+    )
 
     ###############################################
     ###############################################
