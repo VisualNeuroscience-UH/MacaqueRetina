@@ -513,6 +513,9 @@ class ConstructRetina(RetinaMath):
             self.gc_df["rad_c_mm"] = (
                 self.gc_df["rad_c_pix"] * data_microm_per_pix / 1000
             )
+            self.gc_df["rad_s_mm"] = (
+                self.gc_df["rad_s_pix"] * data_microm_per_pix / 1000
+            )
 
         # Calculate RF diameter scaling factor for all ganglion cells. The surround in
         # ellipse_indenpendent model has the same scaling factor as the center.
@@ -602,6 +605,13 @@ class ConstructRetina(RetinaMath):
                 * random_distribution_x
             )
             self.gc_df["rad_c_mm"] = rad_c
+
+            rad_s = (
+                radius_scaling_factors_coverage_1
+                * self.gc_df["rad_s_mm"]
+                * random_distribution_y
+            )
+            self.gc_df["rad_s_mm"] = rad_s
 
     def _generate_DoG_with_rf_from_literature(
         self, lit_dd_vs_ecc_params, dd_regr_model
