@@ -122,9 +122,9 @@ class ConstructRetina(RetinaMath):
         my_retina = self.context.my_retina
         gc_type = my_retina["gc_type"]
         response_type = my_retina["response_type"]
-        ecc_limits = my_retina["ecc_limits"]
+        ecc_limits_deg = my_retina["ecc_limits_deg"]
         visual_field_limit_for_dd_fit = my_retina["visual_field_limit_for_dd_fit"]
-        sector_limits = my_retina["sector_limits"]
+        pol_limits_deg = my_retina["pol_limits_deg"]
         model_density = my_retina["model_density"]
         self.rf_coverage_adjusted_to_1 = my_retina["rf_coverage_adjusted_to_1"]
         self.dd_regr_model = my_retina["dd_regr_model"]
@@ -144,11 +144,11 @@ class ConstructRetina(RetinaMath):
 
         # Assertions
         assert (
-            isinstance(ecc_limits, list) and len(ecc_limits) == 2
+            isinstance(ecc_limits_deg, list) and len(ecc_limits_deg) == 2
         ), "Wrong type or length of eccentricity, aborting"
         assert (
-            isinstance(sector_limits, list) and len(sector_limits) == 2
-        ), "Wrong type or length of sector_limits, aborting"
+            isinstance(pol_limits_deg, list) and len(pol_limits_deg) == 2
+        ), "Wrong type or length of pol_limits_deg, aborting"
         assert model_density <= 1.0, "Density should be <=1.0, aborting"
 
         # Calculate self.gc_proportion from GC type specifications
@@ -184,14 +184,14 @@ class ConstructRetina(RetinaMath):
         self.gc_type = gc_type
         self.response_type = response_type
 
-        self.eccentricity = ecc_limits
+        self.eccentricity = ecc_limits_deg
         self.ecc_lim_mm = np.asarray(
-            [r / self.deg_per_mm for r in ecc_limits]
+            [r / self.deg_per_mm for r in ecc_limits_deg]
         )  # Turn list to numpy array and deg to mm
         self.visual_field_limit_for_dd_fit_mm = (
             visual_field_limit_for_dd_fit / self.deg_per_mm
         )
-        self.polar_lim_deg = np.asarray(sector_limits)  # Turn list to numpy array
+        self.polar_lim_deg = np.asarray(pol_limits_deg)  # Turn list to numpy array
 
         # Make or read fits
         if self.spatial_model == "VAE":
@@ -552,16 +552,6 @@ class ConstructRetina(RetinaMath):
         self.gc_df["gc_scaling_factors"] = radius_scaling_factors_coverage_1
 
         # Apply scaling factors.
-        variability = 0.213  # 21.3% IQR variability in Watanabe_1989_JCompNeurol Fig 9
-        iqr_scaling_factor = 1.35  # Approximate IQR scaling for a normal distribution
-
-        scale_random_distribution = variability / iqr_scaling_factor
-        random_distribution_x = 1 + np.random.normal(
-            scale=scale_random_distribution, size=n_cells
-        )
-        random_distribution_y = 1 + np.random.normal(
-            scale=scale_random_distribution, size=n_cells
-        )
         if self.context.my_retina["DoG_model"] in [
             "ellipse_independent",
             "ellipse_fixed",
@@ -569,13 +559,11 @@ class ConstructRetina(RetinaMath):
             semi_xc = (
                 radius_scaling_factors_coverage_1
                 * self.gc_df["semi_xc_mm"]
-                * random_distribution_x
             )
 
             semi_yc = (
                 radius_scaling_factors_coverage_1
                 * self.gc_df["semi_yc_mm"]
-                * random_distribution_y
             )
 
             self.gc_df["semi_xc_mm"] = semi_xc
@@ -586,13 +574,11 @@ class ConstructRetina(RetinaMath):
             semi_xs = (
                 radius_scaling_factors_coverage_1
                 * self.gc_df["semi_xs_mm"]
-                * random_distribution_x
             )
 
             semi_ys = (
                 radius_scaling_factors_coverage_1
                 * self.gc_df["semi_ys_mm"]
-                * random_distribution_y
             )
 
             self.gc_df["semi_xs_mm"] = semi_xs
@@ -602,14 +588,12 @@ class ConstructRetina(RetinaMath):
             rad_c = (
                 radius_scaling_factors_coverage_1
                 * self.gc_df["rad_c_mm"]
-                * random_distribution_x
             )
             self.gc_df["rad_c_mm"] = rad_c
 
             rad_s = (
                 radius_scaling_factors_coverage_1
                 * self.gc_df["rad_s_mm"]
-                * random_distribution_y
             )
             self.gc_df["rad_s_mm"] = rad_s
 
@@ -898,59 +882,6 @@ class ConstructRetina(RetinaMath):
 
         return forces
 
-    def _boundary_polygon(self, ecc_lim_mm, polar_lim_deg, n_points=100):
-        """
-        Create a boundary polygon based on given eccentricity and polar angle limits.
-
-        Parameters
-        ----------
-        ecc_lim_mm : np.ndarray
-            An array representing the eccentricity limits in millimeters for
-            left and right boundaries (shape: [2]).
-        polar_lim_deg : np.ndarray
-            An array representing the polar angle limits in degrees for
-            bottom and top boundaries (shape: [2]).
-        n_points : int
-            Number of points to generate along each arc.
-
-        Returns
-        -------
-        boundary_polygon : np.ndarray
-            Array of Cartesian coordinates forming the vertices of the boundary polygon.
-        """
-
-        # Generate points for bottom and top polar angle limits
-        bottom_x, bottom_y = self.pol2cart(
-            np.full(n_points, ecc_lim_mm[0]),
-            np.linspace(polar_lim_deg[0], polar_lim_deg[1], n_points),
-        )
-        top_x, top_y = self.pol2cart(
-            np.full(n_points, ecc_lim_mm[1]),
-            np.linspace(polar_lim_deg[0], polar_lim_deg[1], n_points),
-        )
-
-        # Generate points along the arcs for min and max eccentricities
-        theta_range = np.linspace(polar_lim_deg[0], polar_lim_deg[1], n_points)
-        min_ecc_x, min_ecc_y = self.pol2cart(
-            np.full_like(theta_range, ecc_lim_mm[0]), theta_range
-        )
-        max_ecc_x, max_ecc_y = self.pol2cart(
-            np.full_like(theta_range, ecc_lim_mm[1]), theta_range
-        )
-
-        # Combine them to form the vertices of the bounding polygon
-        boundary_polygon = []
-
-        # Add points from bottom arc
-        for bx, by in zip(min_ecc_x, min_ecc_y):
-            boundary_polygon.append((bx, by))
-
-        # Add points from top arc (in reverse order)
-        for tx, ty in reversed(list(zip(max_ecc_x, max_ecc_y))):
-            boundary_polygon.append((tx, ty))
-
-        return np.array(boundary_polygon)
-
     def _pol2cart_torch(self, radius, phi, deg=True):
         """
         Convert polar coordinates to Cartesian coordinates using PyTorch tensors.
@@ -1192,7 +1123,7 @@ class ConstructRetina(RetinaMath):
 
         ecc_lim_mm = self.ecc_lim_mm
         polar_lim_deg = self.polar_lim_deg
-        boundary_polygon = self._boundary_polygon(ecc_lim_mm, polar_lim_deg)
+        boundary_polygon = self.viz.boundary_polygon(ecc_lim_mm, polar_lim_deg)
         original_positions = all_positions.copy()
         positions = all_positions.copy()
         boundary_polygon_shape = ShapelyPolygon(boundary_polygon)
