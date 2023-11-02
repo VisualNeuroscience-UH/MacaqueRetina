@@ -1015,6 +1015,7 @@ class WorkingRetina(RetinaMath):
         """
         Contrast gain control implemented in temporal domain according to Victor_1987_JPhysiol
         """
+        # Henri aloita tästä
 
         Tc = torch.tensor(
             15.0, device=device
@@ -1069,6 +1070,8 @@ class WorkingRetina(RetinaMath):
             h_flipped.view(1, 1, -1),
             padding=0,
         ).squeeze()
+
+        # Henri aloita tästä
 
         ### High pass stages ###
         y_t = torch.tensor(0.0, device=device)
@@ -1546,6 +1549,7 @@ class WorkingRetina(RetinaMath):
         # Get instantaneous firing rates
         if self.temporal_model == "dynamic":
             # Contrast gain control depends dynamically on contrast
+            # Henri aloita tästä
             num_cells = len(cell_indices)
 
             # Get stimulus contrast vector:
@@ -1627,6 +1631,8 @@ class WorkingRetina(RetinaMath):
             ):
                 if self.gc_type == "parasol":
                     unit_params = params_t[idx, :]
+                    # Henri aloita tästä
+
                     generator_potential = self._create_temporal_signal_cg(
                         tvec_t,
                         svecs_t[idx, :],
