@@ -1675,17 +1675,6 @@ class Viz:
             # Update the plot
             fig.canvas.flush_events()
 
-    def draw_polygon(self, polygon_vertices):
-        fig, ax = plt.subplots()
-        polygon = Polygon(polygon_vertices, closed=True, fill=None, edgecolor="r")
-        ax.add_patch(polygon)
-
-        # Setting aspect ratio to be equal, so the square looks like a square,
-        ax.set_aspect("equal", "box")
-
-        plt.xlim(min(polygon_vertices[:, 0]) - 0.1, max(polygon_vertices[:, 0]) + 0.1)
-        plt.ylim(min(polygon_vertices[:, 1]) - 0.1, max(polygon_vertices[:, 1]) + 0.1)
-
     # WorkingRetina visualization
     def show_stimulus_with_gcs(
         self,
