@@ -468,15 +468,16 @@ class ConstructRetina(RetinaMath):
             # We use 1 as the initial guess
             return root(equation, 1).x[0]
 
-    def _fit_DoG_with_rf_coverage_one(self):
+    def _generate_DoG_with_rf_coverage_one(self):
         """
-        Create spatial receptive fields to model cells using coverage = 1.
+        Generate Difference of Gaussians (DoG) model with full retinal field coverage.
 
-        Places all ganglion cell spatial parameters to ganglion cell object dataframe self.gc_df
-
-        At return, all units are in mm unless stated otherwise in the the column name
+        This function ensures full coverage of the retinal field (coverage factor = 1).
+        It updates the `gc_df` dataframe with spatial parameters converted from pixels in
+        orginal experimental data space to millimeters of final retina. It applies scaling
+        for retinal coverage of one at the given eccentricity. Then it instroduces
+        variability in dendritic field size based on experimental data.
         """
-
         # Create all gc units from parameters fitted to experimental data
         n_cells = len(self.gc_df)
         data_microm_per_pix = self.context.apricot_metadata["data_microm_per_pix"]
@@ -487,49 +488,75 @@ class ConstructRetina(RetinaMath):
                 shape, loc, scale, n_cells, distribution
             )
 
-        # Change units to mm. Units are mm for the Chichilnisky data and they are at large eccentricity
+        # Change units to mm. Here the scale reflects Chichilnisky data and they are at large eccentricity
         if self.context.my_retina["DoG_model"] in [
             "ellipse_independent",
             "ellipse_fixed",
         ]:
-            self.gc_df["semi_xc"] = self.gc_df["semi_xc"] * data_microm_per_pix / 1000
-            self.gc_df["semi_yc"] = self.gc_df["semi_yc"] * data_microm_per_pix / 1000
+            self.gc_df["semi_xc_mm"] = (
+                self.gc_df["semi_xc_pix"] * data_microm_per_pix / 1000
+            )
+            self.gc_df["semi_yc_mm"] = (
+                self.gc_df["semi_yc_pix"] * data_microm_per_pix / 1000
+            )
 
-        elif self.context.my_retina["DoG_model"] == "circular":
-            self.gc_df["rad_c"] = self.gc_df["rad_c"] * data_microm_per_pix / 1000
+        if self.context.my_retina["DoG_model"] == "ellipse_independent":
+            # Add surround
+            self.gc_df["semi_xs_mm"] = (
+                self.gc_df["semi_xs_pix"] * data_microm_per_pix / 1000
+            )
+            self.gc_df["semi_ys_mm"] = (
+                self.gc_df["semi_ys_pix"] * data_microm_per_pix / 1000
+            )
 
-        # Calculate RF diameter scaling factor for all ganglion cells
-        # Units are pixels for the Chichilnisky data. We scale them to um2 at the actual eccentricity.
+        if self.context.my_retina["DoG_model"] == "circular":
+            self.gc_df["rad_c_mm"] = (
+                self.gc_df["rad_c_pix"] * data_microm_per_pix / 1000
+            )
+
+        # Calculate RF diameter scaling factor for all ganglion cells. The surround in
+        # ellipse_indenpendent model has the same scaling factor as the center.
         if self.context.my_retina["DoG_model"] in [
             "ellipse_independent",
             "ellipse_fixed",
         ]:
-            area_rfs_cen_mm2 = np.pi * self.gc_df["semi_xc"] * self.gc_df["semi_yc"]
+            area_rfs_cen_mm2 = (
+                np.pi * self.gc_df["semi_xc_mm"] * self.gc_df["semi_yc_mm"]
+            )
 
         elif self.context.my_retina["DoG_model"] == "circular":
-            area_rfs_cen_mm2 = np.pi * self.gc_df["rad_c"] ** 2
+            area_rfs_cen_mm2 = np.pi * self.gc_df["rad_c_mm"] ** 2
 
         """
         The area_of_rf contains area for all model units. Its sum must fill the whole area (coverage factor = 1).
         We do it separately for each ecc sector, step by step, to keep coverage factor at 1 despite changing gc density with ecc
+        r_scaled = sqrt( (area_scaled / area) * r^2 ) => r_scaling_factor = sqrt( (area_scaled / area) )
         """
+        # Calculate area scaling factors for each eccentricity group
         area_scaling_factors_coverage1 = np.zeros(area_rfs_cen_mm2.shape)
-        for index, surface_area_mm2 in enumerate(self.sector_surface_areas_mm2):
-            scaling_for_coverage_1 = (surface_area_mm2) / np.sum(
+        for index, sector_area_mm2 in enumerate(self.sector_surface_areas_mm2):
+            area_scaling_factor = (sector_area_mm2) / np.sum(
                 area_rfs_cen_mm2[self.gc_df["ecc_group_idx"] == index]
             )
 
             area_scaling_factors_coverage1[
                 self.gc_df["ecc_group_idx"] == index
-            ] = scaling_for_coverage_1
+            ] = area_scaling_factor
 
-        radius_scaling_coverage_1 = np.sqrt(area_scaling_factors_coverage1)
+        radius_scaling_factors_coverage_1 = np.sqrt(area_scaling_factors_coverage1)
 
-        # Apply scaling factors to semi_xc and semi_yc.  Units are pixels
-        # scale_random_distribution = 0.08  # Estimated by eye from Watanabe and Perry data.
-        # Normal distribution with scale_random_distribution 0.08 cover about 25% above and below the mean value
-        scale_random_distribution = 0.08
-        random_normal_distribution1 = 1 + np.random.normal(
+        # Save scaling factors for later working retina computations
+        self.gc_df["gc_scaling_factors"] = radius_scaling_factors_coverage_1
+
+        # Apply scaling factors.
+        variability = 0.213  # 21.3% IQR variability in Watanabe_1989_JCompNeurol Fig 9
+        iqr_scaling_factor = 1.35  # Approximate IQR scaling for a normal distribution
+
+        scale_random_distribution = variability / iqr_scaling_factor
+        random_distribution_x = 1 + np.random.normal(
+            scale=scale_random_distribution, size=n_cells
+        )
+        random_distribution_y = 1 + np.random.normal(
             scale=scale_random_distribution, size=n_cells
         )
         if self.context.my_retina["DoG_model"] in [
@@ -537,34 +564,50 @@ class ConstructRetina(RetinaMath):
             "ellipse_fixed",
         ]:
             semi_xc = (
-                radius_scaling_coverage_1
-                * self.gc_df["semi_xc"]
-                * random_normal_distribution1
+                radius_scaling_factors_coverage_1
+                * self.gc_df["semi_xc_mm"]
+                * random_distribution_x
             )
-            random_normal_distribution2 = 1 + np.random.normal(
-                scale=scale_random_distribution, size=n_cells
-            )  # second randomization
 
             semi_yc = (
-                radius_scaling_coverage_1
-                * self.gc_df["semi_yc"]
-                * random_normal_distribution2
+                radius_scaling_factors_coverage_1
+                * self.gc_df["semi_yc_mm"]
+                * random_distribution_y
             )
 
-            self.gc_df["semi_xc"] = semi_xc
-            self.gc_df["semi_yc"] = semi_yc
+            self.gc_df["semi_xc_mm"] = semi_xc
+            self.gc_df["semi_yc_mm"] = semi_yc
 
-        elif self.context.my_retina["DoG_model"] == "circular":
+        if self.context.my_retina["DoG_model"] == "ellipse_independent":
+            # Add surround
+            semi_xs = (
+                radius_scaling_factors_coverage_1
+                * self.gc_df["semi_xs_mm"]
+                * random_distribution_x
+            )
+
+            semi_ys = (
+                radius_scaling_factors_coverage_1
+                * self.gc_df["semi_ys_mm"]
+                * random_distribution_y
+            )
+
+            self.gc_df["semi_xs_mm"] = semi_xs
+            self.gc_df["semi_ys_mm"] = semi_ys
+
+        if self.context.my_retina["DoG_model"] == "circular":
             rad_c = (
-                radius_scaling_coverage_1
-                * self.gc_df["rad_c"]
-                * random_normal_distribution1
+                radius_scaling_factors_coverage_1
+                * self.gc_df["rad_c_mm"]
+                * random_distribution_x
             )
-            self.gc_df["rad_c"] = rad_c
+            self.gc_df["rad_c_mm"] = rad_c
 
-    def _fit_DoG_with_rf_from_literature(self, lit_dd_vs_ecc_params, dd_regr_model):
+    def _generate_DoG_with_rf_from_literature(
+        self, lit_dd_vs_ecc_params, dd_regr_model
+    ):
         """
-        Create spatial receptive fields to model cells according to eccentricity.
+        Generate Difference of Gaussians (DoG) model with dendritic field sizes from literature.
 
         Places all ganglion cell spatial parameters to ganglion cell object dataframe self.gc_df
 
@@ -613,10 +656,14 @@ class ConstructRetina(RetinaMath):
         # Scale factor for semi_x and semi_y from pix at data eccentricity to pix at the actual eccentricity
         # Units are pixels for the Chichilnisky data and they are at large eccentricity
         gc_scaling_factors = (lit_cen_diameter_um / 2) / (self.exp_cen_radius_mm * 1000)
-        # Save scaling factors to gc_df for FIT model type
+        # Save scaling factors to gc_df for later use
         self.gc_df["gc_scaling_factors"] = gc_scaling_factors
+
         um_per_pixel = self.context.apricot_metadata["data_microm_per_pix"]
-        if self.context.my_retina["DoG_model"] == "ellipse_fixed":
+        if self.context.my_retina["DoG_model"] in [
+            "ellipse_independent",
+            "ellipse_fixed",
+        ]:
             # Scale semi_x to pix at its actual eccentricity
             self.gc_df["semi_xc_pix_eccscaled"] = (
                 self.gc_df["semi_xc_pix"] * gc_scaling_factors
@@ -637,27 +684,6 @@ class ConstructRetina(RetinaMath):
                 self.gc_df["semi_yc_pix_eccscaled"] * um_per_pixel / 1000
             )
         if self.context.my_retina["DoG_model"] == "ellipse_independent":
-            # Center
-            # Scale semi_x to pix at its actual eccentricity
-            self.gc_df["semi_xc_pix_eccscaled"] = (
-                self.gc_df["semi_xc_pix"] * gc_scaling_factors
-            )
-
-            # Scale semi_x to mm
-            self.gc_df["semi_xc_mm"] = (
-                self.gc_df["semi_xc_pix_eccscaled"] * um_per_pixel / 1000
-            )
-
-            # Scale semi_y to pix at its actual eccentricity
-            self.gc_df["semi_yc_pix_eccscaled"] = (
-                self.gc_df["semi_yc_pix"] * gc_scaling_factors
-            )
-
-            # Scale semi_y to mm
-            self.gc_df["semi_yc_mm"] = (
-                self.gc_df["semi_yc_pix_eccscaled"] * um_per_pixel / 1000
-            )
-
             # Surround
             # Scale semi_x to pix at its actual eccentricity
             self.gc_df["semi_xs_pix_eccscaled"] = (
@@ -2181,10 +2207,10 @@ class ConstructRetina(RetinaMath):
             # self.gc_df is updated silently
             if self.rf_coverage_adjusted_to_1 == True:
                 # Assumes that the dendritic field diameter is proportional to the coverage
-                self._fit_DoG_with_rf_coverage_one()
+                self._generate_DoG_with_rf_coverage_one()
             elif self.rf_coverage_adjusted_to_1 == False:
                 # Read the dendritic field diameter from literature data
-                self._fit_DoG_with_rf_from_literature(
+                self._generate_DoG_with_rf_from_literature(
                     lit_dd_vs_ecc_params, dd_regr_model
                 )
             # Add dendritic diameter for visualization, in micrometers
