@@ -2056,6 +2056,7 @@ class Viz:
         im = ax[0].imshow(
             spatial_filter, cmap=self.cmap_spatial_filter, vmin=vmin, vmax=vmax
         )
+        ax[0].grid(True) 
         plt.colorbar(im, ax=ax[0])
 
         plt.subplot(122)
