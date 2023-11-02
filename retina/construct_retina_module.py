@@ -1012,6 +1012,7 @@ class ConstructRetina(RetinaMath):
 
         ecc_lim_mm = torch.tensor(self.ecc_lim_mm).to(self.device)
         polar_lim_deg = torch.tensor(self.polar_lim_deg).to(self.device)
+        boundary_polygon = self.viz.boundary_polygon(ecc_lim_mm, polar_lim_deg)
 
         # Adjust unit_distance_threshold and diffusion speed with density of the units
         # This is necessary because the density of the units are adjusted with eccentricity
@@ -1067,6 +1068,7 @@ class ConstructRetina(RetinaMath):
                         original_positions=original_positions,
                         positions=positions_cpu,
                         iteration=iteration,
+                        boundary_polygon=boundary_polygon,
                         **fig_args,
                     )
 
