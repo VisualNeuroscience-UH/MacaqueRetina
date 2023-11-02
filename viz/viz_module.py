@@ -825,7 +825,6 @@ class Viz:
 
         return np.array(boundary_polygon)
 
-
     def visualize_mosaic(self, savefigname=None):
         """
         Visualize the mosaic of ganglion cells in retinal mm coordinates.
@@ -837,7 +836,7 @@ class Viz:
         ----------
         savefigname : str, optional
             The name of the file to save the figure. If None, the figure is not saved.
-    """
+        """
         gc_df = self.project_data.construct_retina["gc_df"]
         ecc_mm = gc_df["pos_ecc_mm"].to_numpy()
         pol_deg = gc_df["pos_polar_deg"].to_numpy()
