@@ -141,8 +141,6 @@ class WorkingRetina(RetinaMath):
             self.gc_df["semi_yc_deg"] = self.gc_df.semi_yc_mm * self.deg_per_mm
             self.gc_df["semi_xs_deg"] = self.gc_df.semi_xs_mm * self.deg_per_mm
             self.gc_df["semi_ys_deg"] = self.gc_df.semi_ys_mm * self.deg_per_mm
-            # Drop rows (units) where semi_xc_deg and semi_yc_deg is zero.
-            # These have bad (>3SD deviation in any ellipse parameter) fits
             self.gc_df = self.gc_df[
                 (self.gc_df.semi_xc_deg != 0) & (self.gc_df.semi_yc_deg != 0)
             ].reset_index(drop=True)
@@ -563,7 +561,7 @@ class WorkingRetina(RetinaMath):
                 }
             )
 
-        # Scale RF axes to stimulus pixel space.
+        # Scale RF to stimulus pixel space.
         if self.DoG_model == "ellipse_fixed":
             self.gc_df_stimpix["semi_xc"] = self.gc_df.semi_xc_deg * self.pix_per_deg
             self.gc_df_stimpix["semi_yc"] = self.gc_df.semi_yc_deg * self.pix_per_deg
@@ -584,6 +582,7 @@ class WorkingRetina(RetinaMath):
         self.gc_df_stimpix = pd.concat([self.gc_df_stimpix, pixspace_coords], axis=1)
         pix_df = deepcopy(self.gc_df_stimpix)
 
+        # Get spatial filter sidelength in pixels in stimulus space
         if self.spatial_model == "FIT":
             # Define spatial filter sidelength (based on angular resolution and widest semimajor axis)
             # We use the general rule that the sidelength should be at least 5 times the SD
