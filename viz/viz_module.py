@@ -772,18 +772,81 @@ class Viz:
         ax.set_xlabel("Eccentricity (mm)")
         ax.set_ylabel("Elevation (mm)")
 
+    def boundary_polygon(self, ecc_lim_mm, polar_lim_deg, n_points=100):
+        """
+        Create a boundary polygon based on given eccentricity and polar angle limits.
+
+        Parameters
+        ----------
+        ecc_lim_mm : np.ndarray
+            An array representing the eccentricity limits in millimeters for
+            left and right boundaries (shape: [2]).
+        polar_lim_deg : np.ndarray
+            An array representing the polar angle limits in degrees for
+            bottom and top boundaries (shape: [2]).
+        n_points : int
+            Number of points to generate along each arc.
+
+        Returns
+        -------
+        boundary_polygon : np.ndarray
+            Array of Cartesian coordinates forming the vertices of the boundary polygon.
+        """
+
+        # Generate points for bottom and top polar angle limits
+        bottom_x, bottom_y = self.pol2cart(
+            np.full(n_points, ecc_lim_mm[0]),
+            np.linspace(polar_lim_deg[0], polar_lim_deg[1], n_points),
+        )
+        top_x, top_y = self.pol2cart(
+            np.full(n_points, ecc_lim_mm[1]),
+            np.linspace(polar_lim_deg[0], polar_lim_deg[1], n_points),
+        )
+
+        # Generate points along the arcs for min and max eccentricities
+        theta_range = np.linspace(polar_lim_deg[0], polar_lim_deg[1], n_points)
+        min_ecc_x, min_ecc_y = self.pol2cart(
+            np.full_like(theta_range, ecc_lim_mm[0]), theta_range
+        )
+        max_ecc_x, max_ecc_y = self.pol2cart(
+            np.full_like(theta_range, ecc_lim_mm[1]), theta_range
+        )
+
+        # Combine them to form the vertices of the bounding polygon
+        boundary_polygon = []
+
+        # Add points from bottom arc
+        for bx, by in zip(min_ecc_x, min_ecc_y):
+            boundary_polygon.append((bx, by))
+
+        # Add points from top arc (in reverse order)
+        for tx, ty in reversed(list(zip(max_ecc_x, max_ecc_y))):
+            boundary_polygon.append((tx, ty))
+
+        return np.array(boundary_polygon)
+
+
     def visualize_mosaic(self, savefigname=None):
         """
-        Plots the full ganglion cell self.construct_retina. Note that this is slow if you have a large patch.
+        Visualize the mosaic of ganglion cells in retinal mm coordinates.
 
-        ConstructRetina call.
+        This function plots the ganglion cells as ellipses on a Cartesian plane and adds 
+        a boundary polygon representing sector limits. 
 
-        :return:
-        """
+        Parameters
+        ----------
+        savefigname : str, optional
+            The name of the file to save the figure. If None, the figure is not saved.
+    """
         gc_df = self.project_data.construct_retina["gc_df"]
         ecc_mm = gc_df["pos_ecc_mm"].to_numpy()
         pol_deg = gc_df["pos_polar_deg"].to_numpy()
 
+        ecc_lim_deg = self.context.my_retina["ecc_limits_deg"]
+        ecc_lim_mm = np.array(ecc_lim_deg) / self.context.my_retina["deg_per_mm"]
+        pol_lim_deg = self.context.my_retina["pol_limits_deg"]
+        boundary_polygon = self.boundary_polygon(ecc_lim_mm, pol_lim_deg)
+        
         # Obtain mm values
         if self.context.my_retina["DoG_model"] == "circular":
             semi_xc = gc_df["rad_c_mm"]
@@ -801,6 +864,12 @@ class Viz:
         xcoord, ycoord = self.pol2cart(ecc_mm, pol_deg)
 
         fig, ax = plt.subplots(nrows=1, ncols=1)
+
+        polygon = Polygon(
+            boundary_polygon, closed=True, fill=None, edgecolor="r"
+        )
+        ax.add_patch(polygon)
+
         ax.plot(
             xcoord.flatten(),
             ycoord.flatten(),
@@ -2030,15 +2099,15 @@ class Viz:
         """
         Display the spatiotemporal filter for a given cell in the retina.
 
-        This method retrieves the specified cell's spatial and temporal filters 
+        This method retrieves the specified cell's spatial and temporal filters
         from the 'working_retina' attribute of the 'project_data' object.
 
         Parameters
         ----------
         cell_index : int, optional
-            Index of the cell for which the spatiotemporal filter is to be shown. 
+            Index of the cell for which the spatiotemporal filter is to be shown.
         savefigname : str or None, optional
-            If a string is provided, the figure will be saved with this filename. 
+            If a string is provided, the figure will be saved with this filename.
         """
         spat_temp_filter_to_show = self.project_data.working_retina[
             "spat_temp_filter_to_show"
@@ -2066,7 +2135,7 @@ class Viz:
         im = ax[0].imshow(
             spatial_filter, cmap=self.cmap_spatial_filter, vmin=vmin, vmax=vmax
         )
-        ax[0].grid(True) 
+        ax[0].grid(True)
         plt.colorbar(im, ax=ax[0])
 
         plt.subplot(122)
