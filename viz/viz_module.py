@@ -2127,7 +2127,19 @@ class Viz:
         plt.colorbar(im, ax=ax[0])
 
         plt.subplot(122)
-        ax[1].plot(range(temporal_filter_len), np.flip(temporal_filter))
+        if self.context.my_retina["temporal_model"] == "dynamic":
+            # Print text to middle of ax[1]: "No fixed temporal filter for dynamic temporal model"
+            ax[1].text(
+                0.5,
+                0.5,
+                "No fixed temporal filter for dynamic temporal model",
+                horizontalalignment="center",
+                verticalalignment="center",
+                fontsize=10,
+            )            
+            
+        else:
+            ax[1].plot(range(temporal_filter_len), np.flip(temporal_filter))
 
         plt.tight_layout()
 
