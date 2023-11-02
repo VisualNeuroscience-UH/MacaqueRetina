@@ -2028,7 +2028,17 @@ class Viz:
 
     def show_spatiotemporal_filter(self, cell_index=0, savefigname=None):
         """
-        WorkingRetina call.
+        Display the spatiotemporal filter for a given cell in the retina.
+
+        This method retrieves the specified cell's spatial and temporal filters 
+        from the 'working_retina' attribute of the 'project_data' object.
+
+        Parameters
+        ----------
+        cell_index : int, optional
+            Index of the cell for which the spatiotemporal filter is to be shown. 
+        savefigname : str or None, optional
+            If a string is provided, the figure will be saved with this filename. 
         """
         spat_temp_filter_to_show = self.project_data.working_retina[
             "spat_temp_filter_to_show"
