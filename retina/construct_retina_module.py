@@ -475,8 +475,7 @@ class ConstructRetina(RetinaMath):
         This function ensures full coverage of the retinal field (coverage factor = 1).
         It updates the `gc_df` dataframe with spatial parameters converted from pixels in
         orginal experimental data space to millimeters of final retina. It applies scaling
-        for retinal coverage of one at the given eccentricity. Then it instroduces
-        variability in dendritic field size based on experimental data.
+        for retinal coverage of one at the given eccentricity. 
         """
         # Create all gc units from parameters fitted to experimental data
         n_cells = len(self.gc_df)
