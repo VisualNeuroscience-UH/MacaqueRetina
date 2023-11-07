@@ -193,7 +193,7 @@ my_retina = {
     "ecc_limits_deg": [4.5, 5.5],  # eccentricity in degrees
     "pol_limits_deg": [-5, 5],  # polar angle in degrees
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
-    "dd_regr_model": "linear",  # linear, quadratic, cubic, exponential
+    "dd_regr_model": "linear",  # linear, quadratic, cubic, exponential TODO: midget central 8-10 deg flat, see Goodchild_1996_JCompNeurol + 1 dataset for dd vs ecc
     "visual_field_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
@@ -201,7 +201,7 @@ my_retina = {
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models. Note that ellipse fit does not tolearate VAE adjustments => fit to nonadjusted generated rfs
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
-    "model_file_name": "model_parasol_on_cpu_20231101_090048.pt",  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[DEVICE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only
+    "model_file_name": None,  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[DEVICE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only
     "ray_tune_trial_id": None,  # Trial_id for tune, None for loading single run after "train_model". Applies to VAE "load_model" only
 }
 
@@ -328,9 +328,13 @@ proportion_of_midget_gc_type = 0.64
 proportion_of_ON_response_type = 0.40
 proportion_of_OFF_response_type = 0.60
 
-# Perry_1985_VisRes; 223 um/deg in the fovea, 169 um/deg at 90 deg ecc
-# One mm retina is ~4.55 deg visual field.
-deg_per_mm = 1 / 0.223
+# Perry_1985_VisRes; 223 um/deg in the fovea, 169 um/deg at 90 deg ecc. 
+# With this relationship one mm retina is ~4.55 deg visual field.
+# Constant (linear) approximation of quadratic formula from 
+# Goodchild_1996_JCompNeurol 0.038 * x**2 + 4.21 * x + 0.1
+# gives 229 um/degree. The R2 (constant vs quadratic) is 
+# > 0.999 for ecc 0.1 - 4 mm, and > 0.97 for ecc 0.1 - 20 mm.
+deg_per_mm = 1 / 0.229
 
 # Compressing cone nonlinearity. Parameters are manually scaled to give dynamic cone ouput.
 # Equation, data from Baylor_1987_JPhysiol
@@ -541,8 +545,7 @@ if __name__ == "__main__":
 
     # For FIT (ellipse and DoG fits, temporal kernels and tonic drives)
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
-    PM.viz.visualize_mosaic(savefigname=None)
-    # PM.viz.show_dendrite_diam_vs_ecc(savefigname=None)
+    PM.viz.show_dendrite_diam_vs_ecc(savefigname=None)
     # PM.viz.show_temporal_filter_response(n_curves=3, savefigname="temporal_filters.eps")
     # PM.viz.show_spatial_statistics(savefigname="spatial_stats.eps")
 
@@ -577,22 +580,22 @@ if __name__ == "__main__":
     ### Create stimulus ###
     ########################
 
-    # Based on my_stimulus_options above
-    PM.stimulate.make_stimulus_video()
+    # # Based on my_stimulus_options above
+    # PM.stimulate.make_stimulus_video()
 
     ####################################
     ### Run multiple trials or cells ###
     ####################################
 
-    # Load stimulus to get working retina, necessary for running cells
-    PM.working_retina.load_stimulus()
-    PM.working_retina.run_with_my_run_options()
+    # # Load stimulus to get working retina, necessary for running cells
+    # PM.working_retina.load_stimulus()
+    # PM.working_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
     ##########################################
 
-    PM.viz.show_spatiotemporal_filter(cell_index=39, savefigname=None)
+    # PM.viz.show_spatiotemporal_filter(cell_index=39, savefigname=None)
     # PM.viz.show_temporal_kernel_frequency_response(cell_index=2, savefigname=None)
     # PM.viz.plot_midpoint_contrast(cell_index=2, savefigname=None)
     # PM.viz.plot_local_rms_contrast(cell_index=2, savefigname=None)
@@ -621,21 +624,23 @@ if __name__ == "__main__":
     ###   or multiple cells for single trial     ###
     ################################################
 
-    # Based on my_run_options above
-    PM.viz.show_all_gc_responses(savefigname=None)
+    # # Based on my_run_options above
+    # PM.viz.show_all_gc_responses(savefigname=None)
 
-    PM.viz.show_stimulus_with_gcs(
-        example_gc=39,  # or my_run_options["cell_index"]
-        frame_number=300,  # depends on fps, and video and baseline lengths
-        show_rf_id=True,
-        savefigname=f"{output_folder}_rfs_stimulus.eps",
-    )
+    # PM.viz.show_stimulus_with_gcs(
+    #     example_gc=39,  # or my_run_options["cell_index"]
+    #     frame_number=300,  # depends on fps, and video and baseline lengths
+    #     show_rf_id=True,
+    #     savefigname=f"{output_folder}_rfs_stimulus.eps",
+    # )
 
     ###############################################
     ###############################################
     ###     Experiment with multiple trials     ###
     ###############################################
     ###############################################
+
+    # TODO Texture experiment from Schwartz_2012_NatNeurosci
 
     ################################
     ### Build and run Experiment ###
