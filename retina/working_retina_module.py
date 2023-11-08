@@ -184,16 +184,6 @@ class WorkingRetina(RetinaMath):
                 filename=self.context.my_retina["spatial_rfs_file"],
             )
 
-            mask_filename = "_".join(
-                [
-                    Path(self.context.my_retina["spatial_rfs_file"]).stem,
-                    "center_mask.npy",
-                ]
-            )
-            self.spat_rf_center_mask = self.data_io.get_data(
-                filename=mask_filename,
-            )
-
         self.initialized = True
 
     def _vspace_to_pixspace(self, x, y):
@@ -266,7 +256,7 @@ class WorkingRetina(RetinaMath):
 
         return qmin, qmax, rmin, rmax
 
-    def _create_spatial_filter_FIT(self, cell_index, get_masks=False):
+    def _create_spatial_filter_FIT(self, cell_index):
         """
         Creates the spatial component of the spatiotemporal filter
 
@@ -335,15 +325,9 @@ class WorkingRetina(RetinaMath):
 
         spatial_kernel = np.reshape(spatial_kernel, (s, s))
 
-        if get_masks:
-            # Create center mask
-            center_mask = np.zeros((s, s))
-            center_mask[spatial_kernel > 0] = 1
-            spatial_kernel = center_mask.astype(bool)
-
         return spatial_kernel
 
-    def _create_spatial_filter_VAE(self, cell_index, get_masks=False):
+    def _create_spatial_filter_VAE(self, cell_index):
         """
         Creates the spatial component of the spatiotemporal filter
 
@@ -359,15 +343,9 @@ class WorkingRetina(RetinaMath):
         """
         s = self.spatial_filter_sidelen
 
-        if get_masks == True:
-            spatial_kernel = resize(
-                self.spat_rf_center_mask[cell_index, :, :], (s, s), anti_aliasing=False
-            )
-
-        else:
-            spatial_kernel = resize(
-                self.spat_rf[cell_index, :, :], (s, s), anti_aliasing=True
-            )
+        spatial_kernel = resize(
+            self.spat_rf[cell_index, :, :], (s, s), anti_aliasing=True
+        )
 
         return spatial_kernel
 
@@ -656,13 +634,13 @@ class WorkingRetina(RetinaMath):
         if isinstance(cell_indices, (int, np.int32, np.int64)):
             cell_indices = np.array([cell_indices])
 
-        qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_indices)
+        sidelen = self.spatial_filter_sidelen
 
         video_copy = np.tile(
             self.stimulus_video.frames.copy(), (len(cell_indices), 1, 1, 1)
         )
 
-        sidelen = self.spatial_filter_sidelen
+        qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_indices)
 
         # Create the r and q indices for each cell, ensure they're integer type
         r_indices = (
@@ -707,6 +685,7 @@ class WorkingRetina(RetinaMath):
         stimulus_cropped = video_copy[
             cell_indices, r_matrix, q_matrix, time_points_indices
         ]
+        # pdb.set_trace()
 
         if contrast is True:
             # Returns Weber constrast
@@ -723,291 +702,75 @@ class WorkingRetina(RetinaMath):
 
         return stimulus_cropped
 
-    def get_w_z_coords(self):
-        """
-        Create w_coord, z_coord for cortical and visual coordinates, respectively
+    def _get_uniformity_index(self, cell_indices, center_masks):
+        """ """
+        # TÄHÄN JÄIT: TEE TÄSSÄ UNIFORMITY INDEX TAI VAIHTOEHTOISESTI SIIRRÄ ANALYZE-OSIOON
+        height = self.context.my_stimulus_options["image_height"]
+        width = self.context.my_stimulus_options["image_width"]
 
-        Parameters
-        ----------
-        None
+        if isinstance(cell_indices, (int, np.int32, np.int64)):
+            cell_indices = np.array([cell_indices])
 
-        Returns
-        -------
-        w_coord : np.ndarray
-            Cortical coordinates
-        z_coord : np.ndarray
-            Visual coordinates
-        """
+        qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_indices)
 
-        # Create w_coord, z_coord for cortical and visual coordinates, respectively
-        z_coord = self.gc_df["x_deg"].values + 1j * self.gc_df["y_deg"].values
+        stim_region = np.zeros((len(cell_indices), height, width), dtype=np.int32)
+        center_region = np.zeros((len(cell_indices), height, width), dtype=np.int32)
 
-        # Macaque values
-        # a for macaques should be 0.3 - 0.9, Schwartz 1994 citing Wilson et al 1990 "The perception of form" in Visual perception: The neurophysiological foundations, Academic Press
-        # k has been pretty open.
-        # However, if we relate 1/M = (a/k) + (1/k) * E and M = (1/0.077) + (1/(0.082 * E)), we get
-        # Andrew James, personal communication: k=1/.082, a=. 077/.082
-        a = 0.077 / 0.082  # ~ 0.94
-        k = 1 / 0.082  # ~ 12.2
-        w_coord = k * np.log(z_coord + a)
+        # Create the r and q indices for each cell, ensure they're integer type
+        sidelen = self.spatial_filter_sidelen
+        r_indices = (
+            (np.arange(sidelen) + rmin[:, np.newaxis])
+            .astype(int)
+            .reshape(-1, 1, sidelen)
+        )
+        q_indices = (
+            (np.arange(sidelen) + qmin[:, np.newaxis])
+            .astype(int)
+            .reshape(-1, sidelen, 1)
+        )
 
-        return w_coord, z_coord
+        # Create r_matrix and q_matrix by broadcasting r_indices and q_indices
+        r_matrix, q_matrix = np.broadcast_arrays(r_indices, q_indices)
 
-    def load_stimulus(self, stimulus_video=None):
-        """
-        Loads stimulus video
+        # create a cell index array
+        unit_region_idx = (
+            np.arange(len(cell_indices)).astype(np.int32).reshape(-1, 1, 1)
+        )
 
-        Parameters
-        ----------
-        stimulus_video : VideoBaseClass, optional
-            Visual stimulus to project to the ganglion cell mosaic. The default is None.
-            If None, the stimulus video is loaded from the stimulus_video_name attribute
-            of the stimulus metadata dictionary.
+        # expand the indices arrays to the shape of r_matrix and q_matrix using broadcasting
+        unit_region_idx = unit_region_idx + np.zeros_like(r_matrix, dtype=np.int32)
 
-        Returns
-        -------
-        None.
+        # use the index arrays to select the elements from video_copy
+        stim_region[unit_region_idx, r_matrix, q_matrix] = 1
 
-        Attributes
-        ----------
-        stimulus_video : VideoBaseClass
-            Visual stimulus to project to the ganglion cell mosaic
-        """
+        total_region = np.sum(stim_region, axis=0) > 0
 
-        # Set basic working_retina attributes
-        if self.initialized is False:
-            self._initialize()
+        center_masks = center_masks.astype(bool).reshape(
+            (len(cell_indices), sidelen, sidelen)
+        )
 
-        if stimulus_video is None:
-            video_file_name = self.context.my_stimulus_options["stimulus_video_name"]
+        center_region[
+            unit_region_idx * center_masks,
+            r_matrix * center_masks,
+            q_matrix * center_masks,
+        ] = 1
 
-            stimulus_video = self.data_io.load_stimulus_from_videofile(video_file_name)
+        unit_region = np.sum(center_region, axis=0)
 
-        assert (stimulus_video.video_width == self.stimulus_width_pix) & (
-            stimulus_video.video_height == self.stimulus_height_pix
-        ), "Check that stimulus dimensions match those of the mosaic"
-        assert (
-            stimulus_video.fps == self.fps
-        ), "Check that stimulus frame rate matches that of the mosaic"
-        assert (
-            stimulus_video.pix_per_deg == self.pix_per_deg
-        ), "Check that stimulus resolution matches that of the mosaic"
+        total_region = unit_region > 0
+        unity_region = unit_region == 1
 
-        # Get parameters from the stimulus object
-        self.stimulus_video = stimulus_video
-        assert (
-            np.min(stimulus_video.frames) >= 0 and np.max(stimulus_video.frames) <= 255
-        ), "Stimulus pixel values must be between 0 and 255"
+        uniformify_index = np.sum(unity_region) / np.sum(total_region)
 
-        # Drop RGCs whose center is not inside the stimulus.
-        # Note that we use the gc_df instead of gc_df_stimpix.
-        xmin, xmax, ymin, ymax = self._get_extents_deg()
-        for index, gc in self.gc_df.iterrows():
-            if (
-                (gc.x_deg < xmin)
-                | (gc.x_deg > xmax)
-                | (gc.y_deg < ymin)
-                | (gc.y_deg > ymax)
-            ):
-                self.gc_df.iloc[index] = 0.0  # all columns set as zero
-                self.gc_df_stimpix.iloc[index] = 0.0  # all columns set as zero
+        # TÄHÄN JÄIT, TEE DELAUNYUN TRIANGULAATIO JA LASKE TOTAL SEN MUKAISESTI
+        print("Uniformity index: ", uniformify_index)
+        fig, ax = plt.subplots(1, 2)
+        ax[0].imshow(total_region)
+        ax[1].imshow(unity_region)
+        # ax[2].imshow(unit_region)
+        plt.show()
 
-    def get_temporal_filters(self, cell_indices):
-        """
-        Retrieve temporal filters for an array of cells.
-
-        This function generates temporal filters for each cell specified by the
-        cell indices. The temporal filter for a specific cell is obtained by calling
-        the `_create_temporal_filter` method.
-
-        Parameters
-        ----------
-        cell_indices : array_like
-            List or 1-D array of cell indices for which to generate temporal filters.
-
-        Returns
-        -------
-        temporal_filters : ndarray
-            2-D array where each row corresponds to a temporal filter of a cell. The shape is
-            (len(cell_indices), self.temporal_filter_len).
-
-        Notes
-        -----
-        This function depends on the following instance variables:
-          - self.temporal_filter_len: an integer specifying the length of a temporal filter.
-        """
-
-        temporal_filters = np.zeros((len(cell_indices), self.temporal_filter_len))
-
-        for idx, cell_index in enumerate(cell_indices):
-            temporal_filters[idx, :] = self._create_temporal_filter(cell_index)
-
-        return temporal_filters
-
-    def get_spatial_filters(self, cell_indices, get_masks=False):
-        """
-        Generate spatial filters for given cell indices.
-
-        This function takes a list of cell indices, determines the model type,
-        creates a corresponding spatial filter for each cell index based on the model,
-        and then reshapes the filter to 1-D. It returns a 2-D array where each row is a
-        1-D spatial filter for a corresponding cell index.
-
-        Parameters
-        ----------
-        cell_indices : array_like
-            List or 1-D array of cell indices for which to generate spatial filters.
-        get_masks : bool, optional
-            If True, return center masks instead of spatial filters. The default is False.
-
-        Returns
-        -------
-        spatial_filters : ndarray
-            2-D array where each row corresponds to a 1-D spatial filter or mask of a cell.
-            The shape is (len(cell_indices), s**2), where s is the side length of a spatial filter.
-
-        Raises
-        ------
-        ValueError
-            If the model type is neither 'FIT' nor 'VAE'.
-
-        Notes
-        -----
-        This function depends on the following instance variables:
-          - self.spatial_model: a string indicating the type of model used. Expected values are 'FIT' or 'VAE'.
-          - self.spatial_filter_sidelen: an integer specifying the side length of a spatial filter.
-        """
-        s = self.spatial_filter_sidelen
-        spatial_filters = np.zeros((len(cell_indices), s**2))
-        for idx, cell_index in enumerate(cell_indices):
-            if self.spatial_model == "FIT":
-                spatial_filter = self._create_spatial_filter_FIT(
-                    cell_index, get_masks=get_masks
-                )
-            elif self.spatial_model == "VAE":
-                spatial_filter = self._create_spatial_filter_VAE(
-                    cell_index, get_masks=get_masks
-                )
-            else:
-                raise ValueError("Unknown model type, aborting...")
-            spatial_filter_1d = np.array([np.reshape(spatial_filter, s**2)]).T
-            spatial_filters[idx, :] = spatial_filter_1d.squeeze()
-
-        return spatial_filters
-
-    def convolve_stimulus_batched(
-        self, cell_indices, stimulus_cropped, spatiotemporal_filter
-    ):
-        """
-        Convolves the stimulus with the spatiotemporal filter for a given set of cells.
-
-        This function performs a convolution operation between the cropped stimulus and
-        a spatiotemporal filter for each specified cell. It uses either PyTorch (if available)
-        or numpy and scipy to perform the convolution. After the convolution, it adds a tonic drive to the
-        generator potential of each cell.
-
-        Parameters
-        ----------
-        cell_indices : array_like
-            Indices of the cells to convolve the stimulus with.
-        stimulus_cropped : ndarray
-            Cropped stimulus to be convolved with the spatiotemporal filter, shape should be
-            [num_cells, num_pixels, time_steps].
-        spatiotemporal_filter : ndarray
-            Spatiotemporal filter used in the convolution, shape should be
-            [num_cells, num_pixels, time_steps].
-
-        Returns
-        -------
-        ndarray
-            Generator potential of each cell, array of shape (num_cells, stimulus timesteps),
-            after the convolution and the addition of the tonic drive.
-
-        Raises
-        ------
-        AssertionError
-            If there is a mismatch between the duration of the stimulus and the duration of the generator potential.
-
-        Notes
-        -----
-        The `num_cells` should be the same for `cell_indices`, `stimulus_cropped`, and `spatiotemporal_filter`.
-        The `num_pixels` and `time_steps` should be the same for `stimulus_cropped` and `spatiotemporal_filter`.
-        """
-
-        stim_len_tp = stimulus_cropped.shape[-1]
-        # stimulus_size_pix = stimulus_cropped.shape[1]
-        num_cells = len(cell_indices)
-        video_dt = (1 / self.stimulus_video.fps) * b2u.second
-
-        # Move to GPU if possible. Both give the same result, but PyTorch@GPU is faster.
-        if "torch" in sys.modules:
-            device = self.context.device
-
-            # Dimensions are [batch_size, num_channels, time_steps]. We use pixels as channels.
-            stimulus_cropped = torch.tensor(stimulus_cropped).float().to(device)
-            spatiotemporal_filter = (
-                torch.tensor(spatiotemporal_filter).float().to(device)
-            )
-
-            # Convolving two signals involves "flipping" one signal and then sliding it
-            # across the other signal. PyTorch, however, does not flip the kernel, so we
-            # need to do it manually.
-            spatiotemporal_filter_flipped = torch.flip(spatiotemporal_filter, dims=[2])
-
-            # Calculate padding size
-            filter_length = spatiotemporal_filter_flipped.shape[2]
-            padding_size = filter_length - 1
-
-            # Pad the stimulus
-            stimulus_padded = torch.nn.functional.pad(
-                stimulus_cropped, (padding_size, 0), mode="replicate"
-            )
-
-            output = torch.empty(
-                (num_cells, stim_len_tp),
-                device=device,
-            )
-            for i in range(num_cells):
-                output[i] = torch.nn.functional.conv1d(
-                    stimulus_padded[i].unsqueeze(0),
-                    spatiotemporal_filter_flipped[i].unsqueeze(0),
-                    padding=0,
-                )
-
-            # Move back to CPU and convert to numpy
-            generator_potential = output.cpu().squeeze().numpy()
-        else:
-            # Run convolution. NOTE: expensive computation. Solution without torch.
-            # if mode is "valid", the output consists only of those elements that do not rely on the zero-padding
-            # if baseline is shorter than filter, the output is truncated
-            filter_length = spatiotemporal_filter.shape[-1]
-            assert (
-                self.context.my_stimulus_options["baseline_start_seconds"]
-                >= filter_length * 1 / self.stimulus_video.fps
-            ), f"baseline_start_seconds must be longer than filter length ({filter_length * video_dt}), aborting..."
-
-            generator_potential = np.empty((num_cells, stim_len_tp - filter_length + 1))
-            for idx in range(num_cells):
-                generator_potential[idx, :] = convolve(
-                    stimulus_cropped[idx], spatiotemporal_filter[idx], mode="valid"
-                )
-
-            # Add some padding to the beginning so that stimulus time and generator potential time match
-            # (First time steps of stimulus are not convolved)
-            n_padding = int(self.data_filter_duration * b2u.ms / video_dt - 1)
-            generator_potential = np.pad(
-                generator_potential,
-                ((0, 0), (n_padding, 0)),
-                mode="edge",
-            )
-
-        # Internal test for convolution operation
-        generator_potential_duration_tp = generator_potential.shape[-1]
-        assert (
-            stim_len_tp == generator_potential_duration_tp
-        ), "Duration mismatch, check convolution operation, aborting..."
-
-        return generator_potential
+        return uniformify_index
 
     def _create_temporal_signal_cg(
         self, tvec, svec, dt, params, device, show_impulse=False, impulse_contrast=1.0
@@ -1418,6 +1181,302 @@ class WorkingRetina(RetinaMath):
 
         self.impulse_to_show = impulse_to_show
 
+    def get_w_z_coords(self):
+        """
+        Create w_coord, z_coord for cortical and visual coordinates, respectively
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        w_coord : np.ndarray
+            Cortical coordinates
+        z_coord : np.ndarray
+            Visual coordinates
+        """
+
+        # Create w_coord, z_coord for cortical and visual coordinates, respectively
+        z_coord = self.gc_df["x_deg"].values + 1j * self.gc_df["y_deg"].values
+
+        # Macaque values
+        # a for macaques should be 0.3 - 0.9, Schwartz 1994 citing Wilson et al 1990 "The perception of form" in Visual perception: The neurophysiological foundations, Academic Press
+        # k has been pretty open.
+        # However, if we relate 1/M = (a/k) + (1/k) * E and M = (1/0.077) + (1/(0.082 * E)), we get
+        # Andrew James, personal communication: k=1/.082, a=. 077/.082
+        a = 0.077 / 0.082  # ~ 0.94
+        k = 1 / 0.082  # ~ 12.2
+        w_coord = k * np.log(z_coord + a)
+
+        return w_coord, z_coord
+
+    def load_stimulus(self, stimulus_video=None):
+        """
+        Loads stimulus video
+
+        Parameters
+        ----------
+        stimulus_video : VideoBaseClass, optional
+            Visual stimulus to project to the ganglion cell mosaic. The default is None.
+            If None, the stimulus video is loaded from the stimulus_video_name attribute
+            of the stimulus metadata dictionary.
+
+        Returns
+        -------
+        None.
+
+        Attributes
+        ----------
+        stimulus_video : VideoBaseClass
+            Visual stimulus to project to the ganglion cell mosaic
+        """
+
+        # Set basic working_retina attributes
+        if self.initialized is False:
+            self._initialize()
+
+        if stimulus_video is None:
+            video_file_name = self.context.my_stimulus_options["stimulus_video_name"]
+
+            stimulus_video = self.data_io.load_stimulus_from_videofile(video_file_name)
+
+        assert (stimulus_video.video_width == self.stimulus_width_pix) & (
+            stimulus_video.video_height == self.stimulus_height_pix
+        ), "Check that stimulus dimensions match those of the mosaic"
+        assert (
+            stimulus_video.fps == self.fps
+        ), "Check that stimulus frame rate matches that of the mosaic"
+        assert (
+            stimulus_video.pix_per_deg == self.pix_per_deg
+        ), "Check that stimulus resolution matches that of the mosaic"
+
+        # Get parameters from the stimulus object
+        self.stimulus_video = stimulus_video
+        assert (
+            np.min(stimulus_video.frames) >= 0 and np.max(stimulus_video.frames) <= 255
+        ), "Stimulus pixel values must be between 0 and 255"
+
+        # Drop RGCs whose center is not inside the stimulus.
+        # Note that we use the gc_df instead of gc_df_stimpix.
+        xmin, xmax, ymin, ymax = self._get_extents_deg()
+        for index, gc in self.gc_df.iterrows():
+            if (
+                (gc.x_deg < xmin)
+                | (gc.x_deg > xmax)
+                | (gc.y_deg < ymin)
+                | (gc.y_deg > ymax)
+            ):
+                self.gc_df.iloc[index] = 0.0  # all columns set as zero
+                self.gc_df_stimpix.iloc[index] = 0.0  # all columns set as zero
+
+    def get_temporal_filters(self, cell_indices):
+        """
+        Retrieve temporal filters for an array of cells.
+
+        This function generates temporal filters for each cell specified by the
+        cell indices. The temporal filter for a specific cell is obtained by calling
+        the `_create_temporal_filter` method.
+
+        Parameters
+        ----------
+        cell_indices : array_like
+            List or 1-D array of cell indices for which to generate temporal filters.
+
+        Returns
+        -------
+        temporal_filters : ndarray
+            2-D array where each row corresponds to a temporal filter of a cell. The shape is
+            (len(cell_indices), self.temporal_filter_len).
+
+        Notes
+        -----
+        This function depends on the following instance variables:
+          - self.temporal_filter_len: an integer specifying the length of a temporal filter.
+        """
+
+        temporal_filters = np.zeros((len(cell_indices), self.temporal_filter_len))
+
+        for idx, cell_index in enumerate(cell_indices):
+            temporal_filters[idx, :] = self._create_temporal_filter(cell_index)
+
+        return temporal_filters
+
+    def get_spatial_filters(self, cell_indices, mask_threshold=None):
+        """
+        Generate spatial filters for given cell indices.
+
+        This function takes a list of cell indices, determines the model type,
+        creates a corresponding spatial filter for each cell index based on the model,
+        and then reshapes the filter to 1-D. It returns a 2-D array where each row is a
+        1-D spatial filter for a corresponding cell index.
+
+        Parameters
+        ----------
+        cell_indices : array_like
+            List or 1-D array of cell indices for which to generate spatial filters.
+        mask_threshold : float or None, optional
+            If float, return center masks instead of spatial filters. The default is None.
+
+        Returns
+        -------
+        spatial_filters : ndarray
+            2-D array where each row corresponds to a 1-D spatial filter or mask of a cell.
+            The shape is (len(cell_indices), s**2), where s is the side length of a spatial filter.
+
+        Raises
+        ------
+        ValueError
+            If the model type is neither 'FIT' nor 'VAE'.
+
+        Notes
+        -----
+        This function depends on the following instance variables:
+          - self.spatial_model: a string indicating the type of model used. Expected values are 'FIT' or 'VAE'.
+          - self.spatial_filter_sidelen: an integer specifying the side length of a spatial filter.
+        """
+        if mask_threshold is not None:
+            assert isinstance(
+                mask_threshold, float
+            ), "mask_threshold must be float, aborting..."
+            assert (
+                mask_threshold >= 0 and mask_threshold <= 1
+            ), "mask_threshold must be between 0 and 1, aborting..."
+
+        s = self.spatial_filter_sidelen
+        spatial_filters = np.zeros((len(cell_indices), s**2))
+        for idx, cell_index in enumerate(cell_indices):
+            if self.spatial_model == "FIT":
+                spatial_filter = self._create_spatial_filter_FIT(cell_index)
+            elif self.spatial_model == "VAE":
+                spatial_filter = self._create_spatial_filter_VAE(cell_index)
+            else:
+                raise ValueError("Unknown model type, aborting...")
+
+        if mask_threshold is not None:
+            spatial_filters = self.get_rf_masks(
+                spatial_filters, mask_threshold=mask_threshold
+            )
+
+        # Reshape to N cells, s**2 pixels
+        spatial_filters = np.reshape(spatial_filters, (len(cell_indices), s**2))
+
+        return spatial_filters
+
+    def convolve_stimulus_batched(
+        self, cell_indices, stimulus_cropped, spatiotemporal_filter
+    ):
+        """
+        Convolves the stimulus with the spatiotemporal filter for a given set of cells.
+
+        This function performs a convolution operation between the cropped stimulus and
+        a spatiotemporal filter for each specified cell. It uses either PyTorch (if available)
+        or numpy and scipy to perform the convolution. After the convolution, it adds a tonic drive to the
+        generator potential of each cell.
+
+        Parameters
+        ----------
+        cell_indices : array_like
+            Indices of the cells to convolve the stimulus with.
+        stimulus_cropped : ndarray
+            Cropped stimulus to be convolved with the spatiotemporal filter, shape should be
+            [num_cells, num_pixels, time_steps].
+        spatiotemporal_filter : ndarray
+            Spatiotemporal filter used in the convolution, shape should be
+            [num_cells, num_pixels, time_steps].
+
+        Returns
+        -------
+        ndarray
+            Generator potential of each cell, array of shape (num_cells, stimulus timesteps),
+            after the convolution and the addition of the tonic drive.
+
+        Raises
+        ------
+        AssertionError
+            If there is a mismatch between the duration of the stimulus and the duration of the generator potential.
+
+        Notes
+        -----
+        The `num_cells` should be the same for `cell_indices`, `stimulus_cropped`, and `spatiotemporal_filter`.
+        The `num_pixels` and `time_steps` should be the same for `stimulus_cropped` and `spatiotemporal_filter`.
+        """
+
+        stim_len_tp = stimulus_cropped.shape[-1]
+        # stimulus_size_pix = stimulus_cropped.shape[1]
+        num_cells = len(cell_indices)
+        video_dt = (1 / self.stimulus_video.fps) * b2u.second
+
+        # Move to GPU if possible. Both give the same result, but PyTorch@GPU is faster.
+        if "torch" in sys.modules:
+            device = self.context.device
+
+            # Dimensions are [batch_size, num_channels, time_steps]. We use pixels as channels.
+            stimulus_cropped = torch.tensor(stimulus_cropped).float().to(device)
+            spatiotemporal_filter = (
+                torch.tensor(spatiotemporal_filter).float().to(device)
+            )
+
+            # Convolving two signals involves "flipping" one signal and then sliding it
+            # across the other signal. PyTorch, however, does not flip the kernel, so we
+            # need to do it manually.
+            spatiotemporal_filter_flipped = torch.flip(spatiotemporal_filter, dims=[2])
+
+            # Calculate padding size
+            filter_length = spatiotemporal_filter_flipped.shape[2]
+            padding_size = filter_length - 1
+
+            # Pad the stimulus
+            stimulus_padded = torch.nn.functional.pad(
+                stimulus_cropped, (padding_size, 0), mode="replicate"
+            )
+
+            output = torch.empty(
+                (num_cells, stim_len_tp),
+                device=device,
+            )
+            for i in range(num_cells):
+                output[i] = torch.nn.functional.conv1d(
+                    stimulus_padded[i].unsqueeze(0),
+                    spatiotemporal_filter_flipped[i].unsqueeze(0),
+                    padding=0,
+                )
+
+            # Move back to CPU and convert to numpy
+            generator_potential = output.cpu().squeeze().numpy()
+        else:
+            # Run convolution. NOTE: expensive computation. Solution without torch.
+            # if mode is "valid", the output consists only of those elements that do not rely on the zero-padding
+            # if baseline is shorter than filter, the output is truncated
+            filter_length = spatiotemporal_filter.shape[-1]
+            assert (
+                self.context.my_stimulus_options["baseline_start_seconds"]
+                >= filter_length * 1 / self.stimulus_video.fps
+            ), f"baseline_start_seconds must be longer than filter length ({filter_length * video_dt}), aborting..."
+
+            generator_potential = np.empty((num_cells, stim_len_tp - filter_length + 1))
+            for idx in range(num_cells):
+                generator_potential[idx, :] = convolve(
+                    stimulus_cropped[idx], spatiotemporal_filter[idx], mode="valid"
+                )
+
+            # Add some padding to the beginning so that stimulus time and generator potential time match
+            # (First time steps of stimulus are not convolved)
+            n_padding = int(self.data_filter_duration * b2u.ms / video_dt - 1)
+            generator_potential = np.pad(
+                generator_potential,
+                ((0, 0), (n_padding, 0)),
+                mode="edge",
+            )
+
+        # Internal test for convolution operation
+        generator_potential_duration_tp = generator_potential.shape[-1]
+        assert (
+            stim_len_tp == generator_potential_duration_tp
+        ), "Duration mismatch, check convolution operation, aborting..."
+
+        return generator_potential
+
     def run_cells(
         self,
         cell_index=None,
@@ -1507,11 +1566,11 @@ class WorkingRetina(RetinaMath):
         if cell_index is None:
             n_cells = len(self.gc_df.index)  # all cells
             cell_indices = np.arange(n_cells)
-        # Run one or a subset of cells
+        # Run a subset of cells
         elif isinstance(cell_index, (list)):
             cell_indices = np.array(cell_index)
             n_cells = len(cell_indices)
-        # Run one or a subset of cells
+        # Run one cell
         elif isinstance(cell_index, (int)):
             cell_indices = np.array([cell_index])
             n_cells = len(cell_indices)
@@ -1531,7 +1590,9 @@ class WorkingRetina(RetinaMath):
         stimulus_cropped = self._get_spatially_cropped_video(cell_indices, reshape=True)
 
         # Get center masks
-        center_masks = self.get_spatial_filters(cell_indices, get_masks=True)
+        center_masks = self.get_spatial_filters(cell_indices, mask_threshold=0.1)
+        uniformity_index = self._get_uniformity_index(cell_indices, center_masks)
+        pdb.set_trace()
 
         # Get spatial filters
         spatial_filters = self.get_spatial_filters(cell_indices)
