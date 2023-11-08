@@ -124,7 +124,7 @@ project = "Retina"
 """
 Current experiment. Use distinct folders fo distinct stimuli.
 """
-experiment = "dynamic_QA" 
+experiment = "dynamic_QA"
 
 
 """
@@ -145,7 +145,7 @@ stimulus_folder = "stim"  # stim_sine_grating_sf2p0_crf_14_7"  # "stim_luminance
 Data context for output. 
 """
 
-output_folder = "parasol_on_stim"  # "parasol_on_stim_sine_grating_sf2p0_crf_14_7"  # "parasol_on_luminance_onset"
+output_folder = "testi_stim"  # "parasol_on_stim_sine_grating_sf2p0_crf_14_7"  # "parasol_on_luminance_onset"
 
 
 """
@@ -197,8 +197,9 @@ my_retina = {
     "visual_field_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
-    "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder
-    "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
+    "center_mask_threshold": 0.10,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
+    "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
+    "DoG_model": "circular",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models. Note that ellipse fit does not tolearate VAE adjustments => fit to nonadjusted generated rfs
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
     "model_file_name": None,  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[DEVICE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only
@@ -328,11 +329,11 @@ proportion_of_midget_gc_type = 0.64
 proportion_of_ON_response_type = 0.40
 proportion_of_OFF_response_type = 0.60
 
-# Perry_1985_VisRes; 223 um/deg in the fovea, 169 um/deg at 90 deg ecc. 
+# Perry_1985_VisRes; 223 um/deg in the fovea, 169 um/deg at 90 deg ecc.
 # With this relationship one mm retina is ~4.55 deg visual field.
-# Constant (linear) approximation of quadratic formula from 
+# Constant (linear) approximation of quadratic formula from
 # Goodchild_1996_JCompNeurol 0.038 * x**2 + 4.21 * x + 0.1
-# gives 229 um/degree. The R2 (constant vs quadratic) is 
+# gives 229 um/degree. The R2 (constant vs quadratic) is
 # > 0.999 for ecc 0.1 - 4 mm, and > 0.97 for ecc 0.1 - 20 mm.
 deg_per_mm = 1 / 0.229
 
@@ -374,7 +375,7 @@ gc_placement_params = {
     "diffusion_speed": 0.0001,  # f only, adjusted with ecc
     "border_repulsion_stength": 10,  # f only
     "border_distance_threshold": 0.01,  # f only
-    "show_placing_progress": True,  # True False
+    "show_placing_progress": False,  # True False
     "show_skip_steps": 100,  # v 1, f 100
 }
 
@@ -545,7 +546,7 @@ if __name__ == "__main__":
 
     # For FIT (ellipse and DoG fits, temporal kernels and tonic drives)
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
-    PM.viz.show_dendrite_diam_vs_ecc(savefigname=None)
+    # PM.viz.show_dendrite_diam_vs_ecc(savefigname=None)
     # PM.viz.show_temporal_filter_response(n_curves=3, savefigname="temporal_filters.eps")
     # PM.viz.show_spatial_statistics(savefigname="spatial_stats.eps")
 
@@ -588,7 +589,7 @@ if __name__ == "__main__":
     ####################################
 
     # # Load stimulus to get working retina, necessary for running cells
-    # PM.working_retina.load_stimulus()
+    PM.working_retina.load_stimulus()
     # PM.working_retina.run_with_my_run_options()
 
     ##########################################
@@ -619,12 +620,21 @@ if __name__ == "__main__":
     # # The PM.working_retina load_stimulus and run_cells must be active for impulse response viz
     # PM.viz.show_impulse_response(savefigname=None)
 
+    ##########################################
+    ###          Show unity data           ###
+    ##########################################
+
+    PM.working_retina.run_cells(get_uniformity_data=True)
+    savename = f"{gc_type}_{response_type}_{my_retina['spatial_model']}_unity" + ".eps"
+    # The PM.working_retina load_stimulus and run_cells must be active for unity viz
+    PM.viz.show_unity(savefigname=None)
+
     ################################################
     ###   Show multiple trials for single cell,  ###
     ###   or multiple cells for single trial     ###
     ################################################
 
-    # # Based on my_run_options above
+    # Based on my_run_options above
     # PM.viz.show_all_gc_responses(savefigname=None)
 
     # PM.viz.show_stimulus_with_gcs(

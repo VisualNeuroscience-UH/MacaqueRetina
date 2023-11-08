@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from scipy.signal import convolve
 from scipy.interpolate import interp1d
+from scipy.spatial import Delaunay
 from scipy.optimize import fsolve
 from skimage.transform import resize
 import torch
@@ -742,8 +743,6 @@ class WorkingRetina(RetinaMath):
         # use the index arrays to select the elements from video_copy
         stim_region[unit_region_idx, r_matrix, q_matrix] = 1
 
-        total_region = np.sum(stim_region, axis=0) > 0
-
         center_masks = center_masks.astype(bool).reshape(
             (len(cell_indices), sidelen, sidelen)
         )
@@ -756,19 +755,69 @@ class WorkingRetina(RetinaMath):
 
         unit_region = np.sum(center_region, axis=0)
 
-        total_region = unit_region > 0
-        unity_region = unit_region == 1
+        # Delaunay triangulation for the total region
+        gc = self.gc_df_stimpix.iloc[cell_indices]
+        q_center = np.round(gc.q_pix).astype(int).values
+        r_center = np.round(gc.r_pix).astype(int).values
 
-        uniformify_index = np.sum(unity_region) / np.sum(total_region)
+        # Create points array for Delaunay triangulation from r_center and q_center
+        points = np.vstack((q_center, r_center)).T  # Shape should be (N, 2)
 
-        print("Uniformity index: ", uniformify_index)
-        fig, ax = plt.subplots(1, 3)
-        ax[0].imshow(total_region)
-        ax[1].imshow(unity_region)
-        ax[2].imshow(unit_region)
-        plt.show()
+        # Perform Delaunay triangulation
+        tri = Delaunay(points)
 
-        return uniformify_index
+        # Initialize total area
+        total_area = 0
+        delaunay_mask = np.zeros((height, width), dtype=np.uint8)
+
+        # Calculate the area of each triangle and sum it up
+        for triangle in tri.simplices:
+            # Get the vertices of the triangle
+            vertices = points[triangle]
+
+            # Use the vertices to calculate the area of the triangle
+            # Area formula for triangles given coordinates: 0.5 * |x1(y2 - y3) + x2(y3 - y1) + x3(y1 - y2)|
+            total_area += 0.5 * abs(
+                vertices[0, 0] * (vertices[1, 1] - vertices[2, 1])
+                + vertices[1, 0] * (vertices[2, 1] - vertices[0, 1])
+                + vertices[2, 0] * (vertices[0, 1] - vertices[1, 1])
+            )
+
+            # Get the bounding box of the triangle to minimize the area to check
+            min_x = np.min(vertices[:, 0])
+            max_x = np.max(vertices[:, 0])
+            min_y = np.min(vertices[:, 1])
+            max_y = np.max(vertices[:, 1])
+
+            # Generate a grid of points representing pixels in the bounding box
+            x_range = np.arange(min_x, max_x + 1)
+            y_range = np.arange(min_y, max_y + 1)
+            grid_x, grid_y = np.meshgrid(x_range, y_range)
+
+            # Use the points in the grid to check if they are inside the triangle
+            grid_points = np.vstack((grid_x.flatten(), grid_y.flatten())).T
+            indicator = tri.find_simplex(grid_points) >= 0
+
+            # Reshape the indicator back to the shape of the bounding box grid
+            indicator = indicator.reshape(grid_x.shape)
+
+            # Place the indicator in the mask image
+            delaunay_mask[min_y : max_y + 1, min_x : max_x + 1] = np.logical_or(
+                delaunay_mask[min_y : max_y + 1, min_x : max_x + 1], indicator
+            )
+
+        unity_region = (unit_region * delaunay_mask) == 1
+
+        uniformify_index = np.sum(unity_region) / np.sum(delaunay_mask)
+
+        uniformify_data = {
+            "uniformify_index": uniformify_index,
+            "total_region": delaunay_mask,
+            "unity_region": unity_region,
+            "unit_region": unit_region,
+        }
+
+        return uniformify_data
 
     def _create_temporal_signal_cg(
         self, tvec, svec, dt, params, device, show_impulse=False, impulse_contrast=1.0
@@ -1177,7 +1226,7 @@ class WorkingRetina(RetinaMath):
         impulse_to_show["response_type"] = self.response_type
         impulse_to_show["temporal_model"] = self.temporal_model
 
-        self.impulse_to_show = impulse_to_show
+        return impulse_to_show
 
     def get_w_z_coords(self):
         """
@@ -1485,6 +1534,7 @@ class WorkingRetina(RetinaMath):
         simulation_dt=0.001,
         get_impulse_response=False,
         contrasts_for_impulse=None,
+        get_uniformity_data=False,
     ):
         """
         Runs the LN pipeline for a single ganglion cell (spiking by Brian2).
@@ -1577,20 +1627,25 @@ class WorkingRetina(RetinaMath):
             )
 
         if get_impulse_response is True:
-            self._get_impulse_response(cell_index, contrasts_for_impulse, video_dt)
-            self.project_data.working_retina["impulse_to_show"] = self.impulse_to_show
+            impulse_to_show = self._get_impulse_response(
+                cell_index, contrasts_for_impulse, video_dt
+            )
+            self.project_data.working_retina["impulse_to_show"] = impulse_to_show
             return
 
         cell_indices = np.atleast_1d(cell_indices)
 
-        # Get cropped stimulus, vectorized.
-        stimulus_cropped = self._get_spatially_cropped_video(cell_indices, reshape=True)
-
         # Get center masks
-        center_masks = self.get_spatial_filters(cell_indices, mask_threshold=0.3)
-        # plt.imshow(np.reshape(center_masks[1,:],(self.spatial_filter_sidelen,self.spatial_filter_sidelen)));plt.colorbar();plt.show()
-        uniformity_index = self._get_uniformity_index(cell_indices, center_masks)
-        pdb.set_trace()
+        mask_threshold = self.context.my_retina["center_mask_threshold"]
+        center_masks = self.get_spatial_filters(
+            cell_indices, mask_threshold=mask_threshold
+        )
+
+        if get_uniformity_data is True:
+            uniformify_data = self._get_uniformity_index(cell_indices, center_masks)
+            uniformify_data["mask_threshold"] = mask_threshold
+            self.project_data.working_retina["uniformify_data"] = uniformify_data
+            return
 
         # Get spatial filters
         spatial_filters = self.get_spatial_filters(cell_indices)
@@ -1604,6 +1659,9 @@ class WorkingRetina(RetinaMath):
         # We need to invert them back to max downwards for simulation.
         if self.response_type == "off":
             spatial_filters = -spatial_filters
+
+        # Get cropped stimulus, vectorized.
+        stimulus_cropped = self._get_spatially_cropped_video(cell_indices, reshape=True)
 
         # Get instantaneous firing rates
         if self.temporal_model == "dynamic":

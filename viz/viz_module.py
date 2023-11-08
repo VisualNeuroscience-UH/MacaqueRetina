@@ -829,8 +829,8 @@ class Viz:
         """
         Visualize the mosaic of ganglion cells in retinal mm coordinates.
 
-        This function plots the ganglion cells as ellipses on a Cartesian plane and adds 
-        a boundary polygon representing sector limits. 
+        This function plots the ganglion cells as ellipses on a Cartesian plane and adds
+        a boundary polygon representing sector limits.
 
         Parameters
         ----------
@@ -845,7 +845,7 @@ class Viz:
         ecc_lim_mm = np.array(ecc_lim_deg) / self.context.my_retina["deg_per_mm"]
         pol_lim_deg = self.context.my_retina["pol_limits_deg"]
         boundary_polygon = self.boundary_polygon(ecc_lim_mm, pol_lim_deg)
-        
+
         # Obtain mm values
         if self.context.my_retina["DoG_model"] == "circular":
             semi_xc = gc_df["rad_c_mm"]
@@ -864,9 +864,7 @@ class Viz:
 
         fig, ax = plt.subplots(nrows=1, ncols=1)
 
-        polygon = Polygon(
-            boundary_polygon, closed=True, fill=None, edgecolor="r"
-        )
+        polygon = Polygon(boundary_polygon, closed=True, fill=None, edgecolor="r")
         ax.add_patch(polygon)
 
         ax.plot(
@@ -2136,8 +2134,8 @@ class Viz:
                 horizontalalignment="center",
                 verticalalignment="center",
                 fontsize=10,
-            )            
-            
+            )
+
         else:
             ax[1].plot(range(temporal_filter_len), np.flip(temporal_filter))
 
@@ -2192,6 +2190,31 @@ class Viz:
         plt.ylabel("Normalized response")
         # Put grid on
         plt.grid(True)
+
+        if savefigname is not None:
+            self._figsave(figurename=savefigname)
+
+    def show_unity(self, savefigname=None):
+        """ """
+
+        uniformify_data = self.project_data.working_retina["uniformify_data"]
+        uniformify_index = uniformify_data["uniformify_index"]
+        total_region = uniformify_data["total_region"]
+        unity_region = uniformify_data["unity_region"]
+        unit_region = uniformify_data["unit_region"]
+        mask_threshold = uniformify_data["mask_threshold"]
+
+        fig, ax = plt.subplots(1, 3, figsize=(12, 5))
+        ax[0].set_title("Total region (Delaunay_mask)")
+        plt.colorbar(ax[0].imshow(total_region, cmap="gray"), ax=ax[0])
+        plt.colorbar(ax[1].imshow(unity_region, cmap="gray"), ax=ax[1])
+        ax[1].set_title(
+            f"Unity region, where:\nSum of unit regions * Delaunay mask == 1\nth = {mask_threshold:.2f}\nuniformify_index = {uniformify_index:.2f}"
+        )
+        ax[2].set_title("Sum of unit regions")
+        plt.colorbar(ax[2].imshow(unit_region, cmap="gray"), ax=ax[2])
+
+        plt.tight_layout()
 
         if savefigname is not None:
             self._figsave(figurename=savefigname)
