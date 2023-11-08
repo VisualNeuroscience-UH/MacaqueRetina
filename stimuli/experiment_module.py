@@ -250,7 +250,6 @@ class Experiment(VideoBaseClass):
                     n_trials=n_trials,
                     save_data=True,
                     spike_generator_model=spike_generator_model,
-                    return_monitor=False,
                     filename=filename,
                     simulation_dt=simulation_dt,
                 )  # Run simulation

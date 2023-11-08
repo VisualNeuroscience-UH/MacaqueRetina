@@ -1557,7 +1557,6 @@ class WorkingRetina(RetinaMath):
         n_trials=1,
         save_data=False,
         spike_generator_model="refractory",
-        return_monitor=False,
         filename=None,
         simulation_dt=0.001,
         get_impulse_response=False,
@@ -1565,67 +1564,90 @@ class WorkingRetina(RetinaMath):
         get_uniformity_data=False,
     ):
         """
-        Runs the LN pipeline for a single ganglion cell (spiking by Brian2).
-        Off responses are inverted back to max negative in this method
-        If `get_impulse_response` is True, returns impulse response for parasol cells but
-        does not run the pipeline.
+         Executes the visual signal processing for designated ganglion cells, simulating their spiking output.
 
-        Parameters
-        ----------
-        cell_index : int or None, optional
-            Index of the cell to run. If None, run all cells. Default is None.
-        n_trials : int, optional
-            Number of trials to run. Default is 1.
-        save_data : bool, optional
-            Whether to save the data. Default is False.
-        spike_generator_model : str, optional
-            Model for spike generation: 'refractory' or 'poisson'. Default is 'refractory'.
-        return_monitor : bool, optional
-            Whether to return a raw Brian2 SpikeMonitor. Default is False.
-        filename : str or None, optional
-            Filename to save the data to. Default is None.
-        simulation_dt : float, optional
-            Time step of the simulation. Default is 0.001 (1 ms).
-        get_impulse_response : bool, optional
-            Whether to compute and return the impulse response for parasol cells.
-            If True, the function will not run the pipeline but instead compute the impulse response.
-            Default is False.
-        contrasts_for_impulse : list of floats or None, optional
-            If `get_impulse_response` is True, this should be a list of contrast values
-            for which the impulse responses are computed. Default is None.
+         This method is capable of running the linear-nonlinear (LN) pipeline for a single or multiple ganglion cells,
+         converting visual stimuli into spike trains using the Brian2 simulator. When `get_impulse_response` is enabled,
+         it bypasses the pipeline to compute impulse responses for specified cell types and contrasts.
+         The method also supports the computation of spatial uniformity indices when `get_uniformity_data` is set.
 
-        Returns
-        -------
-        spiketrains : list of arrays
-            Each array in the list represents the spike times of a particular cell.
-        interpolated_rates_array : numpy array
-            Array representing the interpolated rates of the cells.
+         Parameters
+         ----------
+         cell_index : int, list of int, or None, optional
+             The index(es) of the cell(s) to simulate. If None, all cells are processed. Defaults to None.
+         n_trials : int, optional
+             The number of independent trials to simulate for the stochastic elements of the model.
+             Defaults to 1.
+         save_data : bool, optional
+             Flag to save the output data to a file. Defaults to False.
+         spike_generator_model : str, optional
+             The model for spike generation: 'refractory' for a refractory model,
+             'poisson' for a Poisson process.
+             Defaults to 'refractory'.
+         filename : str or None, optional
+             The filename for saving output data. If None, no data is saved. Defaults to None.
+         simulation_dt : float, optional
+             The time step for the simulation in seconds. Defaults to 0.001 (1 ms).
+         get_impulse_response : bool, optional
+             If True, computes and returns the impulse response for the cell types specified in
+             `contrasts_for_impulse`, and skips the standard LN pipeline. Defaults to False.
+         contrasts_for_impulse : list of floats or None, optional
+             A list of contrast values to compute impulse responses for, applicable when
+             `get_impulse_response` is True. Defaults to None.
+         get_uniformity_data : bool, optional
+             If True, computes and returns a spatial uniformity index and data for visualization,
+             and skips the standard LN pipeline.. Defaults to False.
 
-        Raises
-        ------
-        AssertionError
-            If `get_impulse_response` is True but the necessary conditions are not met
-            (e.g. cell_index is not an integer, the cell type is not "parasol", or contrasts
-            are not specified correctly).
-        ValueError
-            If `spike_generator_model` is neither "refractory" nor "poisson".
+         Returns
+         -------
+        impulse_responses : dict or None
+             A dictionary containing impulse responses if `get_impulse_response` is True, otherwise None.
+         uniformity_indices : dict or None
+             A dictionary containing uniformity indices if `get_uniformity_data` is True, otherwise None.
 
-        Notes
-        -----
-        - If `save_data` is True, the function saves the spike data and possibly
-        the interpolated rates (analog signal) into a file.
-        - If `return_monitor` is True, only the Brian2 SpikeMonitor is returned.
+         Saves to file
+         -------------
+        spike_trains : dict
+            A dictionary containing spike trains for each cell.
+            This is saved both for CxSystem2 as gz(ipped) pickle, and
+            as csv.
+        unit positions (structure): csv
+            A csv file containing the coordinates of each cell.
 
-        References
-        ----------
-        Dynamic contrast gain control
-        .. [1] Victor (1987) Journal of Physiology
-        .. [2] Benardete & Kaplan (1997) Visual Neuroscience
-        .. [3] Kaplan & Benardete (1999) Journal of Physiology
-        Fixed temporal kernel
-        .. [4] Chichilnisky (2001) Network
-        .. [5] Chichilnisky (2002) Journal of Neuroscience
-        .. [6] Field (2010) Nature
+         Saves to internal dictionary for visualization
+         ----------------------------------------------
+        stim_to_show : dict
+            A dictionary containing the stimulus and some metadata used for simulation.
+        spat_temp_filter_to_show : dict
+            A dictionary containing the spatial and temporal filters for each cell and some metadata.
+        gc_responses_to_show : dict
+            A dictionary containing the generator potentials and spike trains for each cell and some metadata.
+
+         Raises
+         ------
+         AssertionError
+             If `cell_index` is not None, an integer, or a list;
+             if `get_impulse_response` is True but the required
+             conditions (e.g., `cell_index`, cell type, or contrasts) are not met.
+         ValueError
+             If `spike_generator_model` is neither 'refractory' nor 'poisson'.
+
+         Notes
+         -----
+         - The method can be utilized in various modes depending on the combination of boolean flags provided.
+         - Saving data and obtaining impulse responses or uniformity indices are mutually exclusive operations.
+         - This method handles the inversion of off-responses to a maximum negative value internally.
+
+         References
+         ----------
+         For the theoretical background and models used in this simulation refer to:
+         [1] Victor 1987 Journal of Physiology
+         [2] Benardete & Kaplan 1997 Visual Neuroscience
+         [3] Kaplan & Benardete 1999 Journal of Physiology
+         [4] Chichilnisky 2001 Network
+         [5] Chichilnisky 2002 Journal of Neuroscience
+         [6] Field 2010 Nature
+         [7] Gauthier 2009 PLoS Biology
         """
 
         # Save spike generation model
@@ -1961,17 +1983,6 @@ class WorkingRetina(RetinaMath):
             rgc_coords = self.gc_df[["x_deg", "y_deg"]].copy()
             self.data_io.save_structure_csv(rgc_coords, filename=filename)
 
-        spat_temp_filter_to_show = {
-            "spatial_filters": spatial_filters,
-            "temporal_filters": self.get_temporal_filters(cell_indices),
-            "data_filter_duration": self.data_filter_duration,
-            "temporal_filter_len": self.temporal_filter_len,
-            "gc_type": self.gc_type,
-            "response_type": self.response_type,
-            "temporal_model": self.temporal_model,
-            "spatial_filter_sidelen": self.spatial_filter_sidelen,
-        }
-
         stim_to_show = {
             "stimulus_video": self.stimulus_video,
             "gc_df_stimpix": self.gc_df_stimpix,
@@ -1982,6 +1993,17 @@ class WorkingRetina(RetinaMath):
             "qr_min_max": self._get_crop_pixels(cell_indices),
             "spatial_filter_sidelen": self.spatial_filter_sidelen,
             "stimulus_cropped": self._get_spatially_cropped_video(cell_indices),
+        }
+
+        spat_temp_filter_to_show = {
+            "spatial_filters": spatial_filters,
+            "temporal_filters": self.get_temporal_filters(cell_indices),
+            "data_filter_duration": self.data_filter_duration,
+            "temporal_filter_len": self.temporal_filter_len,
+            "gc_type": self.gc_type,
+            "response_type": self.response_type,
+            "temporal_model": self.temporal_model,
+            "spatial_filter_sidelen": self.spatial_filter_sidelen,
         }
 
         gc_responses_to_show = {
@@ -1996,15 +2018,10 @@ class WorkingRetina(RetinaMath):
 
         # Attach data requested by other classes to project_data
         self.project_data.working_retina["stim_to_show"] = stim_to_show
-        self.project_data.working_retina["gc_responses_to_show"] = gc_responses_to_show
         self.project_data.working_retina[
             "spat_temp_filter_to_show"
         ] = spat_temp_filter_to_show
-
-        if return_monitor is True:
-            return spike_monitor
-        else:
-            return spiketrains, interpolated_rates_array.flatten()
+        self.project_data.working_retina["gc_responses_to_show"] = gc_responses_to_show
 
     def run_with_my_run_options(self):
         """
@@ -2025,7 +2042,6 @@ class WorkingRetina(RetinaMath):
                 n_trials=n_trials,
                 save_data=save_data,
                 spike_generator_model=spike_generator_model,
-                return_monitor=False,
                 filename=filename,
                 simulation_dt=simulation_dt,
             )
