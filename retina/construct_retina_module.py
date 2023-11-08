@@ -475,7 +475,7 @@ class ConstructRetina(RetinaMath):
         This function ensures full coverage of the retinal field (coverage factor = 1).
         It updates the `gc_df` dataframe with spatial parameters converted from pixels in
         orginal experimental data space to millimeters of final retina. It applies scaling
-        for retinal coverage of one at the given eccentricity. 
+        for retinal coverage of one at the given eccentricity.
         """
         # Create all gc units from parameters fitted to experimental data
         n_cells = len(self.gc_df)
@@ -555,45 +555,27 @@ class ConstructRetina(RetinaMath):
             "ellipse_independent",
             "ellipse_fixed",
         ]:
-            semi_xc = (
-                radius_scaling_factors_coverage_1
-                * self.gc_df["semi_xc_mm"]
-            )
+            semi_xc = radius_scaling_factors_coverage_1 * self.gc_df["semi_xc_mm"]
 
-            semi_yc = (
-                radius_scaling_factors_coverage_1
-                * self.gc_df["semi_yc_mm"]
-            )
+            semi_yc = radius_scaling_factors_coverage_1 * self.gc_df["semi_yc_mm"]
 
             self.gc_df["semi_xc_mm"] = semi_xc
             self.gc_df["semi_yc_mm"] = semi_yc
 
         if self.context.my_retina["DoG_model"] == "ellipse_independent":
             # Add surround
-            semi_xs = (
-                radius_scaling_factors_coverage_1
-                * self.gc_df["semi_xs_mm"]
-            )
+            semi_xs = radius_scaling_factors_coverage_1 * self.gc_df["semi_xs_mm"]
 
-            semi_ys = (
-                radius_scaling_factors_coverage_1
-                * self.gc_df["semi_ys_mm"]
-            )
+            semi_ys = radius_scaling_factors_coverage_1 * self.gc_df["semi_ys_mm"]
 
             self.gc_df["semi_xs_mm"] = semi_xs
             self.gc_df["semi_ys_mm"] = semi_ys
 
         if self.context.my_retina["DoG_model"] == "circular":
-            rad_c = (
-                radius_scaling_factors_coverage_1
-                * self.gc_df["rad_c_mm"]
-            )
+            rad_c = radius_scaling_factors_coverage_1 * self.gc_df["rad_c_mm"]
             self.gc_df["rad_c_mm"] = rad_c
 
-            rad_s = (
-                radius_scaling_factors_coverage_1
-                * self.gc_df["rad_s_mm"]
-            )
+            rad_s = radius_scaling_factors_coverage_1 * self.gc_df["rad_s_mm"]
             self.gc_df["rad_s_mm"] = rad_s
 
     def _generate_DoG_with_rf_from_literature(
@@ -2333,12 +2315,15 @@ class ConstructRetina(RetinaMath):
             self.data_io.save_generated_rfs(
                 img_rfs_final, output_path, filename_stem=filename_stem
             )
-            maskname_stem = Path(filename_stem).stem + "_center_mask.npy"
-            self.data_io.save_generated_rfs(
-                img_rfs_mask,
-                output_path,
-                filename_stem=maskname_stem,
-            )
+            # We do not save the masks because we want the working retina masking be independent
+            # from construction VAE masking. TODO consider deleting this VAE masking or updating it
+            # to better adjust for unity coverage.
+            # maskname_stem = Path(filename_stem).stem + "_center_mask.npy"
+            # self.data_io.save_generated_rfs(
+            #     img_rfs_mask,
+            #     output_path,
+            #     filename_stem=maskname_stem,
+            # )
 
             # 13) Set project_data for later visualization
             self.project_data.construct_retina["gen_spat_img"] = {
