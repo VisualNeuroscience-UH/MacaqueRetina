@@ -704,7 +704,35 @@ class WorkingRetina(RetinaMath):
         return stimulus_cropped
 
     def _get_uniformity_index(self, cell_indices, center_masks):
-        """ """
+        """
+        Calculate the uniformity index for retinal ganglion cell receptive fields.
+
+        This function computes the uniformity index which quantifies the evenness
+        of the distribution of receptive field centers over the visual stimulus area,
+        using Delaunay triangulation to estimate the total area covered by receptive
+        fields.
+
+        Parameters
+        ----------
+        cell_indices : int or ndarray of int
+            Indices of the cells to be considered for the calculation. Can be a single
+            integer or an array of integers.
+        center_masks : ndarray of bool
+            Boolean array where `True` indicates the presence of a cell's receptive
+            field center within the visual stimulus region.
+
+        Returns
+        -------
+        dict
+            A dictionary containing:
+            - 'uniformify_index': The calculated uniformity index.
+            - 'total_region': Binary mask indicating the total region covered by
+            the receptive fields after Delaunay triangulation.
+            - 'unity_region': Binary mask indicating regions where exactly one
+            receptive field is present.
+            - 'unit_region': The sum of center regions for all cells.
+
+        """
         height = self.context.my_stimulus_options["image_height"]
         width = self.context.my_stimulus_options["image_width"]
 

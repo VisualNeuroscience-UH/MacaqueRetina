@@ -2195,7 +2195,18 @@ class Viz:
             self._figsave(figurename=savefigname)
 
     def show_unity(self, savefigname=None):
-        """ """
+        """
+        Display the uniformity regions of a working retina and optionally save the figure.
+
+        This method visualizes the total region covered by Delaunay triangulation mask,
+        the unity region where the sum of unit regions and the Delaunay mask equals 1,
+        and the sum of unit center regions.
+
+        Parameters
+        ----------
+        savefigname : str, optional
+            The filename for saving the figure. If None, the figure is not saved.
+        """
 
         uniformify_data = self.project_data.working_retina["uniformify_data"]
         uniformify_index = uniformify_data["uniformify_index"]
