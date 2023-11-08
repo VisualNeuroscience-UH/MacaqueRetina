@@ -704,7 +704,6 @@ class WorkingRetina(RetinaMath):
 
     def _get_uniformity_index(self, cell_indices, center_masks):
         """ """
-        # TÄHÄN JÄIT: TEE TÄSSÄ UNIFORMITY INDEX TAI VAIHTOEHTOISESTI SIIRRÄ ANALYZE-OSIOON
         height = self.context.my_stimulus_options["image_height"]
         width = self.context.my_stimulus_options["image_width"]
 
@@ -762,12 +761,11 @@ class WorkingRetina(RetinaMath):
 
         uniformify_index = np.sum(unity_region) / np.sum(total_region)
 
-        # TÄHÄN JÄIT, TEE DELAUNYUN TRIANGULAATIO JA LASKE TOTAL SEN MUKAISESTI
         print("Uniformity index: ", uniformify_index)
-        fig, ax = plt.subplots(1, 2)
+        fig, ax = plt.subplots(1, 3)
         ax[0].imshow(total_region)
         ax[1].imshow(unity_region)
-        # ax[2].imshow(unit_region)
+        ax[2].imshow(unit_region)
         plt.show()
 
         return uniformify_index
@@ -1344,15 +1342,14 @@ class WorkingRetina(RetinaMath):
             ), "mask_threshold must be between 0 and 1, aborting..."
 
         s = self.spatial_filter_sidelen
-        spatial_filters = np.zeros((len(cell_indices), s**2))
+        spatial_filters = np.zeros((len(cell_indices), s, s))
         for idx, cell_index in enumerate(cell_indices):
             if self.spatial_model == "FIT":
-                spatial_filter = self._create_spatial_filter_FIT(cell_index)
+                spatial_filters[idx, ...] = self._create_spatial_filter_FIT(cell_index)
             elif self.spatial_model == "VAE":
-                spatial_filter = self._create_spatial_filter_VAE(cell_index)
+                spatial_filters[idx, ...] = self._create_spatial_filter_VAE(cell_index)
             else:
                 raise ValueError("Unknown model type, aborting...")
-
         if mask_threshold is not None:
             spatial_filters = self.get_rf_masks(
                 spatial_filters, mask_threshold=mask_threshold
@@ -1590,7 +1587,8 @@ class WorkingRetina(RetinaMath):
         stimulus_cropped = self._get_spatially_cropped_video(cell_indices, reshape=True)
 
         # Get center masks
-        center_masks = self.get_spatial_filters(cell_indices, mask_threshold=0.1)
+        center_masks = self.get_spatial_filters(cell_indices, mask_threshold=0.3)
+        # plt.imshow(np.reshape(center_masks[1,:],(self.spatial_filter_sidelen,self.spatial_filter_sidelen)));plt.colorbar();plt.show()
         uniformity_index = self._get_uniformity_index(cell_indices, center_masks)
         pdb.set_trace()
 
