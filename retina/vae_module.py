@@ -922,8 +922,6 @@ class RetinaVAE(RetinaMath):
 
         self.latent_space_plot_scale = 15.0  # Scale for plotting latent space
 
-        self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
         self.models_folder = self._set_models_folder(context)
         self.train_log_folder = self.models_folder / "train_logs"
 
@@ -949,6 +947,8 @@ class RetinaVAE(RetinaMath):
 
         match training_mode:
             case "train_model":
+                self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
                 # Create datasets and dataloaders
 
                 self.train_loader = self._augment_and_get_dataloader(
@@ -1489,7 +1489,10 @@ class RetinaVAE(RetinaMath):
                 vae_model = torch.load(model_path)
             elif Path.exists(model_path) and model_path.is_dir():
                 try:
-                    model_path = max(Path(self.models_folder).glob("*.pt"))
+                    prefix = f"model_{self.gc_type}_{self.response_type}_{self.device}_"
+                    model_path = max(Path(self.models_folder).glob(f"{prefix}*.pt"))
+                    time_stamp = "_".join(model_path.stem.split("_")[-2:])
+                    self.timestamp_for_loading = time_stamp
                     vae_model = torch.load(model_path)
                     print(f"Most recent model is {model_path}.")
                 except ValueError:
@@ -1847,10 +1850,14 @@ class RetinaVAE(RetinaMath):
         Load logging from train_log_folder
         """
 
-        # Get the time stamp from the file name
-        name_stem = model_file_name.split(".")[0]
-        times = name_stem.split("_")[-2:]
-        time_stamp = "_".join(times)
+        if model_file_name is None:
+            # This is set in _load_model, when there is no model_file_name
+            time_stamp = self.timestamp_for_loading
+        else:
+            # Get the time stamp from the file name
+            name_stem = model_file_name.split(".")[0]
+            times = name_stem.split("_")[-2:]
+            time_stamp = "_".join(times)
 
         # Get the most recent log file
         try:
