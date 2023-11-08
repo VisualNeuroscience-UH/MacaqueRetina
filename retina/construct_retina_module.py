@@ -1473,47 +1473,6 @@ class ConstructRetina(RetinaMath):
 
         return img_flipped, img_reshaped
 
-    def _get_rf_masks(self, img_stack, mask_threshold=0.1):
-        """
-        Extracts the contours around the maximum of each receptive field in an image stack. The contour for a field is
-        defined as the set of pixels with a value of at least 10% of the maximum pixel value in the field. Only the
-        connected region of the contour that contains the maximum value is included.
-
-        Parameters
-        ----------
-        img_stack : numpy.ndarray
-            3D numpy array representing a stack of images. The shape of the array should be (N, H, W).
-        mask_threshold : float between 0 and 1
-            The threshold for the contour mask.
-
-        Returns
-        -------
-        numpy.ndarray
-            3D numpy array of boolean masks (N, H, W). In each mask, True indicates
-            a pixel is part of the contour, and False indicates it is not.
-        """
-        assert (
-            mask_threshold >= 0 and mask_threshold <= 1
-        ), "mask_threshold must be between 0 and 1, aborting..."
-
-        masks = []
-        for img in img_stack:
-            max_val = np.max(img)
-            mask = img >= max_val * mask_threshold
-
-            # Label the distinct regions in the mask
-            labeled_mask, num_labels = ndimage.label(mask)
-
-            # Find the label of the region that contains the maximum value
-            max_label = labeled_mask[np.unravel_index(np.argmax(img), img.shape)]
-
-            # Keep only the region in the mask that contains the maximum value
-            mask = labeled_mask == max_label
-
-            masks.append(mask)
-
-        return np.array(masks)
-
     def _get_retina_with_rf_masks(
         self,
         rf_masks,
@@ -2269,7 +2228,7 @@ class ConstructRetina(RetinaMath):
 
             # 10) Get center masks for the generated spatial rfs
             # Mask threshold is relative to max value in the image
-            img_rfs_mask = self._get_rf_masks(img_rfs, mask_threshold=0.1)
+            img_rfs_mask = self.get_rf_masks(img_rfs, mask_threshold=0.1)
 
             # 11) Sum separate rf images onto one retina for visualization
             # Uses pos_ecc_mm, pos_polar_deg
