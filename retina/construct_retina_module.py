@@ -1609,6 +1609,7 @@ class ConstructRetina(RetinaMath):
         gc_vae_df["pos_ecc_mm"] = self.gc_df["pos_ecc_mm"]
         gc_vae_df["pos_polar_deg"] = self.gc_df["pos_polar_deg"]
         gc_vae_df["ecc_group_idx"] = self.gc_df["ecc_group_idx"]
+        gc_vae_df["gc_scaling_factors"] = self.gc_df["gc_scaling_factors"]
 
         # Save this metadata to df, although it is the same for all units
         print(f"um_per_pix: {um_per_pix}")
@@ -1716,82 +1717,83 @@ class ConstructRetina(RetinaMath):
         )
 
         # Get the max extent for rectangular image
-        min_x = np.min(sector_limits_mm[:, 0])
-        max_x = np.max(sector_limits_mm[:, 0])
-        min_y = np.min(sector_limits_mm[:, 1])
-        max_y = np.max(sector_limits_mm[:, 1])
+        min_x_mm = np.min(sector_limits_mm[:, 0])
+        max_x_mm = np.max(sector_limits_mm[:, 0])
+        min_y_mm = np.min(sector_limits_mm[:, 1])
+        max_y_mm = np.max(sector_limits_mm[:, 1])
 
         # Check for max hor extent
-        if np.max(ecc_lim_mm) > max_x:
-            max_x = np.max(ecc_lim_mm)
+        if np.max(ecc_lim_mm) > max_x_mm:
+            max_x_mm = np.max(ecc_lim_mm)
 
         # Convert the rotation angle from degrees to radians
         theta_rad = np.radians(rot_angle_deg)
 
         # Find the max and min extents in rotated coordinates
-        max_x_rot = np.max(
+        max_x_mm_rot = np.max(
             np.repeat(np.max(ecc_lim_mm), sector_limits_mm.shape[0]) * np.cos(theta_rad)
             - sector_limits_mm[:, 1] * np.sin(theta_rad)
         )
-        min_x_rot = np.min(
+        min_x_mm_rot = np.min(
             np.repeat(np.min(ecc_lim_mm), sector_limits_mm.shape[0]) * np.cos(theta_rad)
             - sector_limits_mm[:, 1] * np.sin(theta_rad)
         )
-        max_y_rot = np.max(
+        max_y_mm_rot = np.max(
             np.repeat(np.max(ecc_lim_mm), sector_limits_mm.shape[0]) * np.sin(theta_rad)
             + sector_limits_mm[:, 1] * np.cos(theta_rad)
         )
-        min_y_rot = np.min(
+        min_y_mm_rot = np.min(
             np.repeat(np.min(ecc_lim_mm), sector_limits_mm.shape[0]) * np.sin(theta_rad)
             + sector_limits_mm[:, 1] * np.cos(theta_rad)
         )
 
         # Rotate back to original coordinates to get max and min extents
-        max_x = max_x_rot * np.cos(theta_rad) + max_y_rot * np.sin(theta_rad)
-        min_x = min_x_rot * np.cos(theta_rad) + min_y_rot * np.sin(theta_rad)
-        max_y = max_y_rot * np.cos(theta_rad) - max_x_rot * np.sin(theta_rad)
-        min_y = min_y_rot * np.cos(theta_rad) - min_x_rot * np.sin(theta_rad)
+        max_x_mm = max_x_mm_rot * np.cos(theta_rad) + max_y_mm_rot * np.sin(theta_rad)
+        min_x_mm = min_x_mm_rot * np.cos(theta_rad) + min_y_mm_rot * np.sin(theta_rad)
+        max_y_mm = max_y_mm_rot * np.cos(theta_rad) - max_x_mm_rot * np.sin(theta_rad)
+        min_y_mm = min_y_mm_rot * np.cos(theta_rad) - min_x_mm_rot * np.sin(theta_rad)
 
         # Pad with one full rf in each side. This prevents need to cutting the
         # rf imgs at the borders later on
         pad_size_x_mm = rf_img.shape[2] * gc_um_per_pix / 1000
         pad_size_y_mm = rf_img.shape[1] * gc_um_per_pix / 1000
 
-        min_x = min_x - pad_size_x_mm
-        max_x = max_x + pad_size_x_mm
-        min_y = min_y - pad_size_y_mm
-        max_y = max_y + pad_size_y_mm
+        min_x_mm = min_x_mm - pad_size_x_mm
+        max_x_mm = max_x_mm + pad_size_x_mm
+        min_y_mm = min_y_mm - pad_size_y_mm
+        max_y_mm = max_y_mm + pad_size_y_mm
 
         # Get retina image size in pixels
-        img_size_x = int(np.ceil((max_x - min_x) * 1000 / gc_um_per_pix))
-        img_size_y = int(np.ceil((max_y - min_y) * 1000 / gc_um_per_pix))
+        img_size_x = int(np.ceil((max_x_mm - min_x_mm) * 1000 / gc_um_per_pix))
+        img_size_y = int(np.ceil((max_y_mm - min_y_mm) * 1000 / gc_um_per_pix))
 
         ret_img = np.zeros((img_size_y, img_size_x))
 
         # Prepare numpy nd array to hold left upeer corner pixel coordinates for each rf image
         rf_lu_pix = np.zeros((df.shape[0], 2), dtype=int)
+        rf_c_pix = np.zeros((df.shape[0], 2), dtype=int)
 
         pos_ecc_mm = df["pos_ecc_mm"].values
         pos_polar_deg = df["pos_polar_deg"].values
+        gc_scaling_factors = df["gc_scaling_factors"].values
 
-        # Locate left upper corner of each rf img an lay images onto retina image
+        # Locate left upper corner of each rf img and lay images onto retina image
         for i, row in df.iterrows():
             # Get the position of the rf image in mm
             x_mm, y_mm = self.pol2cart(
                 pos_ecc_mm[i], pos_polar_deg[i] - rot_angle_deg, deg=True
             )
-            # Get the position of the rf center in pixels
-            x_pix_c = int(np.round((x_mm - min_x) * 1000 / gc_um_per_pix))
-            y_pix_c = int(np.round((y_mm - min_y) * 1000 / gc_um_per_pix))
+            # Get the position of the rf center in pixels in the ecc scaled retina image
+            x_pix_c = int(np.round((x_mm - min_x_mm) * 1000 / gc_um_per_pix))
+            y_pix_c = int(np.round((y_mm - min_y_mm) * 1000 / gc_um_per_pix))
 
             # Get the position of the rf upper left corner in pixels
-            # The xoc and yoc are in pixels
+            # The xoc and yoc are the center of the rf image in the resampled data scale.
             x_pix = x_pix_c - int(row.xoc_pix)
             y_pix = y_pix_c - int(row.yoc_pix)
-
+            print(f"i: {i}, row.xoc_pix: {row.xoc_pix}")
             # Get the rf image
-            this_rf_img = rf_img[i, :, :]
-
+            this_rf_img = rf_img[i, :, :] + 0.1
             # Lay the rf image onto the retina image
             ret_img[
                 y_pix : y_pix + this_rf_img.shape[0],
@@ -2144,7 +2146,6 @@ class ConstructRetina(RetinaMath):
                 self.retina_vae, n_samples=nsamples_extra
             )
 
-            # 4) Upsample according to smallest rf diameter
             idx_to_process = np.arange(nsamples)
             img_rfs = np.zeros((nsamples, new_sidelen, new_sidelen))
             available_idx_mask = np.ones(nsamples_extra, dtype=bool)
@@ -2154,6 +2155,7 @@ class ConstructRetina(RetinaMath):
 
             # Loop until there is no bad fits
             for _ in range(100):
+                # 4) Upsample according to smallest rf diameter
                 img_after_resample = self._get_resampled_scaled_rfs(
                     img_to_resample[idx_to_process, :, :],
                     gc_um_per_pix,
@@ -2165,6 +2167,8 @@ class ConstructRetina(RetinaMath):
                 # This is dependent metrics, not affecting the spatial RFs
                 # other than quality assurance (below)
                 # fixed DoG model type to exclude the effect on unit selection
+                # Note that this fits the img_after_resample and thus the
+                # xoc_pix and yoc_pix are veridical for the upsampled data.
                 self.fit.initialize(
                     self.gc_type,
                     self.response_type,
