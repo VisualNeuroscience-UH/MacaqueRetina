@@ -81,6 +81,15 @@ class RetinaMath:
 
         return diameters
 
+    def get_translation_matrix(dx, dy):
+        return np.array([[1, 0, dx], [0, 1, dy], [0, 0, 1]])
+
+    def get_rotation_matrix(theta):
+        cos_theta, sin_theta = np.cos(np.radians(theta)), np.sin(np.radians(theta))
+        return np.array(
+            [[cos_theta, -sin_theta, 0], [sin_theta, cos_theta, 0], [0, 0, 1]]
+        )
+
     # RetinaConstruction & WorkingRetina methods
     def pol2cart_df(self, df):
         """
