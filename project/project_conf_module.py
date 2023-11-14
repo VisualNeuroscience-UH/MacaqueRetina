@@ -197,9 +197,9 @@ my_retina = {
     "visual_field_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
-    "center_mask_threshold": 0.10,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
+    "center_mask_threshold": 0.3,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
     "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
-    "DoG_model": "circular",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
+    "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models. Note that ellipse fit does not tolearate VAE adjustments => fit to nonadjusted generated rfs
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
     "model_file_name": None,  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[DEVICE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only
@@ -365,9 +365,9 @@ refractory_params = {
 # "voronoi" (v) : better for big retinas, fast
 # Force Based Layout Algorithm with Boundary Repulsion
 # "force" (f) : better for small retinas, slow
-# None : initial random placement. Use this for testing/speed/nonvarying placements.
+# None : initial random placement. Nonvarying with fixed seed above. Good for testing.
 gc_placement_params = {
-    "algorithm": "force",  # "voronoi" or "force" or None
+    "algorithm": None,  # "voronoi" or "force" or None
     "n_iterations": 1000,  # v 20, f 5000
     "change_rate": 0.001,  # f 0.001, v 0.5
     "unit_repulsion_stregth": 5,  # 10 f only
@@ -378,6 +378,16 @@ gc_placement_params = {
     "show_placing_progress": False,  # True False
     "show_skip_steps": 100,  # v 1, f 100
 }
+
+rf_repulsion_params = {
+    "n_iterations": 100,  # v 20, f 5000
+    "change_rate": 0.1,  # f 0.001, v 0.5
+    "border_repulsion_stength": 10,  # f only
+    "border_distance_threshold": 0.01,  # f only
+    "show_repulsion_progress": True,  # True False
+    "show_skip_steps": 1,  # v 1, f 100
+}
+
 
 my_retina_append = {
     "mosaic_file": gc_type + "_" + response_type + "_mosaic.csv",
@@ -391,6 +401,7 @@ my_retina_append = {
     "cone_params": cone_params,
     "refractory_params": refractory_params,
     "gc_placement_params": gc_placement_params,
+    "rf_repulsion_params": rf_repulsion_params,
 }
 
 my_retina.update(my_retina_append)

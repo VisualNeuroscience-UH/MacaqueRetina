@@ -1673,6 +1673,87 @@ class Viz:
             # Update the plot
             fig.canvas.flush_events()
 
+    def show_repulsion_progress(
+        self,
+        original_retina,
+        new_retina=None,
+        init=False,
+        iteration=0,
+        **fig_args,
+    ):
+        if init is True:
+            ecc_lim_mm = self.construct_retina.ecc_lim_mm
+            polar_lim_deg = self.construct_retina.polar_lim_deg
+
+            boundary_polygon = self.boundary_polygon(ecc_lim_mm, polar_lim_deg)
+
+            # Init plotting
+            # Convert self.polar_lim_deg to Cartesian coordinates
+            pol2cart = self.construct_retina.pol2cart
+
+            bottom_x, bottom_y = pol2cart(
+                np.array([ecc_lim_mm[0], ecc_lim_mm[1]]),
+                np.array([polar_lim_deg[0], polar_lim_deg[0]]),
+            )
+            top_x, top_y = pol2cart(
+                np.array([ecc_lim_mm[0], ecc_lim_mm[1]]),
+                np.array([polar_lim_deg[1], polar_lim_deg[1]]),
+            )
+
+            # Concatenate to get the corner points
+            corners_x = np.concatenate([bottom_x, top_x])
+            corners_y = np.concatenate([bottom_y, top_y])
+
+            # Initialize the plot before the loop
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 10))
+            ax1.scatter(corners_x, corners_y, color="black", marker="x", zorder=2)
+            ax2.scatter(corners_x, corners_y, color="black", marker="x", zorder=2)
+
+            ax1.set_aspect("equal")
+            ax2.set_aspect("equal")
+            imshow1 = ax1.imshow(original_retina)
+            imshow2 = ax2.imshow(original_retina)
+
+            plt.ion()  # Turn on interactive mode
+            plt.show()
+
+            return {
+                "fig": fig,
+                "ax1": ax1,
+                "ax2": ax2,
+                "imshow1": imshow1,
+                "imshow2": imshow2,
+                "boundary_polygon": boundary_polygon,
+            }
+
+        else:
+            fig = fig_args["fig"]
+            ax1 = fig_args["ax1"]
+            ax2 = fig_args["ax2"]
+            imshow1 = fig_args["imshow1"]
+            imshow2 = fig_args["imshow2"]
+            boundary_polygon = fig_args["boundary_polygon"]
+
+            # Clear the previous image
+            ax2.clear()
+
+            # Set new data and redraw
+            imshow1.set_data(original_retina)
+            ax1.set_title("orig rfs")
+
+            ax2.imshow(new_retina)  # Directly use imshow here
+            ax2.set_title(
+                f"new rfs iteration {iteration}\nmax = {np.max(new_retina)}\nmin = {np.min(new_retina)}"
+            )
+
+            # Draw boundary polygon with no fill
+            polygon = Polygon(boundary_polygon, closed=True, fill=None, edgecolor="r")
+            ax2.add_patch(polygon)
+
+            # Redraw and pause
+            fig.canvas.draw()
+            plt.pause(0.001)
+
     # WorkingRetina visualization
     def show_stimulus_with_gcs(
         self,

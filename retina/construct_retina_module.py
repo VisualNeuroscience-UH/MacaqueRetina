@@ -11,8 +11,8 @@ from scipy import ndimage
 from scipy.spatial import Voronoi, voronoi_plot_2d
 
 import torch
+import torch.nn.functional as F
 
-# import torch.nn.functional as F
 # import torch.autograd.profiler as profiler
 
 # from torch.utils.data import DataLoader
@@ -1612,7 +1612,6 @@ class ConstructRetina(RetinaMath):
         gc_vae_df["gc_scaling_factors"] = self.gc_df["gc_scaling_factors"]
 
         # Save this metadata to df, although it is the same for all units
-        print(f"um_per_pix: {um_per_pix}")
         gc_vae_df["um_per_pix"] = um_per_pix
         gc_vae_df["sidelen_pix"] = sidelen_pix
 
@@ -1771,11 +1770,9 @@ class ConstructRetina(RetinaMath):
 
         # Prepare numpy nd array to hold left upeer corner pixel coordinates for each rf image
         rf_lu_pix = np.zeros((df.shape[0], 2), dtype=int)
-        rf_c_pix = np.zeros((df.shape[0], 2), dtype=int)
 
         pos_ecc_mm = df["pos_ecc_mm"].values
         pos_polar_deg = df["pos_polar_deg"].values
-        gc_scaling_factors = df["gc_scaling_factors"].values
 
         # Locate left upper corner of each rf img and lay images onto retina image
         for i, row in df.iterrows():
@@ -1784,16 +1781,16 @@ class ConstructRetina(RetinaMath):
                 pos_ecc_mm[i], pos_polar_deg[i] - rot_angle_deg, deg=True
             )
             # Get the position of the rf center in pixels in the ecc scaled retina image
-            x_pix_c = int(np.round((x_mm - min_x_mm) * 1000 / gc_um_per_pix))
             y_pix_c = int(np.round((y_mm - min_y_mm) * 1000 / gc_um_per_pix))
+            x_pix_c = int(np.round((x_mm - min_x_mm) * 1000 / gc_um_per_pix))
 
             # Get the position of the rf upper left corner in pixels
             # The xoc and yoc are the center of the rf image in the resampled data scale.
-            x_pix = x_pix_c - int(row.xoc_pix)
             y_pix = y_pix_c - int(row.yoc_pix)
-            print(f"i: {i}, row.xoc_pix: {row.xoc_pix}")
+            x_pix = x_pix_c - int(row.xoc_pix)
+
             # Get the rf image
-            this_rf_img = rf_img[i, :, :] + 0.1
+            this_rf_img = rf_img[i, :, :]
             # Lay the rf image onto the retina image
             ret_img[
                 y_pix : y_pix + this_rf_img.shape[0],
@@ -2065,6 +2062,155 @@ class ConstructRetina(RetinaMath):
 
         return img_processed, img_raw, gc_vae_df
 
+    def _apply_rf_repulsion(self, img_ret_shape, img_rfs, img_rfs_mask, rf_lu_pix):
+        """
+        Apply repulsion to the RFs to adjust for unity coverage using Jacobians and force-based repulsion.
+
+        Parameters:
+        -----------
+        img_ret_shape : tuple
+            Shape of the retina image to work with. Pixel coordinates are assumed to be (y, x).
+        img_rfs : numpy.ndarray
+            Array representing the RFs, with shape (n_rfs, n_pixels, n_pixels).
+        img_rfs_mask : numpy.ndarray
+            Array of masks corresponding to the RF centers, with the same shape as `img_rfs`.
+        rf_lu_pix : numpy.ndarray
+            Array representing the coordinates of the upper-left pixel of each RF, with shape (n_rfs, 2).
+        """
+
+        rf_repulsion_params = self.context.my_retina["rf_repulsion_params"]
+        show_repulsion_progress = rf_repulsion_params["show_repulsion_progress"]
+        lr = rf_repulsion_params["change_rate"]
+        n_iterations = rf_repulsion_params["n_iterations"]
+        show_skip_steps = rf_repulsion_params["show_skip_steps"]
+
+        n_units, H, W = img_rfs.shape
+        assert H == W, "RF must be square, aborting..."
+        pad = 1
+        img_ret_shape = (img_ret_shape[0] + pad * 2, img_ret_shape[1] + pad * 2)
+        if show_repulsion_progress is True:
+            # Init plotting
+            fig_args = self.viz.show_repulsion_progress(
+                np.zeros(img_ret_shape), init=True
+            )
+
+        rf_positions = np.array(rf_lu_pix, dtype=float) + pad
+        rfs = np.array(img_rfs, dtype=float)
+        rfs_mask = np.array(img_rfs_mask, dtype=bool)
+        lr = 0.01  # learning rate
+
+        # limit all to first two entries for testing
+        rf_positions = rf_positions[2:4]
+        rfs = rfs[2:4]
+        rfs_mask = rfs_mask[2:4]
+        n_units = 2
+        # pdb.set_trace()
+        # Rigid body matrix
+        trans_zero = np.tile(np.eye(3), (n_units, 1, 1))
+        trans_zero[:, :2, 2] = rf_positions
+
+        Y, X = np.meshgrid(np.arange(H), np.arange(W))
+        homogeneous_coords = np.stack(
+            [X.flatten(), Y.flatten(), np.ones(H * W)], axis=0
+        )
+
+        force_y = np.empty_like(rfs)
+        force_x = np.empty_like(rfs)
+        retina = np.zeros(img_ret_shape)  # To store the retina
+        transformed_coords = trans_zero @ homogeneous_coords
+        original_retina = retina.copy()
+
+        for iteration in range(n_iterations):
+            Xt = (
+                transformed_coords[:, 0, ...].round().reshape(n_units, H, W).astype(int)
+            )
+            Yt = (
+                transformed_coords[:, 1, ...].round().reshape(n_units, H, W).astype(int)
+            )
+
+            retina = original_retina.copy()
+            for i in range(n_units):
+                retina[Yt[i], Xt[i]] += rfs[i]
+            grad_y, grad_x = np.gradient(retina)
+
+            for i in range(n_units):
+                force_y[i] = grad_y[Yt[i], Xt[i]] * rfs[i] * rfs_mask[i]
+                force_x[i] = grad_x[Yt[i], Xt[i]] * rfs[i] * rfs_mask[i]
+
+            centre_of_mass_y = np.sum(rfs * Y, axis=(1, 2)) / np.sum(rfs, axis=(1, 2))
+            centre_of_mass_x = np.sum(rfs * X, axis=(1, 2)) / np.sum(rfs, axis=(1, 2))
+            centre_of_mass_y_mtx = np.tile(centre_of_mass_y, (H, W, 1)).transpose(
+                2, 0, 1
+            )
+            centre_of_mass_x_mtx = np.tile(centre_of_mass_x, (H, W, 1)).transpose(
+                2, 0, 1
+            )
+
+            radius_vec = np.stack(
+                [Yt - centre_of_mass_y_mtx, Xt - centre_of_mass_x_mtx], axis=-1
+            )
+
+            # Torque is computed as forces_y * radii_x - forces_x * radii_y
+            torques = force_y * radius_vec[..., 1] - force_x * radius_vec[..., 0]
+            net_torque = np.sum(torques, axis=(1, 2))
+            net_force_y = np.sum(force_y, axis=(1, 2))
+            net_force_x = np.sum(force_x, axis=(1, 2))
+
+            # print(f"iteration: {iteration}")
+            # print(f"net_torque: {net_torque}")
+            # print(f"net_force_y: {net_force_y}")
+            # print(f"net_force_x: {net_force_x}")
+
+            # pdb.set_trace()
+            # Loop based update
+            rot = lr * net_torque
+            tr_x = lr * net_force_x
+            tr_y = lr * net_force_y
+
+            rot_mtx = np.array(
+                [
+                    [np.cos(rot), -np.sin(rot), np.zeros(n_units)],
+                    [np.sin(rot), np.cos(rot), np.zeros(n_units)],
+                    [np.zeros(n_units), np.zeros(n_units), np.ones(n_units)],
+                ]
+            ).transpose(2, 0, 1)
+            trans_mtx = np.array(
+                [
+                    [np.ones(n_units), np.zeros(n_units), tr_x],
+                    [np.zeros(n_units), np.ones(n_units), tr_y],
+                    [np.zeros(n_units), np.zeros(n_units), np.ones(n_units)],
+                ]
+            ).transpose(2, 0, 1)
+            trans_mtx[:, :2, 2] += rf_positions
+            Mrb = trans_mtx @ rot_mtx
+            print(f"Mrb: {Mrb[-1,...]}")
+            transformed_coords = Mrb @ homogeneous_coords
+
+            if show_repulsion_progress is True:
+                # Update the visualization every 100 iterations for performance (or adjust as needed)
+                if iteration % show_skip_steps == 0:
+                    self.viz.show_repulsion_progress(
+                        original_retina,
+                        new_retina=retina,
+                        iteration=iteration,
+                        **fig_args,
+                    )
+
+        pdb.set_trace()
+        # update corner points
+        rf_lu_pix = np.array(transformed_coords[:, :2, 2], dtype=int) - pad
+
+        # Re sample to original resolution
+        # updated_img_rfs =
+
+        # Get mask
+        # updated_img_rfs_mask =
+
+        if show_repulsion_progress is True:
+            plt.ioff()  # Turn off interactive mode
+
+        return updated_img_rfs, updated_img_rfs_mask, updated_rf_lu_pix
+
     def _create_spatial_rfs(self):
         """
         Generation of spatial receptive fields (RFs) for the retinal ganglion cells (RGCs).
@@ -2252,24 +2398,38 @@ class ConstructRetina(RetinaMath):
                 new_um_per_pix,
             )
 
-            if self.rf_coverage_adjusted_to_1 is True:
-                (
-                    img_rfs_adjusted,
-                    img_ret_adjusted,
-                ) = self._adjust_VAE_center_coverage_to_one(
-                    img_rfs,
-                    img_rfs_mask,
-                    img_ret,
-                    img_ret_masked,
-                    rf_lu_pix,
-                    tolerate_error=0.01,
-                )
-                img_rfs_final = img_rfs_adjusted
+            # Now apply the repulsion adjustment to the receptive fields
+            (
+                img_rfs_updated,
+                rf_lu_pix_updated,
+                gc_vae_df_adjusted,
+            ) = self._apply_rf_repulsion(
+                img_ret.shape, img_rfs, img_rfs_mask, rf_lu_pix
+            )
 
-            else:
-                img_rfs_adjusted = np.zeros_like(img_rfs)
-                img_ret_adjusted = np.zeros_like(img_ret)
-                img_rfs_final = img_rfs
+            # Force the coverage of the generated RFs to go towards 1.0
+            # using affine transformation of the RFs
+
+            # Hey Chat! Please call your new method here, perhaps inside a loop.
+
+            # if self.rf_coverage_adjusted_to_1 is True:
+            #     (
+            #         img_rfs_adjusted,
+            #         img_ret_adjusted,
+            #     ) = self._adjust_VAE_center_coverage_to_one(
+            #         img_rfs,
+            #         img_rfs_mask,
+            #         img_ret,
+            #         img_ret_masked,
+            #         rf_lu_pix,
+            #         tolerate_error=0.01,
+            #     )
+            #     img_rfs_final = img_rfs_adjusted
+
+            # else:
+            #     img_rfs_adjusted = np.zeros_like(img_rfs)
+            #     img_ret_adjusted = np.zeros_like(img_ret)
+            #     img_rfs_final = img_rfs
 
             # 12) Save the generated receptive fields and masks
             output_path = self.context.output_folder
