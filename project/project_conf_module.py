@@ -381,9 +381,9 @@ gc_placement_params = {
 
 rf_repulsion_params = {
     "n_iterations": 100,  # v 20, f 5000
-    "change_rate": 0.1,  # f 0.001, v 0.5
-    "border_repulsion_stength": 10,  # f only
-    "border_distance_threshold": 0.01,  # f only
+    "change_rate": 0.001,  # f 0.001, v 0.5
+    # "border_repulsion_stength": 10,  # f only
+    # "border_distance_threshold": 0.01,  # f only
     "show_repulsion_progress": True,  # True False
     "show_skip_steps": 1,  # v 1, f 100
 }

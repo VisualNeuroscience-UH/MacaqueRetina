@@ -772,7 +772,7 @@ class Viz:
         ax.set_xlabel("Eccentricity (mm)")
         ax.set_ylabel("Elevation (mm)")
 
-    def boundary_polygon(self, ecc_lim_mm, polar_lim_deg, n_points=100):
+    def boundary_polygon(self, ecc_lim_mm, polar_lim_deg, um_per_pix=None, sidelen=0):
         """
         Create a boundary polygon based on given eccentricity and polar angle limits.
 
@@ -784,14 +784,19 @@ class Viz:
         polar_lim_deg : np.ndarray
             An array representing the polar angle limits in degrees for
             bottom and top boundaries (shape: [2]).
-        n_points : int
-            Number of points to generate along each arc.
+        um_per_pix : float, optional
+            Microns per pixel. If provided, boundary in pix space, if None, boundary in mm space.
+        side_len : int, optional
+            Side length of the square image in pixels. If provided, boundary is padded by one rf
+            in each side.
 
         Returns
         -------
         boundary_polygon : np.ndarray
             Array of Cartesian coordinates forming the vertices of the boundary polygon.
         """
+
+        n_points = 100
 
         # Generate points for bottom and top polar angle limits
         bottom_x, bottom_y = self.pol2cart(
@@ -811,6 +816,33 @@ class Viz:
         max_ecc_x, max_ecc_y = self.pol2cart(
             np.full_like(theta_range, ecc_lim_mm[1]), theta_range
         )
+
+        if um_per_pix is not None:
+            max_x_mm = np.max(max_ecc_x)
+            min_x_mm = np.min(min_ecc_x)
+            max_y_mm = np.max(max_ecc_y)
+            min_y_mm = np.min(min_ecc_y)
+
+            # Pad with one full rf in each side. This prevents need to cutting the
+            # rf imgs at the borders later on
+            pad_size_x_mm = sidelen * um_per_pix / 1000
+            pad_size_y_mm = sidelen * um_per_pix / 1000
+
+            min_x_mm = min_x_mm - pad_size_x_mm
+            max_x_mm = max_x_mm + pad_size_x_mm
+            min_y_mm = min_y_mm - pad_size_y_mm
+            max_y_mm = max_y_mm + pad_size_y_mm
+
+            # plt.plot(min_ecc_x, min_ecc_y)
+            # plt.show()
+
+            min_ecc_y = (max_y_mm - min_ecc_y) * 1000 / um_per_pix
+            max_ecc_y = (max_y_mm - max_ecc_y) * 1000 / um_per_pix
+            min_ecc_x = (min_ecc_x - min_x_mm) * 1000 / um_per_pix
+            max_ecc_x = (max_ecc_x - min_x_mm) * 1000 / um_per_pix
+            # min_ecc_x = (min_x_mm + min_ecc_x) * 1000 / um_per_pix
+            # max_ecc_x = (max_x_mm + max_ecc_x) * 1000 / um_per_pix
+            # pdb.set_trace()
 
         # Combine them to form the vertices of the bounding polygon
         boundary_polygon = []
@@ -1675,17 +1707,21 @@ class Viz:
 
     def show_repulsion_progress(
         self,
-        original_retina,
+        reference_retina,
         new_retina=None,
         init=False,
         iteration=0,
+        um_per_pix=None,
+        sidelen=0,
         **fig_args,
     ):
         if init is True:
             ecc_lim_mm = self.construct_retina.ecc_lim_mm
             polar_lim_deg = self.construct_retina.polar_lim_deg
 
-            boundary_polygon = self.boundary_polygon(ecc_lim_mm, polar_lim_deg)
+            boundary_polygon = self.boundary_polygon(
+                ecc_lim_mm, polar_lim_deg, um_per_pix=um_per_pix, sidelen=sidelen
+            )
 
             # Init plotting
             # Convert self.polar_lim_deg to Cartesian coordinates
@@ -1705,14 +1741,12 @@ class Viz:
             corners_y = np.concatenate([bottom_y, top_y])
 
             # Initialize the plot before the loop
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 10))
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
             ax1.scatter(corners_x, corners_y, color="black", marker="x", zorder=2)
             ax2.scatter(corners_x, corners_y, color="black", marker="x", zorder=2)
 
             ax1.set_aspect("equal")
             ax2.set_aspect("equal")
-            imshow1 = ax1.imshow(original_retina)
-            imshow2 = ax2.imshow(original_retina)
 
             plt.ion()  # Turn on interactive mode
             plt.show()
@@ -1721,8 +1755,6 @@ class Viz:
                 "fig": fig,
                 "ax1": ax1,
                 "ax2": ax2,
-                "imshow1": imshow1,
-                "imshow2": imshow2,
                 "boundary_polygon": boundary_polygon,
             }
 
@@ -1730,25 +1762,24 @@ class Viz:
             fig = fig_args["fig"]
             ax1 = fig_args["ax1"]
             ax2 = fig_args["ax2"]
-            imshow1 = fig_args["imshow1"]
-            imshow2 = fig_args["imshow2"]
             boundary_polygon = fig_args["boundary_polygon"]
-
-            # Clear the previous image
-            ax2.clear()
+            polygon1 = Polygon(boundary_polygon, closed=True, fill=None, edgecolor="r")
+            polygon2 = Polygon(boundary_polygon, closed=True, fill=None, edgecolor="r")
 
             # Set new data and redraw
-            imshow1.set_data(original_retina)
-            ax1.set_title("orig rfs")
+            ax1.clear()
+            ax1.add_patch(polygon1)
+            ax1.imshow(reference_retina)
+            ax1.set_title(
+                f"reference rfs iteration {iteration}\nmax = {np.max(reference_retina)}\nmin = {np.min(reference_retina)}"
+            )
 
-            ax2.imshow(new_retina)  # Directly use imshow here
+            ax2.clear()
+            ax2.add_patch(polygon2)
+            ax2.imshow(new_retina)
             ax2.set_title(
                 f"new rfs iteration {iteration}\nmax = {np.max(new_retina)}\nmin = {np.min(new_retina)}"
             )
-
-            # Draw boundary polygon with no fill
-            polygon = Polygon(boundary_polygon, closed=True, fill=None, edgecolor="r")
-            ax2.add_patch(polygon)
 
             # Redraw and pause
             fig.canvas.draw()

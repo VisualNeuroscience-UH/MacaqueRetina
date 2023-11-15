@@ -2062,7 +2062,9 @@ class ConstructRetina(RetinaMath):
 
         return img_processed, img_raw, gc_vae_df
 
-    def _apply_rf_repulsion(self, img_ret_shape, img_rfs, img_rfs_mask, rf_lu_pix):
+    def _apply_rf_repulsion(
+        self, img_ret_shape, img_rfs, img_rfs_mask, rf_lu_pix, new_um_per_pix
+    ):
         """
         Apply repulsion to the RFs to adjust for unity coverage using Jacobians and force-based repulsion.
 
@@ -2076,6 +2078,8 @@ class ConstructRetina(RetinaMath):
             Array of masks corresponding to the RF centers, with the same shape as `img_rfs`.
         rf_lu_pix : numpy.ndarray
             Array representing the coordinates of the upper-left pixel of each RF, with shape (n_rfs, 2).
+        new_um_per_pix : float
+            The number of micrometers per pixel in the img_rfs.
         """
 
         rf_repulsion_params = self.context.my_retina["rf_repulsion_params"]
@@ -2088,26 +2092,22 @@ class ConstructRetina(RetinaMath):
         assert H == W, "RF must be square, aborting..."
         pad = 1
         img_ret_shape = (img_ret_shape[0] + pad * 2, img_ret_shape[1] + pad * 2)
+
         if show_repulsion_progress is True:
             # Init plotting
             fig_args = self.viz.show_repulsion_progress(
-                np.zeros(img_ret_shape), init=True
+                np.zeros(img_ret_shape), init=True, um_per_pix=new_um_per_pix, sidelen=H
             )
 
         rf_positions = np.array(rf_lu_pix, dtype=float) + pad
         rfs = np.array(img_rfs, dtype=float)
         rfs_mask = np.array(img_rfs_mask, dtype=bool)
-        lr = 0.01  # learning rate
 
-        # limit all to first two entries for testing
-        rf_positions = rf_positions[2:4]
-        rfs = rfs[2:4]
-        rfs_mask = rfs_mask[2:4]
-        n_units = 2
-        # pdb.set_trace()
+        boundary_polygon = fig_args["boundary_polygon"]
+
         # Rigid body matrix
-        trans_zero = np.tile(np.eye(3), (n_units, 1, 1))
-        trans_zero[:, :2, 2] = rf_positions
+        Mrb_zero = np.tile(np.eye(3), (n_units, 1, 1))
+        Mrb_zero[:, :2, 2] = rf_positions
 
         Y, X = np.meshgrid(np.arange(H), np.arange(W))
         homogeneous_coords = np.stack(
@@ -2117,7 +2117,7 @@ class ConstructRetina(RetinaMath):
         force_y = np.empty_like(rfs)
         force_x = np.empty_like(rfs)
         retina = np.zeros(img_ret_shape)  # To store the retina
-        transformed_coords = trans_zero @ homogeneous_coords
+        transformed_coords = Mrb_zero @ homogeneous_coords
         original_retina = retina.copy()
 
         for iteration in range(n_iterations):
@@ -2156,12 +2156,6 @@ class ConstructRetina(RetinaMath):
             net_force_y = np.sum(force_y, axis=(1, 2))
             net_force_x = np.sum(force_x, axis=(1, 2))
 
-            # print(f"iteration: {iteration}")
-            # print(f"net_torque: {net_torque}")
-            # print(f"net_force_y: {net_force_y}")
-            # print(f"net_force_x: {net_force_x}")
-
-            # pdb.set_trace()
             # Loop based update
             rot = lr * net_torque
             tr_x = lr * net_force_x
@@ -2181,18 +2175,23 @@ class ConstructRetina(RetinaMath):
                     [np.zeros(n_units), np.zeros(n_units), np.ones(n_units)],
                 ]
             ).transpose(2, 0, 1)
-            trans_mtx[:, :2, 2] += rf_positions
             Mrb = trans_mtx @ rot_mtx
-            print(f"Mrb: {Mrb[-1,...]}")
+            Mrb = Mrb @ Mrb_zero
+            Mrb_zero = Mrb
             transformed_coords = Mrb @ homogeneous_coords
 
             if show_repulsion_progress is True:
-                # Update the visualization every 100 iterations for performance (or adjust as needed)
+                reference_retina = np.zeros(img_ret_shape)
+                for i in range(n_units):
+                    reference_retina[Yt[i], Xt[i]] += force_x[i]
+
                 if iteration % show_skip_steps == 0:
                     self.viz.show_repulsion_progress(
-                        original_retina,
+                        reference_retina,
                         new_retina=retina,
                         iteration=iteration,
+                        um_per_pix=new_um_per_pix,
+                        sidelen=H,
                         **fig_args,
                     )
 
@@ -2404,7 +2403,7 @@ class ConstructRetina(RetinaMath):
                 rf_lu_pix_updated,
                 gc_vae_df_adjusted,
             ) = self._apply_rf_repulsion(
-                img_ret.shape, img_rfs, img_rfs_mask, rf_lu_pix
+                img_ret.shape, img_rfs, img_rfs_mask, rf_lu_pix, new_um_per_pix
             )
 
             # Force the coverage of the generated RFs to go towards 1.0
