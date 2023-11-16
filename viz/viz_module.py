@@ -20,7 +20,9 @@ import brian2.units as b2u
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.patches import Ellipse, Polygon
+import matplotlib.path as mplPath
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+
 import seaborn as sns
 
 # from tqdm import tqdm
@@ -833,16 +835,10 @@ class Viz:
             min_y_mm = min_y_mm - pad_size_y_mm
             max_y_mm = max_y_mm + pad_size_y_mm
 
-            # plt.plot(min_ecc_x, min_ecc_y)
-            # plt.show()
-
             min_ecc_y = (max_y_mm - min_ecc_y) * 1000 / um_per_pix
             max_ecc_y = (max_y_mm - max_ecc_y) * 1000 / um_per_pix
             min_ecc_x = (min_ecc_x - min_x_mm) * 1000 / um_per_pix
             max_ecc_x = (max_ecc_x - min_x_mm) * 1000 / um_per_pix
-            # min_ecc_x = (min_x_mm + min_ecc_x) * 1000 / um_per_pix
-            # max_ecc_x = (max_x_mm + max_ecc_x) * 1000 / um_per_pix
-            # pdb.set_trace()
 
         # Combine them to form the vertices of the bounding polygon
         boundary_polygon = []
@@ -1722,28 +1718,20 @@ class Viz:
             boundary_polygon = self.boundary_polygon(
                 ecc_lim_mm, polar_lim_deg, um_per_pix=um_per_pix, sidelen=sidelen
             )
-
-            # Init plotting
-            # Convert self.polar_lim_deg to Cartesian coordinates
-            pol2cart = self.construct_retina.pol2cart
-
-            bottom_x, bottom_y = pol2cart(
-                np.array([ecc_lim_mm[0], ecc_lim_mm[1]]),
-                np.array([polar_lim_deg[0], polar_lim_deg[0]]),
-            )
-            top_x, top_y = pol2cart(
-                np.array([ecc_lim_mm[0], ecc_lim_mm[1]]),
-                np.array([polar_lim_deg[1], polar_lim_deg[1]]),
-            )
-
-            # Concatenate to get the corner points
-            corners_x = np.concatenate([bottom_x, top_x])
-            corners_y = np.concatenate([bottom_y, top_y])
+            boundary_polygon_path = mplPath.Path(boundary_polygon)
+            retina_shape = reference_retina.shape
+            Y, X = np.meshgrid(
+                np.arange(retina_shape[0]),
+                np.arange(retina_shape[1]),
+                indexing="ij",
+            )  # y, x
+            boundary_points = np.vstack((X.flatten(), Y.flatten())).T  # x,y
+            inside_boundary = boundary_polygon_path.contains_points(boundary_points)
+            boundary_mask = inside_boundary.reshape(retina_shape)
+            # pdb.set_trace()
 
             # Initialize the plot before the loop
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
-            ax1.scatter(corners_x, corners_y, color="black", marker="x", zorder=2)
-            ax2.scatter(corners_x, corners_y, color="black", marker="x", zorder=2)
 
             ax1.set_aspect("equal")
             ax2.set_aspect("equal")
@@ -1756,6 +1744,8 @@ class Viz:
                 "ax1": ax1,
                 "ax2": ax2,
                 "boundary_polygon": boundary_polygon,
+                "boundary_mask": boundary_mask,
+                "boundary_polygon_path": boundary_polygon_path,
             }
 
         else:
@@ -1770,15 +1760,19 @@ class Viz:
             ax1.clear()
             ax1.add_patch(polygon1)
             ax1.imshow(reference_retina)
+            max_val = np.max(reference_retina)
+            min_val = np.min(reference_retina)
             ax1.set_title(
-                f"reference rfs iteration {iteration}\nmax = {np.max(reference_retina)}\nmin = {np.min(reference_retina)}"
+                f"reference rfs iteration {iteration}\nmax = {max_val}\nmin = {min_val}"
             )
 
             ax2.clear()
             ax2.add_patch(polygon2)
             ax2.imshow(new_retina)
+            max_val = np.max(new_retina)
+            min_val = np.min(new_retina)
             ax2.set_title(
-                f"new rfs iteration {iteration}\nmax = {np.max(new_retina)}\nmin = {np.min(new_retina)}"
+                f"new rfs iteration {iteration}\nmax = {max_val}\nmin = {min_val}"
             )
 
             # Redraw and pause

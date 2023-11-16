@@ -191,7 +191,7 @@ my_retina = {
     "gc_type": gc_type,
     "response_type": response_type,
     "ecc_limits_deg": [4.5, 5.5],  # eccentricity in degrees
-    "pol_limits_deg": [-5, 5],  # polar angle in degrees
+    "pol_limits_deg": [-15, 15],  # polar angle in degrees
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
     "dd_regr_model": "linear",  # linear, quadratic, cubic, exponential TODO: midget central 8-10 deg flat, see Goodchild_1996_JCompNeurol + 1 dataset for dd vs ecc
     "visual_field_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
@@ -368,7 +368,7 @@ refractory_params = {
 # None : initial random placement. Nonvarying with fixed seed above. Good for testing.
 gc_placement_params = {
     "algorithm": None,  # "voronoi" or "force" or None
-    "n_iterations": 1000,  # v 20, f 5000
+    "n_iterations": 10,  # v 20, f 5000
     "change_rate": 0.001,  # f 0.001, v 0.5
     "unit_repulsion_stregth": 5,  # 10 f only
     "unit_distance_threshold": 0.02,  # f only, adjusted with ecc
@@ -376,16 +376,15 @@ gc_placement_params = {
     "border_repulsion_stength": 10,  # f only
     "border_distance_threshold": 0.01,  # f only
     "show_placing_progress": False,  # True False
-    "show_skip_steps": 100,  # v 1, f 100
+    "show_skip_steps": 1,  # v 1, f 100
 }
 
 rf_repulsion_params = {
-    "n_iterations": 100,  # v 20, f 5000
-    "change_rate": 0.001,  # f 0.001, v 0.5
-    # "border_repulsion_stength": 10,  # f only
-    # "border_distance_threshold": 0.01,  # f only
+    "n_iterations": 1000,
+    "change_rate": 0.001,
+    "border_repulsion_stength": 10,
     "show_repulsion_progress": True,  # True False
-    "show_skip_steps": 1,  # v 1, f 100
+    "show_skip_steps": 10,
 }
 
 

@@ -1725,46 +1725,49 @@ class ConstructRetina(RetinaMath):
         if np.max(ecc_lim_mm) > max_x_mm:
             max_x_mm = np.max(ecc_lim_mm)
 
-        # Convert the rotation angle from degrees to radians
-        theta_rad = np.radians(rot_angle_deg)
+        # TODO: implement rotation
 
-        # Find the max and min extents in rotated coordinates
-        max_x_mm_rot = np.max(
-            np.repeat(np.max(ecc_lim_mm), sector_limits_mm.shape[0]) * np.cos(theta_rad)
-            - sector_limits_mm[:, 1] * np.sin(theta_rad)
-        )
-        min_x_mm_rot = np.min(
-            np.repeat(np.min(ecc_lim_mm), sector_limits_mm.shape[0]) * np.cos(theta_rad)
-            - sector_limits_mm[:, 1] * np.sin(theta_rad)
-        )
-        max_y_mm_rot = np.max(
-            np.repeat(np.max(ecc_lim_mm), sector_limits_mm.shape[0]) * np.sin(theta_rad)
-            + sector_limits_mm[:, 1] * np.cos(theta_rad)
-        )
-        min_y_mm_rot = np.min(
-            np.repeat(np.min(ecc_lim_mm), sector_limits_mm.shape[0]) * np.sin(theta_rad)
-            + sector_limits_mm[:, 1] * np.cos(theta_rad)
-        )
+        # # Convert the rotation angle from degrees to radians
+        # theta_rad = np.radians(rot_angle_deg)
 
-        # Rotate back to original coordinates to get max and min extents
-        max_x_mm = max_x_mm_rot * np.cos(theta_rad) + max_y_mm_rot * np.sin(theta_rad)
-        min_x_mm = min_x_mm_rot * np.cos(theta_rad) + min_y_mm_rot * np.sin(theta_rad)
-        max_y_mm = max_y_mm_rot * np.cos(theta_rad) - max_x_mm_rot * np.sin(theta_rad)
-        min_y_mm = min_y_mm_rot * np.cos(theta_rad) - min_x_mm_rot * np.sin(theta_rad)
+        # # Find the max and min extents in rotated coordinates
+        # max_x_mm_rot = np.max(
+        #     sector_limits_mm[:, 0] * np.cos(theta_rad)
+        #     - sector_limits_mm[:, 1] * np.sin(theta_rad)
+        # )
+        # min_x_mm_rot = np.min(
+        #     sector_limits_mm[:, 0] * np.cos(theta_rad)
+        #     - sector_limits_mm[:, 1] * np.sin(theta_rad)
+        # )
+        # # pdb.set_trace()
+        # max_y_mm_rot = np.max(
+        #     sector_limits_mm[:, 0] * np.sin(theta_rad)
+        #     + sector_limits_mm[:, 1] * np.cos(theta_rad)
+        # )
+        # min_y_mm_rot = np.min(
+        #     sector_limits_mm[:, 0] * np.sin(theta_rad)
+        #     + sector_limits_mm[:, 1] * np.cos(theta_rad)
+        # )
+
+        # # Rotate back to original coordinates to get max and min extents
+        # max_x_mm = max_x_mm_rot * np.cos(theta_rad) + max_y_mm_rot * np.sin(theta_rad)
+        # min_x_mm = min_x_mm_rot * np.cos(theta_rad) + min_y_mm_rot * np.sin(theta_rad)
+        # max_y_mm = max_y_mm_rot * np.cos(theta_rad) - max_x_mm_rot * np.sin(theta_rad)
+        # min_y_mm = min_y_mm_rot * np.cos(theta_rad) - min_x_mm_rot * np.sin(theta_rad)
 
         # Pad with one full rf in each side. This prevents need to cutting the
         # rf imgs at the borders later on
         pad_size_x_mm = rf_img.shape[2] * gc_um_per_pix / 1000
         pad_size_y_mm = rf_img.shape[1] * gc_um_per_pix / 1000
 
-        min_x_mm = min_x_mm - pad_size_x_mm
-        max_x_mm = max_x_mm + pad_size_x_mm
-        min_y_mm = min_y_mm - pad_size_y_mm
-        max_y_mm = max_y_mm + pad_size_y_mm
+        min_x_mm_im = min_x_mm - pad_size_x_mm
+        max_x_mm_im = max_x_mm + pad_size_x_mm
+        min_y_mm_im = min_y_mm - pad_size_y_mm
+        max_y_mm_im = max_y_mm + pad_size_y_mm
 
         # Get retina image size in pixels
-        img_size_x = int(np.ceil((max_x_mm - min_x_mm) * 1000 / gc_um_per_pix))
-        img_size_y = int(np.ceil((max_y_mm - min_y_mm) * 1000 / gc_um_per_pix))
+        img_size_x = int(np.ceil((max_x_mm_im - min_x_mm_im) * 1000 / gc_um_per_pix))
+        img_size_y = int(np.ceil((max_y_mm_im - min_y_mm_im) * 1000 / gc_um_per_pix))
 
         ret_img = np.zeros((img_size_y, img_size_x))
 
@@ -1780,9 +1783,11 @@ class ConstructRetina(RetinaMath):
             x_mm, y_mm = self.pol2cart(
                 pos_ecc_mm[i], pos_polar_deg[i] - rot_angle_deg, deg=True
             )
+
             # Get the position of the rf center in pixels in the ecc scaled retina image
-            y_pix_c = int(np.round((y_mm - min_y_mm) * 1000 / gc_um_per_pix))
-            x_pix_c = int(np.round((x_mm - min_x_mm) * 1000 / gc_um_per_pix))
+            # y coordinate is flipped because the y starts from the top in the image
+            y_pix_c = int(np.round((max_y_mm_im - y_mm) * 1000 / gc_um_per_pix))
+            x_pix_c = int(np.round((x_mm - min_x_mm_im) * 1000 / gc_um_per_pix))
 
             # Get the position of the rf upper left corner in pixels
             # The xoc and yoc are the center of the rf image in the resampled data scale.
@@ -2087,10 +2092,11 @@ class ConstructRetina(RetinaMath):
         lr = rf_repulsion_params["change_rate"]
         n_iterations = rf_repulsion_params["n_iterations"]
         show_skip_steps = rf_repulsion_params["show_skip_steps"]
+        border_repulsion_stength = rf_repulsion_params["border_repulsion_stength"]
 
         n_units, H, W = img_rfs.shape
         assert H == W, "RF must be square, aborting..."
-        pad = 1
+        pad = 0
         img_ret_shape = (img_ret_shape[0] + pad * 2, img_ret_shape[1] + pad * 2)
 
         if show_repulsion_progress is True:
@@ -2103,13 +2109,16 @@ class ConstructRetina(RetinaMath):
         rfs = np.array(img_rfs, dtype=float)
         rfs_mask = np.array(img_rfs_mask, dtype=bool)
 
-        boundary_polygon = fig_args["boundary_polygon"]
+        # Comput boundary effect
+        boundary_mask = fig_args["boundary_mask"]  # x, y
+        boundary_polygon_path = fig_args["boundary_polygon_path"]  # x, y
+        retina_boundary_effect = np.where(boundary_mask, 0, border_repulsion_stength)
 
         # Rigid body matrix
         Mrb_zero = np.tile(np.eye(3), (n_units, 1, 1))
         Mrb_zero[:, :2, 2] = rf_positions
 
-        Y, X = np.meshgrid(np.arange(H), np.arange(W))
+        Y, X = np.meshgrid(np.arange(H), np.arange(W), indexing="ij")
         homogeneous_coords = np.stack(
             [X.flatten(), Y.flatten(), np.ones(H * W)], axis=0
         )
@@ -2121,6 +2130,8 @@ class ConstructRetina(RetinaMath):
         original_retina = retina.copy()
 
         for iteration in range(n_iterations):
+            # print(f"transformed_coords[0, 0, :4] = {transformed_coords[0, 0, :4]}")
+            # print(f"transformed_coords[0, 1, :4] = {transformed_coords[0, 1, :4]}")
             Xt = (
                 transformed_coords[:, 0, ...].round().reshape(n_units, H, W).astype(int)
             )
@@ -2129,13 +2140,40 @@ class ConstructRetina(RetinaMath):
             )
 
             retina = original_retina.copy()
+
             for i in range(n_units):
-                retina[Yt[i], Xt[i]] += rfs[i]
+                idx = np.where(rfs[i, ...] == np.max(rfs[i], axis=(0, 1)))  # y,x
+                pos = np.stack((Xt[i, idx[1], idx[0]], Yt[i, idx[1], idx[0]]), axis=1)
+                inside_boundary = boundary_polygon_path.contains_points(pos)  # x, y
+                if inside_boundary:
+                    retina[Yt[i], Xt[i]] += rfs[i]
+                else:
+                    inside = np.where(boundary_mask)  # y,x
+                    choise = np.random.choice(len(inside[0]))
+                    # Subtract center location within RF, shape n,y,x
+                    y_start = int(inside[0][choise] - idx[0])
+                    y_end = int(y_start + H)
+                    x_start = int(inside[1][choise] - idx[1])
+                    x_end = int(x_start + W)
+                    Y, X = np.meshgrid(
+                        np.arange(y_start, y_end),
+                        np.arange(x_start, x_end),
+                        indexing="ij",
+                    )
+                    retina[y_start:y_end, x_start:x_end] += rfs[i]
+                    Yt[i, ...] = Y
+                    Xt[i, ...] = X
+                    Mrb_zero[i, :2, 2] = [x_start, y_start]
+
+            retina_viz = retina.copy()
+            retina += retina_boundary_effect
+
             grad_y, grad_x = np.gradient(retina)
 
             for i in range(n_units):
-                force_y[i] = grad_y[Yt[i], Xt[i]] * rfs[i] * rfs_mask[i]
-                force_x[i] = grad_x[Yt[i], Xt[i]] * rfs[i] * rfs_mask[i]
+                # Force goes downhill the gradient, thus -1
+                force_y[i] = -1 * grad_y[Yt[i], Xt[i]] * rfs[i] * rfs_mask[i]
+                force_x[i] = -1 * grad_x[Yt[i], Xt[i]] * rfs[i] * rfs_mask[i]
 
             centre_of_mass_y = np.sum(rfs * Y, axis=(1, 2)) / np.sum(rfs, axis=(1, 2))
             centre_of_mass_x = np.sum(rfs * X, axis=(1, 2)) / np.sum(rfs, axis=(1, 2))
@@ -2175,40 +2213,50 @@ class ConstructRetina(RetinaMath):
                     [np.zeros(n_units), np.zeros(n_units), np.ones(n_units)],
                 ]
             ).transpose(2, 0, 1)
-            Mrb = trans_mtx @ rot_mtx
-            Mrb = Mrb @ Mrb_zero
+
+            Mrb_local = trans_mtx @ rot_mtx
+            Mrb = Mrb_zero @ Mrb_local
             Mrb_zero = Mrb
             transformed_coords = Mrb @ homogeneous_coords
 
             if show_repulsion_progress is True:
                 reference_retina = np.zeros(img_ret_shape)
                 for i in range(n_units):
-                    reference_retina[Yt[i], Xt[i]] += force_x[i]
+                    reference_retina[Yt[i], Xt[i]] += rfs_mask[i]
 
                 if iteration % show_skip_steps == 0:
                     self.viz.show_repulsion_progress(
                         reference_retina,
-                        new_retina=retina,
+                        new_retina=retina_viz,
                         iteration=iteration,
                         um_per_pix=new_um_per_pix,
                         sidelen=H,
                         **fig_args,
                     )
 
-        pdb.set_trace()
         # update corner points
-        rf_lu_pix = np.array(transformed_coords[:, :2, 2], dtype=int) - pad
+        updated_rf_lu_pix = np.array(transformed_coords[:, :2, 2], dtype=int) - pad
 
-        # Re sample to original resolution
-        # updated_img_rfs =
+        # Resample to H, W resolution with aliasing
+        updated_img_rfs = np.zeros((n_units, H, W))
+        for i in range(n_units):
+            # Extract the affine transformation matrix for the current RF
+            Mrb_matrix = Mrb[i, :, :]
 
-        # Get mask
-        # updated_img_rfs_mask =
+            # Apply the affine transformation
+            # Note: The Mrb matrix may need to be adjusted or inverted depending on its formulation
+            updated_img_rfs[i, ...] = ndimage.affine_transform(
+                rfs[i, ...],
+                Mrb_matrix[:2, :2],
+                offset=Mrb_matrix[:2, 2],
+                output_shape=(H, W),
+                order=1,
+            )
 
         if show_repulsion_progress is True:
             plt.ioff()  # Turn off interactive mode
 
-        return updated_img_rfs, updated_img_rfs_mask, updated_rf_lu_pix
+        return updated_img_rfs, updated_rf_lu_pix
 
     def _create_spatial_rfs(self):
         """
@@ -2401,10 +2449,17 @@ class ConstructRetina(RetinaMath):
             (
                 img_rfs_updated,
                 rf_lu_pix_updated,
-                gc_vae_df_adjusted,
             ) = self._apply_rf_repulsion(
-                img_ret.shape, img_rfs, img_rfs_mask, rf_lu_pix, new_um_per_pix
+                img_ret.shape,
+                img_rfs,
+                img_rfs_mask,
+                rf_lu_pix,
+                new_um_per_pix,
             )
+
+            # TÄHÄN JÄIT. FITTAA VIELÄ KERRAN NYT KUN ON REPELLOITU. HARKITSE AIEMPIEN FITTIEN POISTOA.
+            # TARKISTA REPULSIONIN TOIMINTA.
+            pdb.set_trace()
 
             # Force the coverage of the generated RFs to go towards 1.0
             # using affine transformation of the RFs
