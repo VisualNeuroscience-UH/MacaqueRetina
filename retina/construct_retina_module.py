@@ -2285,33 +2285,6 @@ class ConstructRetina(RetinaMath):
             new_retina[Yt[i], Xt[i]] += rfs[i]
             final_retina[Yout[i], Xout[i]] += updated_img_rfs[i]
 
-        if 0:
-            for i in range(n_units):
-                new_retina = np.zeros(img_ret_shape)
-                final_retina = np.zeros(img_ret_shape)
-                new_retina[Yt[i], Xt[i]] += rfs[i]
-                final_retina[Yout[i], Xout[i]] += updated_img_rfs[i]
-                plt.figure()
-                xx = np.zeros(img_ret_shape)
-                yy = xx.copy()
-                xx[Yt[i], Xt[i]] += 1
-                yy[Yout[i], Xout[i]] += 1
-                plt.subplot(2, 2, 1)
-                plt.imshow(xx)
-                plt.title(f"transformed lu coords: {Yt[i][0,0], Xt[i][0,0]}")
-                plt.subplot(2, 2, 2)
-                plt.imshow(yy)
-                plt.title(f"resampled lu coords: {Yout[i][0,0], Xout[i][0,0]}")
-                plt.subplot(2, 2, 3)
-                plt.imshow(new_retina)
-                plt.title(f"transformed retina")
-                plt.subplot(2, 2, 4)
-                plt.imshow(final_retina)
-                plt.title(f"resampled retina")
-                plt.show()
-                input("enterenterenter...")
-                plt.close()
-
         if show_repulsion_progress is True:
             # Show one last time with the final result
             self.viz.show_repulsion_progress(
