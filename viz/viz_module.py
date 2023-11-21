@@ -1704,6 +1704,7 @@ class Viz:
     def show_repulsion_progress(
         self,
         reference_retina,
+        center_mask,
         new_retina=None,
         init=False,
         iteration=0,
@@ -1728,13 +1729,13 @@ class Viz:
             boundary_points = np.vstack((X.flatten(), Y.flatten())).T  # x,y
             inside_boundary = boundary_polygon_path.contains_points(boundary_points)
             boundary_mask = inside_boundary.reshape(retina_shape)
-            # pdb.set_trace()
 
             # Initialize the plot before the loop
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
+            fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(10, 5))
 
             ax1.set_aspect("equal")
             ax2.set_aspect("equal")
+            ax3.set_aspect("equal")
 
             plt.ion()  # Turn on interactive mode
             plt.show()
@@ -1743,6 +1744,7 @@ class Viz:
                 "fig": fig,
                 "ax1": ax1,
                 "ax2": ax2,
+                "ax3": ax3,
                 "boundary_polygon": boundary_polygon,
                 "boundary_mask": boundary_mask,
                 "boundary_polygon_path": boundary_polygon_path,
@@ -1752,9 +1754,11 @@ class Viz:
             fig = fig_args["fig"]
             ax1 = fig_args["ax1"]
             ax2 = fig_args["ax2"]
+            ax3 = fig_args["ax3"]
             boundary_polygon = fig_args["boundary_polygon"]
             polygon1 = Polygon(boundary_polygon, closed=True, fill=None, edgecolor="r")
             polygon2 = Polygon(boundary_polygon, closed=True, fill=None, edgecolor="r")
+            polygon3 = Polygon(boundary_polygon, closed=True, fill=None, edgecolor="r")
 
             # Set new data and redraw
             ax1.clear()
@@ -1762,17 +1766,25 @@ class Viz:
             ax1.imshow(reference_retina)
             max_val = np.max(reference_retina)
             min_val = np.min(reference_retina)
-            ax1.set_title(
-                f"reference rfs iteration {iteration}\nmax = {max_val}\nmin = {min_val}"
-            )
+            ax1.set_title(f"original retina\nmax = {max_val:.2f}\nmin = {min_val:.2f}")
 
+            # Set new data and redraw
             ax2.clear()
             ax2.add_patch(polygon2)
-            ax2.imshow(new_retina)
+            ax2.imshow(center_mask)
+            max_val = np.max(center_mask)
+            min_val = np.min(center_mask)
+            ax2.set_title(
+                f"center mask iteration {iteration}\nmax = {max_val:.2f}\nmin = {min_val:.2f}"
+            )
+
+            ax3.clear()
+            ax3.add_patch(polygon3)
+            ax3.imshow(new_retina)
             max_val = np.max(new_retina)
             min_val = np.min(new_retina)
-            ax2.set_title(
-                f"new rfs iteration {iteration}\nmax = {max_val}\nmin = {min_val}"
+            ax3.set_title(
+                f"new rfs iteration {iteration}\nmax = {max_val:.2f}\nmin = {min_val:.2f}"
             )
 
             # Redraw and pause

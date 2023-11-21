@@ -380,11 +380,12 @@ gc_placement_params = {
 }
 
 rf_repulsion_params = {
-    "n_iterations": 1000,
-    "change_rate": 0.001,
-    "border_repulsion_stength": 10,
+    "n_iterations": 5000,
+    "change_rate": 0.01,
+    "cooling_rate": 0.999,  # each iteration change_rate = change_rate * cooling_rate
+    "border_repulsion_stength": 5,
     "show_repulsion_progress": True,  # True False
-    "show_skip_steps": 10,
+    "show_skip_steps": 50,
 }
 
 

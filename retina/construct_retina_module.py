@@ -9,6 +9,7 @@ from scipy.optimize import root
 import pandas as pd
 from scipy import ndimage
 from scipy.spatial import Voronoi, voronoi_plot_2d
+from scipy.interpolate import griddata
 
 import torch
 import torch.nn.functional as F
@@ -2089,49 +2090,59 @@ class ConstructRetina(RetinaMath):
 
         rf_repulsion_params = self.context.my_retina["rf_repulsion_params"]
         show_repulsion_progress = rf_repulsion_params["show_repulsion_progress"]
-        lr = rf_repulsion_params["change_rate"]
+        change_rate = rf_repulsion_params["change_rate"]
         n_iterations = rf_repulsion_params["n_iterations"]
         show_skip_steps = rf_repulsion_params["show_skip_steps"]
         border_repulsion_stength = rf_repulsion_params["border_repulsion_stength"]
+        cooling_rate = rf_repulsion_params["cooling_rate"]
 
         n_units, H, W = img_rfs.shape
         assert H == W, "RF must be square, aborting..."
-        pad = 0
-        img_ret_shape = (img_ret_shape[0] + pad * 2, img_ret_shape[1] + pad * 2)
+        img_ret_shape = (img_ret_shape[0], img_ret_shape[1])
 
         if show_repulsion_progress is True:
             # Init plotting
             fig_args = self.viz.show_repulsion_progress(
-                np.zeros(img_ret_shape), init=True, um_per_pix=new_um_per_pix, sidelen=H
+                np.zeros(img_ret_shape),
+                np.zeros(img_ret_shape),
+                init=True,
+                um_per_pix=new_um_per_pix,
+                sidelen=H,
             )
 
-        rf_positions = np.array(rf_lu_pix, dtype=float) + pad
+        rf_positions = np.array(rf_lu_pix, dtype=float)
         rfs = np.array(img_rfs, dtype=float)
         rfs_mask = np.array(img_rfs_mask, dtype=bool)
 
-        # Comput boundary effect
+        # Compute boundary effect
         boundary_mask = fig_args["boundary_mask"]  # x, y
         boundary_polygon_path = fig_args["boundary_polygon_path"]  # x, y
         retina_boundary_effect = np.where(boundary_mask, 0, border_repulsion_stength)
 
         # Rigid body matrix
-        Mrb_zero = np.tile(np.eye(3), (n_units, 1, 1))
-        Mrb_zero[:, :2, 2] = rf_positions
+        Mrb_pre = np.tile(np.eye(3), (n_units, 1, 1))
+        Mrb_pre[:, :2, 2] = rf_positions
 
-        Y, X = np.meshgrid(np.arange(H), np.arange(W), indexing="ij")
+        Y0, X0 = np.meshgrid(np.arange(H), np.arange(W), indexing="ij")
         homogeneous_coords = np.stack(
-            [X.flatten(), Y.flatten(), np.ones(H * W)], axis=0
+            [X0.flatten(), Y0.flatten(), np.ones(H * W)], axis=0
         )
 
         force_y = np.empty_like(rfs)
         force_x = np.empty_like(rfs)
         retina = np.zeros(img_ret_shape)  # To store the retina
-        transformed_coords = Mrb_zero @ homogeneous_coords
+        transformed_coords = Mrb_pre @ homogeneous_coords
         original_retina = retina.copy()
 
+        # Centre of mass for all rfs in H, W coordinates
+        centre_of_mass_y = np.sum(rfs * Y0, axis=(1, 2)) / np.sum(rfs, axis=(1, 2))
+        centre_of_mass_x = np.sum(rfs * X0, axis=(1, 2)) / np.sum(rfs, axis=(1, 2))
+        centre_of_mass_y_mtx = np.tile(centre_of_mass_y, (H, W, 1)).transpose(2, 0, 1)
+        centre_of_mass_x_mtx = np.tile(centre_of_mass_x, (H, W, 1)).transpose(2, 0, 1)
+
+        # Main optimization loop
         for iteration in range(n_iterations):
-            # print(f"transformed_coords[0, 0, :4] = {transformed_coords[0, 0, :4]}")
-            # print(f"transformed_coords[0, 1, :4] = {transformed_coords[0, 1, :4]}")
+            # Get the new coordinates of the RFs
             Xt = (
                 transformed_coords[:, 0, ...].round().reshape(n_units, H, W).astype(int)
             )
@@ -2147,6 +2158,8 @@ class ConstructRetina(RetinaMath):
                 inside_boundary = boundary_polygon_path.contains_points(pos)  # x, y
                 if inside_boundary:
                     retina[Yt[i], Xt[i]] += rfs[i]
+                    if iteration == 0:
+                        reference_retina = retina.copy()
                 else:
                     inside = np.where(boundary_mask)  # y,x
                     choise = np.random.choice(len(inside[0]))
@@ -2155,15 +2168,15 @@ class ConstructRetina(RetinaMath):
                     y_end = int(y_start + H)
                     x_start = int(inside[1][choise] - idx[1])
                     x_end = int(x_start + W)
-                    Y, X = np.meshgrid(
+                    Y1, X1 = np.meshgrid(
                         np.arange(y_start, y_end),
                         np.arange(x_start, x_end),
                         indexing="ij",
                     )
                     retina[y_start:y_end, x_start:x_end] += rfs[i]
-                    Yt[i, ...] = Y
-                    Xt[i, ...] = X
-                    Mrb_zero[i, :2, 2] = [x_start, y_start]
+                    Yt[i, ...] = Y1
+                    Xt[i, ...] = X1
+                    Mrb_pre[i, :2, 2] = [x_start, y_start]
 
             retina_viz = retina.copy()
             retina += retina_boundary_effect
@@ -2175,15 +2188,6 @@ class ConstructRetina(RetinaMath):
                 force_y[i] = -1 * grad_y[Yt[i], Xt[i]] * rfs[i] * rfs_mask[i]
                 force_x[i] = -1 * grad_x[Yt[i], Xt[i]] * rfs[i] * rfs_mask[i]
 
-            centre_of_mass_y = np.sum(rfs * Y, axis=(1, 2)) / np.sum(rfs, axis=(1, 2))
-            centre_of_mass_x = np.sum(rfs * X, axis=(1, 2)) / np.sum(rfs, axis=(1, 2))
-            centre_of_mass_y_mtx = np.tile(centre_of_mass_y, (H, W, 1)).transpose(
-                2, 0, 1
-            )
-            centre_of_mass_x_mtx = np.tile(centre_of_mass_x, (H, W, 1)).transpose(
-                2, 0, 1
-            )
-
             radius_vec = np.stack(
                 [Yt - centre_of_mass_y_mtx, Xt - centre_of_mass_x_mtx], axis=-1
             )
@@ -2194,11 +2198,17 @@ class ConstructRetina(RetinaMath):
             net_force_y = np.sum(force_y, axis=(1, 2))
             net_force_x = np.sum(force_x, axis=(1, 2))
 
-            # Loop based update
-            rot = lr * net_torque
-            tr_x = lr * net_force_x
-            tr_y = lr * net_force_y
+            # Normalize the net torque and net_forces to about matching effects
+            net_torque = np.pi * net_torque / np.max(np.abs(net_torque))
+            net_force_y = 50 * net_force_y / np.max(np.abs(net_force_y))  # 50 from hat
+            net_force_x = 50 * net_force_x / np.max(np.abs(net_force_x))
 
+            # Loop based update
+            rot = change_rate * net_torque
+            tr_x = change_rate * net_force_x
+            tr_y = change_rate * net_force_y
+
+            # Compute the change in rotation and translation
             rot_mtx = np.array(
                 [
                     [np.cos(rot), -np.sin(rot), np.zeros(n_units)],
@@ -2214,19 +2224,21 @@ class ConstructRetina(RetinaMath):
                 ]
             ).transpose(2, 0, 1)
 
-            Mrb_local = trans_mtx @ rot_mtx
-            Mrb = Mrb_zero @ Mrb_local
-            Mrb_zero = Mrb
+            Mrb_change = trans_mtx @ rot_mtx
+            Mrb = Mrb_pre @ Mrb_change
+            Mrb_pre = Mrb
             transformed_coords = Mrb @ homogeneous_coords
+            change_rate = change_rate * cooling_rate
 
             if show_repulsion_progress is True:
-                reference_retina = np.zeros(img_ret_shape)
+                center_mask = np.zeros(img_ret_shape)
                 for i in range(n_units):
-                    reference_retina[Yt[i], Xt[i]] += rfs_mask[i]
+                    center_mask[Yt[i], Xt[i]] += rfs_mask[i]
 
                 if iteration % show_skip_steps == 0:
                     self.viz.show_repulsion_progress(
                         reference_retina,
+                        center_mask,
                         new_retina=retina_viz,
                         iteration=iteration,
                         um_per_pix=new_um_per_pix,
@@ -2234,29 +2246,86 @@ class ConstructRetina(RetinaMath):
                         **fig_args,
                     )
 
-        # update corner points
-        updated_rf_lu_pix = np.array(transformed_coords[:, :2, 2], dtype=int) - pad
-
-        # Resample to H, W resolution with aliasing
+        # Resample to rectangular H, W resolution around center of mass
         updated_img_rfs = np.zeros((n_units, H, W))
-        for i in range(n_units):
-            # Extract the affine transformation matrix for the current RF
-            Mrb_matrix = Mrb[i, :, :]
+        Yout = np.zeros((n_units, H, W), dtype=int)
+        Xout = np.zeros((n_units, H, W), dtype=int)
 
-            # Apply the affine transformation
-            # Note: The Mrb matrix may need to be adjusted or inverted depending on its formulation
-            updated_img_rfs[i, ...] = ndimage.affine_transform(
-                rfs[i, ...],
-                Mrb_matrix[:2, :2],
-                offset=Mrb_matrix[:2, 2],
-                output_shape=(H, W),
-                order=1,
+        for i in range(n_units):
+            com_homo = Mrb[i, ...] @ np.array(
+                [centre_of_mass_x[i], centre_of_mass_y[i], 1]
+            )
+            y_top = np.round(com_homo[1] - H / 2)
+            x_left = np.round(com_homo[0] - W / 2)
+            y_out = np.arange(y_top, y_top + H).round().astype(int)
+            x_out = np.arange(x_left, x_left + W).round().astype(int)
+            y_out_grid, x_out_grid = np.meshgrid(y_out, x_out, indexing="ij")
+            Yout[i] = y_out_grid
+            Xout[i] = x_out_grid
+
+            # Flatten the coordinates and image
+            points = np.array([Yt[i].ravel(), Xt[i].ravel()]).T
+            values = rfs[i].ravel()
+            new_points = np.array([y_out_grid.ravel(), x_out_grid.ravel()]).T
+
+            # Interpolate using griddata
+            resampled_values = griddata(
+                points, values, new_points, method="linear", fill_value=0
             )
 
+            # Reshape to 2D
+            updated_img_rfs[i, ...] = resampled_values.reshape(H, W)
+
+        # update corner points
+        updated_rf_lu_pix = np.array([Yout[:, 0, 0], Xout[:, 0, 0]], dtype=int)
+
+        new_retina = np.zeros(img_ret_shape)
+        final_retina = np.zeros(img_ret_shape)
+        for i in range(n_units):
+            new_retina[Yt[i], Xt[i]] += rfs[i]
+            final_retina[Yout[i], Xout[i]] += updated_img_rfs[i]
+
+        if 0:
+            for i in range(n_units):
+                new_retina = np.zeros(img_ret_shape)
+                final_retina = np.zeros(img_ret_shape)
+                new_retina[Yt[i], Xt[i]] += rfs[i]
+                final_retina[Yout[i], Xout[i]] += updated_img_rfs[i]
+                plt.figure()
+                xx = np.zeros(img_ret_shape)
+                yy = xx.copy()
+                xx[Yt[i], Xt[i]] += 1
+                yy[Yout[i], Xout[i]] += 1
+                plt.subplot(2, 2, 1)
+                plt.imshow(xx)
+                plt.title(f"transformed lu coords: {Yt[i][0,0], Xt[i][0,0]}")
+                plt.subplot(2, 2, 2)
+                plt.imshow(yy)
+                plt.title(f"resampled lu coords: {Yout[i][0,0], Xout[i][0,0]}")
+                plt.subplot(2, 2, 3)
+                plt.imshow(new_retina)
+                plt.title(f"transformed retina")
+                plt.subplot(2, 2, 4)
+                plt.imshow(final_retina)
+                plt.title(f"resampled retina")
+                plt.show()
+                input("enterenterenter...")
+                plt.close()
+
         if show_repulsion_progress is True:
+            # Show one last time with the final result
+            self.viz.show_repulsion_progress(
+                reference_retina,
+                center_mask,
+                new_retina=final_retina,
+                iteration=iteration,
+                um_per_pix=new_um_per_pix,
+                sidelen=H,
+                **fig_args,
+            )
             plt.ioff()  # Turn off interactive mode
 
-        return updated_img_rfs, updated_rf_lu_pix
+        return updated_img_rfs, updated_rf_lu_pix, final_retina
 
     def _create_spatial_rfs(self):
         """
@@ -2437,18 +2506,11 @@ class ConstructRetina(RetinaMath):
                 new_um_per_pix,
             )
 
-            img_ret_masked, _ = self._get_full_retina_with_rf_images(
-                self.ecc_lim_mm,
-                self.polar_lim_deg,
-                img_rfs_mask,
-                self.gc_vae_df,
-                new_um_per_pix,
-            )
-
-            # Now apply the repulsion adjustment to the receptive fields
+            # 12) Apply repulsion adjustment to the receptive fields
             (
-                img_rfs_updated,
-                rf_lu_pix_updated,
+                img_rfs_final,
+                updated_rf_lu_pix,
+                final_retina,
             ) = self._apply_rf_repulsion(
                 img_ret.shape,
                 img_rfs,
@@ -2457,33 +2519,20 @@ class ConstructRetina(RetinaMath):
                 new_um_per_pix,
             )
 
-            # TÄHÄN JÄIT. FITTAA VIELÄ KERRAN NYT KUN ON REPELLOITU. HARKITSE AIEMPIEN FITTIEN POISTOA.
-            # TARKISTA REPULSIONIN TOIMINTA.
+            # TÄHÄN JÄIT. UDATE GC_DF, FITTAA VIELÄ KERRAN NYT KUN ON REPELLOITU JA RESAMPLATTY. HARKITSE AIEMPIEN FITTIEN POISTOA.
             pdb.set_trace()
 
-            # Force the coverage of the generated RFs to go towards 1.0
-            # using affine transformation of the RFs
+            # 13) Get center masks for the generated spatial rfs
+            # Mask threshold is relative to max value in the image
+            img_rfs_final_mask = self.get_rf_masks(img_rfs_final, mask_threshold=0.1)
 
-            # Hey Chat! Please call your new method here, perhaps inside a loop.
-
-            # if self.rf_coverage_adjusted_to_1 is True:
-            #     (
-            #         img_rfs_adjusted,
-            #         img_ret_adjusted,
-            #     ) = self._adjust_VAE_center_coverage_to_one(
-            #         img_rfs,
-            #         img_rfs_mask,
-            #         img_ret,
-            #         img_ret_masked,
-            #         rf_lu_pix,
-            #         tolerate_error=0.01,
-            #     )
-            #     img_rfs_final = img_rfs_adjusted
-
-            # else:
-            #     img_rfs_adjusted = np.zeros_like(img_rfs)
-            #     img_ret_adjusted = np.zeros_like(img_ret)
-            #     img_rfs_final = img_rfs
+            img_ret_final_masked, _ = self._get_full_retina_with_rf_images(
+                self.ecc_lim_mm,
+                self.polar_lim_deg,
+                img_rfs_final_mask,
+                self.gc_vae_df,
+                new_um_per_pix,
+            )
 
             # 12) Save the generated receptive fields and masks
             output_path = self.context.output_folder
@@ -2492,15 +2541,6 @@ class ConstructRetina(RetinaMath):
             self.data_io.save_generated_rfs(
                 img_rfs_final, output_path, filename_stem=filename_stem
             )
-            # We do not save the masks because we want the working retina masking be independent
-            # from construction VAE masking. TODO consider deleting this VAE masking or updating it
-            # to better adjust for unity coverage.
-            # maskname_stem = Path(filename_stem).stem + "_center_mask.npy"
-            # self.data_io.save_generated_rfs(
-            #     img_rfs_mask,
-            #     output_path,
-            #     filename_stem=maskname_stem,
-            # )
 
             # 13) Set project_data for later visualization
             self.project_data.construct_retina["gen_spat_img"] = {
@@ -2511,13 +2551,13 @@ class ConstructRetina(RetinaMath):
             self.project_data.construct_retina["gen_rfs"] = {
                 "img_rf": img_rfs,
                 "img_rf_mask": img_rfs_mask,
-                "img_rfs_adjusted": img_rfs_adjusted,
+                "img_rfs_adjusted": img_rfs_final,
             }
 
             self.project_data.construct_retina["gen_ret"] = {
                 "img_ret": img_ret,
-                "img_ret_masked": img_ret_masked,
-                "img_ret_adjusted": img_ret_adjusted,
+                "img_ret_masked": img_ret_final_masked,
+                "img_ret_adjusted": final_retina,
             }
 
             # Save original df
