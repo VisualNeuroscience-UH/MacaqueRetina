@@ -686,7 +686,6 @@ class WorkingRetina(RetinaMath):
         stimulus_cropped = video_copy[
             cell_indices, r_matrix, q_matrix, time_points_indices
         ]
-        # pdb.set_trace()
 
         if contrast is True:
             # Returns Weber constrast
@@ -1691,6 +1690,7 @@ class WorkingRetina(RetinaMath):
             cell_indices, mask_threshold=mask_threshold
         )
 
+        # Get uniformity data and exit
         if get_uniformity_data is True:
             uniformify_data = self._get_uniformity_index(cell_indices, center_masks)
             uniformify_data["mask_threshold"] = mask_threshold
