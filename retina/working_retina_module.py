@@ -1274,13 +1274,11 @@ class WorkingRetina(RetinaMath):
         # Create w_coord, z_coord for cortical and visual coordinates, respectively
         z_coord = self.gc_df["x_deg"].values + 1j * self.gc_df["y_deg"].values
 
-        # Macaque values
-        # a for macaques should be 0.3 - 0.9, Schwartz 1994 citing Wilson et al 1990 "The perception of form" in Visual perception: The neurophysiological foundations, Academic Press
-        # k has been pretty open.
-        # However, if we relate 1/M = (a/k) + (1/k) * E and M = (1/0.077) + (1/(0.082 * E)), we get
-        # Andrew James, personal communication: k=1/.082, a=. 077/.082
-        a = 0.077 / 0.082  # ~ 0.94
-        k = 1 / 0.082  # ~ 12.2
+        visual2cortical_params = self.context.my_retina_options[
+            "visual2cortical_params"
+        ]
+        a = visual2cortical_params["a"]
+        k = visual2cortical_params["k"]
         w_coord = k * np.log(z_coord + a)
 
         return w_coord, z_coord
@@ -2119,10 +2117,8 @@ class PhotoReceptor:
         # Range
         response_range = np.ptp([self.cone_sensitivity_min, self.cone_sensitivity_max])
 
-        # Scale
-        image_at_response_scale = (
-            self.image * response_range
-        )  # Image should be between 0 and 1
+        # Scale. Image should be between 0 and 1
+        image_at_response_scale = self.image * response_range
         cone_input = image_at_response_scale + self.cone_sensitivity_min
 
         # Cone nonlinearity

@@ -589,9 +589,6 @@ class StimulusForm:
         # self.frames = self.frames * mask[..., np.newaxis]
         self._combine_background(mask)
 
-    def stencil(self):
-        raise NotImplementedError
-
 
 class VisualStimulus(VideoBaseClass):
     """
@@ -655,12 +652,6 @@ class VisualStimulus(VideoBaseClass):
         on_proportion: between 0 and 1, proportion of on-stimulus, default 0.5
         direction: 'increment' or 'decrement'
         stimulus_video_name: name of the stimulus video
-
-        TODO Below not implemented yet.
-        For natural_images, phase_scrambled_images, natural_video and phase_scrambled_video,
-        additional arguments are:
-        spatial_band_pass: (cycles per degree min, cycles per degree max)
-        temporal_band_pass: (Hz min, Hz max)
 
         ------------------------
         Output: saves the stimulus video file to output path if stimulus_video_name is not empty str or None
@@ -809,9 +800,6 @@ class AnalogInput:
             )
         elif input_type == "step_current":
             Input = self.create_step_input(Nx=N_units, N_tp=N_tp)
-        # if current_injection is True:
-        #     Input = self.create_current_injection(Input)
-        #     filename_out = filename_out[:-4] + '_ci.mat'
 
         # get coordinates
         if coord_type == "dummy":
@@ -942,7 +930,6 @@ class AnalogInput:
 
     def get_dummy_coordinates(self, Nx=0):
         # Create dummy coordinates for CxSystem format video input.
-        # NOTE: You are safer with local mode on in CxSystem to use these
 
         assert Nx != 0, "N units not set, aborting..."
 
@@ -950,9 +937,11 @@ class AnalogInput:
         z_coord = np.linspace(4.8, 5.2, Nx)
         z_coord = z_coord + 0j  # Add second dimension
 
-        # Copied from macaque retina, to keep w and z coords consistent
-        a = 0.077 / 0.082  # ~ 0.94
-        k = 1 / 0.082  # ~ 12.2
+        visual2cortical_params = self.context.my_retina_options[
+            "visual2cortical_params"
+        ]
+        a = visual2cortical_params["a"]
+        k = visual2cortical_params["k"]
         w_coord = k * np.log(z_coord + a)
 
         return w_coord, z_coord

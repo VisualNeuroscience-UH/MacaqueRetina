@@ -337,6 +337,17 @@ proportion_of_OFF_response_type = 0.60
 # > 0.999 for ecc 0.1 - 4 mm, and > 0.97 for ecc 0.1 - 20 mm.
 deg_per_mm = 1 / 0.229
 
+# Parameters for cortical - visual coordinate transformation.
+# a for macaques between 0.3 - 0.9, Schwartz 1994 citing Wilson et al 1990 "The perception of form"
+# in Visual perception: The neurophysiological foundations, Academic Press
+# k has been pretty open.
+# However, if we relate 1/M = (a/k) + (1/k) * E and M = (1/0.077) + (1/(0.082 * E)), we get
+# Andrew James, personal communication: k=1/.082, a=.077/.082
+visual2cortical_params = {
+    "a": 0.077 / 0.082,
+    "k": 1 / 0.082,
+}
+
 # Compressing cone nonlinearity. Parameters are manually scaled to give dynamic cone ouput.
 # Equation, data from Baylor_1987_JPhysiol
 cone_params = {
@@ -402,6 +413,7 @@ my_retina_append = {
     "refractory_params": refractory_params,
     "gc_placement_params": gc_placement_params,
     "rf_repulsion_params": rf_repulsion_params,
+    "visual2cortical_params": visual2cortical_params,
 }
 
 my_retina.update(my_retina_append)
@@ -518,12 +530,11 @@ if __name__ == "__main__":
     # # If possible, sample only temporal hemiretina
     # from project.project_utilities_module import DataSampler
 
-    # # filename = "Goodchild_1996_JCompNeurol_Parasol_DendDiam_Fig2A.jpg"
-    # filename = "Goodchild_1996_JCompNeurol_Midget_DendDiam_Fig2B.jpg"
+    # filename = "Goodchild_1996_JCompNeurol_Parasol_DendDiam_Fig2A.jpg"
     # filename_full = git_repo_root.joinpath(r"retina/literature_data", filename)
     # # Fig lowest and highest tick values, use these as calibration points
-    # min_X, max_X, min_Y, max_Y = (0, 80, 1, 1000)
-    # ds = DataSampler(filename_full, min_X, max_X, min_Y, max_Y, logX=False, logY=True)
+    # min_X, max_X, min_Y, max_Y = (1, 100, 10, 1000)
+    # ds = DataSampler(filename_full, min_X, max_X, min_Y, max_Y, logX=True, logY=True)
     # ds.collect_and_save_points()
     # ds.quality_control(restore=True)
 
