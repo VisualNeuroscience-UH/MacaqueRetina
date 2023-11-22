@@ -11,6 +11,7 @@ import pandas as pd
 
 # Viz
 import matplotlib.pyplot as plt
+import matplotlib.widgets as widgets
 
 
 class ProjectUtilities:
@@ -250,6 +251,8 @@ class DataSampler:
         Maximum y-axis value for calibration.
     logX : bool
         If True, indicates x-axis is logarithmic.
+    logY : bool
+        If True, indicates y-axis is logarithmic.
     calibration_points : list
         List of calibration points selected from the image.
     data_points : list
@@ -257,45 +260,34 @@ class DataSampler:
 
     Methods
     -------
-    add_calibration_point(point)
-        Adds a point to the list of calibration points.
-    add_data_point(point)
-        Adds a point to the list of data points.
-    validate_calibration()
-        Validates calibration point input.
-    to_data_units(x, y)
-        Converts image units (pixels) to data units.
-    to_image_units(x_data, y_data)
-        Converts data units back to image units (pixels).
-    save_data()
-        Saves the digitized data to a file.
     quality_control()
         Displays the original image with calibration and data points.
     collect_and_save_points()
         Interactively collect calibration and data points from the image.
     """
 
-    def __init__(self, filename, min_X, max_X, min_Y, max_Y, logX=False):
+    def __init__(self, filename, min_X, max_X, min_Y, max_Y, logX=False, logY=False):
         self.filename = filename
         self.min_X = min_X
         self.max_X = max_X
         self.min_Y = min_Y
         self.max_Y = max_Y
         self.logX = logX
+        self.logY = logY
 
         self.calibration_points = []
         self.data_points = []
 
-    def add_calibration_point(self, point):
+    def _add_calibration_point(self, point):
         """Adds a point to the list of calibration points."""
         self.calibration_points.append(point)
 
-    def add_data_point(self, point):
+    def _add_data_point(self, point):
         """Adds a point to the list of data points."""
-        Xdata, Ydata = self.to_data_units(point[0], point[1])
+        Xdata, Ydata = self._to_data_units(point[0], point[1])
         self.data_points.append((Xdata, Ydata))
 
-    def validate_calibration(self):
+    def _validate_calibration(self):
         """Validates the calibration point input."""
         assert (
             len(self.calibration_points) == 3
@@ -307,41 +299,72 @@ class DataSampler:
             x_min < x_max and y_min > y_max
         ), "The calibration set is not valid, 1. origo, 2. y max, 3. x max"
 
-    def to_data_units(self, x, y):
+    def _to_data_units(self, x, y):
         """Converts image units (pixels) to data units."""
         pix_x_min, pix_y_min = self.calibration_points[0]
         _, pix_y_max = self.calibration_points[1]
         pix_x_max, _ = self.calibration_points[2]
-        x_range = pix_x_max - pix_x_min
-        y_range = self.calibration_points[0][1] - pix_y_max  # inverted scale
+        x_range_pix = pix_x_max - pix_x_min
+        y_range_pix = self.calibration_points[0][1] - pix_y_max  # inverted scale
 
-        x_scaled = (x - pix_x_min) / x_range * (self.max_X - self.min_X) + self.min_X
-        y_upright = (
-            pix_y_min - y
-        )  # From bottom upwards, y min is the largest pixel value
-        y_scaled = (y_upright / y_range) * (self.max_Y - self.min_Y) + self.min_Y
+        x_rightwards = x - pix_x_min
+        # From bottom upwards, y min is the largest pixel value
+        y_upright = pix_y_min - y
         if self.logX:
-            x_scaled = np.exp(x_scaled)
+            x_scaled_log = x_rightwards / x_range_pix * np.log10(
+                (self.max_X - self.min_X)
+            ) + np.log10(self.min_X)
+            x_scaled = np.power(10, x_scaled_log)
+        else:
+            x_scaled = (
+                x_rightwards / x_range_pix * (self.max_X - self.min_X) + self.min_X
+            )
+        if self.logY:
+            y_scaled_log = (y_upright / y_range_pix) * np.log10(
+                (self.max_Y - self.min_Y)
+            ) + np.log10(self.min_Y)
+
+            y_scaled = np.power(10, y_scaled_log)
+        else:
+            y_scaled = (y_upright / y_range_pix) * (
+                self.max_Y - self.min_Y
+            ) + self.min_Y
+
         return x_scaled, y_scaled
 
-    def to_image_units(self, x_data, y_data):
+    def _to_image_units(self, x_data, y_data):
         """Converts data units back to image units (pixels)."""
         pix_x_min, pix_y_min = self.calibration_points[0]
         _, pix_y_max = self.calibration_points[1]
         pix_x_max, _ = self.calibration_points[2]
-        x_range = pix_x_max - pix_x_min
-        y_range = pix_y_min - pix_y_max  # inverted scale
-
+        x_range_pix = pix_x_max - pix_x_min
+        y_range_pix = pix_y_min - pix_y_max  # inverted scale
         if self.logX:
-            x_data = np.log(x_data)
-        x = (x_data - self.min_X) / (self.max_X - self.min_X) * x_range + pix_x_min
-        y_offset = y_data - self.min_Y
-        y_upright = y_offset / (self.max_Y - self.min_Y) * y_range
-        y = pix_y_min - y_upright
+            x_data_log = np.log10(x_data)
+            x_rightwards_log = x_data_log - np.log10(self.min_X)
+            x = (
+                x_rightwards_log / np.log10((self.max_X - self.min_X))
+            ) * x_range_pix + pix_x_min
+        else:
+            x = (x_data - self.min_X) / (
+                self.max_X - self.min_X
+            ) * x_range_pix + pix_x_min
+        if self.logY:
+            y_data_log = np.log10(y_data)
+            y_upwards_log = y_data_log - np.log10(self.min_Y)
+            y_upwards_pix = (
+                y_upwards_log / np.log10((self.max_Y - self.min_Y))
+            ) * y_range_pix
+            y = pix_y_min - y_upwards_pix
+            # pdb.set_trace()
+        else:
+            y_offset = y_data - self.min_Y
+            y_upright = y_offset / (self.max_Y - self.min_Y) * y_range_pix
+            y = pix_y_min - y_upright
 
         return x, y
 
-    def save_data(self):
+    def _save_data(self):
         """Saves the digitized data to a file."""
         Xdata, Ydata = zip(*[(x, y) for x, y in self.data_points])
         calib_x, calib_y = zip(*[(x, y) for x, y in self.calibration_points])
@@ -364,18 +387,27 @@ class DataSampler:
             self.calibration_points = [
                 (x, y) for x, y in zip(*[data["calib_x"], data["calib_y"]])
             ]
+        # plt.ion()
+        # fig, ax = plt.subplots()
+        # ax.imshow(imagedata, cmap="gray")
+        # plt.show(block=False)
 
-        data_x, data_y = zip(*[self.to_image_units(x, y) for x, y in self.data_points])
+        data_x, data_y = zip(*[self._to_image_units(x, y) for x, y in self.data_points])
         calib_x = [pt[0] for pt in self.calibration_points]
         calib_y = [pt[1] for pt in self.calibration_points]
 
+        # Print data to screen in beautiful format
+        print("Calibration points (pixel coordinates):")
+        for i, (x, y) in enumerate(self.calibration_points):
+            print(f"Point {i}: x={x:.2e}, y={y:.2e}")
+        print("Data points (data coordinates):")
+        for i, (x, y) in enumerate(self.data_points):
+            print(f"Point {i}: x={x:.2e}, y={y:.2e}")
+
         fig, ax = plt.subplots()
         ax.imshow(imagedata, cmap="gray")
-
         ax.scatter(calib_x, calib_y, color="red", s=50, label="Calibration Points")
-
         ax.scatter(data_x, data_y, color="blue", s=30, label="Data Points")
-
         ax.legend()
 
     def collect_and_save_points(self):
@@ -384,17 +416,22 @@ class DataSampler:
         fig, ax = plt.subplots()
         ax.imshow(imagedata, cmap="gray")
 
+        # Set the cursor to a crosshair
+        cursor = widgets.Cursor(ax, useblit=True, color="red", linewidth=0.5)
+
         print("Calibrate 1. origo, 2. y max, 3. x max")
         calib_points = plt.ginput(3, timeout=0)
         for point in calib_points:
-            self.add_calibration_point(point)
+            self._add_calibration_point(point)
 
-        self.validate_calibration()
+        self._validate_calibration()
 
-        print("And now the data points...")
+        print(
+            "And now the data points: left click to add, right click to remove, middle to stop."
+        )
         data_points = plt.ginput(-1, timeout=0)
         for point in data_points:
-            self.add_data_point(point)
+            self._add_data_point(point)
         plt.close(fig)
 
-        self.save_data()
+        self._save_data()
