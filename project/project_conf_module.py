@@ -192,14 +192,14 @@ my_retina = {
     "response_type": response_type,
     "ecc_limits_deg": [4.5, 5.5],  # eccentricity in degrees
     "pol_limits_deg": [-15, 15],  # polar angle in degrees
-    "model_density": 0.5,  # 1.0 for 100% of the literature density of ganglion cells
+    "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
     "dd_regr_model": "linear",  # linear, quadratic, cubic, exponential TODO: midget central 8-10 deg flat, see Goodchild_1996_JCompNeurol + 1 dataset for dd vs ecc
     "visual_field_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
     "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
-    "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
+    "DoG_model": "ellipse_independent",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models. Note that ellipse fit does not tolearate VAE adjustments => fit to nonadjusted generated rfs
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
     "model_file_name": None,  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[DEVICE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only
@@ -365,7 +365,7 @@ refractory_params = {
 # "voronoi" (v) : better for big retinas, fast
 # Force Based Layout Algorithm with Boundary Repulsion
 # "force" (f) : better for small retinas, slow
-# None : initial random placement. Nonvarying with fixed seed above. Good for testing.
+# None : initial random placement. Nonvarying with fixed seed above. Good for testing and speed.
 gc_placement_params = {
     "algorithm": None,  # "voronoi" or "force" or None
     "n_iterations": 1000,  # v 20, f 5000
@@ -380,7 +380,7 @@ gc_placement_params = {
 }
 
 rf_repulsion_params = {
-    "n_iterations": 5000,
+    "n_iterations": 2000,
     "change_rate": 0.05,
     "cooling_rate": 0.999,  # each iteration change_rate = change_rate * cooling_rate
     "border_repulsion_stength": 5,
@@ -419,14 +419,14 @@ gc_density_fullpath = (
 )
 if my_retina["gc_type"] == "parasol":
     dendr_diam1_fullpath = (
-        # literature_data_folder / "Perry_1984_Neurosci_ParasolDendrDiam_c.mat"
-        literature_data_folder
-        / "Perry_1984_Neurosci_ParasolDendrDiam_Fig6A_c.npz"
+        literature_data_folder / "Perry_1984_Neurosci_ParasolDendrDiam_Fig6A_c.npz"
     )
     dendr_diam2_fullpath = (
-        # literature_data_folder / "Watanabe_1989_JCompNeurol_GCDendrDiam_parasol_c.mat"
+        literature_data_folder / "Watanabe_1989_JCompNeurol_ParasolDendrDiam_Fig7_c.npz"
+    )
+    dendr_diam3_fullpath = (
         literature_data_folder
-        / "Watanabe_1989_JCompNeurol_ParasolDendrDiam_Fig7_c.npz"
+        / "Goodchild_1996_JCompNeurol_Parasol_DendDiam_Fig2A_c.npz"
     )
     temporal_BK_model_fullpath = (
         literature_data_folder / "Benardete_1999_VisNeurosci_parasol.csv"
@@ -437,14 +437,10 @@ if my_retina["gc_type"] == "parasol":
     )
 elif my_retina["gc_type"] == "midget":
     dendr_diam1_fullpath = (
-        # literature_data_folder / "Perry_1984_Neurosci_MidgetDendrDiam_c.mat"
-        literature_data_folder
-        / "Perry_1984_Neurosci_MidgetDendrDiam_Fig6B_c.npz"
+        literature_data_folder / "Perry_1984_Neurosci_MidgetDendrDiam_Fig6B_c.npz"
     )
     dendr_diam2_fullpath = (
-        # literature_data_folder / "Watanabe_1989_JCompNeurol_GCDendrDiam_midget_c.mat"
-        literature_data_folder
-        / "Watanabe_1989_JCompNeurol_MidgetDendrDiam_Fig7_c.npz"
+        literature_data_folder / "Watanabe_1989_JCompNeurol_MidgetDendrDiam_Fig7_c.npz"
     )
     temporal_BK_model_fullpath = (
         literature_data_folder / "Benardete_1997_VisNeurosci_midget.csv"
@@ -456,6 +452,7 @@ literature_data_files = {
     "gc_density_fullpath": gc_density_fullpath,
     "dendr_diam1_fullpath": dendr_diam1_fullpath,
     "dendr_diam2_fullpath": dendr_diam2_fullpath,
+    "dendr_diam3_fullpath": dendr_diam3_fullpath,
     "temporal_BK_model_fullpath": temporal_BK_model_fullpath,
     "spatial_DoG_fullpath": spatial_DoG_fullpath,
 }
@@ -521,16 +518,13 @@ if __name__ == "__main__":
     # # If possible, sample only temporal hemiretina
     # from project.project_utilities_module import DataSampler
 
-    # filename = "Schottdorf_2021_JPhysiol_CenRadius_Fig4C_midget.jpg"
+    # # filename = "Goodchild_1996_JCompNeurol_Parasol_DendDiam_Fig2A.jpg"
+    # filename = "Goodchild_1996_JCompNeurol_Midget_DendDiam_Fig2B.jpg"
     # filename_full = git_repo_root.joinpath(r"retina/literature_data", filename)
-    # min_X, max_X, min_Y, max_Y = (
-    #     0,
-    #     15,
-    #     0,
-    #     12,
-    # )  # Fig lowest and highest tick values, use these as calibration points
-    # ds = DataSampler(filename_full, min_X, max_X, min_Y, max_Y)
-    # # ds.collect_and_save_points()
+    # # Fig lowest and highest tick values, use these as calibration points
+    # min_X, max_X, min_Y, max_Y = (0, 80, 1, 1000)
+    # ds = DataSampler(filename_full, min_X, max_X, min_Y, max_Y, logX=False, logY=True)
+    # ds.collect_and_save_points()
     # ds.quality_control(restore=True)
 
     #################################
@@ -554,11 +548,11 @@ if __name__ == "__main__":
 
     # For FIT and VAE
     # PM.viz.show_DoG_model_fit(sample_list=[0, 1, 2], savefigname=None)
-    PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)
+    # PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)
 
     # For FIT (ellipse and DoG fits, temporal kernels and tonic drives)
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
-    # PM.viz.show_dendrite_diam_vs_ecc(savefigname=None)
+    PM.viz.show_dendrite_diam_vs_ecc(savefigname=None)
     # PM.viz.show_temporal_filter_response(n_curves=3, savefigname="temporal_filters.eps")
     # PM.viz.show_spatial_statistics(savefigname="spatial_stats.eps")
 
@@ -601,8 +595,8 @@ if __name__ == "__main__":
     ####################################
 
     # # Load stimulus to get working retina, necessary for running cells
-    PM.working_retina.load_stimulus()
-    PM.working_retina.run_with_my_run_options()
+    # PM.working_retina.load_stimulus()
+    # PM.working_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
@@ -649,7 +643,7 @@ if __name__ == "__main__":
     ################################################
 
     # Based on my_run_options above
-    PM.viz.show_all_gc_responses(savefigname=None)
+    # PM.viz.show_all_gc_responses(savefigname=None)
 
     # PM.viz.show_stimulus_with_gcs(
     #     example_gc=39,  # or my_run_options["cell_index"]

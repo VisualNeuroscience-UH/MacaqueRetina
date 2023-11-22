@@ -342,16 +342,21 @@ class ConstructRetina(RetinaMath):
         dendr_diam2 = self.data_io.get_data(
             self.context.literature_data_files["dendr_diam2_fullpath"]
         )
+        dendr_diam3 = self.data_io.get_data(
+            self.context.literature_data_files["dendr_diam3_fullpath"]
+        )
 
         # Quality control. Datasets separately for visualization
         data_set_1_x = np.squeeze(dendr_diam1["Xdata"])
         data_set_1_y = np.squeeze(dendr_diam1["Ydata"])
         data_set_2_x = np.squeeze(dendr_diam2["Xdata"])
         data_set_2_y = np.squeeze(dendr_diam2["Ydata"])
+        data_set_3_x = np.squeeze(dendr_diam3["Xdata"])
+        data_set_3_y = np.squeeze(dendr_diam3["Ydata"])
 
         # Both datasets together
-        data_all_x = np.concatenate((data_set_1_x, data_set_2_x))
-        data_all_y = np.concatenate((data_set_1_y, data_set_2_y))
+        data_all_x = np.concatenate((data_set_1_x, data_set_2_x, data_set_3_x))
+        data_all_y = np.concatenate((data_set_1_y, data_set_2_y, data_set_3_y))
 
         # Limit eccentricities for central visual field studies to get better approximation at about 5 deg ecc (1mm)
         # x is eccentricity in mm
@@ -2339,7 +2344,10 @@ class ConstructRetina(RetinaMath):
             )
 
             # 13) Get final center masks for the generated spatial rfs
-            img_rfs_final_mask = self.get_rf_masks(img_rfs_final, mask_threshold=0.1)
+            mask_th = self.context.my_retina["center_mask_threshold"]
+            img_rfs_final_mask = self.get_rf_masks(
+                img_rfs_final, mask_threshold=mask_th
+            )
 
             img_ret_final_masked, _, _ = self._get_full_retina_with_rf_images(
                 self.ecc_lim_mm,
