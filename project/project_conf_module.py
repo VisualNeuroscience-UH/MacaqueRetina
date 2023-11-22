@@ -226,8 +226,8 @@ baseline_start_seconds: midgray at the beginning
 baseline_end_seconds: midgray at the end
 pattern:
     'sine_grating'; 'square_grating'; 'colored_temporal_noise'; 'white_gaussian_noise';
-    'natural_images'; 'phase_scrambled_images'; 'natural_video'; 'phase_scrambled_video';
-    'temporal_sine_pattern'; 'temporal_square_pattern'; 'spatially_uniform_binary_noise'
+    'natural_images'; 'natural_video'; 'temporal_sine_pattern'; 'temporal_square_pattern';
+    'spatially_uniform_binary_noise'
 stimulus_form: 'circular'; 'rectangular'; 'annulus'
 
 For stimulus_form annulus, additional arguments are:
@@ -390,6 +390,7 @@ gc_placement_params = {
     "show_skip_steps": 20,  # v 1, f 100
 }
 
+# For VAE, this is enough to have good distribution between units.
 rf_repulsion_params = {
     "n_iterations": 2000,
     "change_rate": 0.05,
