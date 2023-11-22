@@ -54,8 +54,7 @@ class VideoBaseClass(object):
         options[
             "raw_intensity"
         ] = None  # Dynamic range before scaling, set by each stimulus pattern method
-
-        # Valid options sine_grating; square_grating; colored_temporal_noise; white_gaussian_noise; natural_images; natural_video; phase_scrambled_video
+        # Valid options sine_grating; square_grating; colored_temporal_noise; white_gaussian_noise; natural_images; natural_video
         options["pattern"] = "sine_grating"
         options[
             "phase_shift"
@@ -356,6 +355,14 @@ class StimulusPattern:
     """
 
     def sine_grating(self):
+        """
+        Create a sine wave grating stimulus pattern.
+
+        This method applies a sine function to the temporospatial grating
+        frames, with an optional phase shift. It sets the raw intensity
+        range of the stimulus pattern to [-1, 1].
+        """
+
         # Create temporospatial grating
         self._prepare_grating()
 
@@ -366,6 +373,17 @@ class StimulusPattern:
         self.options["raw_intensity"] = (-1, 1)
 
     def square_grating(self):
+        """
+        Create a square wave grating stimulus pattern.
+
+        This method converts the sine grating into a square wave grating using a
+        thresholding process. The method sets the raw intensity range of the
+        stimulus pattern to [-1, 1] and applies a threshold at zero to create the
+        square wave effect.
+
+        Threshold can be adjusted between [-1, 1] for uneven grating patterns.
+        """
+
         # Create temporospatial grating
         self._prepare_grating()
 
@@ -382,18 +400,44 @@ class StimulusPattern:
         self.frames = (self.frames > threshold) * self.frames / self.frames * 2 - 1
 
     def white_gaussian_noise(self):
+        """
+        Generate a white Gaussian noise stimulus pattern.
+
+        This method fills the frames with white Gaussian noise, using a normal
+        distribution centered at 0.0 with a standard deviation of 1.0. The shape
+        of the noise array matches the shape of the existing frames.
+
+        After generating the noise, it updates the raw intensity values based on
+        the data in the frames.
+        """
+
         self.frames = np.random.normal(loc=0.0, scale=1.0, size=self.frames.shape)
 
         self._raw_intensity_from_data()
 
     def temporal_sine_pattern(self):
-        """Create temporal sine pattern"""
+        """
+        Create a temporal sine wave pattern.
 
+        This method prepares a temporal sine wave pattern by invoking the
+        `_prepare_temporal_sine_pattern` method, which handles the detailed
+        implementation of this pattern.
+        """
         self._prepare_temporal_sine_pattern()
 
     def temporal_square_pattern(self):
-        """Create temporal sine pattern"""
+        """
+        Create a temporal square wave pattern.
 
+        This method starts by preparing a temporal sine pattern using
+        `_prepare_temporal_sine_pattern`. It then converts this pattern
+        into a square wave pattern by applying a threshold, defaulting to zero.
+        Values equal to or above the threshold are set to 1, and values below
+        are set to -1.
+
+        The threshold can be adjusted between [-1, 1] for creating uneven
+        grating patterns.
+        """
         self._prepare_temporal_sine_pattern()
         # Turn to square grating values, threshold at zero.
         threshold = (
@@ -403,8 +447,25 @@ class StimulusPattern:
         self.frames[self.frames >= threshold] = 1
         self.frames[self.frames < threshold] = -1
 
-    def colored_temporal_noise(self):
-        beta = 1  # the exponent. 1 = pink noise, 2 = brown noise, 0 = white noise?
+    def colored_temporal_noise(self, beta=1):
+        """
+        Generate a colored temporal noise pattern.
+
+        This method creates temporal noise with a specified power-law exponent,
+        generating different types of noise (e.g., pink, brown, or white noise)
+        based on the beta value. The method generates a frame time series with
+        unit variance, clips it to a predefined variance range, and then scales
+        it to fit within [0, 1].
+
+        The raw intensity is set to the range [0, 1]. The method ensures that
+        the time series length is compatible with the frame dimensions and
+        applies the time series to all frames.
+
+        Parameters
+        ----------
+        beta : int, optional
+            the exponent. 1 = pink noise, 2 = brown noise, 0 = white noise.
+        """
         variance_limits = np.array([-3, 3])
         samples = self.frames.shape[2]  # number of time samples to generate
         frame_time_series_unit_variance = cn.powerlaw_psd_gaussian(beta, samples)
@@ -429,6 +490,17 @@ class StimulusPattern:
         self.frames = np.zeros(self.frames.shape) + frame_time_series
 
     def spatially_uniform_binary_noise(self):
+        """
+        Generate a spatially uniform binary noise pattern.
+
+        This method creates a binary noise pattern based on the specified 'on_proportion'
+        and applies it to all frames. The noise is either incrementing or decrementing
+        based on the 'direction' option. The contrast is adjusted to account for the
+        dynamic range of the stimulus.
+
+        The method throws a NotImplementedError if the 'direction' is neither 'increment'
+        nor 'decrement'. The raw intensity range is set to [-1, 1].
+        """
         on_proportion = self.options["on_proportion"]
         samples = self.frames.shape[2]
         direction = self.options["direction"]
@@ -462,6 +534,18 @@ class StimulusPattern:
         self.frames = np.zeros(self.frames.shape) + frame_time_series
 
     def natural_images(self):
+        """
+        Process natural images for use in stimulus patterns.
+
+        This method handles natural images by either applying a cone filter response
+        or loading an image file based on the provided stimulus metadata. The selected
+        image is then resized to match the frame dimensions. The resized image is
+        integrated with the frames by multiplying it, enabling the creation of a
+        stimulus pattern.
+
+        After this integration, the method performs additional filtering and updates
+        the raw intensity values based on the new data.
+        """
         if self.context.my_stimulus_metadata["apply_cone_filter"] is True:
             self.cones.image2cone_response()
             self.image = self.cones.cone_response
@@ -472,26 +556,12 @@ class StimulusPattern:
         # resize image by specifying custom width and height
         resized_image = cv2.resize(self.image, self.frames.shape[:2])
 
-        # Prep for temporal pattern. Writes on top of self.frames,
-        self._prepare_temporal_sine_pattern()
-
-        # Change temporal sine pattern to temporal square pattern.
-        threshold = (
-            0  # Change this between [-1 1] if you want uneven grating. Default is 0
-        )
-        self.frames[self.frames >= threshold] = 1
-        self.frames[self.frames < threshold] = 0
-
         # add new axis to b to use numpy broadcasting
         resized_image = resized_image[:, :, np.newaxis]
 
         self.frames = self.frames * resized_image
 
         # filtering: http://www.djmannion.net/psych_programming/vision/sf_filt/sf_filt.html
-        self._raw_intensity_from_data()
-
-    def phase_scrambled_images(self):
-        raise NotImplementedError("Phase scrambled images are not implemented yet.")
         self._raw_intensity_from_data()
 
     def natural_video(self):
@@ -536,10 +606,6 @@ class StimulusPattern:
 
         self._raw_intensity_from_data()
         video_cap.release()
-
-    def phase_scrambled_video(self):
-        raise NotImplementedError("Phase scrambled video is not implemented yet.")
-        self._raw_intensity_from_data()
 
 
 class StimulusForm:
@@ -628,8 +694,8 @@ class VisualStimulus(VideoBaseClass):
         baseline_end_seconds: midgray at the end
         pattern:
             'sine_grating'; 'square_grating'; 'colored_temporal_noise'; 'white_gaussian_noise';
-            'natural_images'; 'phase_scrambled_images'; 'natural_video'; 'phase_scrambled_video';
-            'temporal_sine_pattern'; 'temporal_square_pattern'; 'spatially_uniform_binary_noise'
+            'natural_images'; 'natural_video'; 'temporal_sine_pattern'; 'temporal_square_pattern';
+            'spatially_uniform_binary_noise'
         stimulus_form: 'circular'; 'rectangular'; 'annulus'
         stimulus_position: in degrees, (0,0) is the center.
         stimulus_size: In degrees. Radius for circle and annulus, half-width for rectangle.
@@ -803,9 +869,9 @@ class AnalogInput:
 
         # get coordinates
         if coord_type == "dummy":
-            w_coord, z_coord = self.get_dummy_coordinates(Nx=N_units)
+            w_coord, z_coord = self._get_dummy_coordinates(Nx=N_units)
         elif coord_type == "real":
-            w_coord, z_coord = self.get_real_coordinates(Nx=N_units)
+            w_coord, z_coord = self._get_real_coordinates(Nx=N_units)
 
         assert (
             "w_coord" in locals()
@@ -840,26 +906,61 @@ class AnalogInput:
         Input = Input / max(np.ravel(Input))
         return Input
 
-    def create_noise_input(self, Nx=0, N_tp=None):
+    def create_noise_input(self, Nx=0, N_tp=None, amplitude=15.0):
+        """
+        Create signal for simulated current injection with noise input in the AnalogInput class.
+
+        Generates a multivariate Gaussian noise input for a specified number of units (Nx)
+        and timepoints (N_tp). Applies a Gaussian filter to the noise input and scales it
+        to simulate current injection in a neural network model.
+
+        Parameters
+        ----------
+        Nx : int
+            Number of units. Must be non-zero.
+        N_tp : int or None
+            Number of timepoints. Must be specified.
+        amplitude : float
+            Amplitude of the noise input. Default is 15.
+
+        Returns
+        -------
+        ndarray
+            The generated noise input signal after filtering and scaling.
+        """
         assert Nx != 0, "N units not set, aborting..."
         assert N_tp is not None, "N timepoints not set, aborting..."
         Input = (np.random.multivariate_normal(np.zeros([Nx]), np.eye(Nx), N_tp)).T
 
         # Get gaussian filter, apply
         w = self._gaussian_filter()
-        A = 15  # Deneve project was 2000, from their Learning.py file
+        A = amplitude  # Deneve project was 2000, from their Learning.py file
         for d in np.arange(Nx):
             Input[d, :] = A * np.convolve(Input[d, :], w, "same")
 
         return Input
 
-    def create_quadratic_oscillation_input(self, Nx=0, N_tp=None, N_cycles=0):
+    def create_quadratic_oscillation_input(
+        self, Nx=0, N_tp=None, N_cycles=0, amplitude=5.0
+    ):
         """
-        Creates analog oscillatory input
+        Create analog oscillatory input for a specified number of units, timepoints, and cycles.
 
-        :param Nx: int, number of units
-        :param N_tp: int, number of time points
-        :param N_cycles: int, float or list of ints or floats, number of oscillatory cycles. Scalar value creates a quadratic pair. List enables assigning distinct frequencies to distinct channels. Every 1,3,5... unit will be sine and 2,4,6... will be cosine transformed.
+        Parameters
+        ----------
+        Nx : int
+            Number of units. Must be non-zero.
+        N_tp : int
+            Number of time points. Must be specified.
+        N_cycles : int, float, or list
+            Number of oscillatory cycles. Scalar for quadratic pair, list for distinct frequencies.
+        amplitude : float
+            Amplitude of the oscillatory input. Default is 5.
+
+        Returns
+        -------
+        ndarray
+            The generated oscillatory input signal.
         """
 
         assert Nx != 0, "N units not set, aborting..."
@@ -867,7 +968,7 @@ class AnalogInput:
         assert N_tp is not None, "N timepoints not set, aborting..."
 
         tp_vector = np.arange(N_tp)
-        A = 5  # Deneve project was 2000, from their Learning.py file
+        A = amplitude  # Deneve project was 2000, from their Learning.py file
 
         if isinstance(N_cycles, int) or isinstance(N_cycles, float):
             # frequency, this gives N_cycles over all time points
@@ -900,7 +1001,23 @@ class AnalogInput:
 
         return Input
 
-    def create_step_input(self, Nx=0, N_tp=None):
+    def create_step_input(self, Nx=0, N_tp=None, amplitude=5.0):
+        """
+        Create a step function input for simulated current injection.
+
+        Parameters
+        ----------
+        Nx : int
+            Number of units. Must be non-zero.
+        N_tp : int
+            Number of time points. Must be specified.
+
+        Returns
+        -------
+        ndarray
+            The generated step function input signal after amplification.
+        """
+
         assert Nx != 0, "N units not set, aborting..."
         assert N_tp is not None, "N timepoints not set, aborting..."
 
@@ -919,7 +1036,7 @@ class AnalogInput:
         )
         Input = np.tile(Input.T, (Nx, 1))
 
-        A = 5  # Amplification, Units = ?
+        A = amplitude
         Input = A * Input
 
         minI = np.min(Input)
@@ -928,7 +1045,7 @@ class AnalogInput:
         print(f"maxI = {maxI}")
         return Input
 
-    def get_dummy_coordinates(self, Nx=0):
+    def _get_dummy_coordinates(self, Nx=0):
         # Create dummy coordinates for CxSystem format video input.
 
         assert Nx != 0, "N units not set, aborting..."
@@ -946,7 +1063,7 @@ class AnalogInput:
 
         return w_coord, z_coord
 
-    def get_real_coordinates(self, Nx=0):
+    def _get_real_coordinates(self, Nx=0):
         # For realistic coordinates, we use Macaque retina module
 
         assert Nx != 0, "N units not set, aborting..."
@@ -960,7 +1077,7 @@ class AnalogInput:
         Nmosaic_units = w_coord.size
         assert (
             Nx <= Nmosaic_units
-        ), "Too few units in mosaic, increase ecc and / or sector limits in get_real_coordinates method"
+        ), "Too few units in mosaic, increase ecc and / or sector limits in _get_real_coordinates method"
         idx = np.random.choice(Nmosaic_units, size=Nx, replace=False)
         w_coord, z_coord = w_coord[idx], z_coord[idx]
 
