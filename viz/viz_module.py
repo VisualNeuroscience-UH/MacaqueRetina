@@ -20,7 +20,6 @@ import brian2.units as b2u
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.patches import Ellipse, Polygon
-import matplotlib.path as mplPath
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 import seaborn as sns
@@ -1104,6 +1103,23 @@ class Viz:
                     ha="left",
                     color="k",
                 )
+            elif self.context.my_retina["dd_regr_model"] == "loglog":
+                pdb.set_trace()
+                a = fit_parameters["a"]
+                b = fit_parameters["b"]
+                fitted_y = a * np.power(
+                    data_all_x, b
+                )  # Calculate the fitted values using the power law relationship
+                ax.plot(
+                    data_all_x, fitted_y, "k--", label="Log-log fit"
+                )  # Plot the fitted curve
+                ax.annotate(
+                    f"{dd_model_caption}: \nD={a:.2f} * E^{b:.2f}",
+                    xycoords="axes fraction",
+                    xy=(0.5, 0.15),
+                    ha="left",
+                    color="k",
+                )
 
         plt.title(title)
 
@@ -1719,16 +1735,6 @@ class Viz:
             boundary_polygon = self.boundary_polygon(
                 ecc_lim_mm, polar_lim_deg, um_per_pix=um_per_pix, sidelen=sidelen
             )
-            boundary_polygon_path = mplPath.Path(boundary_polygon)
-            retina_shape = reference_retina.shape
-            Y, X = np.meshgrid(
-                np.arange(retina_shape[0]),
-                np.arange(retina_shape[1]),
-                indexing="ij",
-            )  # y, x
-            boundary_points = np.vstack((X.flatten(), Y.flatten())).T  # x,y
-            inside_boundary = boundary_polygon_path.contains_points(boundary_points)
-            boundary_mask = inside_boundary.reshape(retina_shape)
 
             # Initialize the plot before the loop
             fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(10, 5))
@@ -1746,8 +1752,6 @@ class Viz:
                 "ax2": ax2,
                 "ax3": ax3,
                 "boundary_polygon": boundary_polygon,
-                "boundary_mask": boundary_mask,
-                "boundary_polygon_path": boundary_polygon_path,
             }
 
         else:

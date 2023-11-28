@@ -172,7 +172,7 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 
 # For "load_model" training_mode, the model is loaded from model_file_name at output_folder (primary)
 # or input_folder. The correct model name (including time stamp) must be given in the model_file_name.
-gc_type = "parasol"
+gc_type = "midget"
 response_type = "on"
 
 # VAE RF is generated in experimental data space originating from macaque peripheral retina.
@@ -191,15 +191,15 @@ my_retina = {
     "gc_type": gc_type,
     "response_type": response_type,
     "ecc_limits_deg": [4.5, 5.5],  # eccentricity in degrees
-    "pol_limits_deg": [-15, 15],  # polar angle in degrees
+    "pol_limits_deg": [-5, 5],  # polar angle in degrees
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
-    "dd_regr_model": "linear",  # linear, quadratic, cubic, exponential TODO: midget central 8-10 deg flat, see Goodchild_1996_JCompNeurol + 1 dataset for dd vs ecc
+    "dd_regr_model": "quadratic",  # linear, quadratic, cubic, loglog. For midget < 20 deg, use quadratic; for parasol use loglog
     "visual_field_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
     "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
-    "DoG_model": "ellipse_independent",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
+    "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models. Note that ellipse fit does not tolearate VAE adjustments => fit to nonadjusted generated rfs
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
     "model_file_name": None,  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[DEVICE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only
@@ -392,12 +392,12 @@ gc_placement_params = {
 
 # For VAE, this is enough to have good distribution between units.
 rf_repulsion_params = {
-    "n_iterations": 2000,
-    "change_rate": 0.05,
+    "n_iterations": 500,
+    "change_rate": 0.01,
     "cooling_rate": 0.999,  # each iteration change_rate = change_rate * cooling_rate
     "border_repulsion_stength": 5,
-    "show_repulsion_progress": True,  # True False
-    "show_skip_steps": 50,
+    "show_repulsion_progress": False,  # True False
+    "show_skip_steps": 10,
 }
 
 
@@ -455,17 +455,28 @@ elif my_retina["gc_type"] == "midget":
     dendr_diam2_fullpath = (
         literature_data_folder / "Watanabe_1989_JCompNeurol_MidgetDendrDiam_Fig7_c.npz"
     )
+    dendr_diam3_fullpath = (
+        literature_data_folder
+        / "Goodchild_1996_JCompNeurol_Midget_DendDiam_Fig2B_c.npz"
+    )
     temporal_BK_model_fullpath = (
         literature_data_folder / "Benardete_1997_VisNeurosci_midget.csv"
     )
     spatial_DoG_fullpath = (
         literature_data_folder / "Schottdorf_2021_JPhysiol_CenRadius_Fig4C_midget_c.npz"
     )
+dendr_diam_units = {
+    "data1": ["mm", "um"],
+    "data2": ["mm", "um"],
+    "data3": ["deg", "um"],
+}
+
 literature_data_files = {
     "gc_density_fullpath": gc_density_fullpath,
     "dendr_diam1_fullpath": dendr_diam1_fullpath,
     "dendr_diam2_fullpath": dendr_diam2_fullpath,
     "dendr_diam3_fullpath": dendr_diam3_fullpath,
+    "dendr_diam_units": dendr_diam_units,
     "temporal_BK_model_fullpath": temporal_BK_model_fullpath,
     "spatial_DoG_fullpath": spatial_DoG_fullpath,
 }
@@ -549,6 +560,9 @@ if __name__ == "__main__":
     Build and test your retina here, one gc type at a time. Temporal hemiretina of macaques.
     """
 
+    # TÄHÄN JÄIT: RAKENNA FIGURE 2 GOODCHILD 1996 JCOMPNEUROL ANALYYSI JA VISUALISOINTI
+    # iMPLEMENT GAP JUNCTIONS, SORRY
+
     PM.construct_retina.build()  # Main method for building the retina
 
     # The following visualizations are dependent on the ConstructRetina instance.
@@ -573,7 +587,7 @@ if __name__ == "__main__":
     # PM.viz.show_latent_tsne_space()
     # PM.viz.show_gen_spat_post_hist()
     # PM.viz.show_latent_space_and_samples()
-    # PM.viz.show_retina_img(savefigname=None)
+    PM.viz.show_retina_img(savefigname=None)
     # PM.viz.show_rf_imgs(n_samples=10, savefigname="parasol_on_vae_gen_rf.eps")
     # PM.viz.show_rf_violinplot()  # Pixel values for each unit
 

@@ -624,6 +624,13 @@ class Fit(RetinaMath):
 
             for i in bad_idx_for_spatial_fit:
                 good_mask[i] = 0
+        elif mark_outliers_bad == False:
+            # We need this check for failed fit in the case when
+            # initialize is called with mark_outliers_bad=False
+            self.nan_idx = fits_df[fits_df.isna().any(axis=1)].index.values
+            if len(self.nan_idx) > 0:
+                good_mask = np.where(good_mask)[0] != self.nan_idx
+                good_mask = good_mask.astype(int)
 
         good_mask_df = pd.DataFrame(good_mask, columns=["good_filter_data"])
 

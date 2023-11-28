@@ -1,16 +1,15 @@
 # Numerical
 import numpy as np
 import numpy.ma as ma
-import scipy.optimize as opt
+import matplotlib.path as mplPath
 
-# import scipy.io as sio
+
 import scipy.stats as stats
-from scipy.optimize import root
-import pandas as pd
+import scipy.optimize as opt
 from scipy import ndimage
 from scipy.spatial import Voronoi, voronoi_plot_2d
 from scipy.interpolate import griddata
-
+import pandas as pd
 import torch
 import torch.nn.functional as F
 
@@ -345,13 +344,18 @@ class ConstructRetina(RetinaMath):
         dendr_diam3 = self.data_io.get_data(
             self.context.literature_data_files["dendr_diam3_fullpath"]
         )
+        dendr_diam_units = self.context.literature_data_files["dendr_diam_units"]
+        deg_per_mm = self.context.my_retina["deg_per_mm"]
 
         # Quality control. Datasets separately for visualization
+        assert dendr_diam_units["data1"] == ["mm", "um"]
         data_set_1_x = np.squeeze(dendr_diam1["Xdata"])
         data_set_1_y = np.squeeze(dendr_diam1["Ydata"])
+        assert dendr_diam_units["data2"] == ["mm", "um"]
         data_set_2_x = np.squeeze(dendr_diam2["Xdata"])
         data_set_2_y = np.squeeze(dendr_diam2["Ydata"])
-        data_set_3_x = np.squeeze(dendr_diam3["Xdata"])
+        assert dendr_diam_units["data3"] == ["deg", "um"]
+        data_set_3_x = np.squeeze(dendr_diam3["Xdata"]) / deg_per_mm
         data_set_3_y = np.squeeze(dendr_diam3["Ydata"])
 
         # Both datasets together
@@ -412,6 +416,41 @@ class ConstructRetina(RetinaMath):
                 "constant": fit_parameters[0],
                 "lamda": fit_parameters[1],
             }
+        elif dd_regr_model == "loglog":
+            # Define the model function for the power law relationship
+            # Note that we're fitting the log of the function, so we need to use the linear form
+            def loglog_func(log_E, log_a, b):
+                return log_a + b * log_E
+
+            # Fit the model function to the log-log transformed data
+            # The initial guess p0 is set to [1, 1], which corresponds to log(a) and b respectively
+            log_x = np.log10(data_all_x)
+            log_y = np.log10(data_all_y)
+            fit_parameters, pcov = opt.curve_fit(loglog_func, log_x, log_y, p0=[1, 1])
+
+            # Transform back the log_a to a
+            a = 10 ** fit_parameters[0]
+
+            # The parameter b remains the same
+            b = fit_parameters[1]
+
+            # Save the parameters
+            dendr_diam_parameters[dict_key] = {
+                "a": a,
+                "b": b,
+            }
+        # plt.plot(data_all_x, data_all_y, ".")
+        # # plot a regression line a*E**b
+        # # plt.lplot(data_all_x, a * np.power(data_all_x, b), "-")
+        # plt.plot(
+        #     data_all_x,
+        #     fit_parameters[2]
+        #     + fit_parameters[1] * data_all_x
+        #     + fit_parameters[0] * data_all_x**2,
+        #     "-",
+        # )
+        # plt.show()
+        # pdb.set_trace()
 
         dd_model_caption = f"All data {dd_regr_model} fit"
 
@@ -450,7 +489,7 @@ class ConstructRetina(RetinaMath):
             # For a linear equation, we can solve directly
             # y = mx + c => x = (y - c) / m
             return (dd - params["intercept"]) / params["slope"]
-        else:
+        elif dd_regr_model in ["quadratic", "cubic"]:
             # For quadratic and cubic equations, we need to solve numerically
             # Set up the polynomial equation
             def equation(x):
@@ -472,7 +511,14 @@ class ConstructRetina(RetinaMath):
 
             # Solve the equation numerically and return the root
             # We use 1 as the initial guess
-            return root(equation, 1).x[0]
+            return opt.root(equation, 1).x[0]
+
+        elif dd_regr_model == "loglog":
+            # For the loglog (power law) model, we can solve directly using the inversion
+            # D = aE^b => E = (D/a)^(1/b)
+            a = params["a"]
+            b = params["b"]
+            return np.power(dd / a, 1 / b)
 
     def _generate_DoG_with_rf_coverage_one(self):
         """
@@ -623,6 +669,10 @@ class ConstructRetina(RetinaMath):
         elif dd_regr_model == "exponential":
             lit_cen_diameter_um = diam_fit_params["constant"] + np.exp(
                 gc_eccentricity / diam_fit_params["lamda"]
+            )
+        elif dd_regr_model == "loglog":
+            lit_cen_diameter_um = diam_fit_params["a"] * np.power(
+                gc_eccentricity, diam_fit_params["b"]
             )
 
         # Create all gc units from parameters fitted to experimental data
@@ -1506,6 +1556,9 @@ class ConstructRetina(RetinaMath):
         -----
         gc_pos_ecc_mm is expected to be slightly different each time, because of placement optimization process.
         """
+
+        # TODO: implement Log-log line estimate of parameters: D = 12.25 * np.power(E, 0.757), from Goodchild et al. 1996 J Comp Neurol
+
         key = list(lit_dd_vs_ecc_params.keys())[0]
         parameters = lit_dd_vs_ecc_params[key]
         if self.context.my_retina["dd_regr_model"] in ["linear", "quadratic", "cubic"]:
@@ -1522,6 +1575,13 @@ class ConstructRetina(RetinaMath):
             lit_dd_at_gc_ecc_um = parameters.get("constant", 0) + np.exp(
                 gc_pos_ecc_mm / parameters.get("lamda", 0)
             )
+        elif self.context.my_retina["dd_regr_model"] == "loglog":
+            # Calculate dendritic diameter from the power law relationship
+            # D = a * E^b, where E is the eccentricity and D is the dendritic diameter
+            a = parameters["a"]
+            b = parameters["b"]
+            # Convert mm to um by multiplying by 1000
+            lit_dd_at_gc_ecc_um = a * np.power(gc_pos_ecc_mm * 1000, b)
         else:
             raise ValueError(
                 f"Unknown dd_regr_model: {self.context.my_retina['dd_regr_model']}"
@@ -1617,13 +1677,15 @@ class ConstructRetina(RetinaMath):
         xoc_mm = gc_vae_df_in.xoc_pix * um_per_pix / 1000
         yoc_mm = gc_vae_df_in.yoc_pix * um_per_pix / 1000
         rf_lu_mm = updated_rf_lu_pix * um_per_pix / 1000
-        x_mm = ret_lu_mm[0] + rf_lu_mm[0] + xoc_mm
-        y_mm = ret_lu_mm[1] - rf_lu_mm[1] - yoc_mm
+        # TÄSSÄ ON VIRHE
+        # testattu yksittäin eikä selvää syyllistä ole löytynyt
+        # TÄHÄN JÄIT
+        x_mm = ret_lu_mm[0] + rf_lu_mm[:, 0] + xoc_mm
+        y_mm = ret_lu_mm[1] - rf_lu_mm[:, 1] - yoc_mm
         (pos_ecc_mm, pos_polar_deg) = self.cart2pol(x_mm, y_mm)
 
         gc_vae_df["pos_ecc_mm"] = pos_ecc_mm
         gc_vae_df["pos_polar_deg"] = pos_polar_deg
-
         # These values come from _place_gc_units before _create_spatial_rfs in build()
         # They are independent from FIT.
         gc_vae_df["ecc_group_idx"] = self.gc_df["ecc_group_idx"]
@@ -1783,47 +1845,66 @@ class ConstructRetina(RetinaMath):
         max_y_mm_im = max_y_mm + pad_size_y_mm
 
         # Get retina image size in pixels
-        img_size_x = int(np.ceil((max_x_mm_im - min_x_mm_im) * 1000 / gc_um_per_pix))
-        img_size_y = int(np.ceil((max_y_mm_im - min_y_mm_im) * 1000 / gc_um_per_pix))
+        ret_pix_x = int(np.ceil((max_x_mm_im - min_x_mm_im) * 1000 / gc_um_per_pix))
+        ret_pix_y = int(np.ceil((max_y_mm_im - min_y_mm_im) * 1000 / gc_um_per_pix))
 
-        ret_img = np.zeros((img_size_y, img_size_x))
+        ret_img_pix = np.zeros((ret_pix_y, ret_pix_x))
 
         # Prepare numpy nd array to hold left upeer corner pixel coordinates for each rf image
         rf_lu_pix = np.zeros((rf_img.shape[0], 2), dtype=int)
 
         pos_ecc_mm = df["pos_ecc_mm"].values
         pos_polar_deg = df["pos_polar_deg"].values
-
+        # OUDON PIENI MAX 4.39
+        # pdb.set_trace()
         # Locate left upper corner of each rf img and lay images onto retina image
+        x_mm, y_mm = self.pol2cart(
+            pos_ecc_mm.astype(np.float64),
+            pos_polar_deg.astype(np.float64) - rot_angle_deg,
+            deg=True,
+        )
+        y_pix_c = (np.round((max_y_mm_im - y_mm) * 1000 / gc_um_per_pix)).astype(
+            np.int64
+        )
+        x_pix_c = (np.round((x_mm - min_x_mm_im) * 1000 / gc_um_per_pix)).astype(
+            np.int64
+        )
         for i, row in df.iterrows():
-            # Get the position of the rf image in mm
-            x_mm, y_mm = self.pol2cart(
-                pos_ecc_mm[i], pos_polar_deg[i] - rot_angle_deg, deg=True
-            )
-
-            # Get the position of the rf center in pixels in the ecc scaled retina image
-            # y coordinate is flipped because the y starts from the top in the image
-            y_pix_c = int(np.round((max_y_mm_im - y_mm) * 1000 / gc_um_per_pix))
-            x_pix_c = int(np.round((x_mm - min_x_mm_im) * 1000 / gc_um_per_pix))
-
             # Get the position of the rf upper left corner in pixels
             # The xoc and yoc are the center of the rf image in the resampled data scale.
-            y_pix = y_pix_c - int(row.yoc_pix)
-            x_pix = x_pix_c - int(row.xoc_pix)
+            # TÄHÄN JÄIT: JOSTAIN SYYSTÄ MIDGET SOLULLA 295 Y JÄÄ NEGATIIVISEKSI. OLIT TEKEMÄSSÄ
+            # LOGLOG  dd_regr_model KUN ALOIT TÖRMÄÄNÄÄN NESTED ERRORS. hae pdb.set_trace()
+            # KS MYÖS YLLÄ OUDON PIENI MAX 4.39
+            y_pix_lu = y_pix_c[i] - int(row.yoc_pix)
+            x_pix_lu = x_pix_c[i] - int(row.xoc_pix)
 
             # Get the rf image
             this_rf_img = rf_img[i, :, :]
             # Lay the rf image onto the retina image
-            ret_img[
-                y_pix : y_pix + this_rf_img.shape[0],
-                x_pix : x_pix + this_rf_img.shape[1],
+            ret_img_pix[
+                y_pix_lu : y_pix_lu + this_rf_img.shape[0],
+                x_pix_lu : x_pix_lu + this_rf_img.shape[1],
             ] += this_rf_img
-
             # Store the left upper corner pixel coordinates and width and height of each rf image.
             # The width and height are necessary because some are cut off at the edges of the retina image.
-            rf_lu_pix[i, :] = [x_pix, y_pix]
+            rf_lu_pix[i, :] = [x_pix_lu, y_pix_lu]
 
-        return ret_img, rf_lu_pix, (min_x_mm_im, max_y_mm_im)
+        # plt.plot(
+        #     min_x_mm_im + (x_pix_c) * gc_um_per_pix / 1000,
+        #     max_y_mm_im - (y_pix_c) * gc_um_per_pix / 1000,
+        #     "o",
+        # )
+
+        # plt.plot(x_mm, y_mm, "o")
+        # print(f"min_x_mm_im: {min_x_mm_im}")
+        # print(f"max_x_mm_im: {max_x_mm_im}")
+        # print(f"min_y_mm_im: {min_y_mm_im}")
+        # print(f"max_y_mm_im: {max_y_mm_im}")
+        # # TOISELLA KERRALLA VÄÄRÄ SIIRTYMÄ X JA Y SUUNNISSA
+        # plt.show()
+
+        # pdb.set_trace()
+        return ret_img_pix, rf_lu_pix, (min_x_mm_im, max_y_mm_im)
 
     def _get_vae_rfs_with_good_fits(self, retina_vae, nsamples):
         """
@@ -1953,8 +2034,21 @@ class ConstructRetina(RetinaMath):
         rfs_mask = np.array(img_rfs_mask, dtype=bool)
 
         # Compute boundary effect
-        boundary_mask = fig_args["boundary_mask"]  # x, y
-        boundary_polygon_path = fig_args["boundary_polygon_path"]  # x, y
+        boundary_polygon = self.viz.boundary_polygon(
+            self.ecc_lim_mm,
+            self.polar_lim_deg,
+            um_per_pix=new_um_per_pix,
+            sidelen=H,
+        )
+        boundary_polygon_path = mplPath.Path(boundary_polygon)  # x, y
+        Y, X = np.meshgrid(
+            np.arange(img_ret_shape[0]),
+            np.arange(img_ret_shape[1]),
+            indexing="ij",
+        )  # y, x
+        boundary_points = np.vstack((X.flatten(), Y.flatten())).T  # x,y
+        inside_boundary = boundary_polygon_path.contains_points(boundary_points)
+        boundary_mask = inside_boundary.reshape(img_ret_shape)  # x, y
         retina_boundary_effect = np.where(boundary_mask, 0, border_repulsion_stength)
 
         # Rigid body matrix
@@ -2038,7 +2132,8 @@ class ConstructRetina(RetinaMath):
 
             # Normalize the net torque and net_forces to about matching effects
             net_torque = np.pi * net_torque / np.max(np.abs(net_torque))
-            net_force_y = 50 * net_force_y / np.max(np.abs(net_force_y))  # 50 from hat
+            # With 0.01 change rate, 50 should result in 0.5 pix / iteration
+            net_force_y = 50 * net_force_y / np.max(np.abs(net_force_y))
             net_force_x = 50 * net_force_x / np.max(np.abs(net_force_x))
 
             # Loop based update
@@ -2114,8 +2209,9 @@ class ConstructRetina(RetinaMath):
             # Reshape to 2D
             updated_img_rfs[i, ...] = resampled_values.reshape(H, W)
 
-        # update corner points
-        updated_rf_lu_pix = np.array([Xout[:, 0, 0], Yout[:, 0, 0]], dtype=int)  # x, y
+        updated_rf_lu_pix = np.array(
+            [Xout[:, 0, 0], Yout[:, 0, 0]], dtype=int
+        ).T  # x, y
 
         new_retina = np.zeros(img_ret_shape)
         final_retina = np.zeros(img_ret_shape)
@@ -2273,7 +2369,8 @@ class ConstructRetina(RetinaMath):
 
                 # 7) Update idx_to_process for the loop
                 idx_to_process = np.setdiff1d(idx_to_process, good_idx_generated)
-                print(f"bad fits: {idx_to_process}")
+                print(f"bad fits to replace by new RF:s: {idx_to_process}")
+
                 if len(idx_to_process) > 0:
                     for this_miss in idx_to_process:
                         # Get next possible replacement index
@@ -2295,7 +2392,8 @@ class ConstructRetina(RetinaMath):
             # 8) Get center masks for the generated spatial rfs
             # Mask threshold is relative to max value in the image
             img_rfs_mask = self.get_rf_masks(img_rfs, mask_threshold=0.1)
-
+            # plt.hist(gc_vae_df_temp.yoc_pix.values)
+            # plt.show()
             # 9) Sum separate rf images onto one retina for visualization
             # Uses pos_ecc_mm, pos_polar_deg
             img_ret, rf_lu_pix, ret_lu_mm = self._get_full_retina_with_rf_images(
@@ -2330,13 +2428,30 @@ class ConstructRetina(RetinaMath):
                 new_um_per_pix=new_um_per_pix,
                 mark_outliers_bad=False,
             )
+
             (
                 self.gen_stat_df,
                 self.gen_spat_cen_sd,
                 self.gen_spat_sur_sd,
                 gc_vae_df,
-                _,
+                good_idx_generated,
             ) = self.fit.get_generated_spatial_fits(DoG_model)
+            # plt.hist(rf_lu_pix.flatten())
+            # plt.hist(updated_rf_lu_pix.flatten())
+            # plt.show()
+            # # xoc yoc tuntuu olevan samat ja lu pix samoin
+
+            # pdb.set_trace()
+            # We need this check for failed fits in the case when
+            # initialize is called with mark_outliers_bad=False
+            if len(self.fit.nan_idx) > 0:
+                pdb.set_trace()  # Tarkista good_idx_generated toiminta kun saavuttaa tämän
+                gc_vae_df = gc_vae_df.drop(self.fit.nan_idx).reset_index(drop=True)
+                self.gc_df = self.gc_df.drop(self.fit.nan_idx).reset_index(drop=True)
+
+                img_rfs_final = img_rfs_final[good_idx_generated, :, :]
+                updated_rf_lu_pix = updated_rf_lu_pix[good_idx_generated, :]
+                print(f"Removed units {self.fit.nan_idx} with failed fits")
 
             # 12) Update gc_vae_df to have the same columns as gc_df and to mm, where applicable
             self.gc_vae_df = self._update_gc_vae_df(
@@ -2344,6 +2459,7 @@ class ConstructRetina(RetinaMath):
             )
 
             # 13) Get final center masks for the generated spatial rfs
+            # pdb.set_trace()
             mask_th = self.context.my_retina["center_mask_threshold"]
             img_rfs_final_mask = self.get_rf_masks(
                 img_rfs_final, mask_threshold=mask_th

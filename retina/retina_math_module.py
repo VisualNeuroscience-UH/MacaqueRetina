@@ -174,8 +174,12 @@ class RetinaMath:
         else:
             theta = phi
 
-        x = radius * np.cos(theta)  # radians fed here
-        y = radius * np.sin(theta)
+        try:
+            x = radius * np.cos(theta)  # radians fed here
+            y = radius * np.sin(theta)
+        except:
+            print("Error in pol2cart")
+            pdb.set_trace()
         return (x, y)
 
     def cart2pol(self, x, y, deg=True):
