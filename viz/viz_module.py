@@ -1397,37 +1397,34 @@ class Viz:
         """
         Plot the outputs of the autoencoder.
         """
+        retina_vae = self.project_data.construct_retina["retina_vae"]
         assert (
             self.construct_retina.spatial_model == "VAE"
         ), "Only model type VAE is supported for show_gen_exp_spatial_rf()"
         if ds_name == "train_ds":
-            ds = self.construct_retina.retina_vae.train_loader.dataset
+            ds = retina_vae.train_loader.dataset
         elif ds_name == "valid_ds":
-            ds = self.construct_retina.retina_vae.val_loader.dataset
+            ds = retina_vae.val_loader.dataset
         else:
-            ds = self.construct_retina.retina_vae.test_loader.dataset
+            ds = retina_vae.test_loader.dataset
 
         plt.figure(figsize=(16, 4.5))
 
-        vae = self.construct_retina.retina_vae.vae
+        vae = retina_vae.vae
         vae.eval()
         len_ds = len(ds)
         samples = np.random.choice(len_ds, n_samples, replace=False)
 
         for pos_idx, sample_idx in enumerate(samples):
             ax = plt.subplot(2, len(samples), pos_idx + 1)
-            img = (
-                ds[sample_idx][0]
-                .unsqueeze(0)
-                .to(self.construct_retina.retina_vae.device)
-            )
+            img = ds[sample_idx][0].unsqueeze(0).to(retina_vae.device)
             plt.imshow(img.cpu().squeeze().numpy(), cmap="gist_gray")
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
             ax.text(
                 0.05,
                 0.85,
-                self.construct_retina.retina_vae.apricot_data.data_labels2names_dict[
+                retina_vae.apricot_data.data_labels2names_dict[
                     ds[sample_idx][1].item()
                 ],
                 fontsize=10,
@@ -1453,15 +1450,12 @@ class Viz:
             self._figsave(figurename=savefigname)
 
     def show_latent_tsne_space(self):
-        train_df = self.construct_retina.retina_vae.get_encoded_samples(
-            dataset=self.construct_retina.retina_vae.train_loader.dataset
+        retina_vae = self.project_data.construct_retina["retina_vae"]
+        train_df = retina_vae.get_encoded_samples(
+            dataset=retina_vae.train_loader.dataset
         )
-        valid_df = self.construct_retina.retina_vae.get_encoded_samples(
-            dataset=self.construct_retina.retina_vae.val_loader.dataset
-        )
-        test_df = self.construct_retina.retina_vae.get_encoded_samples(
-            dataset=self.construct_retina.retina_vae.test_loader.dataset
-        )
+        valid_df = retina_vae.get_encoded_samples(dataset=retina_vae.val_loader.dataset)
+        test_df = retina_vae.get_encoded_samples(dataset=retina_vae.test_loader.dataset)
 
         # Add a column to each df with the dataset name
         train_df["dataset"] = "train"

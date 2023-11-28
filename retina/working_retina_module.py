@@ -1274,9 +1274,7 @@ class WorkingRetina(RetinaMath):
         # Create w_coord, z_coord for cortical and visual coordinates, respectively
         z_coord = self.gc_df["x_deg"].values + 1j * self.gc_df["y_deg"].values
 
-        visual2cortical_params = self.context.my_retina_options[
-            "visual2cortical_params"
-        ]
+        visual2cortical_params = self.context.my_retina["visual2cortical_params"]
         a = visual2cortical_params["a"]
         k = visual2cortical_params["k"]
         w_coord = k * np.log(z_coord + a)

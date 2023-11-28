@@ -59,7 +59,7 @@ class Fit(RetinaMath):
         fit_type="experimental",  # "experimental", "generated"
         DoG_model="ellipse_fixed",  # "ellipse_independent", "ellipse_fixed", "circular"
         spatial_data=None,
-        new_um_per_pix=None,
+        um_per_pix=None,
         mark_outliers_bad=True,
     ):
         """
@@ -77,21 +77,21 @@ class Fit(RetinaMath):
             The fit type, can be either 'experimental', 'generated' or "concentric_rings". Default is 'experimental'.
         spatial_data : array_like, optional
             The spatial data. Default is None.
-        new_um_per_pix : float, optional
+        um_per_pix : float, optional
             The new micrometers per pixel value, required when fit_type is 'generated'.
             Default is None.
 
         Raises
         ------
         AssertionError
-            If fit_type is 'generated' and new_um_per_pix is not provided.
+            If fit_type is 'generated' and um_per_pix is not provided.
         AssertionError
             If fit_type is 'generated' and spatial_data is not provided.
         """
 
         assert (
-            fit_type == "experimental" or new_um_per_pix is not None
-        ), "If fit_type is 'generated', new_um_per_pix must be provided"
+            fit_type == "experimental" or um_per_pix is not None
+        ), "If fit_type is 'generated', um_per_pix must be provided"
         assert (
             fit_type == "experimental" or spatial_data is not None
         ), "If fit_type is 'generated', spatial_data must be provided"
@@ -631,6 +631,7 @@ class Fit(RetinaMath):
             if len(self.nan_idx) > 0:
                 good_mask = np.where(good_mask)[0] != self.nan_idx
                 good_mask = good_mask.astype(int)
+                print(f"Removed units {self.nan_idx} with failed fits")
 
         good_mask_df = pd.DataFrame(good_mask, columns=["good_filter_data"])
 
@@ -1161,6 +1162,7 @@ class Fit(RetinaMath):
             axis=0,
         )
 
+        # Save data to project_data for vizualization
         self.project_data.fit["gen_spat_filt"] = self.gen_spat_filt
         self.project_data.fit["gen_spat_stat"] = gen_spat_stat
 
