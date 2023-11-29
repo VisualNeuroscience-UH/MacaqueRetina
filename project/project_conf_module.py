@@ -89,6 +89,7 @@ full : full absolute path
 gc : ganglion cell
 gen : generated
 lit : literature
+mtx : matrix
 param : parameter
 sur : surround
 viz : visualization
@@ -192,13 +193,15 @@ my_retina = {
     "response_type": response_type,
     "ecc_limits_deg": [4.7, 5.3],  # eccentricity in degrees
     "pol_limits_deg": [-1, 1],  # polar angle in degrees
+    # "ecc_limits_deg": [15, 20],  # eccentricity in degrees
+    # "pol_limits_deg": [-3, 3],  # polar angle in degrees
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
-    "dd_regr_model": "quadratic",  # linear, quadratic, cubic, loglog. For midget < 20 deg, use quadratic; for parasol use loglog
+    "dd_regr_model": "linear",  # linear, quadratic, cubic, loglog. For midget < 20 deg, use quadratic; for parasol use loglog
     "visual_field_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
-    "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder
+    "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies both to FIT and VAE models. Note that ellipse fit does not tolearate VAE adjustments => fit to nonadjusted generated rfs
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
@@ -396,7 +399,7 @@ rf_repulsion_params = {
     "change_rate": 0.01,
     "cooling_rate": 0.999,  # each iteration change_rate = change_rate * cooling_rate
     "border_repulsion_stength": 5,
-    "show_repulsion_progress": False,  # True False
+    "show_repulsion_progress": True,  # True False
     "show_skip_steps": 10,
 }
 
@@ -573,7 +576,7 @@ if __name__ == "__main__":
     # in the retina mosaic building process.
 
     # For FIT and VAE
-    # PM.viz.show_DoG_model_fit(sample_list=[0, 1, 2], savefigname=None)
+    PM.viz.show_DoG_model_fit(sample_list=[3, 4, 5, 6, 7], savefigname=None)
     # PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)
 
     # For FIT (ellipse and DoG fits, temporal kernels and tonic drives)
@@ -621,8 +624,8 @@ if __name__ == "__main__":
     ####################################
 
     # # Load stimulus to get working retina, necessary for running cells
-    PM.working_retina.load_stimulus()
-    PM.working_retina.run_with_my_run_options()
+    # PM.working_retina.load_stimulus()
+    # PM.working_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
@@ -669,7 +672,7 @@ if __name__ == "__main__":
     ################################################
 
     # Based on my_run_options above
-    PM.viz.show_all_gc_responses(savefigname=None)
+    # PM.viz.show_all_gc_responses(savefigname=None)
 
     # PM.viz.show_stimulus_with_gcs(
     #     example_gc=39,  # or my_run_options["cell_index"]
