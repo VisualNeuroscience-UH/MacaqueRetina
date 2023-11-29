@@ -1572,7 +1572,8 @@ class ConstructRetina(RetinaMath):
                 f"Unknown dd_regr_model: {self.context.my_retina['dd_regr_model']}"
             )
 
-        # Assuming the experimental data reflects the eccentricity for VAE generation
+        # Assuming the experimental data reflects the eccentricity for
+        # VAE mtx generation
         gc_scaling_factors = lit_dd_at_gc_ecc_um / exp_dd_um
         gc_um_per_pix = gc_scaling_factors * exp_um_per_pix
 
@@ -1581,7 +1582,7 @@ class ConstructRetina(RetinaMath):
         max_um_per_pix = np.max(gc_um_per_pix)
 
         # Get new img stack sidelength whose pixel size = min(gc_um_per_pix),
-        new_sidelen = int((max_um_per_pix / min_um_per_pix) * exp_sidelen)
+        new_sidelen = int(np.round((max_um_per_pix / min_um_per_pix) * exp_sidelen))
 
         # Save scaling factors to gc_df for VAE model type
         self.gc_vae_df["gc_scaling_factors"] = gc_scaling_factors
@@ -1663,9 +1664,7 @@ class ConstructRetina(RetinaMath):
         xoc_mm = gc_vae_df_in.xoc_pix * um_per_pix / 1000
         yoc_mm = gc_vae_df_in.yoc_pix * um_per_pix / 1000
         rf_lu_mm = updated_rf_lu_pix * um_per_pix / 1000
-        # TÄSSÄ ON VIRHE
-        # testattu yksittäin eikä selvää syyllistä ole löytynyt
-        # TÄHÄN JÄIT
+
         x_mm = ret_lu_mm[0] + rf_lu_mm[:, 0] + xoc_mm
         y_mm = ret_lu_mm[1] - rf_lu_mm[:, 1] - yoc_mm
         (pos_ecc_mm, pos_polar_deg) = self.cart2pol(x_mm, y_mm)
@@ -1759,29 +1758,23 @@ class ConstructRetina(RetinaMath):
         polar_lim_deg = self.polar_lim_deg
 
         # First we need to get rotation angle of the mean meridian in degrees.
-        rot_angle_deg = np.mean(polar_lim_deg)
+        rot_deg = np.mean(polar_lim_deg)
 
         # Find corner coordinates of the retina image as [left upper, right_upper, left_lower, right lower]
         # Sector is now symmetrically around the horizontal meridian
-        sector_limits_mm = np.zeros((4, 2))
-        sector_limits_mm[0, :] = self.pol2cart(
-            ecc_lim_mm[0], polar_lim_deg[1] - rot_angle_deg, deg=True
-        )
-        sector_limits_mm[1, :] = self.pol2cart(
-            ecc_lim_mm[1], polar_lim_deg[1] - rot_angle_deg, deg=True
-        )
-        sector_limits_mm[2, :] = self.pol2cart(
-            ecc_lim_mm[0], polar_lim_deg[0] - rot_angle_deg, deg=True
-        )
-        sector_limits_mm[3, :] = self.pol2cart(
-            ecc_lim_mm[1], polar_lim_deg[0] - rot_angle_deg, deg=True
-        )
+        corners_mm = np.zeros((4, 2))
+        corners_mm[0, :] = self.pol2cart(ecc_lim_mm[0], polar_lim_deg[1] - rot_deg)
+        corners_mm[1, :] = self.pol2cart(ecc_lim_mm[0], polar_lim_deg[0] - rot_deg)
+        corners_mm[2, :] = self.pol2cart(ecc_lim_mm[1], polar_lim_deg[0] - rot_deg)
+        corners_mm[3, :] = self.pol2cart(ecc_lim_mm[1], polar_lim_deg[1] - rot_deg)
+
+        self.corners_mm = corners_mm
 
         # Get the max extent for rectangular image
-        min_x_mm = np.min(sector_limits_mm[:, 0])
-        max_x_mm = np.max(sector_limits_mm[:, 0])
-        min_y_mm = np.min(sector_limits_mm[:, 1])
-        max_y_mm = np.max(sector_limits_mm[:, 1])
+        min_x_mm = np.min(corners_mm[:, 0])
+        max_x_mm = np.max(corners_mm[:, 0])
+        min_y_mm = np.min(corners_mm[:, 1])
+        max_y_mm = np.max(corners_mm[:, 1])
 
         # Check for max hor extent
         if np.max(ecc_lim_mm) > max_x_mm:
@@ -1790,24 +1783,24 @@ class ConstructRetina(RetinaMath):
         # TODO: implement rotation
 
         # # Convert the rotation angle from degrees to radians
-        # theta_rad = np.radians(rot_angle_deg)
+        # theta_rad = np.radians(rot_deg)
 
         # # Find the max and min extents in rotated coordinates
         # max_x_mm_rot = np.max(
-        #     sector_limits_mm[:, 0] * np.cos(theta_rad)
-        #     - sector_limits_mm[:, 1] * np.sin(theta_rad)
+        #     corners_mm[:, 0] * np.cos(theta_rad)
+        #     - corners_mm[:, 1] * np.sin(theta_rad)
         # )
         # min_x_mm_rot = np.min(
-        #     sector_limits_mm[:, 0] * np.cos(theta_rad)
-        #     - sector_limits_mm[:, 1] * np.sin(theta_rad)
+        #     corners_mm[:, 0] * np.cos(theta_rad)
+        #     - corners_mm[:, 1] * np.sin(theta_rad)
         # )
         # max_y_mm_rot = np.max(
-        #     sector_limits_mm[:, 0] * np.sin(theta_rad)
-        #     + sector_limits_mm[:, 1] * np.cos(theta_rad)
+        #     corners_mm[:, 0] * np.sin(theta_rad)
+        #     + corners_mm[:, 1] * np.cos(theta_rad)
         # )
         # min_y_mm_rot = np.min(
-        #     sector_limits_mm[:, 0] * np.sin(theta_rad)
-        #     + sector_limits_mm[:, 1] * np.cos(theta_rad)
+        #     corners_mm[:, 0] * np.sin(theta_rad)
+        #     + corners_mm[:, 1] * np.cos(theta_rad)
         # )
 
         # # Rotate back to original coordinates to get max and min extents
@@ -1842,7 +1835,7 @@ class ConstructRetina(RetinaMath):
         # Locate left upper corner of each rf img and lay images onto retina image
         x_mm, y_mm = self.pol2cart(
             pos_ecc_mm.astype(np.float64),
-            pos_polar_deg.astype(np.float64) - rot_angle_deg,
+            pos_polar_deg.astype(np.float64) - rot_deg,
             deg=True,
         )
         y_pix_c = (np.round((max_y_mm_im - y_mm) * 1000 / um_per_pix)).astype(np.int64)
@@ -2048,7 +2041,6 @@ class ConstructRetina(RetinaMath):
 
         n_units, H, W = img_rfs.shape
         assert H == W, "RF must be square, aborting..."
-        img_ret_shape = (img_ret_shape[0], img_ret_shape[1])
 
         if show_repulsion_progress is True:
             # Init plotting
@@ -2063,6 +2055,21 @@ class ConstructRetina(RetinaMath):
         rf_positions = np.array(rf_lu_pix, dtype=float)
         rfs = np.array(img_rfs, dtype=float)
         rfs_mask = np.array(img_rfs_mask, dtype=bool)
+        masked_rfs = rfs * rfs_mask
+        sum_masked_rfs = np.sum(masked_rfs, axis=(1, 2))
+
+        # for i in range(n_units):
+        #     # Force goes downhill the gradient, thus -1
+        #     force_y[i] = -1 * grad_y[Yt[i], Xt[i]] * masked_rfs[i]
+        #     force_x[i] = -1 * grad_x[Yt[i], Xt[i]] * masked_rfs[i]
+
+        # # Centre of mass for all rfs in H, W coordinates
+        # com_y = np.sum(masked_rfs * Yt, axis=(1, 2)) / sum_masked_rfs
+        # com_x = np.sum(masked_rfs * Xt, axis=(1, 2)) / sum_masked_rfs
+        # com_y_mtx = np.tile(com_y, (H, W, 1)).transpose(2, 0, 1)
+        # com_x_mtx = np.tile(com_x, (H, W, 1)).transpose(2, 0, 1)
+
+        # radius_vec = np.stack([Yt - com_y_mtx, Xt - com_x_mtx], axis=-1)
 
         # Compute boundary effect
         boundary_polygon = self.viz.boundary_polygon(
@@ -2098,10 +2105,10 @@ class ConstructRetina(RetinaMath):
         original_retina = retina.copy()
 
         # Centre of mass for all rfs in H, W coordinates
-        centre_of_mass_y = np.sum(rfs * Y0, axis=(1, 2)) / np.sum(rfs, axis=(1, 2))
-        centre_of_mass_x = np.sum(rfs * X0, axis=(1, 2)) / np.sum(rfs, axis=(1, 2))
-        centre_of_mass_y_mtx = np.tile(centre_of_mass_y, (H, W, 1)).transpose(2, 0, 1)
-        centre_of_mass_x_mtx = np.tile(centre_of_mass_x, (H, W, 1)).transpose(2, 0, 1)
+        com_y = np.sum(rfs * Y0, axis=(1, 2)) / np.sum(rfs, axis=(1, 2))
+        com_x = np.sum(rfs * X0, axis=(1, 2)) / np.sum(rfs, axis=(1, 2))
+        com_y_mtx = np.tile(com_y, (H, W, 1)).transpose(2, 0, 1)
+        com_x_mtx = np.tile(com_x, (H, W, 1)).transpose(2, 0, 1)
 
         # Main optimization loop
         for iteration in range(n_iterations):
@@ -2151,9 +2158,13 @@ class ConstructRetina(RetinaMath):
                 force_y[i] = -1 * grad_y[Yt[i], Xt[i]] * rfs[i] * rfs_mask[i]
                 force_x[i] = -1 * grad_x[Yt[i], Xt[i]] * rfs[i] * rfs_mask[i]
 
-            radius_vec = np.stack(
-                [Yt - centre_of_mass_y_mtx, Xt - centre_of_mass_x_mtx], axis=-1
-            )
+            # Centre of mass for all rfs in H, W coordinates
+            com_y = np.sum(rfs * Yt, axis=(1, 2)) / np.sum(rfs, axis=(1, 2))
+            com_x = np.sum(rfs * Xt, axis=(1, 2)) / np.sum(rfs, axis=(1, 2))
+            com_y_mtx = np.tile(com_y, (H, W, 1)).transpose(2, 0, 1)
+            com_x_mtx = np.tile(com_x, (H, W, 1)).transpose(2, 0, 1)
+
+            radius_vec = np.stack([Yt - com_y_mtx, Xt - com_x_mtx], axis=-1)
 
             # Torque is computed as forces_y * radii_x - forces_x * radii_y
             torques = force_y * radius_vec[..., 1] - force_x * radius_vec[..., 0]
@@ -2210,19 +2221,17 @@ class ConstructRetina(RetinaMath):
                         **fig_args,
                     )
 
-        # Resample to rectangular H, W resolution around center of mass
+        # Resample to rectangular H, W resolution
         updated_img_rfs = np.zeros((n_units, H, W))
-        Yout = np.zeros((n_units, H, W), dtype=int)
-        Xout = np.zeros((n_units, H, W), dtype=int)
+        Yout = np.zeros((n_units, H, W), dtype=np.int32)
+        Xout = np.zeros((n_units, H, W), dtype=np.int32)
 
         for i in range(n_units):
-            com_homo = Mrb[i, ...] @ np.array(
-                [centre_of_mass_x[i], centre_of_mass_y[i], 1]
-            )
-            y_top = np.round(com_homo[1] - H / 2)
-            x_left = np.round(com_homo[0] - W / 2)
-            y_out = np.arange(y_top, y_top + H).round().astype(int)
-            x_out = np.arange(x_left, x_left + W).round().astype(int)
+            left_upper_coords = Mrb[i, ...] @ np.array([0, 0, 1])
+            y_top = np.round(left_upper_coords[1])
+            x_left = np.round(left_upper_coords[0])
+            y_out = np.arange(y_top, y_top + H).round().astype(np.int32)
+            x_out = np.arange(x_left, x_left + W).round().astype(np.int32)
             y_out_grid, x_out_grid = np.meshgrid(y_out, x_out, indexing="ij")
             Yout[i] = y_out_grid
             Xout[i] = x_out_grid
@@ -2241,7 +2250,7 @@ class ConstructRetina(RetinaMath):
             updated_img_rfs[i, ...] = resampled_values.reshape(H, W)
 
         updated_rf_lu_pix = np.array(
-            [Xout[:, 0, 0], Yout[:, 0, 0]], dtype=int
+            [Xout[:, 0, 0], Yout[:, 0, 0]], dtype=np.int32
         ).T  # x, y
 
         new_retina = np.zeros(img_ret_shape)
@@ -2249,6 +2258,7 @@ class ConstructRetina(RetinaMath):
         for i in range(n_units):
             new_retina[Yt[i], Xt[i]] += rfs[i]
             final_retina[Yout[i], Xout[i]] += updated_img_rfs[i]
+            # pdb.set_trace()
 
         if show_repulsion_progress is True:
             # Show one last time with the final interpolated result
@@ -2263,7 +2273,17 @@ class ConstructRetina(RetinaMath):
             )
             plt.ioff()  # Turn off interactive mode
 
-        return updated_img_rfs, updated_rf_lu_pix, final_retina
+        # For plotting com_x and y are in local pix coords
+        com_x = com_x - updated_rf_lu_pix[:, 0]
+        com_y = com_y - updated_rf_lu_pix[:, 1]
+
+        return (
+            updated_img_rfs,
+            updated_rf_lu_pix,
+            final_retina,
+            com_x,
+            com_y,
+        )
 
     def _create_spatial_rfs(self):
         """
@@ -2302,9 +2322,8 @@ class ConstructRetina(RetinaMath):
 
         elif self.spatial_model == "VAE":
             # Endow cells with spatial receptive fields using the generative variational autoencoder model
-
-            # 1) Fit or load variational autoencoder to generate receptive fields
-            # self.gc_df is updated explicitly at the end of this if statement
+            self.fit.tmp_pass_apply_rf_repulsion = False
+            # 1) Get variational autoencoder to generate receptive fields
             retina_vae = RetinaVAE(
                 self.gc_type,
                 self.response_type,
@@ -2322,13 +2341,12 @@ class ConstructRetina(RetinaMath):
                 new_um_per_pix,
             ) = self._get_rf_resampling_params(lit_dd_vs_ecc_params)
 
-            # 3) "Bad fit loop".
-            # Provides eccentricity-scaled vae rfs with good DoG fits.
+            # 3) "Bad fit loop", provides eccentricity-scaled vae rfs with good DoG fits.
             img_rfs = self._get_vae_rfs_with_good_fits(
                 retina_vae, new_sidelen, new_um_per_pix
             )
 
-            # 4) Get center masks for the generated spatial rfs
+            # 4) Get center masks
             mask_th = self.context.my_retina["center_mask_threshold"]
             img_rfs_mask = self.get_rf_masks(img_rfs, mask_threshold=mask_th)
 
@@ -2345,6 +2363,8 @@ class ConstructRetina(RetinaMath):
                 img_rfs_final,
                 updated_rf_lu_pix,
                 ret_pix_mtx_final,
+                com_x,
+                com_y,
             ) = self._apply_rf_repulsion(
                 ret_pix_mtx.shape,
                 img_rfs,
@@ -2410,6 +2430,8 @@ class ConstructRetina(RetinaMath):
                 "img_rf": img_rfs,
                 "img_rf_mask": img_rfs_mask,
                 "img_rfs_adjusted": img_rfs_final,
+                "centre_of_mass_y": com_y,
+                "centre_of_mass_x": com_x,
             }
 
             self.project_data.construct_retina["gen_ret"] = {

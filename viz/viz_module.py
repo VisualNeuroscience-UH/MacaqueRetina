@@ -206,7 +206,13 @@ class Viz:
             self._figsave(figurename=savefigname)
 
     def show_spatial_filter_response(
-        self, spat_filt, n_samples=1, sample_list=None, title="", savefigname=None
+        self,
+        spat_filt,
+        n_samples=1,
+        sample_list=None,
+        com_data=None,
+        title="",
+        savefigname=None,
     ):
         """
         Display the spatial filter response of the selected cells, along with the corresponding DoG models.
@@ -269,6 +275,12 @@ class Viz:
                 horizontalalignment="right",
             )
 
+            if com_data is not None:
+                com_x = com_data["centre_of_mass_x"][this_cell_ix_numerical]
+                com_y = com_data["centre_of_mass_y"][this_cell_ix_numerical]
+                axes[idx, 0].plot(com_x, com_y, ".r")
+                print(f"COM: {com_x}, {com_y}")
+
             # Get DoG model fit parameters to popt
             popt = data_all_viable_cells[this_cell_ix_numerical, :]
             spatial_data_array = spat_filt[this_cell_ix]["spatial_data_array"]
@@ -287,7 +299,7 @@ class Viz:
 
             # Ellipses for DoG2D_fixed_surround. Circular params are mapped to ellipse_fixed params
             if DoG_model == "ellipse_fixed":
-                data_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
+                img_rf_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
                 e1 = Ellipse(
                     (popt[np.array([1, 2])]),
                     popt[3],
@@ -309,7 +321,7 @@ class Viz:
                 )
 
             elif DoG_model == "ellipse_independent":
-                data_fitted = self.DoG2D_independent_surround((x_grid, y_grid), *popt)
+                img_rf_fitted = self.DoG2D_independent_surround((x_grid, y_grid), *popt)
                 e1 = Ellipse(
                     (popt[np.array([1, 2])]),
                     popt[3],
@@ -330,7 +342,7 @@ class Viz:
                     linestyle="--",
                 )
             elif DoG_model == "circular":
-                data_fitted = self.DoG2D_circular((x_grid, y_grid), *popt)
+                img_rf_fitted = self.DoG2D_circular((x_grid, y_grid), *popt)
                 e1 = Ellipse(
                     (popt[np.array([1, 2])]),
                     popt[3],
@@ -355,7 +367,7 @@ class Viz:
             axes[idx, 0].add_artist(e2)
 
             sur = axes[idx, 1].imshow(
-                data_fitted.reshape(pixel_array_shape_y, pixel_array_shape_x),
+                img_rf_fitted.reshape(pixel_array_shape_y, pixel_array_shape_x),
                 cmap=imshow_cmap,
                 origin="lower",
                 extent=(x_grid.min(), x_grid.max(), y_grid.min(), y_grid.max()),
@@ -799,15 +811,15 @@ class Viz:
 
         n_points = 100
 
-        # Generate points for bottom and top polar angle limits
-        bottom_x, bottom_y = self.pol2cart(
-            np.full(n_points, ecc_lim_mm[0]),
-            np.linspace(polar_lim_deg[0], polar_lim_deg[1], n_points),
-        )
-        top_x, top_y = self.pol2cart(
-            np.full(n_points, ecc_lim_mm[1]),
-            np.linspace(polar_lim_deg[0], polar_lim_deg[1], n_points),
-        )
+        # # Generate points for bottom and top polar angle limits
+        # bottom_x, bottom_y = self.pol2cart(
+        #     np.full(n_points, ecc_lim_mm[0]),
+        #     np.linspace(polar_lim_deg[0], polar_lim_deg[1], n_points),
+        # )
+        # top_x, top_y = self.pol2cart(
+        #     np.full(n_points, ecc_lim_mm[1]),
+        #     np.linspace(polar_lim_deg[0], polar_lim_deg[1], n_points),
+        # )
 
         # Generate points along the arcs for min and max eccentricities
         theta_range = np.linspace(polar_lim_deg[0], polar_lim_deg[1], n_points)
@@ -1218,11 +1230,13 @@ class Viz:
         use of 'ellipse_fixed'.
         """
         if self.construct_retina.spatial_model == "VAE":
+            gen_rfs = self.project_data.construct_retina["gen_rfs"]
             spat_filt = self.project_data.fit["gen_spat_filt"]
             self.show_spatial_filter_response(
                 spat_filt,
                 n_samples=n_samples,
                 sample_list=sample_list,
+                com_data=gen_rfs,
                 title="Generated",
                 savefigname=savefigname,
             )
