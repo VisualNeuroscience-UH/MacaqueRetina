@@ -300,9 +300,10 @@ class Fit(RetinaMath):
         num_pix_x = spat_data_array.shape[2]
 
         # Make fit to all cells
-        # Note: input coming from matlab, thus indexing starts from 1
-        x_position_indices = np.linspace(1, num_pix_x, num_pix_x)
-        y_position_indices = np.linspace(1, num_pix_y, num_pix_y)
+        # Note: this index used to start from 1, creating a bug downstream.
+        # The reason for exceptional 1-index was data coming from matlab with 1-index.
+        x_position_indices = np.linspace(0, num_pix_x - 1, num_pix_x)
+        y_position_indices = np.linspace(0, num_pix_y - 1, num_pix_y)
         x_grid, y_grid = np.meshgrid(x_position_indices, y_position_indices)
 
         all_viable_cells = np.setdiff1d(np.arange(n_cells), bad_idx_for_spatial_fit)
@@ -563,25 +564,25 @@ class Fit(RetinaMath):
 
             # Compute fitting error
             if DoG_model == "ellipse_independent":
-                data_fitted = self.DoG2D_independent_surround((x_grid, y_grid), *popt)
+                img_rf_fitted = self.DoG2D_independent_surround((x_grid, y_grid), *popt)
             elif DoG_model == "ellipse_fixed":
-                data_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
+                img_rf_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
             elif DoG_model == "circular":
-                data_fitted = self.DoG2D_circular((x_grid, y_grid), *popt)
+                img_rf_fitted = self.DoG2D_circular((x_grid, y_grid), *popt)
 
-            data_fitted = data_fitted.reshape(num_pix_y, num_pix_x)
-            fit_deviations = data_fitted - this_rf
+            img_rf_fitted = img_rf_fitted.reshape(num_pix_y, num_pix_x)
+            fit_deviations = img_rf_fitted - this_rf
 
             # MSE
             fit_error = np.sum(fit_deviations**2) / np.prod(this_rf.shape)
             error_all_viable_cells[cell_idx, 0] = fit_error
 
             # Save DoG fit sums
-            dog_filtersum_array[cell_idx, 0] = np.sum(data_fitted[data_fitted > 0])
+            dog_filtersum_array[cell_idx, 0] = np.sum(img_rf_fitted[img_rf_fitted > 0])
             dog_filtersum_array[cell_idx, 1] = (-1) * np.sum(
-                data_fitted[data_fitted < 0]
+                img_rf_fitted[img_rf_fitted < 0]
             )
-            dog_filtersum_array[cell_idx, 2] = np.sum(data_fitted)
+            dog_filtersum_array[cell_idx, 2] = np.sum(img_rf_fitted)
             dog_filtersum_array[cell_idx, 3] = np.sum(this_rf[this_rf > 0])
 
             # For visualization
