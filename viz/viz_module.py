@@ -246,9 +246,20 @@ class Viz:
 
         # get cell_ixs
         cell_ixs_list = [ci for ci in spat_filt.keys() if ci.startswith("cell_ix_")]
+        cell_ix = [int(ci.split("_")[-1]) for ci in cell_ixs_list]
         if sample_list is not None:
-            cell_ixs_list = [cell_ixs_list[i] for i in sample_list]
+            # cell_ixs_list = [cell_ixs_list[i] for i in sample_list]
+            cell_ixs_list = [
+                name
+                for ix, name in enumerate(cell_ixs_list)
+                if cell_ix[ix] in sample_list
+            ]
             n_samples = len(cell_ixs_list)
+            if n_samples < len(sample_list):
+                # Find missing cell indices
+                cell_ix_selected = [int(ci.split("_")[-1]) for ci in cell_ixs_list]
+                missing_cell_ixs = np.setdiff1d(sample_list, cell_ix_selected)
+                print(f"Rejected unit indices: {missing_cell_ixs}")
         elif n_samples < len(cell_ixs_list):
             cell_ixs_list = np.random.choice(cell_ixs_list, n_samples, replace=False)
         elif n_samples == np.inf:
@@ -258,6 +269,12 @@ class Viz:
         fig, axes = plt.subplots(figsize=(8, 2 * n_samples), nrows=n_samples, ncols=2)
         if n_samples == 1:  # Ensure axes is a 2D array for consistency
             axes = np.array([axes])
+
+        suptitle = f"{title}"
+        if com_data is not None:
+            suptitle = (
+                f"{suptitle}, red dot is the centre of mass for rf centre (masked)"
+            )
 
         imshow_cmap = "viridis"
         ellipse_edgecolor = "white"
@@ -275,17 +292,14 @@ class Viz:
                 horizontalalignment="right",
             )
 
+            # Get DoG model fit parameters to popt
+            popt = data_all_viable_cells[this_cell_ix_numerical, :]
+            spatial_data_array = spat_filt[this_cell_ix]["spatial_data_array"]
+
             if com_data is not None:
                 com_x = com_data["centre_of_mass_x"][this_cell_ix_numerical]
                 com_y = com_data["centre_of_mass_y"][this_cell_ix_numerical]
                 axes[idx, 0].plot(com_x, com_y, ".r")
-                print(f"COM: {com_x}, {com_y}")
-
-            # Get DoG model fit parameters to popt
-            popt = data_all_viable_cells[this_cell_ix_numerical, :]
-            spatial_data_array = spat_filt[this_cell_ix]["spatial_data_array"]
-            suptitle = spat_filt[this_cell_ix]["suptitle"]
-            suptitle = f"{title}, {suptitle})"
 
             cen = axes[idx, 0].imshow(
                 spatial_data_array,
@@ -377,7 +391,7 @@ class Viz:
             fig.colorbar(sur, ax=axes[idx, 1])
 
         plt.tight_layout()
-        plt.suptitle(title, fontsize=10)
+        plt.suptitle(suptitle, fontsize=10)
         plt.subplots_adjust(top=0.95)
 
         if savefigname:
@@ -1239,22 +1253,15 @@ class Viz:
                 title="Generated",
                 savefigname=savefigname,
             )
-            # VAE RF is originally generated in experimental data space at peripheral retina.
-            # When eccentricity changes also the VAE RF sizes need to be scaled.
-            # The VAE RF sizes are scaled according to dendritic field diameter comparison between
-            # experimental data fit and literature data.
-            # Thus the experimental (first) fit for VAE is fixed to ellipse_fixed not to have the
-            # VAE RF resolution depend on DoG model.
-            exp_title = "Experimental shows ellipse_fixed when spatial_model: VAE"
-        else:
-            exp_title = "Experimental"
 
+        # Experimental is always shown, because the VAE rf scale dependes on the dendritic field diameter
+        # of the experimental data fit.
         spat_filt = self.project_data.fit["exp_spat_filt"]
         self.show_spatial_filter_response(
             spat_filt,
             n_samples=n_samples,
             sample_list=sample_list,
-            title=exp_title,
+            title="Experimental",
             savefigname=savefigname,
         )
 
