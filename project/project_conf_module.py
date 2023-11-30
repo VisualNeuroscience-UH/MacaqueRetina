@@ -565,8 +565,7 @@ if __name__ == "__main__":
     Build and test your retina here, one gc type at a time. Temporal hemiretina of macaques.
     """
 
-    # TÄHÄN JÄIT: RAKENNA FIGURE 2 GOODCHILD 1996 JCOMPNEUROL ANALYYSI JA VISUALISOINTI
-    # iMPLEMENT GAP JUNCTIONS, SORRY
+    # TÄHÄN JÄIT: IMPLEMENT GAP JUNCTIONS, SORRY
 
     PM.construct_retina.build()  # Main method for building the retina
 

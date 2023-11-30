@@ -1833,7 +1833,6 @@ class ConstructRetina(RetinaMath):
         for i, row in self.gc_vae_df.iterrows():
             # Get the position of the rf upper left corner in pixels
             # The xoc and yoc are the center of the rf image in the resampled data scale.
-            # TÄHÄN JÄIT: JOSTAIN SYYSTÄ MIDGET SOLULLA 295 Y JÄÄ NEGATIIVISEKSI.
             y_pix_lu = y_pix_c[i] - int(row.yoc_pix)
             x_pix_lu = x_pix_c[i] - int(row.xoc_pix)
 
