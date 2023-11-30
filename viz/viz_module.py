@@ -1236,13 +1236,17 @@ class Viz:
             List of specific samples to display. Overrides n_samples if provided.
         savefigname : str, optional
             Name of the file to save the figure. If None, the figure won't be saved.
-
-        Notes
-        -----
-        - When the spatial model is VAE, the experimental title changes to indicate the
-        use of 'ellipse_fixed'.
         """
-        if self.construct_retina.spatial_model == "VAE":
+        if self.context.my_retina["spatial_model"] == "FIT":
+            spat_filt = self.project_data.fit["exp_spat_filt"]
+            self.show_spatial_filter_response(
+                spat_filt,
+                n_samples=n_samples,
+                sample_list=sample_list,
+                title="Experimental",
+                savefigname=savefigname,
+            )
+        elif self.context.my_retina["spatial_model"] == "VAE":
             gen_rfs = self.project_data.construct_retina["gen_rfs"]
             spat_filt = self.project_data.fit["gen_spat_filt"]
             self.show_spatial_filter_response(
@@ -1253,17 +1257,6 @@ class Viz:
                 title="Generated",
                 savefigname=savefigname,
             )
-
-        # Experimental is always shown, because the VAE rf scale dependes on the dendritic field diameter
-        # of the experimental data fit.
-        spat_filt = self.project_data.fit["exp_spat_filt"]
-        self.show_spatial_filter_response(
-            spat_filt,
-            n_samples=n_samples,
-            sample_list=sample_list,
-            title="Experimental",
-            savefigname=savefigname,
-        )
 
     def show_latent_space_and_samples(self):
         """
