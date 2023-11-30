@@ -32,31 +32,32 @@ class ApricotData:
         # Define filenames
         # Spatial data are read from a separate mat file that have been derived from the originals.
         # Non-spatial data are read from the original data files.
+        # To review, activate PM.viz.show_DoG_model_fit sample list, and set my_retina "spatial_model": "FIT"
         if gc_type == "parasol" and response_type == "on":
             self.spatial_filename = "Parasol_ON_spatial.mat"
-            # self.manually_picked_bad_data_idx=[15, 67, 71, 86, 89]   # Simo's; Manually selected for Chichilnisky apricot (spatial) data
-            self.manually_picked_bad_data_idx = [15, 71, 86, 89]
+            # Simo's new:
+            self.manually_picked_bad_data_idx = [9, 15, 20, 25, 71, 86, 89]
+            self.manually_picked_bad_data_idx = [15, 71, 86, 89]  # Henri's
 
             self.filename_nonspatial = "mosaicGLM_apricot_ONParasol-1-mat.mat"
 
         elif gc_type == "parasol" and response_type == "off":
             self.spatial_filename = "Parasol_OFF_spatial.mat"
-            # self.manually_picked_bad_data_idx = [6, 31, 73]  # Simo's
-            self.manually_picked_bad_data_idx = [6, 31, 40, 76]
+            self.manually_picked_bad_data_idx = [6, 31, 71, 73]  # Simo's new
+            # self.manually_picked_bad_data_idx = [6, 31, 40, 76] # Henri's
 
             self.filename_nonspatial = "mosaicGLM_apricot_OFFParasol-1-mat.mat"
 
         elif gc_type == "midget" and response_type == "on":
             self.spatial_filename = "Midget_ON_spatial.mat"
-            # self.manually_picked_bad_data_idx = [6, 13, 19, 23, 26, 28, 55, 74, 93, 99, 160, 162, 203, 220]  # Simo's
-            self.manually_picked_bad_data_idx = [13]
+            self.manually_picked_bad_data_idx = [13, 23]  # Simo's new
+            # self.manually_picked_bad_data_idx = [13] # Henri's
             self.filename_nonspatial = "mosaicGLM_apricot_ONMidget-1-mat.mat"
 
         elif gc_type == "midget" and response_type == "off":
             self.spatial_filename = "Midget_OFF_spatial.mat"
-            # self.manually_picked_bad_data_idx = [4, 5, 13, 23, 39, 43, 50, 52, 55, 58, 71, 72, 86, 88, 94, 100, 104, 119, 137,
-            #                     154, 155, 169, 179, 194, 196, 224, 230, 234, 235, 239, 244, 250, 259, 278]  # Simo's
-            self.manually_picked_bad_data_idx = [39, 43, 50, 56, 109, 129, 137]
+            self.manually_picked_bad_data_idx = [39, 43, 50, 129, 137]  # Simo's new
+            # self.manually_picked_bad_data_idx = [39, 43, 50, 56, 109, 129, 137] # Henri's
             self.filename_nonspatial = "mosaicGLM_apricot_OFFMidget-1-mat.mat"
 
         else:
