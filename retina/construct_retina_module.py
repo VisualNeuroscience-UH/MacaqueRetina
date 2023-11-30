@@ -2038,6 +2038,7 @@ class ConstructRetina(RetinaMath):
         show_skip_steps = rf_repulsion_params["show_skip_steps"]
         border_repulsion_stength = rf_repulsion_params["border_repulsion_stength"]
         cooling_rate = rf_repulsion_params["cooling_rate"]
+        show_only_unit = rf_repulsion_params["show_only_unit"]
 
         n_units, H, W = img_rfs.shape
         assert H == W, "RF must be square, aborting..."
@@ -2057,19 +2058,6 @@ class ConstructRetina(RetinaMath):
         rfs_mask = np.array(img_rfs_mask, dtype=bool)
         masked_rfs = rfs * rfs_mask
         sum_masked_rfs = np.sum(masked_rfs, axis=(1, 2))
-
-        # for i in range(n_units):
-        #     # Force goes downhill the gradient, thus -1
-        #     force_y[i] = -1 * grad_y[Yt[i], Xt[i]] * masked_rfs[i]
-        #     force_x[i] = -1 * grad_x[Yt[i], Xt[i]] * masked_rfs[i]
-
-        # # Centre of mass for all rfs in H, W coordinates
-        # com_y = np.sum(masked_rfs * Yt, axis=(1, 2)) / sum_masked_rfs
-        # com_x = np.sum(masked_rfs * Xt, axis=(1, 2)) / sum_masked_rfs
-        # com_y_mtx = np.tile(com_y, (H, W, 1)).transpose(2, 0, 1)
-        # com_x_mtx = np.tile(com_x, (H, W, 1)).transpose(2, 0, 1)
-
-        # radius_vec = np.stack([Yt - com_y_mtx, Xt - com_x_mtx], axis=-1)
 
         # Compute boundary effect
         boundary_polygon = self.viz.boundary_polygon(
@@ -2100,27 +2088,15 @@ class ConstructRetina(RetinaMath):
 
         force_y = np.empty_like(rfs)
         force_x = np.empty_like(rfs)
-        retina = np.zeros(img_ret_shape)  # To store the retina
-        transformed_coords = Mrb_pre @ homogeneous_coords
-        original_retina = retina.copy()
-
-        # Centre of mass for all rfs in H, W coordinates
-        com_y = np.sum(rfs * Y0, axis=(1, 2)) / np.sum(rfs, axis=(1, 2))
-        com_x = np.sum(rfs * X0, axis=(1, 2)) / np.sum(rfs, axis=(1, 2))
-        com_y_mtx = np.tile(com_y, (H, W, 1)).transpose(2, 0, 1)
-        com_x_mtx = np.tile(com_x, (H, W, 1)).transpose(2, 0, 1)
+        new_coords = Mrb_pre @ homogeneous_coords
 
         # Main optimization loop
         for iteration in range(n_iterations):
             # Get the new coordinates of the RFs
-            Xt = (
-                transformed_coords[:, 0, ...].round().reshape(n_units, H, W).astype(int)
-            )
-            Yt = (
-                transformed_coords[:, 1, ...].round().reshape(n_units, H, W).astype(int)
-            )
+            Xt = new_coords[:, 0, ...].round().reshape(n_units, H, W).astype(int)
+            Yt = new_coords[:, 1, ...].round().reshape(n_units, H, W).astype(int)
 
-            retina = original_retina.copy()
+            retina = np.zeros(img_ret_shape)
 
             for i in range(n_units):
                 idx = np.where(rfs[i, ...] == np.max(rfs[i], axis=(0, 1)))  # y,x
@@ -2128,8 +2104,6 @@ class ConstructRetina(RetinaMath):
                 inside_boundary = boundary_polygon_path.contains_points(pos)  # x, y
                 if inside_boundary:
                     retina[Yt[i], Xt[i]] += rfs[i]
-                    if iteration == 0:
-                        reference_retina = retina.copy()
                 else:
                     inside = np.where(boundary_mask)  # y,x
                     choise = np.random.choice(len(inside[0]))
@@ -2148,6 +2122,9 @@ class ConstructRetina(RetinaMath):
                     Xt[i, ...] = X1
                     Mrb_pre[i, :2, 2] = [x_start, y_start]
 
+            if iteration == 0:
+                reference_retina = retina.copy()
+
             retina_viz = retina.copy()
             retina += retina_boundary_effect
 
@@ -2158,9 +2135,20 @@ class ConstructRetina(RetinaMath):
                 force_y[i] = -1 * grad_y[Yt[i], Xt[i]] * rfs[i] * rfs_mask[i]
                 force_x[i] = -1 * grad_x[Yt[i], Xt[i]] * rfs[i] * rfs_mask[i]
 
-            # Centre of mass for all rfs in H, W coordinates
-            com_y = np.sum(rfs * Yt, axis=(1, 2)) / np.sum(rfs, axis=(1, 2))
-            com_x = np.sum(rfs * Xt, axis=(1, 2)) / np.sum(rfs, axis=(1, 2))
+            # Centre of mass of the RF centre (masked) for all rfs in H, W coordinates
+            com_y = np.sum(masked_rfs * Yt, axis=(1, 2)) / sum_masked_rfs
+            com_x = np.sum(masked_rfs * Xt, axis=(1, 2)) / sum_masked_rfs
+
+            if show_repulsion_progress is True and show_only_unit is not None:
+                unit_retina = np.zeros(img_ret_shape)
+                unit_idx = show_only_unit
+                fig_args["additional_points"] = [com_x[unit_idx], com_y[unit_idx]]
+                fig_args["unit_idx"] = unit_idx
+                unit_img = np.ones(masked_rfs[unit_idx].shape) * 0.1
+                unit_img += masked_rfs[unit_idx, ...]
+                unit_retina[Yt[unit_idx], Xt[unit_idx]] += unit_img
+                retina_viz = unit_retina.copy()
+
             com_y_mtx = np.tile(com_y, (H, W, 1)).transpose(2, 0, 1)
             com_x_mtx = np.tile(com_x, (H, W, 1)).transpose(2, 0, 1)
 
@@ -2202,7 +2190,7 @@ class ConstructRetina(RetinaMath):
             Mrb_change = trans_mtx @ rot_mtx
             Mrb = Mrb_pre @ Mrb_change
             Mrb_pre = Mrb
-            transformed_coords = Mrb @ homogeneous_coords
+            new_coords = Mrb @ homogeneous_coords
             change_rate = change_rate * cooling_rate
 
             if show_repulsion_progress is True:
@@ -2227,9 +2215,8 @@ class ConstructRetina(RetinaMath):
         Xout = np.zeros((n_units, H, W), dtype=np.int32)
 
         for i in range(n_units):
-            left_upper_coords = Mrb[i, ...] @ np.array([0, 0, 1])
-            y_top = np.round(left_upper_coords[1])
-            x_left = np.round(left_upper_coords[0])
+            y_top = np.round(com_y[i] - H / 2)
+            x_left = np.round(com_x[i] - W / 2)
             y_out = np.arange(y_top, y_top + H).round().astype(np.int32)
             x_out = np.arange(x_left, x_left + W).round().astype(np.int32)
             y_out_grid, x_out_grid = np.meshgrid(y_out, x_out, indexing="ij")
@@ -2243,7 +2230,7 @@ class ConstructRetina(RetinaMath):
 
             # Interpolate using griddata
             resampled_values = griddata(
-                points, values, new_points, method="linear", fill_value=0
+                points, values, new_points, method="cubic", fill_value=0
             )
 
             # Reshape to 2D
@@ -2252,13 +2239,14 @@ class ConstructRetina(RetinaMath):
         updated_rf_lu_pix = np.array(
             [Xout[:, 0, 0], Yout[:, 0, 0]], dtype=np.int32
         ).T  # x, y
+        com_x_local = com_x - updated_rf_lu_pix[:, 0]
+        com_y_local = com_y - updated_rf_lu_pix[:, 1]
 
         new_retina = np.zeros(img_ret_shape)
         final_retina = np.zeros(img_ret_shape)
         for i in range(n_units):
             new_retina[Yt[i], Xt[i]] += rfs[i]
             final_retina[Yout[i], Xout[i]] += updated_img_rfs[i]
-            # pdb.set_trace()
 
         if show_repulsion_progress is True:
             # Show one last time with the final interpolated result
@@ -2273,16 +2261,12 @@ class ConstructRetina(RetinaMath):
             )
             plt.ioff()  # Turn off interactive mode
 
-        # For plotting com_x and y are in local pix coords
-        com_x = com_x - updated_rf_lu_pix[:, 0]
-        com_y = com_y - updated_rf_lu_pix[:, 1]
-
         return (
             updated_img_rfs,
             updated_rf_lu_pix,
             final_retina,
-            com_x,
-            com_y,
+            com_x_local,
+            com_y_local,
         )
 
     def _create_spatial_rfs(self):
