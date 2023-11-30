@@ -1040,7 +1040,7 @@ class Viz:
                 )
             )
 
-    def show_dendrite_diam_vs_ecc(self, savefigname=None):
+    def show_dendrite_diam_vs_ecc(self, log_x=False, log_y=False, savefigname=None):
         """
         Plot dendritic diameter as a function of retinal eccentricity with linear, quadratic, or cubic fitting.
         """
@@ -1067,14 +1067,13 @@ class Viz:
                 slope = fit_parameters[0]
                 ax.plot(data_all_x, intercept + slope * data_all_x, "k--")
                 ax.annotate(
-                    "{0} : \ny={1:.1f} + {2:.1f}x".format(
-                        dd_model_caption, intercept, slope
-                    ),
+                    f"{dd_model_caption} : \ny={intercept:.1f} + {slope:.1f}x",
                     xycoords="axes fraction",
                     xy=(0.5, 0.15),
                     ha="left",
                     color="k",
                 )
+
             elif self.context.my_retina["dd_regr_model"] == "quadratic":
                 intercept = fit_parameters[2]
                 slope = fit_parameters[1]
@@ -1085,14 +1084,13 @@ class Viz:
                     "k--",
                 )
                 ax.annotate(
-                    "{0}: \ny={1:.1f} + {2:.1f}x + {3:.1f}x^2".format(
-                        dd_model_caption, intercept, slope, square
-                    ),
+                    f"{dd_model_caption}: \ny={intercept:.1f} + {slope:.1f}x + {square:.1f}x^2",
                     xycoords="axes fraction",
                     xy=(0.5, 0.15),
                     ha="left",
                     color="k",
                 )
+
             elif self.context.my_retina["dd_regr_model"] == "cubic":
                 intercept = fit_parameters[3]
                 slope = fit_parameters[2]
@@ -1107,37 +1105,32 @@ class Viz:
                     "k--",
                 )
                 ax.annotate(
-                    "{0}: \ny={1:.1f} + {2:.1f}x + {3:.1f}x^2 + {4:.1f}x^3".format(
-                        dd_model_caption, intercept, slope, square, cube
-                    ),
+                    f"{dd_model_caption}: \ny={intercept:.1f} + {slope:.1f}x + {square:.1f}x^2 + {cube:.1f}x^3",
                     xycoords="axes fraction",
                     xy=(0.5, 0.15),
                     ha="left",
                     color="k",
                 )
+
             elif self.context.my_retina["dd_regr_model"] == "exponential":
                 constant = fit_parameters[0]
                 lamda = fit_parameters[1]
                 ax.plot(data_all_x, constant + np.exp(data_all_x / lamda), "k--")
                 ax.annotate(
-                    "{0}: \ny={1:.1f} + exp(x/{2:.1f})".format(
-                        dd_model_caption, constant, lamda
-                    ),
+                    f"{dd_model_caption}: \ny={constant:.1f} + exp(x/{lamda:.1f})",
                     xycoords="axes fraction",
                     xy=(0.5, 0.15),
                     ha="left",
                     color="k",
                 )
+
             elif self.context.my_retina["dd_regr_model"] == "loglog":
-                pdb.set_trace()
-                a = fit_parameters["a"]
-                b = fit_parameters["b"]
-                fitted_y = a * np.power(
-                    data_all_x, b
-                )  # Calculate the fitted values using the power law relationship
-                ax.plot(
-                    data_all_x, fitted_y, "k--", label="Log-log fit"
-                )  # Plot the fitted curve
+                # a = 10 ** fit_parameters[0]
+                a = fit_parameters[0]
+                b = fit_parameters[1]
+                # Calculate the fitted values using the power law relationship
+                fitted_y = a * np.power(data_all_x, b)
+                ax.plot(data_all_x, fitted_y, "k--", label="Log-log fit")
                 ax.annotate(
                     f"{dd_model_caption}: \nD={a:.2f} * E^{b:.2f}",
                     xycoords="axes fraction",
@@ -1145,6 +1138,14 @@ class Viz:
                     ha="left",
                     color="k",
                 )
+                # set ylim
+                ax.set_ylim([1, 1000])
+
+        # Set x and y axis logarithmic, if called for
+        if log_x:
+            ax.set_xscale("log")
+        if log_y:
+            ax.set_yscale("log")
 
         plt.title(title)
 

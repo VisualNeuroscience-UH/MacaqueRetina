@@ -413,19 +413,14 @@ class ConstructRetina(RetinaMath):
         elif dd_regr_model == "loglog":
             # Define the model function for the power law relationship
             # Note that we're fitting the log of the function, so we need to use the linear form
-            def loglog_func(log_E, log_a, b):
-                return log_a + b * log_E
+            def power_func(E, a, b):
+                return a * np.power(E, b)
 
-            # Fit the model function to the log-log transformed data
-            # The initial guess p0 is set to [1, 1], which corresponds to log(a) and b respectively
-            log_x = np.log10(data_all_x)
-            log_y = np.log10(data_all_y)
-            fit_parameters, pcov = opt.curve_fit(loglog_func, log_x, log_y, p0=[1, 1])
+            fit_parameters, pcov = opt.curve_fit(
+                power_func, data_all_x, data_all_y, p0=[1, 1]
+            )
 
-            # Transform back the log_a to a
-            a = 10 ** fit_parameters[0]
-
-            # The parameter b remains the same
+            a = fit_parameters[0]
             b = fit_parameters[1]
 
             # Save the parameters
@@ -1561,8 +1556,8 @@ class ConstructRetina(RetinaMath):
             # D = a * E^b, where E is the eccentricity and D is the dendritic diameter
             a = parameters["a"]
             b = parameters["b"]
-            # Convert mm to um by multiplying by 1000
-            lit_dd_at_gc_ecc_um = a * np.power(gc_pos_ecc_mm * 1000, b)
+            # Eccentricity in mm, dendritic diameter in um
+            lit_dd_at_gc_ecc_um = a * np.power(gc_pos_ecc_mm, b)
         else:
             raise ValueError(
                 f"Unknown dd_regr_model: {self.context.my_retina['dd_regr_model']}"
