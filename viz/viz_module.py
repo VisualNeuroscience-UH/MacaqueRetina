@@ -384,7 +384,6 @@ class Viz:
             self._figsave(figurename=title + "_" + savefigname)
 
     # ConstructRetina visualization
-
     def _get_imgs(
         self,
         df,
@@ -1795,9 +1794,17 @@ class Viz:
             ax3.imshow(new_retina)
             max_val = np.max(new_retina)
             min_val = np.min(new_retina)
-            ax3.set_title(
-                f"new rfs iteration {iteration}\nmax = {max_val:.2f}\nmin = {min_val:.2f}"
-            )
+            ax3_title = f"new retina iteration {iteration}\nmax = {max_val:.2f}\nmin = {min_val:.2f}"
+            ax3.set_title(ax3_title)
+
+            if "additional_points" in fig_args:
+                points = fig_args["additional_points"]
+                unit_idx = fig_args["unit_idx"]
+                ax3.plot(points[0], points[1], ".r")
+                ax3_title = (
+                    ax3_title + f"\nPoint is the center of mass for unit {unit_idx}"
+                )
+                ax3.set_title(ax3_title)
 
             # Redraw and pause
             fig.canvas.draw()
