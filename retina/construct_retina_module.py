@@ -195,10 +195,10 @@ class ConstructRetina(RetinaMath):
 
         # Make or read fits
         if self.spatial_model == "VAE":
-            # VAE RF scaling with eccentricity is dependent of DoG fit (dendritic diameter)
+            # VAE RF scaling with eccentricity is dependent on DoG fit (dendritic diameter)
             # comparison btw literature and experimental data fit. We do not want the data fit
             # to vary with the DoG model. Thus, we use the same DoG model for all for the initial
-            # experimental fit.
+            # experimental fit. The VAE generated RFs will be fitted downstream.
             DoG_model = "ellipse_fixed"
         elif self.spatial_model == "FIT":
             DoG_model = my_retina["DoG_model"]
@@ -283,13 +283,9 @@ class ConstructRetina(RetinaMath):
 
     def _read_gc_density_data(self):
         """
-        Read re-digitized old literature data from mat files
+        Read re-digitized old literature ganglion cell density data
         """
 
-        print(
-            "Reading density data from:",
-            self.context.literature_data_files["gc_density_fullpath"],
-        )
         gc_density = self.data_io.get_data(
             self.context.literature_data_files["gc_density_fullpath"]
         )
@@ -1948,7 +1944,7 @@ class ConstructRetina(RetinaMath):
                 DoG_model="ellipse_fixed",
                 spatial_data=img_after_resample,
                 um_per_pix=um_per_pix,
-                mark_outliers_bad=True,
+                mark_outliers_bad=True,  # False to bypass bad fit check
             )
 
             # 6) Discard bad fits
@@ -2306,8 +2302,9 @@ class ConstructRetina(RetinaMath):
 
         elif self.spatial_model == "VAE":
             # Endow cells with spatial receptive fields using the generative variational autoencoder model
-            self.fit.tmp_pass_apply_rf_repulsion = False
+
             # 1) Get variational autoencoder to generate receptive fields
+            print("\nGetting VAE model...")
             retina_vae = RetinaVAE(
                 self.gc_type,
                 self.response_type,
@@ -2320,12 +2317,14 @@ class ConstructRetina(RetinaMath):
             self.gc_vae_df = self.gc_df.copy()
 
             # 2) Get resampling parameters.
+            print("\nGetting resampling parameters...")
             (
                 new_sidelen,
                 new_um_per_pix,
             ) = self._get_rf_resampling_params(lit_dd_vs_ecc_params)
 
-            # 3) "Bad fit loop", provides eccentricity-scaled vae rfs with good DoG fits.
+            # 3) "Bad fit loop", provides eccentricity-scaled vae rfs with good DoG fits (error < 3SD from mean).
+            print("\nBad fit loop: Generating receptive fields with good DoG fits...")
             img_rfs = self._get_vae_rfs_with_good_fits(
                 retina_vae, new_sidelen, new_um_per_pix
             )
@@ -2343,6 +2342,7 @@ class ConstructRetina(RetinaMath):
             )
 
             # 6) Apply repulsion adjustment to the receptive fields
+            print("\nApplying repulsion between the receptive fields...")
             (
                 img_rfs_final,
                 updated_rf_lu_pix,
@@ -2358,6 +2358,7 @@ class ConstructRetina(RetinaMath):
             )
 
             # 7) Redo the good fits for final statistics
+            print("\nFinal DoG fit to generated rfs...")
             DoG_model = self.context.my_retina["DoG_model"]
             self.fit.initialize(
                 self.gc_type,
@@ -2379,11 +2380,13 @@ class ConstructRetina(RetinaMath):
 
             # 8) Update gc_vae_df to include new positions and DoG fits after repulsion
             # and convert units to to mm, where applicable
+            print("\nUpdating ganglion cell dataframe...")
             self.gc_vae_df = self._update_gc_vae_df(
                 gc_vae_df, new_um_per_pix, new_sidelen, updated_rf_lu_pix, ret_lu_mm
             )
 
             # 9) Get final center masks for the generated spatial rfs
+            print("\nGetting final masked rfs and retina...")
             img_rfs_final_mask = self.get_rf_masks(
                 img_rfs_final, mask_threshold=mask_th
             )
@@ -2395,6 +2398,7 @@ class ConstructRetina(RetinaMath):
             )
 
             # 11) Save the generated receptive fields and masks
+            print("\nSaving data...")
             output_path = self.context.output_folder
             filename_stem = self.context.my_retina["spatial_rfs_file"]
 
@@ -2414,8 +2418,8 @@ class ConstructRetina(RetinaMath):
                 "img_rf": img_rfs,
                 "img_rf_mask": img_rfs_mask,
                 "img_rfs_adjusted": img_rfs_final,
-                "centre_of_mass_y": com_y,
                 "centre_of_mass_x": com_x,
+                "centre_of_mass_y": com_y,
             }
 
             self.project_data.construct_retina["gen_ret"] = {
