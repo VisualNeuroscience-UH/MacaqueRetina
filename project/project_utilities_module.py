@@ -356,7 +356,6 @@ class DataSampler:
                 y_upwards_log / np.log10((self.max_Y - self.min_Y))
             ) * y_range_pix
             y = pix_y_min - y_upwards_pix
-            # pdb.set_trace()
         else:
             y_offset = y_data - self.min_Y
             y_upright = y_offset / (self.max_Y - self.min_Y) * y_range_pix

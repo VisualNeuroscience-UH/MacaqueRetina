@@ -1826,8 +1826,7 @@ class ConstructRetina(RetinaMath):
 
         pos_ecc_mm = self.gc_vae_df["pos_ecc_mm"].values
         pos_polar_deg = self.gc_vae_df["pos_polar_deg"].values
-        # OUDON PIENI MAX 4.39
-        # pdb.set_trace()
+
         # Locate left upper corner of each rf img and lay images onto retina image
         x_mm, y_mm = self.pol2cart(
             pos_ecc_mm.astype(np.float64),
@@ -1839,9 +1838,7 @@ class ConstructRetina(RetinaMath):
         for i, row in self.gc_vae_df.iterrows():
             # Get the position of the rf upper left corner in pixels
             # The xoc and yoc are the center of the rf image in the resampled data scale.
-            # TÄHÄN JÄIT: JOSTAIN SYYSTÄ MIDGET SOLULLA 295 Y JÄÄ NEGATIIVISEKSI. OLIT TEKEMÄSSÄ
-            # LOGLOG  dd_regr_model KUN ALOIT TÖRMÄÄNÄÄN NESTED ERRORS. hae pdb.set_trace()
-            # KS MYÖS YLLÄ OUDON PIENI MAX 4.39
+            # TÄHÄN JÄIT: JOSTAIN SYYSTÄ MIDGET SOLULLA 295 Y JÄÄ NEGATIIVISEKSI.
             y_pix_lu = y_pix_c[i] - int(row.yoc_pix)
             x_pix_lu = x_pix_c[i] - int(row.xoc_pix)
 
@@ -1856,21 +1853,6 @@ class ConstructRetina(RetinaMath):
             # The width and height are necessary because some are cut off at the edges of the retina image.
             rf_lu_pix[i, :] = [x_pix_lu, y_pix_lu]
 
-        # plt.plot(
-        #     min_x_mm_im + (x_pix_c) * um_per_pix / 1000,
-        #     max_y_mm_im - (y_pix_c) * um_per_pix / 1000,
-        #     "o",
-        # )
-
-        # plt.plot(x_mm, y_mm, "o")
-        # print(f"min_x_mm_im: {min_x_mm_im}")
-        # print(f"max_x_mm_im: {max_x_mm_im}")
-        # print(f"min_y_mm_im: {min_y_mm_im}")
-        # print(f"max_y_mm_im: {max_y_mm_im}")
-        # # TOISELLA KERRALLA VÄÄRÄ SIIRTYMÄ X JA Y SUUNNISSA
-        # plt.show()
-
-        # pdb.set_trace()
         return ret_img_pix, rf_lu_pix, (min_x_mm_im, max_y_mm_im)
 
     def _get_vae_rfs_with_good_fits(self, retina_vae, new_sidelen, um_per_pix):
