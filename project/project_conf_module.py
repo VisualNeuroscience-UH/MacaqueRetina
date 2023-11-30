@@ -174,7 +174,7 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 # For "load_model" training_mode, the model is loaded from model_file_name at output_folder (primary)
 # or input_folder. The correct model name (including time stamp) must be given in the model_file_name.
 gc_type = "parasol"  # "parasol" or "midget
-response_type = "on"
+response_type = "off"
 
 # VAE RF is generated in experimental data space originating from macaque peripheral retina.
 # VAE RF sizes need to be scaled according to eccentricity.
@@ -193,13 +193,13 @@ my_retina = {
     "response_type": response_type,
     # "ecc_limits_deg": [4.7, 5.3],  # eccentricity in degrees
     # "pol_limits_deg": [-1, 1],  # polar angle in degrees
-    "ecc_limits_deg": [4.5, 5.5],  # eccentricity in degrees
+    "ecc_limits_deg": [3, 7],  # eccentricity in degrees
     "pol_limits_deg": [-5, 5],  # polar angle in degrees
     # "ecc_limits_deg": [15, 20],  # eccentricity in degrees
     # "pol_limits_deg": [-3, 3],  # polar angle in degrees
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
-    "dd_regr_model": "quadratic",  # linear, quadratic, cubic, loglog. For midget < 20 deg, use quadratic; for parasol use loglog
-    "visual_field_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
+    "dd_regr_model": "loglog",  # linear, quadratic, cubic, loglog. For midget < 20 deg, use quadratic; for parasol use loglog
+    "visual_field_limit_for_dd_fit": math.inf,  # 20,  # degrees, math.inf for no limit
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
@@ -580,9 +580,9 @@ if __name__ == "__main__":
     # For FIT and VAE
     # PM.viz.show_DoG_model_fit(sample_list=[412, 436, 465, 466], savefigname=None)
     PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)
+    PM.viz.show_dendrite_diam_vs_ecc(log_x=False, log_y=True, savefigname=None)
 
-    # For FIT (ellipse and DoG fits, temporal kernels and tonic drives)
-    PM.viz.show_dendrite_diam_vs_ecc(savefigname=None)
+    # For FIT (DoG fits, temporal kernels and tonic drives)
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
     # PM.viz.show_temporal_filter_response(n_curves=3, savefigname="temporal_filters.eps")
     # PM.viz.show_spatial_statistics(savefigname="spatial_stats.eps")

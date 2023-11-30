@@ -167,11 +167,7 @@ class Experiment(VideoBaseClass):
                 repeated_tuple = tuple([value] * n_columns)
                 df.loc[key] = repeated_tuple
             else:
-                try:
-                    df.loc[key] = value
-                except:
-                    print(key, value)
-                    pdb.set_trace()
+                df.loc[key] = value
 
         for idx, this_dict in enumerate(cond_options):
             for key, value in this_dict.items():
