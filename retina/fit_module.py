@@ -60,7 +60,7 @@ class Fit(RetinaMath):
         DoG_model="ellipse_fixed",  # "ellipse_independent", "ellipse_fixed", "circular"
         spatial_data=None,
         um_per_pix=None,
-        mark_outliers_bad=True,
+        mark_outliers_bad=False,
     ):
         """
         Initialize the fit_dog object.
@@ -225,7 +225,7 @@ class Fit(RetinaMath):
 
         return pd.concat([parameters_df, error_df], axis=1), exp_temp_filt
 
-    def _get_fit_outliers(self, fits_df, bad_idx_for_spatial_fit, columns):
+    def _get_fit_outliers(self, fits_df, bad_spatial_idx, columns):
         """
         Finds the outliers of the spatial filters.
         """
@@ -236,19 +236,19 @@ class Fit(RetinaMath):
             threshold = 3 * std_dev
             mask = np.abs(out_data - mean) > threshold
             idx = np.where(mask)[0]
-            bad_idx_for_spatial_fit += idx.tolist()
-        bad_idx_for_spatial_fit.sort()
+            bad_spatial_idx += idx.tolist()
+        bad_spatial_idx.sort()
 
-        return bad_idx_for_spatial_fit
+        return bad_spatial_idx
 
     def _fit_spatial_filters(
         self,
         spat_data_array,
         cen_rot_rad_all=None,
-        bad_idx_for_spatial_fit=None,
+        bad_spatial_idx=None,
         DoG_model="ellipse_fixed",
         semi_x_always_major=True,
-        mark_outliers_bad=True,
+        mark_outliers_bad=False,
     ):
         """
         Fit difference of Gaussians (DoG) model spatial filters using retinal spike triggered average (STA) data.
@@ -259,7 +259,7 @@ class Fit(RetinaMath):
             Array of shape `(n_cells, num_pix_y, num_pix_x)` containing the spatial data for each cell to fit.
         cen_rot_rad_all : numpy.ndarray or None, optional
             Array of shape `(n_cells,)` containing the rotation angle for each cell. If None, rotation is set to 0, by default None
-        bad_idx_for_spatial_fit : numpy.ndarray or None, optional
+        bad_spatial_idx : numpy.ndarray or None, optional
             Indices of cells to exclude from fitting, by default None
         DoG_model : str, optional
            ellipse_independent : fit center and surround anisotropic elliptical Gaussians independently,
@@ -268,7 +268,7 @@ class Fit(RetinaMath):
         semi_x_always_major : bool, optional
             Whether to rotate Gaussians so that semi_x is always the semimajor/longer axis, by default True
         mark_outliers_bad : bool, optional
-            Whether to mark outliers (> 3SD from mean) as bad, by default True
+            Whether to mark units with large fit error (> 3SD from mean) as bad, by default False
 
         Returns
         -------
@@ -306,7 +306,7 @@ class Fit(RetinaMath):
         y_position_indices = np.linspace(0, num_pix_y - 1, num_pix_y)
         x_grid, y_grid = np.meshgrid(x_position_indices, y_position_indices)
 
-        all_viable_cells = np.setdiff1d(np.arange(n_cells), bad_idx_for_spatial_fit)
+        all_viable_cells = np.setdiff1d(np.arange(n_cells), bad_spatial_idx)
 
         if DoG_model == "ellipse_independent":
             parameter_names = [
@@ -507,7 +507,7 @@ class Fit(RetinaMath):
             except:
                 print(("Fitting failed for cell {0}".format(str(cell_idx))))
                 data_all_viable_cells[cell_idx, :] = np.nan
-                bad_idx_for_spatial_fit.append(cell_idx)
+                bad_spatial_idx.append(cell_idx)
                 continue
 
             if DoG_model in ["ellipse_independent", "ellipse_fixed"]:
@@ -617,14 +617,29 @@ class Fit(RetinaMath):
         error_df = pd.DataFrame(error_all_viable_cells, columns=["spatialfit_mse"])
         good_mask = np.ones(len(data_all_viable_cells))
 
+        # Remove hand picked (in apricot data module) bad indeces
+        for i in bad_spatial_idx:
+            good_mask[i] = 0
+
         if mark_outliers_bad == True:
+            print(
+                f"Previously removed {len(bad_spatial_idx)} outliers: {', '.join(map(str, bad_spatial_idx))}"
+            )
+            old_bad_spatial_idx = bad_spatial_idx.copy()
             # identify outliers (> 3SD from mean) and mark them bad
-            bad_idx_for_spatial_fit = self._get_fit_outliers(
-                fits_df, bad_idx_for_spatial_fit, columns=fits_df.columns
+            bad_spatial_idx = self._get_fit_outliers(
+                error_df, bad_spatial_idx, columns=error_df.columns
+            )
+            bad_spatial_idx = np.unique(bad_spatial_idx)
+
+            diff_idx = np.setdiff1d(bad_spatial_idx, old_bad_spatial_idx)
+            print(
+                f"Removing {len(diff_idx)} unit(s) with error > 3SD from mean: {', '.join(map(str, diff_idx))}"
             )
 
-            for i in bad_idx_for_spatial_fit:
+            for i in diff_idx:
                 good_mask[i] = 0
+
         elif mark_outliers_bad == False:
             # We need this check for failed fit in the case when
             # initialize is called with mark_outliers_bad=False
@@ -692,7 +707,7 @@ class Fit(RetinaMath):
         ) = self._fit_spatial_filters(
             spat_data_array=spatial_data,
             cen_rot_rad_all=cen_rot_rad_all,
-            bad_idx_for_spatial_fit=self.bad_data_idx,
+            bad_spatial_idx=self.bad_data_idx,
             DoG_model=DoG_model,
         )
 
@@ -732,7 +747,7 @@ class Fit(RetinaMath):
             spat_DoG_fit_params,
         )
 
-    def _fit_DoG_generated_data(self, DoG_model, spatial_data, mark_outliers_bad=True):
+    def _fit_DoG_generated_data(self, DoG_model, spatial_data, mark_outliers_bad=False):
         """
         Fits spatial DoG parameters to the generated data.
 
@@ -763,7 +778,7 @@ class Fit(RetinaMath):
         ) = self._fit_spatial_filters(
             spat_data_array=spatial_data,
             cen_rot_rad_all=cen_rot_rad_all,
-            bad_idx_for_spatial_fit=[],
+            bad_spatial_idx=[],
             DoG_model=DoG_model,
             mark_outliers_bad=mark_outliers_bad,
         )
