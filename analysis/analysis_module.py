@@ -11,6 +11,8 @@ ISI analysis: : Uzzell_2004_JNeurophysiol
 # Numerical
 import numpy as np
 from scipy.fft import fft
+from scipy.signal import coherence, csd, correlate, welch
+from scipy.stats import pearsonr
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -25,6 +27,7 @@ from analysis.analysis_base_module import AnalysisBase
 import pdb
 import os
 from pathlib import Path
+import time
 
 
 class Analysis(AnalysisBase):
@@ -42,6 +45,39 @@ class Analysis(AnalysisBase):
     @property
     def data_io(self):
         return self._data_io
+
+    def _min_max_scaler(self, X, feature_range=(0, 1)):
+        # TODO: CHECK
+        X_min = np.min(X, axis=0)
+        X_max = np.max(X, axis=0)
+        X_std = (X - X_min) / (X_max - X_min)
+        X_scaled = X_std * (feature_range[1] - feature_range[0]) + feature_range[0]
+        return X_scaled
+
+    def _scale(self, X):
+        # TODO: CHECK
+        mean = np.mean(X, axis=0)
+        std = np.std(X, axis=0)
+        return (X - mean) / std
+
+    def scaler(self, data, scale_type="standard", feature_range=[-1, 1]):
+        # TODO: CHECK
+        # Data is assumed to be [samples or time, features or regressors]
+        if scale_type == "standard":
+            # Standardize data by removing the mean and scaling to unit variance
+            data_scaled = self._scale(data)
+        elif scale_type == "minmax":
+            # Transform features by scaling each feature to a given range.
+            # If you put in matrix, note that scales each column (feature) independently
+            if data.ndim > 1:
+                minmaxscaler = self._min_max_scaler(data, feature_range=feature_range)
+                minmaxscaler.fit(data)
+                data_scaled = minmaxscaler.transform(data)
+            elif data.ndim == 1:  # Manual implementation for 1-D data
+                feat_min, feat_max = feature_range
+                data_std = (data - data.min()) / (data.max() - data.min())
+                data_scaled = data_std * (feat_max - feat_min) + feat_min
+        return data_scaled
 
     def _get_spikes_by_interval(self, data, trial, t_start, t_end):
         key_name = f"spikes_{trial}"
@@ -174,6 +210,13 @@ class Analysis(AnalysisBase):
 
         cycle_length = 1 / temp_freq  # in seconds
         bins = np.arange(t_start, t_end, cycle_length / bins_per_cycle)
+
+        # Check for non-oscillatory response
+        n_cycles = int(np.floor((t_end - t_start) / cycle_length))
+        if n_cycles < 2:
+            print(f"Cannot analyze oscillatory response from {n_cycles} cycles")
+            return np.nan, np.nan, np.nan, np.nan, np.nan
+
         for this_unit in range(N_neurons):
             unit_mask = units == this_unit
             times_unit = times[unit_mask]
@@ -300,6 +343,10 @@ class Analysis(AnalysisBase):
         # Find the integer number of full cycles matching t_end - t_start
         n_cycles = int(np.floor((t_end - t_start) / cycle_length))
 
+        if n_cycles < 2:
+            print(f"Cannot analyze oscillatory response from {n_cycles} cycles")
+            return np.nan, np.nan
+
         # Corrected time interval
         t_epoch = n_cycles * cycle_length
 
@@ -390,7 +437,88 @@ class Analysis(AnalysisBase):
 
         return phase_np_reset
 
-    def analyze_response(self, my_analysis_options):
+    def _correlation_lags(self, in1_len, in2_len, mode="full"):
+        # Copied from scipy.signal correlation_lags, mode full or same
+
+        if mode == "full":
+            lags = np.arange(-in2_len + 1, in1_len)
+        elif mode == "same":
+            # the output is the same size as `in1`, centered
+            # with respect to the 'full' output.
+            # calculate the full output
+            lags = np.arange(-in2_len + 1, in1_len)
+            # determine the mean point in the full output
+            mean_point = lags.size // 2
+            # determine lag_bound to be used with respect
+            # to the mean point
+            lag_bound = in1_len // 2
+            # calculate lag ranges for even and odd scenarios
+            if in1_len % 2 == 0:
+                lags = lags[(mean_point - lag_bound) : (mean_point + lag_bound)]
+            else:
+                lags = lags[(mean_point - lag_bound) : (mean_point + lag_bound) + 1]
+
+        return lags
+
+    def _get_cross_correlation_trial(
+        self, data, trial, t_start, t_end, bins, lags, unit_vec
+    ):
+        """
+        Calculate cross correlation between units for a single trial. For each unit, calculate
+        cross correlation with all other units.
+
+        Parameters
+        ----------
+        data : dict
+            The data dictionary containing the spike information.
+        trial : int
+            The trial number to analyze.
+        t_start : float
+            The start time of the interval (in seconds) to analyze.
+        t_end : float
+            The end time of the interval (in seconds) to analyze.
+        bins : numpy.ndarray
+            The bins to use for binning the spike times.
+        lags : numpy.ndarray
+            The lags to use for cross correlation.
+        unit_vec : numpy.ndarray of ints
+            The units to analyze.
+        """
+        # Get spike data limited to requested time interval, single trial
+        units, times = self._get_spikes_by_interval(data, trial, t_start, t_end)
+
+        n_units = len(unit_vec)
+        spike_events = np.zeros((n_units, len(bins) - 1))
+        for this_idx, this_unit in enumerate(unit_vec):
+            unit_mask = units == this_unit
+            times_unit = times[unit_mask]
+
+            # Bin spike rates
+            spike_counts, _ = np.histogram(times_unit, bins=bins)
+
+            # Convert spike count to boolean. More than one in one bin becomes one.
+            spike_events[this_idx] = spike_counts > 0
+
+        ccf = np.zeros((n_units, n_units, len(lags)))
+        ccoef = np.zeros((n_units, n_units))
+
+        # Calculate cross correlation between all pairs of units
+        for y_idx in range(n_units):
+            for x_idx in range(n_units):
+                y = spike_events[y_idx]
+                y_scaled = self.scaler(y)
+                x = spike_events[x_idx]
+                x_scaled = self.scaler(x)
+
+                ccf[y_idx, x_idx, :] = correlate(
+                    y_scaled, x_scaled, mode="full", method="direct"
+                )
+                # [0] is the correlation, [1] is the p-value
+                ccoef[y_idx, x_idx] = pearsonr(y_scaled, x_scaled)[0]
+
+        return ccf, ccoef
+
+    def analyze_experiment(self, my_analysis_options):
         """
         R for firing rate
         F for Fourier amplitude
@@ -410,6 +538,7 @@ class Analysis(AnalysisBase):
         assert np.all(
             n_trials_vec == n_trials_vec[0]
         ), "Not equal number of trials, aborting..."
+        n_trials = n_trials_vec[0]
 
         # Make dataframe with columns = conditions and index = trials
         R_popul_df = pd.DataFrame(index=range(n_trials_vec[0]), columns=cond_names)
@@ -423,7 +552,6 @@ class Analysis(AnalysisBase):
         for idx, cond_name in enumerate(cond_names):
             filename = Path(data_folder) / ("Response_" + cond_name + ".gz")
             data_dict = self.data_io.get_data(filename)
-            n_trials = n_trials_vec[idx]
             temp_freq = pd.to_numeric(
                 experiment_df.loc["temporal_frequency", cond_name]
             )
@@ -475,6 +603,21 @@ class Analysis(AnalysisBase):
         R_unit_mean = np.mean(R_unit_compiled, axis=2)
         R_unit_df = pd.DataFrame(R_unit_mean, columns=cond_names)
 
+        # Save results
+        filename_out = f"{cond_names_string}_population_means.csv"
+        csv_save_path = data_folder / filename_out
+        R_popul_df.to_csv(csv_save_path)
+
+        filename_out = f"{cond_names_string}_unit_means.csv"
+        csv_save_path = data_folder / filename_out
+        R_unit_df.to_csv(csv_save_path)
+
+        all_nan_popul = F_popul_df[cond_names.tolist()].isna().all().all()
+        all_nan_unit = np.isnan(F_unit_compiled).all()
+        if all_nan_popul or all_nan_unit:
+            print("No oscillatory response, no F1F2 responses available...")
+            return
+
         # Set unit F1 and F2 to dataframe, mean over trials
         F_unit_mean = np.mean(F_unit_compiled, axis=2)
         F_unit_mean_ampl_reshaped = np.concatenate(
@@ -494,14 +637,6 @@ class Analysis(AnalysisBase):
         )
 
         # Save results
-        filename_out = f"{cond_names_string}_population_means.csv"
-        csv_save_path = data_folder / filename_out
-        R_popul_df.to_csv(csv_save_path)
-
-        filename_out = f"{cond_names_string}_unit_means.csv"
-        csv_save_path = data_folder / filename_out
-        R_unit_df.to_csv(csv_save_path)
-
         filename_out = f"{cond_names_string}_F1F2_population_means.csv"
         csv_save_path = data_folder / filename_out
         F_popul_df.to_csv(csv_save_path)
@@ -525,6 +660,67 @@ class Analysis(AnalysisBase):
             filename_out = f"{cond_names_string}_F1F2_unit_phase_means.csv"
             csv_save_path = data_folder / filename_out
             F_unit_phase_df.to_csv(csv_save_path)
+
+    def noise_correlation(self, my_analysis_options, corr_units):
+        """ """
+
+        exp_variables = my_analysis_options["exp_variables"]
+        cond_names_string = "_".join(exp_variables)
+        filename = f"exp_metadata_{cond_names_string}.csv"
+        data_folder = self.context.output_folder
+        experiment_df = self.data_io.get_data(filename=filename)
+        cond_names = experiment_df.columns.values
+        t_start = my_analysis_options["t_start_ana"]
+        t_end = my_analysis_options["t_end_ana"]
+        n_trials_vec = pd.to_numeric(experiment_df.loc["n_trials", :].values)
+
+        # Assert for equal number of trials
+        assert np.all(
+            n_trials_vec == n_trials_vec[0]
+        ), "Not equal number of trials, aborting..."
+        n_trials = n_trials_vec[0]
+
+        bin_width = 0.01
+
+        bins = np.linspace(t_start, t_end, int((t_end - t_start) / bin_width))
+        lags = self._correlation_lags(len(bins) - 1, len(bins) - 1)
+
+        cond_name = cond_names[0]
+        filename = Path(data_folder) / ("Response_" + cond_name + ".gz")
+        data_dict = self.data_io.get_data(filename)
+
+        if corr_units is None:
+            n_units = data_dict["n_units"]
+            unit_vec = np.arange(n_units)
+        else:
+            n_units = len(corr_units)
+            unit_vec = np.array(corr_units)
+
+        # Cross-correlation matrix [trial, unit_y, unit_x, lags]
+        ccf_mtx = np.zeros((n_trials, n_units, n_units, len(lags)))
+        # Correlation coefficient matrix [trial, unit_y, unit_x]
+        ccoef_mtx = np.zeros((n_trials, n_units, n_units))
+
+        # Loop conditions
+        # for idx, cond_name in enumerate(cond_names):
+        for this_trial in range(n_trials):
+            # Cross correlation
+            ccf, ccoef = self._get_cross_correlation_trial(
+                data_dict, this_trial, t_start, t_end, bins, lags, unit_vec
+            )
+            ccf_mtx[this_trial, ...] = ccf
+            ccoef_mtx[this_trial, ...] = ccoef
+
+        # Save results
+        filename_out = f"{cond_names_string}_correlation.npz"
+        npy_save_path = data_folder / filename_out
+        np.savez(
+            npy_save_path,
+            ccf_mtx=ccf_mtx,
+            ccoef_mtx=ccoef_mtx,
+            lags=lags,
+            unit_vec=unit_vec,
+        )
 
     def amplitude_sensitivity(self):
         """ """
