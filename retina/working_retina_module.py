@@ -6,6 +6,7 @@ from scipy.signal import convolve
 from scipy.interpolate import interp1d
 from scipy.spatial import Delaunay
 from scipy.optimize import fsolve
+from scipy.ndimage import gaussian_filter
 from skimage.transform import resize
 import torch
 
@@ -637,9 +638,10 @@ class WorkingRetina(RetinaMath):
 
         sidelen = self.spatial_filter_sidelen
 
-        video_copy = np.tile(
-            self.stimulus_video.frames.copy(), (len(cell_indices), 1, 1, 1)
-        )
+        # Original frames are now [time points, height, width]
+        video_copy = self.stimulus_video.frames.copy()
+        video_copy = np.transpose(video_copy, (1, 2, 0))
+        video_copy = np.tile(video_copy, (len(cell_indices), 1, 1, 1))
 
         qmin, qmax, rmin, rmax = self._get_crop_pixels(cell_indices)
 
@@ -694,7 +696,8 @@ class WorkingRetina(RetinaMath):
         # stimulus_cropped = stimulus_cropped.astype(np.uint16)
 
         if reshape is True:
-            n_frames = np.shape(self.stimulus_video.frames)[-1]
+            # Original frames are now [time points, height, width]
+            n_frames = np.shape(self.stimulus_video.frames)[0]
             # reshape the video
             stimulus_cropped = stimulus_cropped.reshape(
                 (len(cell_indices), sidelen**2, n_frames)
@@ -2080,10 +2083,18 @@ class PhotoReceptor:
     def image2cone_response(self):
         image_file_name = self.context.my_stimulus_metadata["stimulus_file"]
         self.pix_per_deg = self.context.my_stimulus_metadata["pix_per_deg"]
-        self.fps = self.context.my_stimulus_options["fps"]
+        self.fps = self.context.my_stimulus_metadata["fps"]
 
         # Process stimulus.
         self.image = self.data_io.get_data(image_file_name)
+
+        # For videofiles, average over color channels
+        filename_extension = Path(image_file_name).suffix
+        if filename_extension in [".avi", ".mp4"]:
+            if self.image.shape[-1] == 3:
+                self.image = np.mean(self.image, axis=-1).squeeze()
+            options = self.context.my_stimulus_options
+
         self.blur_image()
         self.aberrated_image2cone_response()
 
@@ -2093,19 +2104,13 @@ class PhotoReceptor:
         """
 
         # Turn the optical aberration of 2 arcmin FWHM to Gaussian function sigma
-        sigma_in_degrees = self.optical_aberration / (2 * np.sqrt(2 * np.log(2)))
-        sigma_in_pixels = self.pix_per_deg * sigma_in_degrees
+        sigma_deg = self.optical_aberration / (2 * np.sqrt(2 * np.log(2)))
+        sigma_pix = self.pix_per_deg * sigma_deg
 
-        # Turn
-        kernel_size = (
-            5,
-            5,
-        )  # Dimensions of the smoothing kernel in pixels, centered in the pixel to be smoothed
-        image_after_optics = cv2.GaussianBlur(
-            self.image, kernel_size, sigmaX=sigma_in_pixels
-        )  # sigmaY = sigmaX
-
-        self.image_after_optics = image_after_optics
+        # Apply Gaussian blur to each frame in the image array
+        self.image_after_optics = gaussian_filter(
+            self.image, sigma=[0, sigma_pix, sigma_pix]
+        )
 
     def aberrated_image2cone_response(self):
         """
@@ -2126,8 +2131,5 @@ class PhotoReceptor:
 
         # Save the cone response to output folder
         filename = self.context.my_stimulus_metadata["stimulus_file"]
+        pdb.set_trace()
         self.data_io.save_cone_response_to_hdf5(filename, cone_response)
-
-
-# if __name__ == "__main__":
-#     pass

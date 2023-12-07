@@ -181,15 +181,16 @@ class VideoBaseClass(object):
             one_cycle * cycles_per_degree * image_width_diameter_in_degrees,
             image_width_diameter,
         )
-        n_frames = self.frames.shape[2]
+        n_frames = self.frames.shape[0]
 
         # Recycling large_frames and self.frames below, instead of descriptive variable names for the evolving video, saves a lot of memory
         # Create large 3D frames array covering the most distant corner when rotated
         large_frames = np.tile(
             image_position_vector, (image_height_diameter, n_frames, 1)
         )
-        # Correct dimensions to image[0,1] and time[2]
-        large_frames = np.moveaxis(large_frames, 2, 1)
+        # Correct dimensions to image[0,1] and time[2]: OLD
+        # Correct dimensions to time[0] and image[1,2]: NEW
+        large_frames = np.moveaxis(large_frames, 1, 0)
         total_temporal_shift = temporal_frequency * one_cycle * duration_seconds
         one_frame_temporal_shift = (temporal_frequency * one_cycle) / fps
         temporal_shift_vector = np.linspace(
@@ -199,11 +200,12 @@ class VideoBaseClass(object):
             len(temporal_shift_vector) == n_frames
         ), "Temporal shift vector length does not match number of frames, aborting..."
         # Shift grating phase in time. Broadcasting temporal vector automatically to correct dimension.
-
-        large_frames = large_frames + temporal_shift_vector
+        large_frames = large_frames + temporal_shift_vector[:, np.newaxis, np.newaxis]
 
         # Rotate to desired orientation
-        large_frames = ndimage.rotate(large_frames, orientation, reshape=False)
+        large_frames = ndimage.rotate(
+            large_frames, orientation, axes=(2, 1), reshape=False
+        )
 
         # Cut back to original image dimensions
         marginal_height = (diameter - image_height) / 2
@@ -211,10 +213,10 @@ class VideoBaseClass(object):
         marginal_height = np.round(marginal_height).astype(np.uint)
         marginal_width = np.round(marginal_width).astype(np.uint)
         self.frames = large_frames[
-            marginal_height:-marginal_height, marginal_width:-marginal_width, :
+            :, marginal_height:-marginal_height, marginal_width:-marginal_width
         ]
         # remove rounding error
-        self.frames = self.frames[0:image_height, 0:image_width, :]
+        self.frames = self.frames[:, 0:image_height, 0:image_width]
 
     def _prepare_form(self, stimulus_size):
         center_deg = self.options["stimulus_position"]  # in degrees
@@ -258,7 +260,7 @@ class VideoBaseClass(object):
     def _combine_background(self, mask):
         # OLD: self.frames = self.frames * mask[..., np.newaxis]
         self.frames_background = np.ones(self.frames.shape) * self.options["background"]
-        self.frames_background[mask] = self.frames[mask]
+        self.frames_background[:, mask] = self.frames[:, mask]
         self.frames = self.frames_background
 
     def _prepare_temporal_sine_pattern(self):
@@ -277,7 +279,7 @@ class VideoBaseClass(object):
         one_cycle = 2 * np.pi
         cycles_per_second = temporal_frequency
 
-        n_frames = self.frames.shape[2]
+        n_frames = self.frames.shape[0]
         image_width = self.options["image_width"]
         image_height = self.options["image_height"]
 
@@ -289,7 +291,9 @@ class VideoBaseClass(object):
         temporal_modulation = np.sin(time_vec)
 
         # Set the frames to sin values
-        frames = np.ones(self.frames.shape) * temporal_modulation
+        frames = (
+            np.ones(self.frames.shape) * temporal_modulation[:, np.newaxis, np.newaxis]
+        )
 
         # Set raw_intensity to [-1 1]
         self.options["raw_intensity"] = (-1, 1)
@@ -312,9 +316,9 @@ class VideoBaseClass(object):
         frames = (
             np.ones(
                 (
+                    int(self.options["fps"] * epoch__in_seconds),
                     self.options["image_height"],
                     self.options["image_width"],
-                    int(self.options["fps"] * epoch__in_seconds),
                 ),
                 dtype=np.uint8,
             )
@@ -342,7 +346,7 @@ class VideoBaseClass(object):
             _, frame = cap.read()
 
             frame_out = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            self.frames[:, :, frame_ix] = cv2.resize(
+            self.frames[frame_ix, :, :] = cv2.resize(
                 frame_out, (w, h), interpolation=cv2.INTER_AREA
             )
 
@@ -467,7 +471,7 @@ class StimulusPattern:
             the exponent. 1 = pink noise, 2 = brown noise, 0 = white noise.
         """
         variance_limits = np.array([-3, 3])
-        samples = self.frames.shape[2]  # number of time samples to generate
+        samples = self.frames.shape[0]  # number of time samples to generate
         frame_time_series_unit_variance = cn.powerlaw_psd_gaussian(beta, samples)
 
         # Cut variance to [-3,3]
@@ -485,7 +489,7 @@ class StimulusPattern:
 
         # Cast time series to frames
         assert (
-            len(frame_time_series) not in self.frames.shape[:-1]
+            len(frame_time_series) not in self.frames.shape[1:]
         ), "Oops. Two different dimensions match the time series length."
         self.frames = np.zeros(self.frames.shape) + frame_time_series
 
@@ -502,7 +506,7 @@ class StimulusPattern:
         nor 'decrement'. The raw intensity range is set to [-1, 1].
         """
         on_proportion = self.options["on_proportion"]
-        samples = self.frames.shape[2]
+        samples = self.frames.shape[0]
         direction = self.options["direction"]
 
         def _rand_bin_array(samples, on_proportion):
@@ -554,10 +558,10 @@ class StimulusPattern:
             self.image = self.data_io.get_data(image_file_name)
 
         # resize image by specifying custom width and height
-        resized_image = cv2.resize(self.image, self.frames.shape[:2])
+        resized_image = cv2.resize(self.image, self.frames.shape[1:])
 
         # add new axis to b to use numpy broadcasting
-        resized_image = resized_image[:, :, np.newaxis]
+        resized_image = resized_image[np.newaxis, :, :]
 
         self.frames = self.frames * resized_image
 
@@ -575,9 +579,9 @@ class StimulusPattern:
         self.pix_per_deg = self.options["pix_per_deg"]
 
         # Cut to desired length at desired fps
-        n_frames = self.frames.shape[2]
+        n_frames = self.frames.shape[0]
         self.frames = np.ones(
-            (self.options["image_height"], self.options["image_width"], n_frames)
+            n_frames, (self.options["image_height"], self.options["image_width"])
         )
 
         video_n_frames = int(video_cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -781,17 +785,18 @@ class VisualStimulus(VideoBaseClass):
 
         # Concatenate baselines and stimulus, recycle to self.frames
         self.frames = np.concatenate(
-            (self.frames_baseline_start, self.frames, self.frames_baseline_end), axis=2
+            (self.frames_baseline_start, self.frames, self.frames_baseline_end), axis=0
         )
         self.frames = self.frames.astype(np.uint8)
 
-        self.video = self.frames.transpose(2, 0, 1)
+        # self.video = self.frames.transpose(2, 0, 1)
+        self.video = self.frames
         self.fps = self.options["fps"]
         self.pix_per_deg = self.options["pix_per_deg"]
 
         self.video_n_frames = len(self.video)
-        self.video_width = self.video[0].shape[1]
-        self.video_height = self.video[1].shape[0]
+        self.video_width = self.frames.shape[2]
+        self.video_height = self.frames.shape[1]
         self.video_width_deg = self.video_width / self.pix_per_deg
         self.video_height_deg = self.video_height / self.pix_per_deg
 

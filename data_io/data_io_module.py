@@ -250,7 +250,8 @@ class DataIO(DataIOBase):
             else:
                 data = np.float32(image)  # 16 bit to save space and memory
         elif filename_extension in [".avi", ".mp4"]:
-            data = cv2.VideoCapture(str(data_fullpath_filename))
+            video_data = cv2.VideoCapture(str(data_fullpath_filename))
+            data = self._video_capture2numpy_array(video_data)
         elif filename_extension in [".npy", ".npz"]:
             data = np.load(data_fullpath_filename)
         elif filename_extension in [".h5", ".hdf5"]:
@@ -267,6 +268,29 @@ class DataIO(DataIOBase):
             return data, data_fullpath_filename
         else:
             return data
+
+    def _video_capture2numpy_array(self, video_data):
+        """
+        Convert video data to numpy array
+        :param video_data: cv2.VideoCapture object
+        :return: numpy array
+        """
+
+        frames = []
+
+        # Read frames in a loop
+        while True:
+            ret, frame = video_data.read()
+            if not ret:
+                break
+            frames.append(frame)
+
+        # Release the VideoCapture object
+        video_data.release()
+        # Convert list of frames to a numpy array
+        data = np.array(frames)
+
+        return data
 
     def save_dict_to_hdf5(self, filename, dic):
         """
@@ -431,8 +455,8 @@ class DataIO(DataIOBase):
         )  # path, codec, fps, size. Note, the isColor the flag is currently supported on Windows only
 
         # Write frames to videofile frame-by-frame
-        for index in np.arange(stimulus.frames.shape[2]):
-            video.write(stimulus.frames[:, :, index])
+        for index in np.arange(stimulus.frames.shape[0]):
+            video.write(stimulus.frames[index, :, :])
 
         video.release()
 
@@ -565,8 +589,6 @@ class DataIO(DataIOBase):
         # Create a dummy VideoBaseCLass object to create a stimulus object
         class DummyVideoClass:
             def __init__(self, data_dict):
-                # self.frames = frames
-
                 for key, value in data_dict.items():
                     setattr(self, key, value)
                 # self.options = options
@@ -599,7 +621,7 @@ class DataIO(DataIOBase):
         stem_extension = filename_stem + filename_extension
 
         fullpath_filename = Path.joinpath(parent_path, stem_extension + ".hdf5")
-
+        pdb.set_trace()
         self.save_array_to_hdf5(fullpath_filename, cone_response)
 
     def load_cone_response_from_hdf5(self, filename):

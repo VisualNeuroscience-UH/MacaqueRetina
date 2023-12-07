@@ -1849,7 +1849,7 @@ class Viz:
 
         fig = plt.figure()
         ax = ax or plt.gca()
-        ax.imshow(stimulus_video.frames[:, :, frame_number], vmin=0, vmax=255)
+        ax.imshow(stimulus_video.frames[frame_number, :, :], vmin=0, vmax=255)
         ax = plt.gca()
 
         gc_rot_deg = gc_df_stimpix["orient_cen_rad"] * (-1) * 180 / np.pi
@@ -1953,7 +1953,7 @@ class Viz:
 
         # Show stimulus frame cropped to RGC surroundings & overlay 1SD center RF on top of that
         ax.imshow(
-            stimulus_video.frames[:, :, frame_number],
+            stimulus_video.frames[frame_number, :, :],
             cmap=self.cmap_stim,
             vmin=0,
             vmax=255,
