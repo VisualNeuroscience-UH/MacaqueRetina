@@ -88,6 +88,7 @@ class ProjectManager(ProjectBase, ProjectUtilities):
 
         # natural_image = NaturalImage(context, data_io, cones)
         # self.natural_image = natural_image
+        retina_math = RetinaMath()
 
         ana = Analysis(
             # Interfaces
@@ -97,11 +98,10 @@ class ProjectManager(ProjectBase, ProjectUtilities):
             # Methods, which are needed also elsewhere
             # round_to_n_significant=self.round_to_n_significant,
             # pp_df_full=self.pp_df_full,
+            pol2cart=retina_math.pol2cart,
         )
 
         self.ana = ana
-
-        retina_math = RetinaMath()
 
         viz = Viz(
             # Interfaces
