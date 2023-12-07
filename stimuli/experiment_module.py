@@ -236,10 +236,10 @@ class Experiment(VideoBaseClass):
                     self.options["raw_intensity"] = stim.options["raw_intensity"]
 
                 self.working_retina.load_stimulus(stim)
-
                 example_gc = None  # int or 'None'
+                filename_prefix = f"Response_{self.working_retina.gc_type}_{self.working_retina.response_type}_"
 
-                filename = Path(data_folder) / ("Response_" + cond_names[idx])
+                filename = Path(data_folder) / (filename_prefix + cond_names[idx])
 
                 self.working_retina.run_cells(
                     cell_index=example_gc,
