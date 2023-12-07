@@ -465,7 +465,8 @@ class Analysis(AnalysisBase):
     ):
         """
         Calculate cross correlation between units for a single trial. For each unit, calculate
-        cross correlation with all other units.
+        cross correlation with all other units. The cross correlation is normalized to provide
+        correlation coefficients.
 
         Parameters
         ----------
@@ -510,9 +511,34 @@ class Analysis(AnalysisBase):
                 x = spike_events[x_idx]
                 x_scaled = self.scaler(x)
 
-                ccf[y_idx, x_idx, :] = correlate(
-                    y_scaled, x_scaled, mode="full", method="direct"
+                # Standard deviations of the signals
+                std_y = np.std(y_scaled)
+                std_x = np.std(x_scaled)
+
+                # Cross-correlation function
+                raw_ccf = correlate(y_scaled, x_scaled, mode="full", method="direct")
+
+                # Normalization factor for each lag
+                lag_counts = np.correlate(
+                    np.ones_like(y_scaled), np.ones_like(x_scaled), mode="full"
                 )
+                normalization = std_y * std_x * lag_counts
+
+                # Normalized correlation coefficient for each lag
+                ccf[y_idx, x_idx, :] = raw_ccf / normalization
+                # # Calculate cross correlation between all pairs of units
+                # for y_idx in range(n_units):
+                #     for x_idx in range(n_units):
+                #         y = spike_events[y_idx]
+                #         # y_scaled = y
+                #         y_scaled = self.scaler(y)
+                #         x = spike_events[x_idx]
+                #         # x_scaled = x
+                #         x_scaled = self.scaler(x)
+
+                #         ccf[y_idx, x_idx, :] = correlate(
+                #             y_scaled, x_scaled, mode="full", method="direct"
+                #         )
                 # [0] is the correlation, [1] is the p-value
                 ccoef[y_idx, x_idx] = pearsonr(y_scaled, x_scaled)[0]
 
@@ -671,7 +697,7 @@ class Analysis(AnalysisBase):
                 )
         return dist_mtx
 
-    def _create_distance_dataframe(self, dist_mtx, unit_vec):
+    def _create_dist_ccoef_df(self, dist_mtx, ccoef_mtx_mean, unit_vec):
         # Initialize an empty list to store the tuples
         data_list = []
 
@@ -681,19 +707,20 @@ class Analysis(AnalysisBase):
                 yx_name = f"unit pair {unit_vec[i]}-{unit_vec[j]}"
                 yx_idx = np.array([i, j])
                 distance = dist_mtx[i, j]
-                data_list.append((yx_name, yx_idx, distance))
+                ccoef = ccoef_mtx_mean[i, j]
+                data_list.append((yx_name, yx_idx, distance, ccoef))
 
         # Sort the list by distance
         sorted_data_list = sorted(data_list, key=lambda x: x[2])
 
         # Convert the list to a DataFrame
         distance_df = pd.DataFrame(
-            sorted_data_list, columns=["yx_name", "yx_idx", "distance_mm"]
+            sorted_data_list, columns=["yx_name", "yx_idx", "distance_mm", "ccoef"]
         )
 
         return distance_df
 
-    def _create_neighbors_dataframe(self, distance_df, unit_vec):
+    def _create_neighbors_df(self, distance_df, unit_vec):
         # Initialize an empty list to store the nearest neighbor tuples
         nearest_neighbors = []
 
@@ -715,25 +742,25 @@ class Analysis(AnalysisBase):
 
         return neighbors_df
 
-    def noise_correlation(self, my_analysis_options, gc_type, response_type, gc_units):
+    def unit_correlation(self, my_analysis_options, gc_type, response_type, gc_units):
         """
         Analyze noise correlation in neural responses based on experimental variables.
 
-        This method computes cross-correlation and correlation coefficients for neural responses.
+        This method computes cross-correlation, normalized to correlation coefficient
+        as a function of time lag, and correlation coefficients for neural responses.
         It uses experimental conditions and ganglion cell (GC) data to analyze correlations and
-        saves the results to files. The method also asserts that the number of trials are equal across conditions.
+        saves the results to files.
 
         Parameters
         ----------
         my_analysis_options : dict
-            A dictionary containing experimental variables and analysis parameters such as
-            'exp_variables', 't_start_ana', and 't_end_ana'.
-        gc_type : str
+            A dictionary containing experimental variables and analysis parameters.
+        gc_type : str, midget or parasol
             The type of ganglion cell under analysis.
-        response_type : str
-            The type of response being analyzed, e.g., 'spike' or 'rate'.
+        response_type : str, on or off
+            The type of response being analyzed.
         gc_units : list or None
-            A list of ganglion cell unit identifiers for analysis. If None, all units are analyzed.
+            A list of ganglion cell unit indexes for analysis. If None, all units are analyzed.
 
         Raises
         ------
@@ -741,12 +768,6 @@ class Analysis(AnalysisBase):
             If `gc_units` is neither None nor a list.
         AssertionError
             If the number of trials is not equal across conditions.
-
-        Notes
-        -----
-        - The method uses `self.data_io.get_data()` for loading data and assumes specific filename structures.
-        - It calculates cross-correlation and correlation coefficients for each trial and unit.
-        - Saves the mean and SEM of the cross-correlation matrix, as well as the neighbor data, to files.
         """
 
         exp_variables = my_analysis_options["exp_variables"]
@@ -765,10 +786,12 @@ class Analysis(AnalysisBase):
         ), "Not equal number of trials, aborting..."
         n_trials = n_trials_vec[0]
 
-        bin_width = 0.01
+        bin_width = 0.01  # seconds
 
         bins = np.linspace(t_start, t_end, int((t_end - t_start) / bin_width))
         lags = self._correlation_lags(len(bins) - 1, len(bins) - 1)
+        # Convert lags to seconds
+        lags = lags * bin_width
 
         cond_name = cond_names[0]
         filename_prefix = f"Response_{gc_type}_{response_type}_"
@@ -791,7 +814,7 @@ class Analysis(AnalysisBase):
 
         # Loop conditions
         for this_trial in range(n_trials):
-            # Cross correlation
+            # Cross correlation, normalized to correlation coefficient
             ccf, ccoef = self._get_cross_correlation_trial(
                 data_dict, this_trial, t_start, t_end, bins, lags, unit_vec
             )
@@ -800,6 +823,7 @@ class Analysis(AnalysisBase):
 
         ccf_mtx_mean = np.mean(ccf_mtx, axis=0)
         ccf_mtx_SEM = np.std(ccf_mtx, axis=0) / np.sqrt(ccf_mtx.shape[0])
+        ccoef_mtx_mean = np.mean(ccoef_mtx, axis=0)
 
         # Load mosaic
         gc_dataframe = self.data_io.get_data(
@@ -812,8 +836,8 @@ class Analysis(AnalysisBase):
 
         # Calculate distances between unit_vec units
         dist_mtx = self._calc_dist_mtx(x_vec, y_vec, unit_vec)
-        dist_df = self._create_distance_dataframe(dist_mtx, unit_vec)
-        neigbor_df = self._create_neighbors_dataframe(dist_df, unit_vec)
+        dist_df = self._create_dist_ccoef_df(dist_mtx, ccoef_mtx_mean, unit_vec)
+        neigbor_df = self._create_neighbors_df(dist_df, unit_vec)
         neighbor_unique_df = neigbor_df.drop_duplicates(subset=["yx_name"])
 
         # Save results
@@ -830,6 +854,10 @@ class Analysis(AnalysisBase):
         filename_out = f"{cond_names_string}_correlation_neighbors.csv"
         csv_save_path = data_folder / filename_out
         neighbor_unique_df.to_csv(csv_save_path, index=False)
+
+        filename_out = f"{cond_names_string}_correlation_distances.csv"
+        csv_save_path = data_folder / filename_out
+        dist_df.to_csv(csv_save_path, index=False)
 
     def amplitude_sensitivity(self):
         """ """

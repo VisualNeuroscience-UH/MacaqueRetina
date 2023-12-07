@@ -2842,111 +2842,88 @@ class Viz:
         if savefigname:
             self._figsave(figurename=savefigname)
 
-    def show_noise_correlation(self, exp_variables, trial=0, savefigname=None):
+    def show_unit_correlation(self, exp_variables, time_window=None, savefigname=None):
         """ """
 
-        def _calc_dist_mtx(x_vec, y_vec, unit_vec):
-            n_units = unit_vec.shape[0]
-            dist_mtx = np.zeros((n_units, n_units))
-            for i in range(n_units):
-                for j in range(n_units):
-                    dist_mtx[i, j] = np.sqrt(
-                        (x_vec[i] - x_vec[j]) ** 2 + (y_vec[i] - y_vec[j]) ** 2
-                    )
-            return dist_mtx
-
-        def _create_distance_dataframe(dist_mtx, unit_vec):
-            # Initialize an empty list to store the tuples
-            data_list = []
-
-            # Iterate over the upper triangle of dist_mtx to avoid duplicates
-            for i in range(dist_mtx.shape[0]):
-                for j in range(i + 1, dist_mtx.shape[1]):
-                    yx_name = f"unit pair {unit_vec[i]}-{unit_vec[j]}"
-                    yx_idx = np.array([i, j])
-                    distance = dist_mtx[i, j]
-                    data_list.append((yx_name, yx_idx, distance))
-
-            # Sort the list by distance
-            sorted_data_list = sorted(data_list, key=lambda x: x[2])
-
-            # Convert the list to a DataFrame
-            distance_df = pd.DataFrame(
-                sorted_data_list, columns=["yx_name", "yx_idx", "distance_mm"]
-            )
-
-            return distance_df
-
-        def _create_neighbors_dataframe(distance_df, unit_vec):
-            # Initialize an empty list to store the nearest neighbor tuples
-            nearest_neighbors = []
-
-            # Iterate over each unit in unit_vec.
-            for idx, unit in enumerate(unit_vec):
-                # Filter distance_df to find the rows where the unit index is either yx_idx[0] or yx_idx[1]
-                # Note that we are looking at index, not the unit number
-                filtered_df = distance_df[
-                    distance_df["yx_idx"].apply(lambda x: idx in x)
-                ]
-
-                # If the filtered_df is not empty, find the nearest neighbor
-                if not filtered_df.empty:
-                    nearest_neighbor = filtered_df.iloc[
-                        0
-                    ]  # the first row is the nearest neighbor
-                    nearest_neighbors.append(nearest_neighbor)
-
-            # Convert the list to a DataFrame
-            neighbors_df = pd.DataFrame(nearest_neighbors).reset_index(drop=True)
-
-            return neighbors_df
+        def _exp_func(x, a, b, c):
+            return a * np.exp(-b * x) + c
 
         cond_names_string = "_".join(exp_variables)
         filename = f"exp_metadata_{cond_names_string}.csv"
         experiment_df = self.data_io.get_data(filename=filename)
-        cond_names = experiment_df.columns.values
+        # cond_names = experiment_df.columns.values
         data_folder = self.context.output_folder
-        n_trials_vec = pd.to_numeric(experiment_df.loc["n_trials", :].values)
-        assert trial < np.min(n_trials_vec), "Trial id too high, aborting..."
-
-        # Visualize
-        fig, ax = plt.subplots(len(experiment_df.columns), 1, figsize=(8, 4))
-        # make sure ax is subscriptable
-        ax = np.array(ax, ndmin=1)
+        # n_trials_vec = pd.to_numeric(experiment_df.loc["n_trials", :].values)
 
         # Load results
         filename_in = f"{cond_names_string}_correlation.npz"
         npy_save_path = data_folder / filename_in
         npz_file = np.load(npy_save_path, allow_pickle=True)
-        ccf_mtx = npz_file["ccf_mtx"]
+        ccf_mtx_mean = npz_file["ccf_mtx_mean"]
+        ccf_mtx_SEM = npz_file["ccf_mtx_SEM"]
         lags = npz_file["lags"]
-        ccf_mtx_mean = np.mean(ccf_mtx, axis=0)
-        ccf_mtx_SEM = np.std(ccf_mtx, axis=0) / np.sqrt(ccf_mtx.shape[0])
 
-        ccoef_mtx = npz_file["ccoef_mtx"]
+        if time_window is not None:
+            idx_start = np.argmin(np.abs(lags - time_window[0]))
+            idx_end = np.argmin(np.abs(lags - time_window[1]))
+            lags = lags[idx_start:idx_end]
+            ccf_mtx_mean = ccf_mtx_mean[:, :, idx_start:idx_end]
+            ccf_mtx_SEM = ccf_mtx_SEM[:, :, idx_start:idx_end]
 
         unit_vec = npz_file["unit_vec"]
 
-        # TÄHÄN JÄIT:
-        # -KORRELAATION VIZ
-        # -CCF VS DIST VIZ
-        # -SNR VS DIST VIZ
-        # SYNC MEKANISMI
+        filename_in = f"{cond_names_string}_correlation_neighbors.csv"
+        neighbor_unique_df = pd.read_csv(data_folder / filename_in)
+        n_corr = len(neighbor_unique_df)
 
-        # Load mosaic
-        gc_dataframe = self.data_io.get_data(
-            filename=self.context.my_retina["mosaic_file"]
+        filename_in = f"{cond_names_string}_correlation_distances.csv"
+        dist_df = pd.read_csv(data_folder / filename_in)
+
+        # pdb.set_trace()
+        # Visualize
+        fig, ax = plt.subplots(n_corr, 2, figsize=(8, 4))
+        ax = np.array(ax, ndmin=1)  # make sure ax is subscriptable
+
+        # Loop conditions
+        for idx, row in neighbor_unique_df.iterrows():
+            yx_idx_s = row["yx_idx"]
+            yx_str = yx_idx_s.strip("[]").split()
+            yx_list = [int(num) for num in yx_str]
+            yx_name = row["yx_name"]
+
+            ax[idx, 0].plot(
+                lags,
+                ccf_mtx_mean[yx_list[0], yx_list[1], :],
+                color="black",
+            )
+            ax[idx, 0].fill_between(
+                lags,
+                ccf_mtx_mean[yx_list[0], yx_list[1], :]
+                - ccf_mtx_SEM[yx_list[0], yx_list[1], :],
+                ccf_mtx_mean[yx_list[0], yx_list[1], :]
+                + ccf_mtx_SEM[yx_list[0], yx_list[1], :],
+                color="black",
+                alpha=0.2,
+            )
+            ax[idx, 0].set_title(
+                f"{yx_name}",
+                fontsize=10,
+            )
+
+        ax[0, 1].plot(dist_df["distance_mm"], dist_df["ccoef"], ".", color="black")
+        # Make exponential regression to the data
+        x = dist_df["distance_mm"].values
+        y = dist_df["ccoef"].values
+        popt, pcov = opt.curve_fit(_exp_func, x, y, p0=(1, 1e-6, 1))
+        y_fit = _exp_func(x, *popt)
+        ax[0, 1].plot(x, y_fit, "--", color="black")
+        ax[0, 1].set_title(
+            f"Correlation vs distance\ny = {popt[0]:.2f} exp(-{popt[1]:.2f}x) + {popt[2]:.2f}",
+            fontsize=10,
         )
-        # Get xy coords from dataframe
-        pos_ecc_mm = gc_dataframe["pos_ecc_mm"]
-        pos_polar_deg = gc_dataframe["pos_polar_deg"]
-        x_vec, y_vec = self.pol2cart(pos_ecc_mm, pos_polar_deg)
-        # Calculate distances between unit_vec units
-        dist_mtx = _calc_dist_mtx(x_vec, y_vec, unit_vec)
-        dist_df = _create_distance_dataframe(dist_mtx, unit_vec)
-        neigbor_df = _create_neighbors_dataframe(dist_df, unit_vec)
-        neighbor_unique_df = neigbor_df.drop_duplicates(subset=["yx_name"])
-        pdb.set_trace()
+        # set the rest of the axes off
+        for i in range(1, n_corr):
+            ax[i, 1].axis("off")
 
         if savefigname:
             self._figsave(figurename=savefigname)
