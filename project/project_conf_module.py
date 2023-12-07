@@ -288,7 +288,7 @@ my_stimulus_options = {
     "background": 128,
     "contrast": 0.5,  # Weber constrast
     "mean": 128,
-    "temporal_frequency": 0.01,  # 4.0,  # 40,  # Hz
+    "temporal_frequency": 10,  # 0.01,  # 4.0,  # 40,  # Hz
     "spatial_frequency": 2.0,
     "orientation": 0,  # degrees
     "phase_shift": 0,  # math.pi,  # radians
@@ -562,7 +562,7 @@ if __name__ == "__main__":
     #################################
 
     """
-    Build and test your retina here, one gc type at a time. Temporal hemiretina of macaques.
+    Build and test your retina here, one gc type at a time. 
     """
 
     # PM.construct_retina.build()  # Main method for building the retina
@@ -694,19 +694,19 @@ if __name__ == "__main__":
 
     exp_variables = ["temporal_frequency"]  # from my_stimulus_options
     # exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
-    # # # Define experiment parameters. List lengths must be equal.
-    # # # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logaritmic = [True]
-    # experiment_dict = {
-    #     "exp_variables": exp_variables,
-    #     "min_max_values": [[0.01, 0.01]],  # two vals for each exp_variable # frequency
-    #     "n_steps": [1],
-    #     "logaritmic": [False],
-    #     # "min_max_values": [[0.5, 46], [0.01, 0.64]],  # temporal frequency, contrast
-    #     # "n_steps": [14, 7],  # temporal frequency, contrast
-    #     # "logaritmic": [False, True],  # temporal frequency, contrast
-    # }
+    # # Define experiment parameters. List lengths must be equal.
+    # # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logaritmic = [True]
+    experiment_dict = {
+        "exp_variables": exp_variables,
+        "min_max_values": [[10, 10]],  # two vals for each exp_variable # frequency
+        "n_steps": [1],
+        "logaritmic": [False],
+        # "min_max_values": [[0.5, 46], [0.01, 0.64]],  # temporal frequency, contrast
+        # "n_steps": [14, 7],  # temporal frequency, contrast
+        # "logaritmic": [False, True],  # temporal frequency, contrast
+    }
 
-    # PM.experiment.build_and_run(experiment_dict, n_trials=4)
+    PM.experiment.build_and_run(experiment_dict, n_trials=10)
 
     # # #########################
     # # ## Analyze Experiment ###
@@ -721,15 +721,19 @@ if __name__ == "__main__":
     }
 
     # PM.ana.analyze_experiment(my_analysis_options)
-    PM.ana.noise_correlation(my_analysis_options, corr_units=[0, 2, 4, 6])
+    PM.ana.unit_correlation(my_analysis_options, gc_type, response_type, gc_units=None)
 
     # ############################
     # ### Visualize Experiment ###
     # ############################
 
+    # TÄHÄN JÄIT: SYNC MEKANISMI
+
     # PM.viz.spike_raster_response(exp_variables, trial=0, savefigname=None)
 
-    PM.viz.show_noise_correlation(exp_variables, trial=0, savefigname=None)
+    PM.viz.show_unit_correlation(
+        exp_variables, time_window=[-0.2, 0.2], savefigname=None
+    )
 
     # PM.viz.F1F2_popul_response(exp_variables, xlog=False, savefigname=None)
     # PM.viz.F1F2_unit_response(
