@@ -755,13 +755,13 @@ class ConstructRetina(RetinaMath):
         return d0 * (1 + beta * r) ** (-2)
 
     # GC placement functions
-    def _initialize_positions_by_group(self, gc_density_func_params):
+    def _initialize_positions_by_group(self, gc_density_params, cone_density_params):
         """
         Initialize cell positions based on grouped eccentricities.
 
         Parameters
         ----------
-        gc_density_func_params : tuple
+        gc_density_params : tuple
             Parameters for the density function used to calculate cell density
             at a given eccentricity.
 
@@ -771,7 +771,7 @@ class ConstructRetina(RetinaMath):
             A list of arrays where each array contains group indices representing
             eccentricity steps for cells.
 
-        initial_positions : list of ndarray
+        gc_initial_pos : list of ndarray
             A list of arrays where each array contains cell positions for each
             eccentricity group.
 
@@ -799,32 +799,61 @@ class ConstructRetina(RetinaMath):
         angle_deg = np.ptp(self.polar_lim_deg)  # The angle_deg is now == max theta_deg
 
         eccentricity_groups = []
-        initial_positions = []
         areas_all_mm2 = []
-        density_prop_all = []
+        gc_initial_pos = []
+        gc_density_all = []
+        cone_initial_pos = []
+        cone_density_all = []
         for group_idx in range(len(eccentricity_steps) - 1):
             min_ecc = eccentricity_steps[group_idx]
             max_ecc = eccentricity_steps[group_idx + 1]
             avg_ecc = (min_ecc + max_ecc) / 2
-            density = self.gauss_plus_baseline_func(avg_ecc, *gc_density_func_params)
-            # density_prop_all.append(density * self.gc_proportion)
+
+            gc_density_group = self.gauss_plus_baseline_func(
+                avg_ecc, *gc_density_params
+            )
+            cone_density_group = self.double_exponential_func(
+                avg_ecc, *cone_density_params
+            )
 
             # Calculate area for this eccentricity group
             sector_area_remove = self.sector2area_mm2(min_ecc, angle_deg)
             sector_area_full = self.sector2area_mm2(max_ecc, angle_deg)
             sector_surface_area = sector_area_full - sector_area_remove  # in mm2
+
             # collect sector area for each ecc step
             areas_all_mm2.append(sector_surface_area)
 
-            n_cells = math.ceil(sector_surface_area * density * self.gc_proportion)
-            positions = self._random_positions_within_group(min_ecc, max_ecc, n_cells)
-            eccentricity_groups.append(np.full(n_cells, group_idx))
-            density_prop_all.append(np.full(n_cells, density * self.gc_proportion))
-            initial_positions.append(positions)
+            gc_units = math.ceil(
+                sector_surface_area * gc_density_group * self.gc_proportion
+            )
+            gc_positions = self._random_positions_within_group(
+                min_ecc, max_ecc, gc_units
+            )
+            eccentricity_groups.append(np.full(gc_units, group_idx))
+            gc_density_all.append(
+                np.full(gc_units, gc_density_group * self.gc_proportion)
+            )
+            gc_initial_pos.append(gc_positions)
 
-        gc_density = np.concatenate(density_prop_all)
+            cone_units = math.ceil(sector_surface_area * cone_density_group)
+            cone_positions = self._random_positions_within_group(
+                min_ecc, max_ecc, cone_units
+            )
+            cone_density_all.append(np.full(cone_units, cone_density_group))
+            cone_initial_pos.append(cone_positions)
 
-        return eccentricity_groups, initial_positions, areas_all_mm2, gc_density
+        gc_density = np.concatenate(gc_density_all)
+        cone_density = np.concatenate(cone_density_all)
+
+        return (
+            eccentricity_groups,
+            areas_all_mm2,
+            gc_initial_pos,
+            gc_density,
+            cone_initial_pos,
+            cone_density,
+        )
 
     def _boundary_force(self, positions, rep, dist_th, ecc_lim_mm, polar_lim_deg):
         """
@@ -992,7 +1021,9 @@ class ConstructRetina(RetinaMath):
 
         return torch.stack([delta_x, delta_y], dim=1)
 
-    def _apply_force_based_layout(self, all_positions, gc_density):
+    def _apply_force_based_layout(
+        self, all_positions, unit_density, unit_placement_params
+    ):
         """
         Apply a force-based layout on the given positions.
 
@@ -1000,7 +1031,7 @@ class ConstructRetina(RetinaMath):
         ----------
         all_positions : list or ndarray
             Initial positions of nodes.
-        gc_density : float
+        unit_density : float
             One local density according to eccentricity group.
         Returns
         -------
@@ -1013,26 +1044,25 @@ class ConstructRetina(RetinaMath):
         It visualizes the progress of the layout optimization.
         """
 
-        gc_placement_params = self.context.my_retina["gc_placement_params"]
-        n_iterations = gc_placement_params["n_iterations"]
-        change_rate = gc_placement_params["change_rate"]
-        unit_repulsion_stregth = gc_placement_params["unit_repulsion_stregth"]
-        unit_distance_threshold = gc_placement_params["unit_distance_threshold"]
-        diffusion_speed = gc_placement_params["diffusion_speed"]
-        border_repulsion_stength = gc_placement_params["border_repulsion_stength"]
-        border_distance_threshold = gc_placement_params["border_distance_threshold"]
-        show_placing_progress = gc_placement_params["show_placing_progress"]
-        show_skip_steps = gc_placement_params["show_skip_steps"]
+        n_iterations = unit_placement_params["n_iterations"]
+        change_rate = unit_placement_params["change_rate"]
+        unit_repulsion_stregth = unit_placement_params["unit_repulsion_stregth"]
+        unit_distance_threshold = unit_placement_params["unit_distance_threshold"]
+        diffusion_speed = unit_placement_params["diffusion_speed"]
+        border_repulsion_stength = unit_placement_params["border_repulsion_stength"]
+        border_distance_threshold = unit_placement_params["border_distance_threshold"]
+        show_placing_progress = unit_placement_params["show_placing_progress"]
+        show_skip_steps = unit_placement_params["show_skip_steps"]
 
         if show_placing_progress is True:
             # Init plotting
-            fig_args = self.viz.show_gc_placement_progress(all_positions, init=True)
+            fig_args = self.viz.show_unit_placement_progress(all_positions, init=True)
 
         unit_distance_threshold = torch.tensor(unit_distance_threshold).to(self.device)
         unit_repulsion_stregth = torch.tensor(unit_repulsion_stregth).to(self.device)
         diffusion_speed = torch.tensor(diffusion_speed).to(self.device)
         n_iterations = torch.tensor(n_iterations).to(self.device)
-        gc_density = torch.tensor(gc_density).to(self.device)
+        unit_density = torch.tensor(unit_density).to(self.device)
 
         rep = torch.tensor(border_repulsion_stength).to(self.device)
         dist_th = torch.tensor(border_distance_threshold).to(self.device)
@@ -1051,8 +1081,8 @@ class ConstructRetina(RetinaMath):
         # Adjust unit_distance_threshold and diffusion speed with density of the units
         # This is a technical trick to get good spread for different densities
         # The 1 mm ecc for parasol provides 952 units/mm2 density. This is the reference density.
-        gc_distance_threshold = unit_distance_threshold * (952 / gc_density)
-        gc_diffusion_speed = diffusion_speed * (952 / gc_density)
+        adjusted_distance_threshold = unit_distance_threshold * (952 / unit_density)
+        adjusted_diffusion_speed = diffusion_speed * (952 / unit_density)
 
         for iteration in torch.range(0, n_iterations):
             optimizer.zero_grad()
@@ -1063,7 +1093,7 @@ class ConstructRetina(RetinaMath):
             # Clip minimum distance to avoid very high repulsion
             dist = torch.clamp(dist, min=0.00001)
             # Clip max to inf (zero repulsion) above a certain distance
-            dist[dist > gc_distance_threshold] = torch.inf
+            dist[dist > adjusted_distance_threshold] = torch.inf
             # Using inverse cube for repulsion
             repulsive_force = unit_repulsion_stregth * torch.sum(
                 diff / (dist[..., None] ** 3), dim=1
@@ -1087,18 +1117,19 @@ class ConstructRetina(RetinaMath):
                 positions, ecc_lim_mm, polar_lim_deg
             )
 
-            gc_diffusion_speed_reshaped = gc_diffusion_speed.view(-1, 1)
+            gc_diffusion_speed_reshaped = adjusted_diffusion_speed.view(-1, 1)
             new_data = (
                 torch.randn_like(positions) * gc_diffusion_speed_reshaped
                 + positions_delta
             )
+
             positions.data = positions + new_data
 
             if show_placing_progress is True:
                 # Update the visualization every 100 iterations for performance (or adjust as needed)
                 if iteration % show_skip_steps == 0:
                     positions_cpu = positions.detach().cpu().numpy()
-                    self.viz.show_gc_placement_progress(
+                    self.viz.show_unit_placement_progress(
                         original_positions=original_positions,
                         positions=positions_cpu,
                         iteration=iteration,
@@ -1111,7 +1142,7 @@ class ConstructRetina(RetinaMath):
 
         return positions.detach().cpu().numpy()
 
-    def _apply_voronoi_layout(self, all_positions):
+    def _apply_voronoi_layout(self, all_positions, unit_placement_params):
         """
         Apply a Voronoi-based layout on the given positions.
 
@@ -1132,14 +1163,13 @@ class ConstructRetina(RetinaMath):
         """
 
         # Extract parameters from context
-        gc_placement_params = self.context.my_retina["gc_placement_params"]
-        n_iterations = gc_placement_params["n_iterations"]
-        change_rate = gc_placement_params["change_rate"]
-        show_placing_progress = gc_placement_params["show_placing_progress"]
-        show_skip_steps = gc_placement_params["show_skip_steps"]
+        n_iterations = unit_placement_params["n_iterations"]
+        change_rate = unit_placement_params["change_rate"]
+        show_placing_progress = unit_placement_params["show_placing_progress"]
+        show_skip_steps = unit_placement_params["show_skip_steps"]
 
         if show_placing_progress:
-            fig_args = self.viz.show_gc_placement_progress(all_positions, init=True)
+            fig_args = self.viz.show_unit_placement_progress(all_positions, init=True)
 
         def polygon_centroid(polygon):
             """Compute the centroid of a polygon."""
@@ -1215,7 +1245,7 @@ class ConstructRetina(RetinaMath):
             positions = (positions_torch + position_deltas).numpy()
 
             if show_placing_progress and iteration % show_skip_steps == 0:
-                self.viz.show_gc_placement_progress(
+                self.viz.show_unit_placement_progress(
                     original_positions=original_positions,
                     positions=np.array(old_positions),
                     iteration=iteration,
@@ -1231,29 +1261,23 @@ class ConstructRetina(RetinaMath):
 
         return positions
 
-    def _random_positions_within_group(self, min_ecc, max_ecc, n_cells):
-        eccs = np.random.uniform(min_ecc, max_ecc, n_cells)
+    def _random_positions_within_group(self, min_ecc, max_ecc, n_units):
+        eccs = np.random.uniform(min_ecc, max_ecc, n_units)
         angles = np.random.uniform(
-            self.polar_lim_deg[0], self.polar_lim_deg[1], n_cells
+            self.polar_lim_deg[0], self.polar_lim_deg[1], n_units
         )
         return np.column_stack((eccs, angles))
 
-    def _place_gc_units(self, gc_density_func_params):
-        # 1. Initial Positioning by Group
-        (
-            eccentricity_groups,
-            initial_positions,
-            sector_surface_areas_mm2,
-            gc_density,
-        ) = self._initialize_positions_by_group(gc_density_func_params)
-
-        # 2. Merge the Groups
+    def _optimize_positions(
+        self, initial_positions, unit_density, unit_placement_params
+    ):
+        # Merge the Groups
         all_positions = np.vstack(initial_positions)
         all_positions_tuple = self.pol2cart(all_positions[:, 0], all_positions[:, 1])
         all_positions_mm = np.column_stack(all_positions_tuple)
 
-        # 3 Optimize positions
-        optim_algorithm = self.context.my_retina["gc_placement_params"]["algorithm"]
+        # Optimize positions for ganglion cells
+        optim_algorithm = unit_placement_params["algorithm"]
         if optim_algorithm == None:
             # Initial random placement.
             # Use this for testing/speed/nonvarying placements.
@@ -1262,22 +1286,50 @@ class ConstructRetina(RetinaMath):
             if optim_algorithm == "force":
                 # Apply Force Based Layout Algorithm with Boundary Repulsion
                 optimized_positions_mm = self._apply_force_based_layout(
-                    all_positions_mm, gc_density
+                    all_positions_mm, unit_density, unit_placement_params
                 )
             elif optim_algorithm == "voronoi":
                 # Apply Voronoi-based Layout with Loyd's Relaxation
-                optimized_positions_mm = self._apply_voronoi_layout(all_positions_mm)
+                optimized_positions_mm = self._apply_voronoi_layout(
+                    all_positions_mm, unit_placement_params
+                )
             optimized_positions_tuple = self.cart2pol(
                 optimized_positions_mm[:, 0], optimized_positions_mm[:, 1]
             )
             optimized_positions = np.column_stack(optimized_positions_tuple)
 
-        # 4. Assign Output Variables
-        self.gc_df["pos_ecc_mm"] = optimized_positions[:, 0]
-        self.gc_df["pos_polar_deg"] = optimized_positions[:, 1]
+        return optimized_positions
+
+    def _place_units(self, gc_density_params, cone_density_params):
+        # Initial Positioning by Group
+        (
+            eccentricity_groups,
+            sector_surface_areas_mm2,
+            gc_initial_pos,
+            gc_density,
+            cone_initial_pos,
+            cone_density,
+        ) = self._initialize_positions_by_group(gc_density_params, cone_density_params)
+
+        # Optimize positions
+        gc_placement_params = self.context.my_retina["gc_placement_params"]
+        gc_optimized_pos = self._optimize_positions(
+            gc_initial_pos, gc_density, gc_placement_params
+        )
+        cone_placement_params = self.context.my_retina["cone_placement_params"]
+        cone_optimized_pos = self._optimize_positions(
+            cone_initial_pos, cone_density, cone_placement_params
+        )
+
+        # TÄHÄN JÄIT: TAPIT PAIKALLAAN. TEE WORKING RETINASSA TAPPEIHIN KOHINA. LEVITÄ KOHINA GANGLION SOLUIHIN.
+        #
+
+        # Assign Output Variables
+        self.gc_df["pos_ecc_mm"] = gc_optimized_pos[:, 0]
+        self.gc_df["pos_polar_deg"] = gc_optimized_pos[:, 1]
         self.gc_df["ecc_group_idx"] = np.concatenate(eccentricity_groups)
         self.sector_surface_areas_mm2 = sector_surface_areas_mm2
-        self.gc_density_func_params = gc_density_func_params
+        self.gc_density_params = gc_density_params
 
     # temporal filter and tonic frive functions
     def _create_fixed_temporal_rfs(self):
@@ -1681,7 +1733,7 @@ class ConstructRetina(RetinaMath):
 
         gc_vae_df["pos_ecc_mm"] = pos_ecc_mm
         gc_vae_df["pos_polar_deg"] = pos_polar_deg
-        # These values come from _place_gc_units before _create_spatial_rfs in build()
+        # These values come from _place_units before _create_spatial_rfs in build()
         # They are independent from FIT.
         gc_vae_df["ecc_group_idx"] = self.gc_vae_df["ecc_group_idx"]
         gc_vae_df["gc_scaling_factors"] = self.gc_vae_df["gc_scaling_factors"]
@@ -2448,10 +2500,11 @@ class ConstructRetina(RetinaMath):
 
         # -- First, place the ganglion cell midpoints (units mm)
         # Run GC density fit to data, get func_params. Data from Perry_1984_Neurosci
-        gc_density_func_params = self.read_and_fit_unit_density_data("gc")
+        gc_density_params = self.read_and_fit_unit_density_data("gc")
+        cone_density_params = self.read_and_fit_unit_density_data("cone")
 
         # Place ganglion cells to desired retina.
-        self._place_gc_units(gc_density_func_params)
+        self._place_units(gc_density_params, cone_density_params)
 
         # Now that we have placed the units, we know their number
         self.n_units = len(self.gc_df)

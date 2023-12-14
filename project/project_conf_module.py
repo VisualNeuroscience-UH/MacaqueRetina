@@ -271,8 +271,8 @@ my_stimulus_options = {
     "pix_per_deg": 60,
     "fps": 300,  # 300 for good cg integration
     "duration_seconds": 1,  # actual frames = floor(duration_seconds * fps)
-    "baseline_start_seconds": 1.0,  # Total duration is duration + both baselines
-    "baseline_end_seconds": 1.0,
+    "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
+    "baseline_end_seconds": 0.5,
     "pattern": "temporal_square_pattern",  # One of the StimulusPatterns
     "stimulus_form": "rectangular",
     "size_inner": 0.1,  # deg, Applies to annulus only
@@ -282,7 +282,7 @@ my_stimulus_options = {
     "background": 128,
     "contrast": 0.5,  # Weber constrast
     "mean": 128,
-    "temporal_frequency": 10,  # 0.01,  # 4.0,  # 40,  # Hz
+    "temporal_frequency": 0.1,  # 0.01,  # 4.0,  # 40,  # Hz
     "spatial_frequency": 2.0,
     "orientation": 0,  # degrees
     "phase_shift": 0,  # math.pi,  # radians
@@ -393,8 +393,21 @@ gc_placement_params = {
     "diffusion_speed": 0.0001,  # f only, adjusted with ecc
     "border_repulsion_stength": 10,  # f only
     "border_distance_threshold": 0.01,  # f only
-    "show_placing_progress": True,  # True False
+    "show_placing_progress": False,  # True False
     "show_skip_steps": 20,  # v 1, f 100
+}
+
+cone_placement_params = {
+    "algorithm": "force",  # "voronoi" or "force" or None
+    "n_iterations": 1000,  # v 20, f 5000
+    "change_rate": 0.0001,  # f 0.001, v 0.5
+    "unit_repulsion_stregth": 2,  # 10 f only
+    "unit_distance_threshold": 0.1,  # f only, adjusted with ecc
+    "diffusion_speed": 0.001,  # f only, adjusted with ecc
+    "border_repulsion_stength": 5,  # f only
+    "border_distance_threshold": 0.0001,  # f only
+    "show_placing_progress": True,  # True False
+    "show_skip_steps": 10,  # v 1, f 100
 }
 
 # For VAE, this is enough to have good distribution between units.
@@ -416,10 +429,11 @@ my_retina_append = {
     "proportion_of_ON_response_type": proportion_of_ON_response_type,
     "proportion_of_OFF_response_type": proportion_of_OFF_response_type,
     "deg_per_mm": deg_per_mm,
-    "optical_aberration": 2 / 60,  # unit is degree
+    "optical_aberration": 2 / 60,  # deg , 2 arcmin, Navarro 1993 JOSAA
     "cone_params": cone_params,
     "refractory_params": refractory_params,
     "gc_placement_params": gc_placement_params,
+    "cone_placement_params": cone_placement_params,
     "rf_repulsion_params": rf_repulsion_params,
     "visual2cortical_params": visual2cortical_params,
 }
@@ -432,6 +446,8 @@ literature_data_folder = git_repo_root.joinpath(r"retina/literature_data")
 # Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
 # Define literature data files for linear temporal models.
 # Data from Benardete_1999_VisNeurosci and Benardete_1997_VisNeurosci
+# Define literature data files for cone density.
+# Data from Packer_1989_JCompNeurol
 
 # gc_density_fullpath = literature_data_folder / "Perry_1984_Neurosci_GCdensity_c.mat"
 gc_density_fullpath = (
@@ -478,6 +494,13 @@ dendr_diam_units = {
     "data3": ["deg", "um"],
 }
 
+cone_density1_fullpath = (
+    literature_data_folder / "Packer_1989_JCompNeurol_ConeDensity_Fig6A_main_c.npz"
+)
+cone_density2_fullpath = (
+    literature_data_folder / "Packer_1989_JCompNeurol_ConeDensity_Fig6A_insert_c.npz"
+)
+
 literature_data_files = {
     "gc_density_fullpath": gc_density_fullpath,
     "dendr_diam1_fullpath": dendr_diam1_fullpath,
@@ -486,6 +509,8 @@ literature_data_files = {
     "dendr_diam_units": dendr_diam_units,
     "temporal_BK_model_fullpath": temporal_BK_model_fullpath,
     "spatial_DoG_fullpath": spatial_DoG_fullpath,
+    "cone_density1_fullpath": cone_density1_fullpath,
+    "cone_density2_fullpath": cone_density2_fullpath,
 }
 
 
@@ -535,11 +560,13 @@ if __name__ == "__main__":
 
     # TODO: enable cone filtering to stimuli, partially not implemented
     """
-    The Chichilnisky model receptive fields were measured from isolated retinas.
-    Images were focused on photoreceptors. To account for the blur by the eye,
-    we have the cone sample image method.
+    For artificial stimuli, we want to measure the true transfer function of the retina.
+    E.g. the Chichilnisky model receptive fields were measured from isolated retinas,
+    where images were focused on photoreceptors. The natural_stimuli_cone_filter method 
+    accounts for the blur by the eye and the nonlinear cone response for natural images 
+    and videos.
     """
-    # PM.cones.image2cone_response()
+    # PM.cones.natural_stimuli_cone_filter()
     # PM.viz.show_cone_response(
     #     PM.cones.image, PM.cones.image_after_optics, PM.cones.cone_response
     # )
@@ -548,16 +575,16 @@ if __name__ == "__main__":
     ##   Sample figure data from literature  ##
     ###########################################
 
-    # # If possible, sample only temporal hemiretina
-    from project.project_utilities_module import DataSampler
+    # # # If possible, sample only temporal hemiretina
+    # from project.project_utilities_module import DataSampler
 
-    filename = "Goodchild_1996_JCompNeurol_Parasol_DendDiam_Fig2A.jpg"
-    filename_full = git_repo_root.joinpath(r"retina/literature_data", filename)
-    # Fig lowest and highest tick values, use these as calibration points
-    min_X, max_X, min_Y, max_Y = (1, 100, 10, 1000)
-    ds = DataSampler(filename_full, min_X, max_X, min_Y, max_Y, logX=True, logY=True)
-    ds.collect_and_save_points()
-    ds.quality_control(restore=True)
+    # filename = "Packer_1989_JCompNeurol_ConeDensity_Fig6A_insert.jpg"
+    # filename_full = git_repo_root.joinpath(r"retina/literature_data", filename)
+    # # Fig lowest and highest tick values in the image, use these as calibration points
+    # min_X, max_X, min_Y, max_Y = (0, 1.25, 25, 225)
+    # ds = DataSampler(filename_full, min_X, max_X, min_Y, max_Y, logX=False, logY=False)
+    # ds.collect_and_save_points()
+    # ds.quality_control(restore=True)
 
     #################################
     #################################
@@ -569,7 +596,7 @@ if __name__ == "__main__":
     Build and test your retina here, one gc type at a time. 
     """
 
-    # PM.construct_retina.build()  # Main method for building the retina
+    PM.construct_retina.build()  # Main method for building the retina
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # Thus, they are called after the retina is built.
@@ -627,8 +654,8 @@ if __name__ == "__main__":
     ####################################
 
     # # Load stimulus to get working retina, necessary for running cells
-    # PM.working_retina.load_stimulus()
-    # PM.working_retina.run_with_my_run_options()
+    PM.working_retina.load_stimulus()
+    PM.working_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
@@ -675,7 +702,7 @@ if __name__ == "__main__":
     ################################################
 
     # # Based on my_run_options above
-    # PM.viz.show_all_gc_responses(savefigname=None)
+    PM.viz.show_all_gc_responses(savefigname=None)
 
     # PM.viz.show_stimulus_with_gcs(
     #     example_gc=3,  # or my_run_options["cell_index"]

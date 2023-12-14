@@ -116,7 +116,7 @@ class ProjectManager(ProjectBase, ProjectUtilities):
             DoG2D_independent_surround=retina_math.DoG2D_independent_surround,
             DoG2D_circular=retina_math.DoG2D_circular,
             pol2cart=retina_math.pol2cart,
-            gauss_plus_baseline=retina_math.gauss_plus_baseline,
+            gauss_plus_baseline_func=retina_math.gauss_plus_baseline_func,
             sector2area_mm2=retina_math.sector2area_mm2,
         )
 
@@ -129,7 +129,7 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         )
         self.viz.construct_retina = self.construct_retina
 
-        self.working_retina = WorkingRetina(context, data_io, viz, project_data)
+        self.working_retina = WorkingRetina(context, data_io, cones, viz, project_data)
         # self.viz.working_retina = self.working_retina
 
         experiment = Experiment(context, data_io)

@@ -780,7 +780,7 @@ class Viz:
 
         ecc_mm = self.construct_retina.gc_df["pos_ecc_mm"].to_numpy()
         pol_deg = self.construct_retina.gc_df["pos_polar_deg"].to_numpy()
-        gc_density_func_params = self.construct_retina.gc_density_func_params
+        gc_density_params = self.construct_retina.gc_density_params
 
         # to cartesian
         xcoord, ycoord = self.pol2cart(ecc_mm, pol_deg)
@@ -1620,7 +1620,7 @@ class Viz:
             # Position idx in layout: enumerate starts at 0, so add 1.
             self._subplot_img_recoimg(axd, "re", idx + 1, rec_img, samples, title)
 
-    def show_gc_placement_progress(
+    def show_unit_placement_progress(
         self,
         original_positions,
         positions=None,

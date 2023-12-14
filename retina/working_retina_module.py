@@ -5,7 +5,7 @@ import pandas as pd
 from scipy.signal import convolve
 from scipy.interpolate import interp1d
 from scipy.spatial import Delaunay
-from scipy.optimize import fsolve
+from scipy.optimize import fsolve, curve_fit
 from scipy.ndimage import gaussian_filter
 from skimage.transform import resize
 import torch
@@ -36,10 +36,11 @@ b2.prefs["logging.display_brian_error_message"] = False
 
 
 class WorkingRetina(RetinaMath):
-    def __init__(self, context, data_io, viz, project_data) -> None:
+    def __init__(self, context, data_io, cones, viz, project_data) -> None:
         self._context = context.set_context(self)
         self._data_io = data_io
         # viz.client_object = self  # injecting client object pointer into viz object
+        self._cones = cones
         self._viz = viz
         self._project_data = project_data
 
@@ -52,6 +53,10 @@ class WorkingRetina(RetinaMath):
     @property
     def data_io(self):
         return self._data_io
+
+    @property
+    def cones(self):
+        return self._cones
 
     @property
     def viz(self):
@@ -1709,7 +1714,7 @@ class WorkingRetina(RetinaMath):
         if self.response_type == "off":
             spatial_filters = -spatial_filters
 
-        # Get cropped stimulus, vectorized.
+        # Get cropped stimulus, vectorized. One cropped sequence for each unit
         stimulus_cropped = self._get_spatially_cropped_video(cell_indices, reshape=True)
 
         # Get instantaneous firing rates
@@ -1855,6 +1860,22 @@ class WorkingRetina(RetinaMath):
                     generator_potentials_t[idx, :] = gen_pot_cen + gen_pot_sur
 
             generator_potentials = generator_potentials_t.cpu().numpy()
+            """
+            TÄHÄN JÄIT: ADD SHARED NOISE TO GENERATOR POTENTIALS
+            CONE DENSITY GENERATORS
+              -cone density Packer_1989_JCompNeurol
+              -tappien kohinan autokorrelaatioaika (FWHM) 13+-1 ms mean+-SEM
+              -spread Boycott_1991_EurJNeurosci, Ala-Laurila_2011_NatNeurosci
+            GAUSSIAN BLUR SPREAD FOR EACH UNIT TYPE TO GENERATE NOISE FIELDS
+              -cone signals were spread over a disc with a radius of 27 µm for diffuse cone bipolar cells 
+            and 9 µm for midget cone bipolar cells 25(viite 25: Boycott & Wässle, 1991, niiden Table 1)
+            ADD SHARED NOISE FIELD TO GENERATOR POTENTIALS AT GC CENTER
+            """
+            # self.cones.fit_cone_density_vs_eccentricity()
+            # self.cones.place_cones_to_retina()
+            # cone_noise = self.cones.create_cone_noise(self.gc_df)
+            # generator_potentials = generator_potentials + cone_noise
+            # pdb.set_trace()
 
             # Dynamic contrast gain control with linear-nonlinear model
             # has no separate nonlinearity, so we can use the generator potential directly
@@ -2048,15 +2069,9 @@ class WorkingRetina(RetinaMath):
 
 class PhotoReceptor:
     """
-    This class gets one image at a time, and provides the cone response.
-    After instantiation, the RGC group can get one frame at a time, and the system will give an show_impulse response.
-
-    This is not necessary for GC transfer function, it is not used in Chichilnisky_2002_JNeurosci Field_2010_Nature.
-    Instead, they focus the pattern directly on isolated cone mosaic.
-    Nevertheless, it may be useful for comparison of image input with and w/o  explicit photoreceptor.
+    PhotoReceptor is with WorkingRetina, because the latter needs the cone filtering for natural stimuli
+    (optical aberration and nonlinear luminance response) and adds cone noise to generator potentials.
     """
-
-    # self.context. attributes
 
     def __init__(self, context, data_io) -> None:
         self._context = context.set_context(self)
@@ -2080,7 +2095,7 @@ class PhotoReceptor:
     def data_io(self):
         return self._data_io
 
-    def image2cone_response(self):
+    def natural_stimuli_cone_filter(self):
         image_file_name = self.context.my_stimulus_metadata["stimulus_file"]
         self.pix_per_deg = self.context.my_stimulus_metadata["pix_per_deg"]
         self.fps = self.context.my_stimulus_metadata["fps"]
@@ -2095,24 +2110,31 @@ class PhotoReceptor:
                 self.image = np.mean(self.image, axis=-1).squeeze()
             options = self.context.my_stimulus_options
 
-        self.blur_image()
-        self.aberrated_image2cone_response()
+        self._optical_aberration()
+        self._luminance2cone_response()
 
-    def blur_image(self):
+    def _optical_aberration(self):
         """
-        Gaussian smoothing from Navarro 1993: 2 arcmin FWHM under 20deg eccentricity.
+        Gaussian smoothing from Navarro 1993 JOSAA: 2 arcmin FWHM under 20deg eccentricity.
         """
 
         # Turn the optical aberration of 2 arcmin FWHM to Gaussian function sigma
         sigma_deg = self.optical_aberration / (2 * np.sqrt(2 * np.log(2)))
         sigma_pix = self.pix_per_deg * sigma_deg
-
+        image = self.image
         # Apply Gaussian blur to each frame in the image array
-        self.image_after_optics = gaussian_filter(
-            self.image, sigma=[0, sigma_pix, sigma_pix]
-        )
+        if len(image.shape) == 3:
+            self.image_after_optics = gaussian_filter(
+                image, sigma=[0, sigma_pix, sigma_pix]
+            )
+        elif len(image.shape) == 2:
+            self.image_after_optics = gaussian_filter(
+                image, sigma=[sigma_pix, sigma_pix]
+            )
+        else:
+            raise ValueError("Image must be 2D or 3D, aborting...")
 
-    def aberrated_image2cone_response(self):
+    def _luminance2cone_response(self):
         """
         Cone nonlinearity. Equation from Baylor_1987_JPhysiol.
         """
@@ -2131,5 +2153,4 @@ class PhotoReceptor:
 
         # Save the cone response to output folder
         filename = self.context.my_stimulus_metadata["stimulus_file"]
-        pdb.set_trace()
         self.data_io.save_cone_response_to_hdf5(filename, cone_response)
