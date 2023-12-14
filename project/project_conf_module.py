@@ -211,13 +211,6 @@ my_retina = {
     "ray_tune_trial_id": None,  # Trial_id for tune, None for loading single run after "train_model". Applies to VAE "load_model" only
 }
 
-# For external video and image input. See visual_stimulus_module.VideoBaseClass for more options.
-my_stimulus_metadata = {
-    "stimulus_file": "nature1.avi",  # nature1.avi, testi.jpg
-    "pix_per_deg": 60,
-    "apply_cone_filter": False,
-    "fps": 25,
-}
 
 """
 Stimulus video will be saved on output_folder in mp4 format (viewing) and hdf5 format (reloading)
@@ -294,6 +287,14 @@ my_stimulus_options = {
     "orientation": 0,  # degrees
     "phase_shift": 0,  # math.pi,  # radians
     "stimulus_video_name": f"{stimulus_folder}.mp4",
+}
+
+# For external video and image input. See visual_stimulus_module.VideoBaseClass for more options.
+my_stimulus_metadata = {
+    "stimulus_file": "testi2.jpg",  # nature1.avi, testi.jpg
+    "pix_per_deg": 30,  # VanHateren_1998_ProcRSocLondB 2 arcmin per pixel
+    "apply_cone_filter": False,
+    "fps": 25,
 }
 
 # Each gc response file contain n_trials
@@ -539,22 +540,24 @@ if __name__ == "__main__":
     we have the cone sample image method.
     """
     # PM.cones.image2cone_response()
-    # PM.viz.show_cone_response(PM.cones.image, PM.cones.image_after_optics, PM.cones.cone_response)
+    # PM.viz.show_cone_response(
+    #     PM.cones.image, PM.cones.image_after_optics, PM.cones.cone_response
+    # )
 
     ###########################################
     ##   Sample figure data from literature  ##
     ###########################################
 
     # # If possible, sample only temporal hemiretina
-    # from project.project_utilities_module import DataSampler
+    from project.project_utilities_module import DataSampler
 
-    # filename = "Goodchild_1996_JCompNeurol_Parasol_DendDiam_Fig2A.jpg"
-    # filename_full = git_repo_root.joinpath(r"retina/literature_data", filename)
-    # # Fig lowest and highest tick values, use these as calibration points
-    # min_X, max_X, min_Y, max_Y = (1, 100, 10, 1000)
-    # ds = DataSampler(filename_full, min_X, max_X, min_Y, max_Y, logX=True, logY=True)
-    # ds.collect_and_save_points()
-    # ds.quality_control(restore=True)
+    filename = "Goodchild_1996_JCompNeurol_Parasol_DendDiam_Fig2A.jpg"
+    filename_full = git_repo_root.joinpath(r"retina/literature_data", filename)
+    # Fig lowest and highest tick values, use these as calibration points
+    min_X, max_X, min_Y, max_Y = (1, 100, 10, 1000)
+    ds = DataSampler(filename_full, min_X, max_X, min_Y, max_Y, logX=True, logY=True)
+    ds.collect_and_save_points()
+    ds.quality_control(restore=True)
 
     #################################
     #################################
@@ -617,15 +620,15 @@ if __name__ == "__main__":
     ########################
 
     # # Based on my_stimulus_options above
-    PM.stimulate.make_stimulus_video()
+    # PM.stimulate.make_stimulus_video()
 
     ####################################
     ### Run multiple trials or cells ###
     ####################################
 
     # # Load stimulus to get working retina, necessary for running cells
-    PM.working_retina.load_stimulus()
-    PM.working_retina.run_with_my_run_options()
+    # PM.working_retina.load_stimulus()
+    # PM.working_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
@@ -672,14 +675,14 @@ if __name__ == "__main__":
     ################################################
 
     # # Based on my_run_options above
-    PM.viz.show_all_gc_responses(savefigname=None)
+    # PM.viz.show_all_gc_responses(savefigname=None)
 
-    PM.viz.show_stimulus_with_gcs(
-        example_gc=3,  # or my_run_options["cell_index"]
-        frame_number=301,  # depends on fps, and video and baseline lengths
-        show_rf_id=True,
-        savefigname=None,
-    )
+    # PM.viz.show_stimulus_with_gcs(
+    #     example_gc=3,  # or my_run_options["cell_index"]
+    #     frame_number=301,  # depends on fps, and video and baseline lengths
+    #     show_rf_id=True,
+    #     savefigname=None,
+    # )
 
     #################################################################
     #################################################################
@@ -727,8 +730,6 @@ if __name__ == "__main__":
     # ############################
     # ### Visualize Experiment ###
     # ############################
-
-    # TÄHÄN JÄIT: SYNC MEKANISMI
 
     # PM.viz.spike_raster_response(exp_variables, trial=0, savefigname=None)
 

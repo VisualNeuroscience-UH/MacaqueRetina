@@ -621,7 +621,6 @@ class DataIO(DataIOBase):
         stem_extension = filename_stem + filename_extension
 
         fullpath_filename = Path.joinpath(parent_path, stem_extension + ".hdf5")
-        pdb.set_trace()
         self.save_array_to_hdf5(fullpath_filename, cone_response)
 
     def load_cone_response_from_hdf5(self, filename):

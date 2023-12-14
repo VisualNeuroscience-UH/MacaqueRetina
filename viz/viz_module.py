@@ -2379,9 +2379,9 @@ class Viz:
         axs[1].hist(image_after_optics.flatten(), 20)
         axs[2].hist(cone_response.flatten(), 20)
 
-        axs[3].imshow(image, cmap="Greys")
-        axs[4].imshow(image_after_optics, cmap="Greys")
-        axs[5].imshow(cone_response, cmap="Greys")
+        axs[3].imshow(image)
+        axs[4].imshow(image_after_optics)
+        axs[5].imshow(cone_response)
 
     def plot_analog_stimulus(self, analog_input):
         data = analog_input.Input
