@@ -281,37 +281,56 @@ class ConstructRetina(RetinaMath):
 
         return distribution_parameters
 
-    def _read_gc_density_data(self):
+    def read_and_fit_unit_density_data(self, unit_type):
         """
-        Read re-digitized old literature ganglion cell density data
-        """
+        Read literature data from file and fit ganglion cell or cone density with respect to eccentricity.
 
-        gc_density = self.data_io.get_data(
-            self.context.literature_data_files["gc_density_fullpath"]
-        )
-        cell_eccentricity = np.squeeze(gc_density["Xdata"])
+        Parameters
+        ----------
+        filepath : str
+            The path to the file containing the data.
+        unit_type : str
+            The type of unit, either "gc" or "cone".
+        """
+        if unit_type == "gc":
+            # Get ganglion cell density data from Perry_1984_Neurosci
+            filepaths = [self.context.literature_data_files["gc_density_fullpath"]]
+        elif unit_type == "cone":
+            # Get cone density data from Packer_1989_JCompNeurol
+            filepaths = [
+                self.context.literature_data_files["cone_density1_fullpath"],
+                self.context.literature_data_files["cone_density2_fullpath"],
+            ]
+
+        unit_eccentricity = np.array([])
+        unit_density = np.array([])
+        for filepath in filepaths:
+            density = self.data_io.get_data(filepath)
+            _eccentricity = np.squeeze(density["Xdata"])
+            _density = np.squeeze(density["Ydata"])
+            unit_eccentricity = np.concatenate((unit_eccentricity, _eccentricity))
+            unit_density = np.concatenate((unit_density, _density))
+
         # Cells are in thousands, thus the 1e3
-        cell_density = np.squeeze(gc_density["Ydata"]) * 1e3
-        return cell_eccentricity, cell_density
+        unit_density = unit_density * 1e3
 
-    def _fit_gc_density_data(self):
-        """
-        Fits a Gaussian to ganglion cell density (digitized data from Perry_1984).
+        if unit_type == "gc":
+            scale, mean, sigma, baseline0 = 1000, 0, 2, np.min(unit_density)
+            fit_parameters, _ = opt.curve_fit(
+                self.gauss_plus_baseline_func,
+                unit_eccentricity,
+                unit_density,
+                p0=[scale, mean, sigma, baseline0],
+            )
+        elif unit_type == "cone":
+            fit_parameters, pcov = opt.curve_fit(
+                self.double_exponential_func,
+                unit_eccentricity,
+                unit_density,
+                p0=[0, -1, 0, 0],
+            )
 
-        :returns a, x0, sigma, baseline (aka "gc_density_func_params")
-        """
-
-        cell_eccentricity, cell_density = self._read_gc_density_data()
-        # Gaussian + baseline fit initial values for fitting
-        scale, mean, sigma, baseline0 = 1000, 0, 2, np.min(cell_density)
-        popt, pcov = opt.curve_fit(
-            self.gauss_plus_baseline,
-            cell_eccentricity,
-            cell_density,
-            p0=[scale, mean, sigma, baseline0],
-        )
-
-        return popt  # = gc_density_func_params
+        return fit_parameters
 
     def _fit_dd_vs_ecc(self):
         """
@@ -787,7 +806,7 @@ class ConstructRetina(RetinaMath):
             min_ecc = eccentricity_steps[group_idx]
             max_ecc = eccentricity_steps[group_idx + 1]
             avg_ecc = (min_ecc + max_ecc) / 2
-            density = self.gauss_plus_baseline(avg_ecc, *gc_density_func_params)
+            density = self.gauss_plus_baseline_func(avg_ecc, *gc_density_func_params)
             # density_prop_all.append(density * self.gc_proportion)
 
             # Calculate area for this eccentricity group
@@ -1030,7 +1049,7 @@ class ConstructRetina(RetinaMath):
         boundary_polygon = self.viz.boundary_polygon(ecc_lim_mm, polar_lim_deg)
 
         # Adjust unit_distance_threshold and diffusion speed with density of the units
-        # This is necessary because the density of the units are adjusted with eccentricity
+        # This is a technical trick to get good spread for different densities
         # The 1 mm ecc for parasol provides 952 units/mm2 density. This is the reference density.
         gc_distance_threshold = unit_distance_threshold * (952 / gc_density)
         gc_diffusion_speed = diffusion_speed * (952 / gc_density)
@@ -2429,7 +2448,7 @@ class ConstructRetina(RetinaMath):
 
         # -- First, place the ganglion cell midpoints (units mm)
         # Run GC density fit to data, get func_params. Data from Perry_1984_Neurosci
-        gc_density_func_params = self._fit_gc_density_data()
+        gc_density_func_params = self.read_and_fit_unit_density_data("gc")
 
         # Place ganglion cells to desired retina.
         self._place_gc_units(gc_density_func_params)
