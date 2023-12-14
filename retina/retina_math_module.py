@@ -20,7 +20,10 @@ class RetinaMath:
         pass
 
     # RetinaConstruction methods
-    def gauss_plus_baseline(self, x, a, x0, sigma, baseline):  # To fit GC density
+    def double_exponential_func(self, x, a, b, c, d):
+        return a * np.exp(b * x) + c * np.exp(d * x)
+
+    def gauss_plus_baseline_func(self, x, a, x0, sigma, baseline):  # To fit GC density
         """
         Function for Gaussian distribution with a baseline value. For optimization.
         """
