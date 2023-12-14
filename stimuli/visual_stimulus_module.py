@@ -551,7 +551,7 @@ class StimulusPattern:
         the raw intensity values based on the new data.
         """
         if self.context.my_stimulus_metadata["apply_cone_filter"] is True:
-            self.cones.image2cone_response()
+            self.cones.natural_stimuli_cone_filter()
             self.image = self.cones.cone_response
         else:
             image_file_name = self.context.my_stimulus_metadata["stimulus_file"]
@@ -570,7 +570,7 @@ class StimulusPattern:
 
     def natural_video(self):
         # TODO: add cone filtering to video
-        # self.cones.image2cone_response()
+        # self.cones.natural_stimuli_cone_filter()
         # self.image = self.cones.cone_response
         video_file_name = self.context.my_stimulus_metadata["stimulus_file"]
         video_cap = self.data_io.get_data(video_file_name)

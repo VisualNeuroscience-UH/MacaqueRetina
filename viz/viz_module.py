@@ -2380,8 +2380,11 @@ class Viz:
         axs[2].hist(cone_response.flatten(), 20)
 
         axs[3].imshow(image)
+        axs[3].set_title("Original image")
         axs[4].imshow(image_after_optics)
+        axs[4].set_title("Image after optics")
         axs[5].imshow(cone_response)
+        axs[5].set_title("Nonlinear cone response")
 
     def plot_analog_stimulus(self, analog_input):
         data = analog_input.Input
