@@ -468,7 +468,7 @@ class Fit(RetinaMath):
 
         # Go through all cells
         print(("Fitting DoG model, surround is {0}".format(surround_status)))
-        for cell_idx in tqdm(all_viable_cells, desc="Fitting spatial  filters"):
+        for cell_idx in tqdm(all_viable_cells, desc="Fitting spatial filters"):
             this_rf = spat_data_array[cell_idx, :, :]
 
             try:
