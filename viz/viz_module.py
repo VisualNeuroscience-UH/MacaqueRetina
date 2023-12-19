@@ -1841,8 +1841,12 @@ class Viz:
             for cone_pos, prob in zip(cone_positions, connection_probs):
                 ax[idx].scatter(*cone_pos, alpha=prob, color="blue")
 
-            x_mm = X_grid_mm.flatten() * img_rfs_mask.flatten()
-            y_mm = Y_grid_mm.flatten() * img_rfs_mask.flatten()
+            mask = img_rfs_mask[this_sample, ...]
+            x_mm = X_grid_mm[this_sample, ...] * mask
+            y_mm = Y_grid_mm[this_sample, ...] * mask
+            x_mm = x_mm[x_mm != 0]
+            y_mm = y_mm[y_mm != 0]
+            
             ax[idx].plot(x_mm, y_mm, ".g", label="RF center")
             ax[idx].set_xlabel("X Position (mm)")
             ax[idx].set_ylabel("Y Position (mm)")
