@@ -748,14 +748,22 @@ class DataIO(DataIOBase):
 
         return result_grid
 
-    def save_generated_rfs(self, img_stack, output_path, filename_stem="rf_values"):
+    def save_generated_rfs(self, data_dict, output_path, filename_stem="rf_values"):
         """
-        Save a 3D image stack as a series of 2D image files using Pillow and save the original stack in a numpy format.
+        Save rf image data.
 
         Parameters
         ----------
-        img_stack : numpy.ndarray
-            The 3D image stack to be saved, with shape (M, N, N).
+        data_dict : dict
+            The dictionary containing the fields to be saved:
+                img_rfs_final : numpy.ndarray
+                    The 3D image stack to be saved, with shape (N, H, W).
+                img_rfs_final_mask : numpy.ndarray
+                    The 3D image stack center mask to be saved, with shape (N, H, W).
+                X_grid_mm : numpy.ndarray
+                    The X grid in mm, with shape (N, H, W).
+                Y_grid_mm : numpy.ndarray
+                    The Y grid in mm, with shape (N, H, W).
         output_path : str or Path
             The path to the output folder where the image files and the stack will be saved.
         """
@@ -771,11 +779,20 @@ class DataIO(DataIOBase):
         )  # or "rf_values.pkl" for pickle format
 
         # If extension is not npy, add it
-        if not stack_filename.suffix == ".npy":
-            stack_filename = stack_filename.with_suffix(".npy")
-        np.save(
-            stack_filename, img_stack
-        )  # or pickle.dump(img_stack, open(stack_filename, "wb"))
+        if not stack_filename.suffix == ".npz":
+            stack_filename = stack_filename.with_suffix(".npz")
+
+        np.savez(
+            stack_filename,
+            img_rfs=data_dict["img_rfs"],
+            img_rfs_mask=data_dict["img_rfs_mask"],
+            X_grid_mm=data_dict["X_grid_mm"],
+            Y_grid_mm=data_dict["Y_grid_mm"],
+        )
+
+        # np.save(
+        #     stack_filename, img_stack
+        # )  # or pickle.dump(img_stack, open(stack_filename, "wb"))
 
     def save_spikes_for_cxsystem(
         self,
