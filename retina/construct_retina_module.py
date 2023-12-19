@@ -7,8 +7,9 @@ import matplotlib.path as mplPath
 import scipy.stats as stats
 import scipy.optimize as opt
 from scipy import ndimage
-from scipy.spatial import Voronoi, voronoi_plot_2d
+from scipy.spatial import Voronoi, voronoi_plot_2d, distance
 from scipy.interpolate import griddata
+from scipy.integrate import dblquad
 import pandas as pd
 import torch
 import torch.nn.functional as F
@@ -31,7 +32,7 @@ from shapely.geometry import Polygon as ShapelyPolygon
 # from PIL import Image
 
 # Viz
-# from tqdm import tqdm
+from tqdm import tqdm
 
 # Comput Neurosci
 # import brian2 as b2
@@ -837,9 +838,13 @@ class ConstructRetina(RetinaMath):
             gc_initial_pos.append(gc_positions)
 
             cone_units = math.ceil(sector_surface_area * cone_density_group)
-            cone_positions = self._random_positions_within_group(
+            # cone_positions = self._random_positions_within_group(
+            #     min_ecc, max_ecc, cone_units
+            # )
+            cone_positions = self._hexagonal_positions_within_group(
                 min_ecc, max_ecc, cone_units
             )
+
             cone_density_all.append(np.full(cone_units, cone_density_group))
             cone_initial_pos.append(cone_positions)
 
@@ -1076,7 +1081,9 @@ class ConstructRetina(RetinaMath):
 
         ecc_lim_mm = torch.tensor(self.ecc_lim_mm).to(self.device)
         polar_lim_deg = torch.tensor(self.polar_lim_deg).to(self.device)
-        boundary_polygon = self.viz.boundary_polygon(ecc_lim_mm, polar_lim_deg)
+        boundary_polygon = self.viz.boundary_polygon(
+            ecc_lim_mm.cpu().numpy(), polar_lim_deg.cpu().numpy()
+        )
 
         # Adjust unit_distance_threshold and diffusion speed with density of the units
         # This is a technical trick to get good spread for different densities
@@ -1268,6 +1275,37 @@ class ConstructRetina(RetinaMath):
         )
         return np.column_stack((eccs, angles))
 
+    def _hexagonal_positions_within_group(self, min_ecc, max_ecc, n_units):
+        delta_ecc = max_ecc - min_ecc
+        mean_ecc = (max_ecc + min_ecc) / 2
+
+        # Calculate polar coords in mm at mean ecc
+        x0, y0 = self.pol2cart(mean_ecc, self.polar_lim_deg[0])
+        x1, y1 = self.pol2cart(mean_ecc, self.polar_lim_deg[1])
+        delta_pol = np.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2)
+
+        # n_pol = np.sqrt(n_units * delta_pol / (np.sqrt(3) * delta_ecc))
+        n_pol = int(np.ceil(np.sqrt(n_units * (delta_pol / delta_ecc))))
+        n_ecc = int(np.ceil(n_units / n_pol))
+
+        # Generate evenly spaced values for eccentricity and angle
+        eccs = np.linspace(min_ecc, max_ecc, n_ecc, endpoint=True)
+        angles = np.linspace(
+            self.polar_lim_deg[0], self.polar_lim_deg[1], n_pol, endpoint=False
+        )
+
+        # Create a meshgrid of all combinations of eccs and angles
+        eccs_grid, angles_grid = np.meshgrid(eccs, angles, indexing="ij")
+        # Offset every other row by half the distance between columns
+        for i in range(n_ecc):
+            if i % 2 == 1:  # Check if the row is odd
+                angles_grid[i, :] += (angles[1] - angles[0]) / 2
+
+        # Reshape the grids and combine them into a single array
+        positions = np.column_stack((eccs_grid.ravel(), angles_grid.ravel()))
+
+        return positions[:n_units]
+
     def _optimize_positions(
         self, initial_positions, unit_density, unit_placement_params
     ):
@@ -1282,6 +1320,7 @@ class ConstructRetina(RetinaMath):
             # Initial random placement.
             # Use this for testing/speed/nonvarying placements.
             optimized_positions = all_positions
+            optimized_positions_mm = all_positions_mm
         else:
             if optim_algorithm == "force":
                 # Apply Force Based Layout Algorithm with Boundary Repulsion
@@ -1298,7 +1337,66 @@ class ConstructRetina(RetinaMath):
             )
             optimized_positions = np.column_stack(optimized_positions_tuple)
 
-        return optimized_positions
+        return optimized_positions, optimized_positions_mm
+
+    def _link_cones_to_gcs(self):
+        """ """
+
+        print("Connetcing cones to ganglion cells for shared cone noise...")
+        cone_params = self.context.my_retina["cone_params"]
+
+        cone_pos_mm = self.cone_optimized_positions_mm
+        x_mm, y_mm = self.pol2cart(
+            self.gc_df[["pos_ecc_mm"]].values, self.gc_df[["pos_polar_deg"]].values
+        )
+        gc_pos_mm = np.column_stack((x_mm, y_mm))
+
+        # distances = distance.cdist(cone_pos_mm, gc_pos_mm, metric="euclidean")
+
+        if self.gc_type == "parasol":
+            sd_cone = cone_params["cone2gc_parasol"] / 1000
+        elif self.gc_type == "midget":
+            sd_cone = cone_params["cone2gc_midget"] / 1000
+        cutoff_distance = cone_params["cone2gc_cutoff_SD"] * sd_cone
+
+        weights = np.zeros((len(cone_pos_mm), len(gc_pos_mm)))
+
+        n_cones = cone_pos_mm.shape[0]
+        n_gcs = gc_pos_mm.shape[0]
+
+        img_rfs = self.spatial_rfs_file["img_rfs"]
+        img_rfs_mask = self.spatial_rfs_file["img_rfs_mask"]
+        X_grid_mm = self.spatial_rfs_file["X_grid_mm"]
+        Y_grid_mm = self.spatial_rfs_file["Y_grid_mm"]
+
+        # Normalize center activation to probability distribution
+        img_cen = img_rfs * img_rfs_mask
+        img_prob = img_cen / np.sum(img_cen, axis=(1, 2))[:, None, None]
+
+        for i in tqdm(
+            range(len(cone_pos_mm)),
+            desc=f"Calculating {n_cones} x {n_gcs} probabilities",
+        ):
+            mean_cone = cone_pos_mm[i]
+            dist_x_mtx = X_grid_mm - mean_cone[0]
+            dist_y_mtx = Y_grid_mm - mean_cone[1]
+            dist_mtx = np.sqrt(dist_x_mtx**2 + dist_y_mtx**2)
+
+            # Drop weight as a Gaussian function of distance with sd = sd_cone
+            probability = np.exp(-((dist_mtx / sd_cone) ** 2))
+            probability[dist_mtx > cutoff_distance] = 0
+
+            weights_mtx = probability * img_prob
+            weights[i, :] = weights_mtx.sum(axis=(1, 2))
+
+        self.project_data.construct_retina["cones_to_gcs"] = {
+            "cone_pos_mm": cone_pos_mm,
+            "gc_pos_mm": gc_pos_mm,
+            "weights": weights,
+            "X_grid_mm": X_grid_mm,
+            "Y_grid_mm": Y_grid_mm,
+            "img_rfs_mask": img_rfs_mask,
+        }
 
     def _place_units(self, gc_density_params, cone_density_params):
         # Initial Positioning by Group
@@ -1313,16 +1411,13 @@ class ConstructRetina(RetinaMath):
 
         # Optimize positions
         gc_placement_params = self.context.my_retina["gc_placement_params"]
-        gc_optimized_pos = self._optimize_positions(
+        gc_optimized_pos, gc_optimized_positions_mm = self._optimize_positions(
             gc_initial_pos, gc_density, gc_placement_params
         )
         cone_placement_params = self.context.my_retina["cone_placement_params"]
-        cone_optimized_pos = self._optimize_positions(
+        cone_optimized_pos, cone_optimized_positions_mm = self._optimize_positions(
             cone_initial_pos, cone_density, cone_placement_params
         )
-
-        # TÄHÄN JÄIT: TAPIT PAIKALLAAN. TEE WORKING RETINASSA TAPPEIHIN KOHINA. LEVITÄ KOHINA GANGLION SOLUIHIN.
-        #
 
         # Assign Output Variables
         self.gc_df["pos_ecc_mm"] = gc_optimized_pos[:, 0]
@@ -1330,6 +1425,10 @@ class ConstructRetina(RetinaMath):
         self.gc_df["ecc_group_idx"] = np.concatenate(eccentricity_groups)
         self.sector_surface_areas_mm2 = sector_surface_areas_mm2
         self.gc_density_params = gc_density_params
+
+        # Cones will be attached to gcs after the final position of gcs is known after
+        # repulsion.
+        self.cone_optimized_positions_mm = cone_optimized_positions_mm
 
     # temporal filter and tonic frive functions
     def _create_fixed_temporal_rfs(self):
@@ -1727,6 +1826,8 @@ class ConstructRetina(RetinaMath):
         yoc_mm = gc_vae_df_in.yoc_pix * um_per_pix / 1000
         rf_lu_mm = updated_rf_lu_pix * um_per_pix / 1000
 
+        # Left upper corner of retina + left upper corner of receptive field relative to the left upper corner of retina
+        # + offset of receptive field center from the left upper corner of receptive field
         x_mm = ret_lu_mm[0] + rf_lu_mm[:, 0] + xoc_mm
         y_mm = ret_lu_mm[1] - rf_lu_mm[:, 1] - yoc_mm
         (pos_ecc_mm, pos_polar_deg) = self.cart2pol(x_mm, y_mm)
@@ -2063,7 +2164,7 @@ class ConstructRetina(RetinaMath):
         updated_img_rfs: numpy.ndarray
             The updated RFs after repulsion and transformation, shape (n_rfs, n_pixels, n_pixels).
         updated_rf_lu_pix: numpy.ndarray
-            Updated upper-left pixel coordinates of each RF, shape (n_rfs, 2).
+            Updated upper-left pixel coordinates of each RF, shape (n_rfs, 2), each row indicating (x, y).
         final_retina: numpy.ndarray
             2D array representing the final state of the retina after RF adjustments, shape matching `img_ret_shape`.
 
@@ -2312,6 +2413,65 @@ class ConstructRetina(RetinaMath):
             com_y_local,
         )
 
+    def _get_rf_grid_mm(
+        self,
+        img_rfs_final_mask,
+        new_um_per_pix,
+        updated_rf_lu_pix,
+        ret_lu_mm,
+    ):
+        """
+        Get the receptive field center x and y coordinate grids in mm.
+        Necessary for downstream distance calculations.
+
+        Parameters
+        ----------
+        img_rfs_final_mask : np.ndarray
+            3D array of boolean masks for RF centers, shape (n_rfs, n_pixels, n_pixels).
+        new_um_per_pix : float
+            The number of micrometers per pixel in the rf_img.
+        updated_rf_lu_pix : np.ndarray
+            2D array of the upper-left pixel coordinates of each RF, shape (n_rfs, 2), each row indicating (x, y).
+        ret_lu_mm : tuple
+            Left upper corner of retina image position in mm, (min_x_mm, max_y_mm).
+        """
+
+        # Get the rf image size in pixels. img_rfs is [N, H, W]
+        rf_pix_y = img_rfs_final_mask.shape[1]
+        rf_pix_x = img_rfs_final_mask.shape[2]
+
+        Y_grid, X_grid = np.meshgrid(
+            np.arange(rf_pix_y),
+            np.arange(rf_pix_x),
+            indexing="ij",
+        )
+
+        X_grid_local_mm = X_grid * new_um_per_pix / 1000
+        Y_grid_local_mm = Y_grid * new_um_per_pix / 1000
+
+        updated_rf_lu_mm_x = updated_rf_lu_pix[:, 0] * new_um_per_pix / 1000
+        updated_rf_lu_mm_y = updated_rf_lu_pix[:, 1] * new_um_per_pix / 1000
+
+        # x starts from the left
+        X_grid_mm = (
+            ret_lu_mm[0]
+            + np.tile(
+                updated_rf_lu_mm_x[:, np.newaxis, np.newaxis], (1, rf_pix_y, rf_pix_x)
+            )
+            + np.tile(X_grid_local_mm, (updated_rf_lu_pix.shape[0], 1, 1))
+        )
+
+        # y starts from the top
+        Y_grid_mm = (
+            ret_lu_mm[1]
+            - np.tile(
+                updated_rf_lu_mm_y[:, np.newaxis, np.newaxis], (1, rf_pix_y, rf_pix_x)
+            )
+            - np.tile(Y_grid_local_mm, (updated_rf_lu_pix.shape[0], 1, 1))
+        )
+
+        return X_grid_mm, Y_grid_mm
+
     def _create_spatial_rfs(self):
         """
         Generation of spatial receptive fields (RFs) for the retinal ganglion cells (RGCs).
@@ -2388,7 +2548,8 @@ class ConstructRetina(RetinaMath):
                 new_um_per_pix,
             )
 
-            # 6) Apply repulsion adjustment to the receptive fields
+            # 6) Apply repulsion adjustment to the receptive fields. Note that this will
+            # change the positions of the receptive fields.
             print("\nApplying repulsion between the receptive fields...")
             (
                 img_rfs_final,
@@ -2444,14 +2605,30 @@ class ConstructRetina(RetinaMath):
                 new_um_per_pix,
             )
 
-            # 11) Save the generated receptive fields and masks
+            X_grid_mm, Y_grid_mm = self._get_rf_grid_mm(
+                img_rfs_final_mask,
+                new_um_per_pix,
+                updated_rf_lu_pix,
+                ret_lu_mm,
+            )
+
+            # 11) Save the generated receptive fields, masks, and pixel locations in mm
             print("\nSaving data...")
             output_path = self.context.output_folder
             filename_stem = self.context.my_retina["spatial_rfs_file"]
 
+            # Collate data for saving
+            spatial_rfs_file = {
+                "img_rfs": img_rfs_final,
+                "img_rfs_mask": img_rfs_final_mask,
+                "X_grid_mm": X_grid_mm,
+                "Y_grid_mm": Y_grid_mm,
+            }
+
             self.data_io.save_generated_rfs(
-                img_rfs_final, output_path, filename_stem=filename_stem
+                spatial_rfs_file, output_path, filename_stem=filename_stem
             )
+            self.spatial_rfs_file = spatial_rfs_file
 
             # Save original and new df:s. For vae, gc_df contains the original
             # positions which were updated during the repulsion step
@@ -2501,6 +2678,7 @@ class ConstructRetina(RetinaMath):
         # -- First, place the ganglion cell midpoints (units mm)
         # Run GC density fit to data, get func_params. Data from Perry_1984_Neurosci
         gc_density_params = self.read_and_fit_unit_density_data("gc")
+        # Run cone density fit to data, get func_params. Data from Packer_1989_JCompNeurol
         cone_density_params = self.read_and_fit_unit_density_data("cone")
 
         # Place ganglion cells to desired retina.
@@ -2511,6 +2689,7 @@ class ConstructRetina(RetinaMath):
 
         # -- Second, endow cells with spatial receptive fields
         self._create_spatial_rfs()
+        self._link_cones_to_gcs()
 
         # -- Third, endow cells with temporal receptive fields
         self._create_fixed_temporal_rfs()  # Chichilnisky data
