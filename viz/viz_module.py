@@ -1825,6 +1825,8 @@ class Viz:
         probabilities = cones_to_gcs["probabilities"]
 
         fig, ax = plt.subplots(len(gc_list), 1, figsize=(10, 10))
+        if len(gc_list) == 1:
+            ax = [ax]
 
         for idx, this_sample in enumerate(gc_list):
             gc_position = gc_pos_mm[this_sample, :]
