@@ -1811,6 +1811,40 @@ class Viz:
             fig.canvas.draw()
             plt.pause(0.001)
 
+    def show_cones_linked_to_gc(self, gc_list=None, savefigname=None):
+        """
+        Visualize a ganglion cell and its connected cones.
+
+
+
+        """
+        cones_to_gcs = self.project_data.construct_retina["cones_to_gcs"]
+
+        gc_pos_mm = cones_to_gcs["gc_pos_mm"]
+        cone_positions = cones_to_gcs["cone_pos_mm"]
+        probabilities = cones_to_gcs["probabilities"]
+
+        fig, ax = plt.subplots(len(gc_list), 1, figsize=(10, 10))
+
+        for idx, this_sample in enumerate(gc_list):
+            gc_position = gc_pos_mm[this_sample, :]
+            ax[idx].scatter(*gc_position, color="red", label="Ganglion Cell")
+
+            # Plot each cone with alpha based on connection probability
+            connection_probs = probabilities[:, this_sample]
+            for cone_pos, prob in zip(cone_positions, connection_probs):
+                ax[idx].scatter(*cone_pos, alpha=prob, color="blue")
+
+            ax[idx].set_xlabel("X Position (mm)")
+            ax[idx].set_ylabel("Y Position (mm)")
+            ax[idx].set_title(f"Ganglion Cell {this_sample} and Connected Cones")
+            ax[idx].legend()
+            # Set equal aspect ratio
+            ax[idx].set_aspect("equal", adjustable="box")
+
+        if savefigname:
+            self._figsave(figurename=savefigname)
+
     # WorkingRetina visualization
     def show_stimulus_with_gcs(
         self,
