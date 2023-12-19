@@ -1822,7 +1822,10 @@ class Viz:
 
         gc_pos_mm = cones_to_gcs["gc_pos_mm"]
         cone_positions = cones_to_gcs["cone_pos_mm"]
-        probabilities = cones_to_gcs["probabilities"]
+        weights = cones_to_gcs["weights"]
+        X_grid_mm = cones_to_gcs["X_grid_mm"]
+        Y_grid_mm = cones_to_gcs["Y_grid_mm"]
+        img_rfs_mask = cones_to_gcs["img_rfs_mask"]
 
         fig, ax = plt.subplots(len(gc_list), 1, figsize=(10, 10))
         if len(gc_list) == 1:
@@ -1833,13 +1836,19 @@ class Viz:
             ax[idx].scatter(*gc_position, color="red", label="Ganglion Cell")
 
             # Plot each cone with alpha based on connection probability
-            connection_probs = probabilities[:, this_sample]
+            connection_probs = weights[:, this_sample]
+            n_connected = np.sum(connection_probs > 0)
             for cone_pos, prob in zip(cone_positions, connection_probs):
                 ax[idx].scatter(*cone_pos, alpha=prob, color="blue")
 
+            x_mm = X_grid_mm.flatten() * img_rfs_mask.flatten()
+            y_mm = Y_grid_mm.flatten() * img_rfs_mask.flatten()
+            ax[idx].plot(x_mm, y_mm, ".g", label="RF center")
             ax[idx].set_xlabel("X Position (mm)")
             ax[idx].set_ylabel("Y Position (mm)")
-            ax[idx].set_title(f"Ganglion Cell {this_sample} and Connected Cones")
+            ax[idx].set_title(
+                f"Ganglion Cell {this_sample} and Connected {n_connected} cones"
+            )
             ax[idx].legend()
             # Set equal aspect ratio
             ax[idx].set_aspect("equal", adjustable="box")
