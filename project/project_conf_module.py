@@ -191,12 +191,8 @@ response_type = "on"
 my_retina = {
     "gc_type": gc_type,
     "response_type": response_type,
-    "ecc_limits_deg": [4.5, 5.5],  # eccentricity in degrees
-    "pol_limits_deg": [-2, 2],  # polar angle in degrees
-    # "ecc_limits_deg": [3, 7],  # eccentricity in degrees
-    # "pol_limits_deg": [-5, 5],  # polar angle in degrees
-    # "ecc_limits_deg": [15, 20],  # eccentricity in degrees
-    # "pol_limits_deg": [-3, 3],  # polar angle in degrees
+    "ecc_limits_deg": [4.7, 5.3],  # eccentricity in degrees
+    "pol_limits_deg": [-3, 3],  # polar angle in degrees
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
     "dd_regr_model": "loglog",  # linear, quadratic, cubic, loglog. For midget < 20 deg, use quadratic; for parasol use loglog
     "visual_field_limit_for_dd_fit": math.inf,  # 20,  # degrees, math.inf for no limit
@@ -362,6 +358,10 @@ cone_params = {
     "k": 2.77e-4,  # at 500 nm
     "sensitivity_min": 5e2,
     "sensitivity_max": 1e4,
+    "cone2gc_midget": 9,  # um, 1 SD of Gaussian
+    "cone2gc_parasol": 27,  # um
+    "cone2gc_cutoff_SD": 1,  # 3 SD is 99.7% of Gaussian
+    "cone_noise_autocorr": 0.013,  # sec
 }
 
 # Recovery function from Berry_1998_JNeurosci, Uzzell_2004_JNeurophysiol
@@ -385,8 +385,8 @@ refractory_params = {
 # "force" (f) : better for small retinas, slow
 # None : initial random placement. Nonvarying with fixed seed above. Good for testing and speed.
 gc_placement_params = {
-    "algorithm": None,  # "voronoi" or "force" or None
-    "n_iterations": 1000,  # v 20, f 5000
+    "algorithm": "force",  # "voronoi" or "force" or None
+    "n_iterations": 200,  # v 20, f 5000
     "change_rate": 0.001,  # f 0.001, v 0.5
     "unit_repulsion_stregth": 5,  # 10 f only
     "unit_distance_threshold": 0.02,  # f only, adjusted with ecc
@@ -399,14 +399,14 @@ gc_placement_params = {
 
 cone_placement_params = {
     "algorithm": "force",  # "voronoi" or "force" or None
-    "n_iterations": 1000,  # v 20, f 5000
+    "n_iterations": 100,  # v 20, f 5000
     "change_rate": 0.0001,  # f 0.001, v 0.5
     "unit_repulsion_stregth": 2,  # 10 f only
     "unit_distance_threshold": 0.1,  # f only, adjusted with ecc
     "diffusion_speed": 0.001,  # f only, adjusted with ecc
     "border_repulsion_stength": 5,  # f only
     "border_distance_threshold": 0.0001,  # f only
-    "show_placing_progress": True,  # True False
+    "show_placing_progress": False,  # True False
     "show_skip_steps": 10,  # v 1, f 100
 }
 
@@ -423,7 +423,7 @@ rf_repulsion_params = {
 
 my_retina_append = {
     "mosaic_file": gc_type + "_" + response_type + "_mosaic.csv",
-    "spatial_rfs_file": gc_type + "_" + response_type + "_spatial_rfs.npy",
+    "spatial_rfs_file": gc_type + "_" + response_type + "_spatial_rfs.npz",
     "proportion_of_parasol_gc_type": proportion_of_parasol_gc_type,
     "proportion_of_midget_gc_type": proportion_of_midget_gc_type,
     "proportion_of_ON_response_type": proportion_of_ON_response_type,
@@ -606,6 +606,8 @@ if __name__ == "__main__":
     # in the retina mosaic building process.
 
     # For FIT and VAE
+    PM.viz.show_cones_linked_to_gc(gc_list=[3], savefigname=None)
+
     # PM.viz.show_DoG_model_fit(sample_list=[412, 436, 465, 466], savefigname=None)
     # PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)
     # PM.viz.show_dendrite_diam_vs_ecc(log_x=False, log_y=True, savefigname=None)
@@ -654,8 +656,8 @@ if __name__ == "__main__":
     ####################################
 
     # # Load stimulus to get working retina, necessary for running cells
-    PM.working_retina.load_stimulus()
-    PM.working_retina.run_with_my_run_options()
+    # PM.working_retina.load_stimulus()
+    # PM.working_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
@@ -702,7 +704,7 @@ if __name__ == "__main__":
     ################################################
 
     # # Based on my_run_options above
-    PM.viz.show_all_gc_responses(savefigname=None)
+    # PM.viz.show_all_gc_responses(savefigname=None)
 
     # PM.viz.show_stimulus_with_gcs(
     #     example_gc=3,  # or my_run_options["cell_index"]
