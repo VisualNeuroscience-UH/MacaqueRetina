@@ -19,7 +19,7 @@ import brian2.units as b2u
 # Viz
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-from matplotlib.patches import Ellipse, Polygon
+from matplotlib.patches import Ellipse, Polygon, Circle
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 import seaborn as sns
@@ -1814,9 +1814,6 @@ class Viz:
     def show_cones_linked_to_gc(self, gc_list=None, savefigname=None):
         """
         Visualize a ganglion cell and its connected cones.
-
-
-
         """
         cones_to_gcs = self.project_data.construct_retina["cones_to_gcs"]
 
@@ -1827,12 +1824,34 @@ class Viz:
         Y_grid_mm = cones_to_gcs["Y_grid_mm"]
         img_rfs_mask = cones_to_gcs["img_rfs_mask"]
 
+        gc_df = self.data_io.get_data(self.context.my_retina["mosaic_file"])
+
         fig, ax = plt.subplots(len(gc_list), 1, figsize=(10, 10))
         if len(gc_list) == 1:
             ax = [ax]
 
         for idx, this_sample in enumerate(gc_list):
             gc_position = gc_pos_mm[this_sample, :]
+            if self.context.my_retina["DoG_model"] == "circular":
+                DoG_patch = Circle(
+                    xy=gc_position,
+                    radius=gc_df.loc[this_sample, "rad_c_mm"],
+                    edgecolor="g",
+                    facecolor="none",
+                )
+            elif self.context.my_retina["DoG_model"] in [
+                "ellipse_independent",
+                "ellipse_fixed",
+            ]:
+                # Create ellipse patch for visualizing the RF
+                DoG_patch = Ellipse(
+                    xy=gc_position,
+                    width=2 * gc_df.loc[this_sample, "semi_xc_mm"],
+                    height=2 * gc_df.loc[this_sample, "semi_yc_mm"],
+                    angle=gc_df.loc[this_sample, "orient_cen_rad"],
+                    edgecolor="g",
+                    facecolor="none",
+                )
             ax[idx].scatter(*gc_position, color="red", label="Ganglion Cell")
 
             # Plot each cone with alpha based on connection probability
@@ -1846,8 +1865,12 @@ class Viz:
             y_mm = Y_grid_mm[this_sample, ...] * mask
             x_mm = x_mm[x_mm != 0]
             y_mm = y_mm[y_mm != 0]
-            
+
             ax[idx].plot(x_mm, y_mm, ".g", label="RF center")
+            
+            # Add DoG_patch to the plot
+            ax[idx].add_patch(DoG_patch)
+            
             ax[idx].set_xlabel("X Position (mm)")
             ax[idx].set_ylabel("Y Position (mm)")
             ax[idx].set_title(
@@ -1856,6 +1879,51 @@ class Viz:
             ax[idx].legend()
             # Set equal aspect ratio
             ax[idx].set_aspect("equal", adjustable="box")
+
+        if savefigname:
+            self._figsave(figurename=savefigname)
+
+    def show_unit_density_vs_ecc(self, unit_type, savefigname=None):
+        unit_density_dict = self.project_data.construct_retina[f"{unit_type}_n_vs_ecc"]
+        fit_parameters = unit_density_dict["fit_parameters"]
+        unit_eccentricity = unit_density_dict["unit_eccentricity"]
+        unit_density = unit_density_dict["unit_density"]
+        this_function = unit_density_dict["function"]
+
+        ecc_limits_deg = self.context.my_retina["ecc_limits_deg"]
+        deg_per_mm = self.context.my_retina["deg_per_mm"]
+        ecc_lim_mm = np.asarray(ecc_limits_deg) / deg_per_mm
+        mean_ecc = np.mean(ecc_lim_mm)
+
+        # Get density at mean eccentricity
+        mean_density = this_function(mean_ecc, *fit_parameters)
+
+        fig, ax = plt.subplots()
+        ax.plot(unit_eccentricity, unit_density, "o", label="data")
+        ax.plot(
+            unit_eccentricity,
+            this_function(unit_eccentricity, *fit_parameters),
+            label="fit",
+        )
+        ax.set_xlabel("Eccentricity (mm)")
+        ax.set_ylabel(f"{unit_type} density")
+        ax.set_title(
+            f"{unit_type} density vs eccentricity: {mean_density:.2f} at {mean_ecc:.2f} mm"
+        )
+        ax.legend()
+
+        # Format fit_parameters to two decimal places in exponential notation
+        formatted_fit_parameters = ", ".join(
+            f"{param:.2e}\n" for param in fit_parameters
+        )
+
+        # Write onto figure axes the function name, equation, and the formatted fit parameters
+        ax.text(
+            0.60,
+            0.30,
+            f"{this_function.__name__}\nfit parameters: {formatted_fit_parameters}",
+            transform=ax.transAxes,
+        )
 
         if savefigname:
             self._figsave(figurename=savefigname)
