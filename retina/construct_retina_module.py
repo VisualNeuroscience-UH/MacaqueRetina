@@ -1698,13 +1698,6 @@ class ConstructRetina(RetinaMath):
 
         return img_flipped, img_reshaped
 
-    def _get_retina_with_rf_masks(
-        self,
-        rf_masks,
-        rspace_pos_mm,
-    ):
-        pass
-
     def _get_rf_resampling_params(self, lit_dd_vs_ecc_params):
         """
         Place rf images to pixel space
@@ -2494,6 +2487,37 @@ class ConstructRetina(RetinaMath):
 
         return X_grid_mm, Y_grid_mm
 
+    def _add_center_mask_area_to_df(self, img_rfs_final_mask, new_um_per_pix):
+        """
+        Get the area of the center mask for each RF in mm^2.
+
+        Parameters
+        ----------
+        img_rfs_final_mask : np.ndarray
+            3D array of boolean masks for RF centers, shape (n_rfs, n_pixels, n_pixels).
+        new_um_per_pix : float
+            The number of micrometers per pixel in the rf_img.
+        """
+
+        # Get the area of the center mask for each RF in mm^2
+        center_mask_area_mm2 = (
+            np.sum(img_rfs_final_mask, axis=(1, 2)) * new_um_per_pix**2 / 1000**2
+        )
+
+        self.gc_vae_df["center_mask_area_mm2"] = center_mask_area_mm2
+
+    def _add_center_fit_area_to_df(self):
+        if self.context.my_retina["DoG_model"] == "circular":
+            self.gc_df["center_fit_area_mm2"] = np.pi * self.gc_df["rad_c_mm"] ** 2
+
+        elif self.context.my_retina["DoG_model"] in [
+            "ellipse_independent",
+            "ellipse_fixed",
+        ]:
+            self.gc_df["center_fit_area_mm2"] = (
+                np.pi * self.gc_df["semi_xc_mm"] * self.gc_df["semi_yc_mm"]
+            )
+
     def _create_spatial_rfs(self):
         """
         Generation of spatial receptive fields (RFs) for the retinal ganglion cells (RGCs).
@@ -2620,6 +2644,8 @@ class ConstructRetina(RetinaMath):
             img_rfs_final_mask = self.get_rf_masks(
                 img_rfs_final, mask_threshold=mask_th
             )
+            # Add center mask area to gc_vae_df for visualization
+            self._add_center_mask_area_to_df(img_rfs_final_mask, new_um_per_pix)
 
             # 10) Sum separate rf center masks onto one retina pixel matrix.
             ret_pix_mtx_final_masked, _, _ = self._get_full_retina_with_rf_images(
@@ -2673,6 +2699,9 @@ class ConstructRetina(RetinaMath):
                 "img_ret_masked": ret_pix_mtx_final_masked,
                 "img_ret_adjusted": ret_pix_mtx_final,
             }
+
+        # Add fitted DoG center area to gc_df for visualization
+        self._add_center_fit_area_to_df()
 
         # Scale center and surround amplitude: center Gaussian volume in pixel space becomes one
         # Surround amplitude is scaled relative to center volume of one
