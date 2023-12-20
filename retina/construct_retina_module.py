@@ -305,6 +305,7 @@ class ConstructRetina(RetinaMath):
 
         unit_eccentricity = np.array([])
         unit_density = np.array([])
+        unit_density_dict = {}
         for filepath in filepaths:
             density = self.data_io.get_data(filepath)
             _eccentricity = np.squeeze(density["Xdata"])
@@ -312,24 +313,48 @@ class ConstructRetina(RetinaMath):
             unit_eccentricity = np.concatenate((unit_eccentricity, _eccentricity))
             unit_density = np.concatenate((unit_density, _density))
 
+        # Sort eccentricity and use these indexed to sort density
+        unit_eccentricity_index = np.argsort(unit_eccentricity)
+        unit_eccentricity = unit_eccentricity[unit_eccentricity_index]
+        unit_density = unit_density[unit_eccentricity_index]
+
         # Cells are in thousands, thus the 1e3
         unit_density = unit_density * 1e3
 
         if unit_type == "gc":
             scale, mean, sigma, baseline0 = 1000, 0, 2, np.min(unit_density)
+            # scale, mean, alpha, beta = 1000, 0, 1, 2
+            this_function = self.gauss_plus_baseline_func
+            # this_function = self.generalized_gauss_func
             fit_parameters, _ = opt.curve_fit(
-                self.gauss_plus_baseline_func,
+                this_function,
                 unit_eccentricity,
                 unit_density,
+                # p0=[scale, mean, alpha, beta],
                 p0=[scale, mean, sigma, baseline0],
             )
+            unit_density_dict["fit_parameters"] = fit_parameters
+            unit_density_dict["unit_eccentricity"] = unit_eccentricity
+            unit_density_dict["unit_density"] = unit_density
+            unit_density_dict["function"] = this_function
+            self.gc_fit_function = this_function
+
         elif unit_type == "cone":
+            this_function = self.double_exponential_func
             fit_parameters, pcov = opt.curve_fit(
-                self.double_exponential_func,
+                this_function,
                 unit_eccentricity,
                 unit_density,
                 p0=[0, -1, 0, 0],
             )
+            unit_density_dict["fit_parameters"] = fit_parameters
+            unit_density_dict["unit_eccentricity"] = unit_eccentricity
+            unit_density_dict["unit_density"] = unit_density
+            unit_density_dict["function"] = this_function
+            self.cone_fit_function = this_function
+
+        # Save data for visualization
+        self.project_data.construct_retina[f"{unit_type}_n_vs_ecc"] = unit_density_dict
 
         return fit_parameters
 
@@ -810,12 +835,9 @@ class ConstructRetina(RetinaMath):
             max_ecc = eccentricity_steps[group_idx + 1]
             avg_ecc = (min_ecc + max_ecc) / 2
 
-            gc_density_group = self.gauss_plus_baseline_func(
-                avg_ecc, *gc_density_params
-            )
-            cone_density_group = self.double_exponential_func(
-                avg_ecc, *cone_density_params
-            )
+            gc_density_group = self.gc_fit_function(avg_ecc, *gc_density_params)
+
+            cone_density_group = self.cone_fit_function(avg_ecc, *cone_density_params)
 
             # Calculate area for this eccentricity group
             sector_area_remove = self.sector2area_mm2(min_ecc, angle_deg)
