@@ -2,6 +2,7 @@
 import numpy as np
 from scipy.stats import norm
 from scipy import ndimage
+from scipy.special import gamma
 
 # Viz
 import matplotlib.pyplot as plt
@@ -23,11 +24,21 @@ class RetinaMath:
     def double_exponential_func(self, x, a, b, c, d):
         return a * np.exp(b * x) + c * np.exp(d * x)
 
+    def triple_exponential_func(self, x, a, b, c, d, e, f):
+        return a * np.exp(b * x) + c * np.exp(d * x) + e * np.exp(f * x)
+
     def gauss_plus_baseline_func(self, x, a, x0, sigma, baseline):  # To fit GC density
         """
         Function for Gaussian distribution with a baseline value. For optimization.
         """
         return a * np.exp(-((x - x0) ** 2) / (2 * sigma**2)) + baseline
+
+    def generalized_gauss_func(self, x, a, x0, alpha, beta):
+        """
+        Generalized Gaussian distribution function with variable kurtosis.
+        """
+        coeff = beta / (2 * alpha * gamma(1 / beta))
+        return a * coeff * np.exp(-np.abs((x - x0) / alpha) ** beta)
 
     def sector2area_mm2(self, radius, angle):
         """
