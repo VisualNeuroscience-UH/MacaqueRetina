@@ -187,11 +187,14 @@ response_type = "on"
 
 # The model_file_name must must be of correct gc_type and response_type.
 
+# Note: FIT model ellipse independent does not correlate the center and surround parameters. Thus they are independent, which
+# is not the case in the VAE model, and not very physiological.
+
 # These values are used for building a new retina
 my_retina = {
     "gc_type": gc_type,
     "response_type": response_type,
-    "ecc_limits_deg": [4.7, 5.3],  # eccentricity in degrees
+    "ecc_limits_deg": [4.7, 6.3],  # eccentricity in degrees
     "pol_limits_deg": [-3, 3],  # polar angle in degrees
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
     "dd_regr_model": "loglog",  # linear, quadratic, cubic, loglog. For midget < 20 deg, use quadratic; for parasol use loglog
@@ -199,8 +202,8 @@ my_retina = {
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
-    "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
-    "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
+    "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder
+    "DoG_model": "circular",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies to FIT only, scales sum(unit center areas) = retina area
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
     "model_file_name": None,  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[DEVICE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only
@@ -359,7 +362,7 @@ cone_params = {
     "sensitivity_min": 5e2,
     "sensitivity_max": 1e4,
     "cone2gc_midget": 9,  # um, 1 SD of Gaussian
-    "cone2gc_parasol": 27,  # um
+    "cone2gc_parasol": 27,  # um 27
     "cone2gc_cutoff_SD": 1,  # 3 SD is 99.7% of Gaussian
     "cone_noise_autocorr": 0.013,  # sec
 }
@@ -606,9 +609,16 @@ if __name__ == "__main__":
     # in the retina mosaic building process.
 
     # For FIT and VAE
-    PM.viz.show_cones_linked_to_gc(gc_list=[3], savefigname=None)
+    PM.viz.show_cones_linked_to_gc(gc_list=[12], savefigname=None)
+    # PM.viz.show_unit_density_vs_ecc(unit_type="gc", savefigname=None)  # gc or cone
 
-    # PM.viz.show_DoG_model_fit(sample_list=[412, 436, 465, 466], savefigname=None)
+    # TÄHÄN JÄIT: TOIMIVA VAE CONE 2 GC LINKKI. CONE PER GC MÄÄRÄ SUUREHKO. TARKISTA MÄÄRÄ(ECC). LINKITÄ TEMPORAALINEN KOHINA.
+    # OLIT TEKEMÄSSÄ FIT VERSIOTA CONE 2 GC LINKISTÄ (GENEROI IMG_RFS JA SIITÄ PARAMETREJA),
+    # MUTTA POSITIO TARKISTUSKUVASSA ON SELVÄSTI PIELESSÄ. KS CONSTRUCT RETINA _CREATE_SPATIAL_RFS
+    # MAHDOLLISESTI PIIRRETYN ELLIPSIN KOORDINAATIT PIELESSÄ? VOI OLLA SKAALAUSKYSYMYS.
+    # MYÖS KESKIPISTE ON SIVUSSA ESIM YLLÄ GC LIST 12 ESIMERKILLÄ.
+
+    # PM.viz.show_DoG_model_fit(sample_list=[12, 14, 16, 18], savefigname=None)
     # PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)
     # PM.viz.show_dendrite_diam_vs_ecc(log_x=False, log_y=True, savefigname=None)
 

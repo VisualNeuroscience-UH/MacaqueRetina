@@ -1826,7 +1826,7 @@ class Viz:
 
         gc_df = self.data_io.get_data(self.context.my_retina["mosaic_file"])
 
-        fig, ax = plt.subplots(len(gc_list), 1, figsize=(10, 10))
+        fig, ax = plt.subplots(1, len(gc_list), figsize=(12, 10))
         if len(gc_list) == 1:
             ax = [ax]
 
@@ -1848,7 +1848,7 @@ class Viz:
                     xy=gc_position,
                     width=2 * gc_df.loc[this_sample, "semi_xc_mm"],
                     height=2 * gc_df.loc[this_sample, "semi_yc_mm"],
-                    angle=gc_df.loc[this_sample, "orient_cen_rad"],
+                    angle=gc_df.loc[this_sample, "orient_cen_rad"] * 180/np.pi,
                     edgecolor="g",
                     facecolor="none",
                 )
