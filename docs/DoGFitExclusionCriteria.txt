@@ -1,0 +1,6 @@
+FIT model
+-Apricot data
+	-manually picked bad data idx
+-fit_module
+	-fit_spatial_filters
+		-if DoG fit fails at scipy.optimize.curve_fit
