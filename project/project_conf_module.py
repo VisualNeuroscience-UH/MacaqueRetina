@@ -202,8 +202,8 @@ my_retina = {
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
-    "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder
-    "DoG_model": "circular",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
+    "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
+    "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies to FIT only, scales sum(unit center areas) = retina area
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
     "model_file_name": None,  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[DEVICE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only
@@ -609,7 +609,7 @@ if __name__ == "__main__":
     # in the retina mosaic building process.
 
     # For FIT and VAE
-    PM.viz.show_cones_linked_to_gc(gc_list=[12], savefigname=None)
+    # PM.viz.show_cones_linked_to_gc(gc_list=[12], savefigname=None)
     # PM.viz.show_unit_density_vs_ecc(unit_type="gc", savefigname=None)  # gc or cone
 
     # TÄHÄN JÄIT: TOIMIVA VAE CONE 2 GC LINKKI. CONE PER GC MÄÄRÄ SUUREHKO. TARKISTA MÄÄRÄ(ECC). LINKITÄ TEMPORAALINEN KOHINA.
@@ -620,7 +620,7 @@ if __name__ == "__main__":
 
     # PM.viz.show_DoG_model_fit(sample_list=[12, 14, 16, 18], savefigname=None)
     # PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)
-    # PM.viz.show_dendrite_diam_vs_ecc(log_x=False, log_y=True, savefigname=None)
+    PM.viz.show_dendrite_diam_vs_ecc(log_x=False, log_y=True, savefigname=None)
 
     # For FIT (DoG fits, temporal kernels and tonic drives)
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)

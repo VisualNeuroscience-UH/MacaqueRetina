@@ -668,7 +668,8 @@ class Fit(RetinaMath):
 
     def _fit_DoG_experimental_data(self, DoG_model):
         """
-        Fits spatial ellipse, temporal and tonic drive parameters to the experimental data.
+        Fits spatial ellipse, temporal and tonic drive parameters to the experimental data. Called
+        only from initialize() when fit_type="experimental".
 
         Returns
         -------
@@ -749,7 +750,8 @@ class Fit(RetinaMath):
 
     def _fit_DoG_generated_data(self, DoG_model, spatial_data, mark_outliers_bad=False):
         """
-        Fits spatial DoG parameters to the generated data.
+        Fits spatial DoG parameters to the generated data. Called only from initialize()
+        when fit_type="generated".
 
         Parameters:
         -----------
@@ -822,6 +824,7 @@ class Fit(RetinaMath):
         param_distribution_dict = {param: "gamma" for param in gamma_params}
         param_distribution_dict.update({param: "vonmises" for param in vonmises_params})
 
+        # Accept only good data
         data_all_cells = np.array(self.all_data_fits_df)
         all_viable_cells = data_all_cells[good_data_fit_idx]
 
@@ -1137,7 +1140,6 @@ class Fit(RetinaMath):
             exp_stat_df,
             exp_cen_radius_mm,
             exp_sur_radius_mm,
-            self.spat_DoG_fit_params,
         )
 
     def get_generated_spatial_fits(self, DoG_model):
@@ -1189,9 +1191,3 @@ class Fit(RetinaMath):
             self.all_data_fits_df,
             good_idx_generated,
         )
-
-
-# if __name__ == '__main__':
-
-#     a = Fit('parasol', 'on')
-#     a._fit_temporal_filters(show_temporal_filter_response=True, normalize_before_fit=True)

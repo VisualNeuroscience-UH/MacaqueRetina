@@ -185,7 +185,7 @@ class ConstructRetina(RetinaMath):
         self.gc_type = gc_type
         self.response_type = response_type
 
-        self.eccentricity = ecc_limits_deg
+        # self.eccentricity = ecc_limits_deg
         self.ecc_lim_mm = np.asarray(
             [r / self.deg_per_mm for r in ecc_limits_deg]
         )  # Turn list to numpy array and deg to mm
@@ -210,7 +210,6 @@ class ConstructRetina(RetinaMath):
             self.exp_stat_df,
             self.exp_cen_radius_mm,
             self.exp_sur_radius_mm,
-            self.spat_DoG_fit_params,
         ) = self.fit.get_experimental_fits(DoG_model)
 
         self.gc_df = pd.DataFrame()
@@ -1429,7 +1428,7 @@ class ConstructRetina(RetinaMath):
         # repulsion.
         self.cone_optimized_positions_mm = cone_optimized_positions_mm
 
-    # temporal filter and tonic frive functions
+    # temporal filter and tonic drive functions
     def _create_fixed_temporal_rfs(self):
         n_cells = len(self.gc_df)
         temporal_df = self.exp_stat_df[self.exp_stat_df["domain"] == "temporal"]
@@ -1902,10 +1901,10 @@ class ConstructRetina(RetinaMath):
         ----------
         rf_img : numpy.ndarray
             3D numpy array of receptive field images. The shape of the array should be (N, H, W).
-        df : pandas.DataFrame
-            DataFrame with gc parameters.
         um_per_pix : float
             The number of micrometers per pixel in the rf_img.
+        df : pandas.DataFrame
+            DataFrame with gc parameters.
         """
 
         ecc_lim_mm = self.ecc_lim_mm
@@ -2120,6 +2119,9 @@ class ConstructRetina(RetinaMath):
 
         # For visualization of the construction process early steps
         good_idx_compiled = np.where(good_mask_compiled)[0]
+        assert (
+            len(good_idx_compiled) == nsamples
+        ), "Bad fit loop did not remove all bad fits, aborting..."
         self.project_data.construct_retina["gen_spat_img"] = {
             "img_processed": img_processed_extra[good_idx_compiled, :, :],
             "img_raw": img_raw_extra[good_idx_compiled, :, :],
@@ -2808,16 +2810,24 @@ class ConstructRetina(RetinaMath):
                 self.gen_stat_df,
                 self.gen_spat_cen_sd,
                 self.gen_spat_sur_sd,
-                gc_vae_df,
+                _gc_vae_df,
                 _,
             ) = self.fit.get_generated_spatial_fits(DoG_model)
 
-            # 8) Update gc_vae_df to include new positions and DoG fits after repulsion
+            # 8) Update self.gc_vae_df to include new positions and DoG fits after repulsion
             # and convert units to to mm, where applicable
             print("\nUpdating ganglion cell dataframe...")
             self.gc_vae_df = self._update_gc_vae_df(
-                gc_vae_df, new_um_per_pix, new_sidelen, updated_rf_lu_pix, ret_lu_mm
+                _gc_vae_df, new_um_per_pix, new_sidelen, updated_rf_lu_pix, ret_lu_mm
             )
+
+            # Set rows to zero for units whose final DoG fit failed
+            if not self.n_units == np.sum(_gc_vae_df["good_filter_data"]):
+                bad_data_idx = np.where(_gc_vae_df["good_filter_data"] == False)[0]
+                self.gc_vae_df.loc[bad_data_idx, :] = 0
+                print(
+                    f"Bad final VAE fits for units {bad_data_idx}, values set to zero"
+                )
 
             # 9) Get final center masks for the generated spatial rfs
             print("\nGetting final masked rfs and retina...")
@@ -2829,8 +2839,7 @@ class ConstructRetina(RetinaMath):
 
             # 10) Sum separate rf center masks onto one retina pixel matrix.
             ret_pix_mtx_final_masked, _, _ = self._get_full_retina_with_rf_images(
-                img_rfs_final_mask,
-                new_um_per_pix,
+                img_rfs_final_mask, new_um_per_pix, self.gc_vae_df
             )
 
             X_grid_mm, Y_grid_mm = self._get_rf_grid_mm(
@@ -2839,15 +2848,14 @@ class ConstructRetina(RetinaMath):
                 updated_rf_lu_pix,
                 ret_lu_mm,
             )
-            print("VAE model")
-            print(f"ret_lu_mm: {ret_lu_mm}")
-            print(f"new_um_per_pix: {new_um_per_pix}")
-            print(f"updated_rf_lu_pix: {updated_rf_lu_pix}")
 
             # Save original and new df:s. For vae, gc_df contains the original
             # positions which were updated during the repulsion step
             self.gc_df_original = self.gc_df.copy()
             self.gc_df = self.gc_vae_df
+
+            # Remove the gc_vae_df from memory to prevent accidental use
+            del self.gc_vae_df
 
             # 11) Set vae data to project_data for later visualization
             self.project_data.construct_retina["retina_vae"] = retina_vae
