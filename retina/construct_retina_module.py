@@ -1418,7 +1418,7 @@ class ConstructRetina(RetinaMath):
             cone_initial_pos, cone_density, cone_placement_params
         )
 
-        # Assign Output Variables
+        # Assign ganglion cell positions to gc_df
         self.gc_df["pos_ecc_mm"] = gc_optimized_pos[:, 0]
         self.gc_df["pos_polar_deg"] = gc_optimized_pos[:, 1]
         self.gc_df["ecc_group_idx"] = np.concatenate(eccentricity_groups)
@@ -2681,6 +2681,7 @@ class ConstructRetina(RetinaMath):
         # # Quality control: check that the fitted dendritic diameter is close to the original data
         # # Frechette_2005_JNeurophysiol datasets: 9.7 mm (45°); 9.0 mm (41°); 8.4 mm (38°)
         # # Estimate the orginal data eccentricity from the fit to full eccentricity range
+        # # TODO: move to integration tests
         # exp_rad = self.exp_cen_radius_mm * 2 * 1000
         # self.visual_field_limit_for_dd_fit_mm = np.inf
         # dd_ecc_params_full = self._fit_dd_vs_ecc()
@@ -2733,18 +2734,6 @@ class ConstructRetina(RetinaMath):
                 rf_lu_pix,
                 ret_lu_mm,
             )
-            x_mm, y_mm = self.pol2cart(self.gc_df.pos_ecc_mm, self.gc_df.pos_polar_deg)
-            xx = 12
-            x_pos = x_mm[xx]
-            y_pos = y_mm[xx]
-            x_grid_pos = X_grid_mm[xx, ...].mean()
-            y_grid_pos = Y_grid_mm[xx, ...].mean()
-            print("FIT model")
-            print(f"x_pos: {x_pos}")
-            print(f"y_pos: {y_pos}")
-            print(f"x_grid_pos: {x_grid_pos}")
-            print(f"y_grid_pos: {y_grid_pos}")
-            pdb.set_trace()
 
         elif self.spatial_model == "VAE":
             # Endow cells with spatial receptive fields using the generative variational autoencoder model
@@ -2930,15 +2919,13 @@ class ConstructRetina(RetinaMath):
         # Run cone density fit to data, get func_params. Data from Packer_1989_JCompNeurol
         cone_density_params = self.read_and_fit_unit_density_data("cone")
 
-        # Place ganglion cells to desired retina.
+        # Place ganglion cells and cones to desired retina.
         self._place_units(gc_density_params, cone_density_params)
-
-        # Now that we have placed the units, we know their number
         self.n_units = len(self.gc_df)
 
         # -- Second, endow cells with spatial receptive fields
         self._create_spatial_rfs()
-        self._link_cones_to_gcs()
+        self._link_cones_to_gcs()  # TODO: probable location of the bug in the cone linking
 
         # -- Third, endow cells with temporal receptive fields
         self._create_fixed_temporal_rfs()  # Chichilnisky data

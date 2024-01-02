@@ -37,7 +37,7 @@ class ApricotData:
             self.spatial_filename = "Parasol_ON_spatial.mat"
             # Simo's new:
             self.manually_picked_bad_data_idx = [9, 15, 20, 25, 71, 86, 89]
-            self.manually_picked_bad_data_idx = [15, 71, 86, 89]  # Henri's
+            # self.manually_picked_bad_data_idx = [15, 71, 86, 89]  # Henri's
 
             self.filename_nonspatial = "mosaicGLM_apricot_ONParasol-1-mat.mat"
 

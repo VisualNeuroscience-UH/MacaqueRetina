@@ -111,7 +111,7 @@ class Fit(RetinaMath):
                     self.exp_temp_filt,
                     self.good_idx_experimental,
                     self.spat_DoG_fit_params,
-                ) = self._fit_experimental_data(DoG_model)
+                ) = self._fit_DoG_experimental_data(DoG_model)
             case "generated":
                 (
                     self.all_data_fits_df,
@@ -666,7 +666,7 @@ class Fit(RetinaMath):
             parameter_names,
         )
 
-    def _fit_experimental_data(self, DoG_model):
+    def _fit_DoG_experimental_data(self, DoG_model):
         """
         Fits spatial ellipse, temporal and tonic drive parameters to the experimental data.
 
@@ -948,8 +948,6 @@ class Fit(RetinaMath):
             "temporal_filter_parameters": temporal_filter_parameters,
             "distrib_params": distrib_params,
             "suptitle": self.gc_type + " " + self.response_type,
-            "all_data_fits_df": self.all_data_fits_df,
-            "good_idx_experimental": good_data_fit_idx,
         }
 
         temporal_exp_stat_df = pd.DataFrame(
@@ -1132,6 +1130,8 @@ class Fit(RetinaMath):
         self.project_data.fit["exp_temp_filt"] = self.exp_temp_filt
         self.project_data.fit["exp_temp_stat"] = exp_temp_stat
         self.project_data.fit["exp_tonic_dr"] = exp_tonic_dr
+        self.project_data.fit["all_data_fits_df"]: self.all_data_fits_df
+        self.project_data.fit["good_idx_experimental"]: good_data_fit_idx
 
         return (
             exp_stat_df,

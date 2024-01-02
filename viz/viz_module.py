@@ -1162,8 +1162,8 @@ class Viz:
         temporal_filter_parameters = exp_temp_stat["temporal_filter_parameters"]
         distrib_params = exp_temp_stat["distrib_params"]
         suptitle = exp_temp_stat["suptitle"]
-        all_data_fits_df = exp_temp_stat["all_data_fits_df"]
-        good_idx_experimental = exp_temp_stat["good_idx_experimental"]
+        all_data_fits_df = self.project_data.fit["all_data_fits_df"]
+        good_idx_experimental = self.project_data.fit["good_idx_experimental"]
 
         plt.subplots(2, 3)
         plt.suptitle(suptitle)
@@ -1848,7 +1848,7 @@ class Viz:
                     xy=gc_position,
                     width=2 * gc_df.loc[this_sample, "semi_xc_mm"],
                     height=2 * gc_df.loc[this_sample, "semi_yc_mm"],
-                    angle=gc_df.loc[this_sample, "orient_cen_rad"] * 180/np.pi,
+                    angle=gc_df.loc[this_sample, "orient_cen_rad"] * 180 / np.pi,
                     edgecolor="g",
                     facecolor="none",
                 )
@@ -1867,10 +1867,10 @@ class Viz:
             y_mm = y_mm[y_mm != 0]
 
             ax[idx].plot(x_mm, y_mm, ".g", label="RF center")
-            
+
             # Add DoG_patch to the plot
             ax[idx].add_patch(DoG_patch)
-            
+
             ax[idx].set_xlabel("X Position (mm)")
             ax[idx].set_ylabel("Y Position (mm)")
             ax[idx].set_title(
@@ -2999,7 +2999,6 @@ class Viz:
         filename_in = f"{cond_names_string}_correlation_distances.csv"
         dist_df = pd.read_csv(data_folder / filename_in)
 
-        # pdb.set_trace()
         # Visualize
         fig, ax = plt.subplots(n_corr, 2, figsize=(8, 4))
         ax = np.array(ax, ndmin=1)  # make sure ax is subscriptable
