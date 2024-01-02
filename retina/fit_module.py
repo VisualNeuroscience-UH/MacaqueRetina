@@ -617,9 +617,9 @@ class Fit(RetinaMath):
         error_df = pd.DataFrame(error_all_viable_cells, columns=["spatialfit_mse"])
         good_mask = np.ones(len(data_all_viable_cells))
 
-        # Remove hand picked (in apricot data module) bad indeces
-        for i in bad_spatial_idx:
-            good_mask[i] = 0
+        # Remove hand picked (in apricot data module) bad indices or failed fits
+        if bad_spatial_idx is not None:
+            good_mask[bad_spatial_idx] = 0
 
         if mark_outliers_bad == True:
             print(

@@ -1337,10 +1337,12 @@ class ConstructRetina(RetinaMath):
 
         return optimized_positions, optimized_positions_mm
 
-    def _link_cones_to_gcs(self):
-        """ """
+    def _link_cone_noise_units_to_gcs(self):
+        """
+        Connect cones to ganglion cells for shared cone noise.
+        """
 
-        print("Connetcing cones to ganglion cells for shared cone noise...")
+        print("Connecting cones to ganglion cells for shared cone noise...")
         cone_params = self.context.my_retina["cone_params"]
 
         cone_pos_mm = self.cone_optimized_positions_mm
@@ -1398,6 +1400,7 @@ class ConstructRetina(RetinaMath):
 
     def _place_units(self, gc_density_params, cone_density_params):
         # Initial Positioning by Group
+        print("\nPlacing units...\n")
         (
             eccentricity_groups,
             sector_surface_areas_mm2,
@@ -2821,13 +2824,12 @@ class ConstructRetina(RetinaMath):
                 _gc_vae_df, new_um_per_pix, new_sidelen, updated_rf_lu_pix, ret_lu_mm
             )
 
-            # Set rows to zero for units whose final DoG fit failed
-            if not self.n_units == np.sum(_gc_vae_df["good_filter_data"]):
-                bad_data_idx = np.where(_gc_vae_df["good_filter_data"] == False)[0]
-                self.gc_vae_df.loc[bad_data_idx, :] = 0
-                print(
-                    f"Bad final VAE fits for units {bad_data_idx}, values set to zero"
-                )
+            # Check that all fits are good. If this starts creating problems, probably
+            # the best solution is to remove the bad fit units totally from the self.gc_vae_df, self.gc_df,
+            # img_rfs_final, updated_rf_lu_pix, ret_pix_mtx_final, com_x, com_y, and update self.n_units
+            assert self.n_units == np.sum(
+                _gc_vae_df["good_filter_data"]
+            ), "Some final VAE fits are bad, aborting..."
 
             # 9) Get final center masks for the generated spatial rfs
             print("\nGetting final masked rfs and retina...")
@@ -2933,7 +2935,7 @@ class ConstructRetina(RetinaMath):
 
         # -- Second, endow cells with spatial receptive fields
         self._create_spatial_rfs()
-        self._link_cones_to_gcs()  # TODO: probable location of the bug in the cone linking
+        self._link_cone_noise_units_to_gcs()  # TODO: probable location of the bug in the cone linking
 
         # -- Third, endow cells with temporal receptive fields
         self._create_fixed_temporal_rfs()  # Chichilnisky data

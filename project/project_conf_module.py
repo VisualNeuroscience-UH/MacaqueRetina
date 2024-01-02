@@ -194,8 +194,9 @@ response_type = "on"
 my_retina = {
     "gc_type": gc_type,
     "response_type": response_type,
-    "ecc_limits_deg": [4.7, 6.3],  # eccentricity in degrees
-    "pol_limits_deg": [-3, 3],  # polar angle in degrees
+    # "ecc_limits_deg": [4.7, 6.3],  # eccentricity in degrees
+    "ecc_limits_deg": [9, 11],  # eccentricity in degrees
+    "pol_limits_deg": [-5, 5],  # polar angle in degrees
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
     "dd_regr_model": "loglog",  # linear, quadratic, cubic, loglog. For midget < 20 deg, use quadratic; for parasol use loglog
     "visual_field_limit_for_dd_fit": math.inf,  # 20,  # degrees, math.inf for no limit
@@ -609,7 +610,7 @@ if __name__ == "__main__":
     # in the retina mosaic building process.
 
     # For FIT and VAE
-    # PM.viz.show_cones_linked_to_gc(gc_list=[12], savefigname=None)
+    PM.viz.show_cones_linked_to_gc(gc_list=[12], savefigname=None)
     # PM.viz.show_unit_density_vs_ecc(unit_type="gc", savefigname=None)  # gc or cone
 
     # TÄHÄN JÄIT: TOIMIVA VAE CONE 2 GC LINKKI. CONE PER GC MÄÄRÄ SUUREHKO. TARKISTA MÄÄRÄ(ECC). LINKITÄ TEMPORAALINEN KOHINA.
@@ -620,7 +621,7 @@ if __name__ == "__main__":
 
     # PM.viz.show_DoG_model_fit(sample_list=[12, 14, 16, 18], savefigname=None)
     # PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)
-    PM.viz.show_dendrite_diam_vs_ecc(log_x=False, log_y=True, savefigname=None)
+    # PM.viz.show_dendrite_diam_vs_ecc(log_x=False, log_y=True, savefigname=None)
 
     # For FIT (DoG fits, temporal kernels and tonic drives)
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
