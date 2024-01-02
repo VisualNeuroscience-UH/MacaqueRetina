@@ -1364,13 +1364,13 @@ class ConstructRetina(RetinaMath):
         n_cones = cone_pos_mm.shape[0]
         n_gcs = gc_pos_mm.shape[0]
 
-        img_rfs = self.spatial_rfs_file["img_rfs"]
-        img_rfs_mask = self.spatial_rfs_file["img_rfs_mask"]
+        gc_img = self.spatial_rfs_file["gc_img"]
+        gc_img_mask = self.spatial_rfs_file["gc_img_mask"]
         X_grid_mm = self.spatial_rfs_file["X_grid_mm"]
         Y_grid_mm = self.spatial_rfs_file["Y_grid_mm"]
 
         # Normalize center activation to probability distribution
-        img_cen = img_rfs * img_rfs_mask
+        img_cen = gc_img * gc_img_mask
         img_prob = img_cen / np.sum(img_cen, axis=(1, 2))[:, None, None]
 
         for i in tqdm(
@@ -1395,7 +1395,7 @@ class ConstructRetina(RetinaMath):
             "weights": weights,
             "X_grid_mm": X_grid_mm,
             "Y_grid_mm": Y_grid_mm,
-            "img_rfs_mask": img_rfs_mask,
+            "gc_img_mask": gc_img_mask,
         }
 
     def _place_units(self, gc_density_params, cone_density_params):
@@ -1805,18 +1805,18 @@ class ConstructRetina(RetinaMath):
         self.gc_df["den_diam_um"] = den_diam_um_s
 
     def _update_gc_vae_df(
-        self, gc_vae_df_in, um_per_pix, sidelen_pix, updated_rf_lu_pix, ret_lu_mm
+        self, gc_vae_df_in, um_per_pix, sidelen_pix, updated_img_lu_pix, ret_lu_mm
     ):
         """
         Update gc_vae_df to have the same columns as gc_df with corresponding values.
         Update the remaining pixel values to mm, unless unit in is in the column name
         """
         gc_vae_df = gc_vae_df_in.reindex(columns=self.gc_vae_df.columns)
-        # Calculate the eccentricity and polar angle of the receptive field center from the updated_rf_lu_pix
+        # Calculate the eccentricity and polar angle of the receptive field center from the updated_img_lu_pix
         # and ret_lu_mm
         xoc_mm = gc_vae_df_in.xoc_pix * um_per_pix / 1000
         yoc_mm = gc_vae_df_in.yoc_pix * um_per_pix / 1000
-        rf_lu_mm = updated_rf_lu_pix * um_per_pix / 1000
+        rf_lu_mm = updated_img_lu_pix * um_per_pix / 1000
 
         # Left upper corner of retina + left upper corner of receptive field relative to the left upper corner of retina
         # + offset of receptive field center from the left upper corner of receptive field
@@ -1890,7 +1890,7 @@ class ConstructRetina(RetinaMath):
 
     def _get_full_retina_with_rf_images(
         self,
-        rf_img,
+        gc_img,
         um_per_pix,
         df,
     ):
@@ -1902,10 +1902,10 @@ class ConstructRetina(RetinaMath):
 
         Parameters
         ----------
-        rf_img : numpy.ndarray
+        gc_img : numpy.ndarray
             3D numpy array of receptive field images. The shape of the array should be (N, H, W).
         um_per_pix : float
-            The number of micrometers per pixel in the rf_img.
+            The number of micrometers per pixel in the gc_img.
         df : pandas.DataFrame
             DataFrame with gc parameters.
         """
@@ -1967,8 +1967,8 @@ class ConstructRetina(RetinaMath):
 
         # Pad with one full rf in each side. This prevents need to cutting the
         # rf imgs at the borders later on
-        pad_size_x_mm = rf_img.shape[2] * um_per_pix / 1000
-        pad_size_y_mm = rf_img.shape[1] * um_per_pix / 1000
+        pad_size_x_mm = gc_img.shape[2] * um_per_pix / 1000
+        pad_size_y_mm = gc_img.shape[1] * um_per_pix / 1000
 
         min_x_mm_im = min_x_mm - pad_size_x_mm
         max_x_mm_im = max_x_mm + pad_size_x_mm
@@ -1982,7 +1982,7 @@ class ConstructRetina(RetinaMath):
         ret_img_pix = np.zeros((ret_pix_y, ret_pix_x))
 
         # Prepare numpy nd array to hold left upeer corner pixel coordinates for each rf image
-        rf_lu_pix = np.zeros((rf_img.shape[0], 2), dtype=int)
+        img_lu_pix = np.zeros((gc_img.shape[0], 2), dtype=int)
 
         pos_ecc_mm = df["pos_ecc_mm"].values
         pos_polar_deg = df["pos_polar_deg"].values
@@ -2002,7 +2002,7 @@ class ConstructRetina(RetinaMath):
             x_pix_lu = x_pix_c[i] - int(row.xoc_pix)
 
             # Get the rf image
-            this_rf_img = rf_img[i, :, :]
+            this_rf_img = gc_img[i, :, :]
             # Lay the rf image onto the retina image
             ret_img_pix[
                 y_pix_lu : y_pix_lu + this_rf_img.shape[0],
@@ -2010,11 +2010,11 @@ class ConstructRetina(RetinaMath):
             ] += this_rf_img
             # Store the left upper corner pixel coordinates and width and height of each rf image.
             # The width and height are necessary because some are cut off at the edges of the retina image.
-            rf_lu_pix[i, :] = [x_pix_lu, y_pix_lu]
+            img_lu_pix[i, :] = [x_pix_lu, y_pix_lu]
 
-        return ret_img_pix, rf_lu_pix, (min_x_mm_im, max_y_mm_im)
+        return ret_img_pix, img_lu_pix, (min_x_mm_im, max_y_mm_im)
 
-    def _get_vae_rfs_with_good_fits(self, retina_vae, new_sidelen, um_per_pix):
+    def _get_vae_imgs_with_good_fits(self, retina_vae, new_sidelen, um_per_pix):
         """
         Provides eccentricity-scaled spatial receptive fields from the
         VAE model, with good DoG fits as QA.
@@ -2032,12 +2032,8 @@ class ConstructRetina(RetinaMath):
 
         Returns
         -------
-        img_processed : np.ndarray
-            Processed image of the generated RFs.
-        img_raw : np.ndarray
-            Raw image of the generated RFs.
-        gc_vae_df: pd.DataFrame
-            Dataframe containing the FITs for accepted rfs.
+        gc_vae_img : numpy.ndarray
+            3D array of spatial receptive fields, shape (n_units, new_sidelen, new_sidelen).
 
         Notes
         -----
@@ -2054,12 +2050,12 @@ class ConstructRetina(RetinaMath):
         )
 
         idx_to_process = np.arange(nsamples)
-        img_rfs = np.zeros((nsamples, new_sidelen, new_sidelen))
+        gc_vae_img = np.zeros((nsamples, new_sidelen, new_sidelen))
         available_idx_mask = np.ones(nsamples_extra, dtype=bool)
         available_idx_mask[idx_to_process] = False
         img_to_resample = img_processed_extra[idx_to_process, :, :]
         good_mask_compiled = np.zeros(nsamples, dtype=bool)
-        gc_vae_df_temp = pd.DataFrame(
+        _gc_vae_df = pd.DataFrame(
             index=np.arange(nsamples),
             columns=["xoc_pix", "yoc_pix"],
         )
@@ -2092,14 +2088,14 @@ class ConstructRetina(RetinaMath):
             good_idx_this_iter = self.fit.good_idx_generated
             good_idx_generated = idx_to_process[good_idx_this_iter]
             # save the good rfs
-            img_rfs[good_idx_generated, :, :] = img_after_resample[
+            gc_vae_img[good_idx_generated, :, :] = img_after_resample[
                 good_idx_this_iter, :, :
             ]
 
             good_df = self.fit.all_data_fits_df.loc[good_idx_this_iter, :]
-            gc_vae_df_temp.loc[
-                good_idx_generated, ["yoc_pix", "xoc_pix"]
-            ] = good_df.loc[:, ["yoc_pix", "xoc_pix"]].values
+            _gc_vae_df.loc[good_idx_generated, ["yoc_pix", "xoc_pix"]] = good_df.loc[
+                :, ["yoc_pix", "xoc_pix"]
+            ].values
 
             good_mask_compiled[good_idx_generated] = True
 
@@ -2130,12 +2126,12 @@ class ConstructRetina(RetinaMath):
             "img_raw": img_raw_extra[good_idx_compiled, :, :],
         }
 
-        self.gc_vae_df.loc[:, ["xoc_pix", "yoc_pix"]] = gc_vae_df_temp
+        self.gc_vae_df.loc[:, ["xoc_pix", "yoc_pix"]] = _gc_vae_df
 
-        return img_rfs
+        return gc_vae_img
 
     def _apply_rf_repulsion(
-        self, img_ret_shape, img_rfs, img_rfs_mask, rf_lu_pix, um_per_pix
+        self, img_ret_shape, gc_img, gc_img_mask, img_lu_pix, um_per_pix
     ):
         """
         Apply mutual repulsion to receptive fields (RFs) to ensure optimal coverage of a simulated retina.
@@ -2146,20 +2142,20 @@ class ConstructRetina(RetinaMath):
         -----------
         img_ret_shape : tuple
             Shape of the retina image (height, width) in pixels.
-        img_rfs : numpy.ndarray
+        gc_img : numpy.ndarray
             3D array representing the RFs, shape (n_rfs, n_pixels, n_pixels).
-        img_rfs_mask : numpy.ndarray
+        gc_img_mask : numpy.ndarray
             3D array of boolean masks for RF centers, shape (n_rfs, n_pixels, n_pixels).
-        rf_lu_pix : numpy.ndarray
+        img_lu_pix : numpy.ndarray
             2D array of the upper-left pixel coordinates of each RF, shape (n_rfs, 2).
         um_per_pix : float
-            Scale factor representing micrometers per pixel in `img_rfs`.
+            Scale factor representing micrometers per pixel in `gc_img`.
 
         Returns:
         --------
-        updated_img_rfs: numpy.ndarray
+        updated_gc_img: numpy.ndarray
             The updated RFs after repulsion and transformation, shape (n_rfs, n_pixels, n_pixels).
-        updated_rf_lu_pix: numpy.ndarray
+        updated_img_lu_pix: numpy.ndarray
             Updated upper-left pixel coordinates of each RF, shape (n_rfs, 2), each row indicating (x, y).
         final_retina: numpy.ndarray
             2D array representing the final state of the retina after RF adjustments, shape matching `img_ret_shape`.
@@ -2180,7 +2176,7 @@ class ConstructRetina(RetinaMath):
         cooling_rate = rf_repulsion_params["cooling_rate"]
         show_only_unit = rf_repulsion_params["show_only_unit"]
 
-        n_units, H, W = img_rfs.shape
+        n_units, H, W = gc_img.shape
         assert H == W, "RF must be square, aborting..."
 
         if show_repulsion_progress is True:
@@ -2193,9 +2189,9 @@ class ConstructRetina(RetinaMath):
                 sidelen=H,
             )
 
-        rf_positions = np.array(rf_lu_pix, dtype=float)
-        rfs = np.array(img_rfs, dtype=float)
-        rfs_mask = np.array(img_rfs_mask, dtype=bool)
+        rf_positions = np.array(img_lu_pix, dtype=float)
+        rfs = np.array(gc_img, dtype=float)
+        rfs_mask = np.array(gc_img_mask, dtype=bool)
         masked_rfs = rfs * rfs_mask
         sum_masked_rfs = np.sum(masked_rfs, axis=(1, 2))
 
@@ -2350,7 +2346,7 @@ class ConstructRetina(RetinaMath):
                     )
 
         # Resample to rectangular H, W resolution
-        updated_img_rfs = np.zeros((n_units, H, W))
+        updated_gc_img = np.zeros((n_units, H, W))
         Yout = np.zeros((n_units, H, W), dtype=np.int32)
         Xout = np.zeros((n_units, H, W), dtype=np.int32)
 
@@ -2374,19 +2370,19 @@ class ConstructRetina(RetinaMath):
             )
 
             # Reshape to 2D
-            updated_img_rfs[i, ...] = resampled_values.reshape(H, W)
+            updated_gc_img[i, ...] = resampled_values.reshape(H, W)
 
-        updated_rf_lu_pix = np.array(
+        updated_img_lu_pix = np.array(
             [Xout[:, 0, 0], Yout[:, 0, 0]], dtype=np.int32
         ).T  # x, y
-        com_x_local = com_x - updated_rf_lu_pix[:, 0]
-        com_y_local = com_y - updated_rf_lu_pix[:, 1]
+        com_x_local = com_x - updated_img_lu_pix[:, 0]
+        com_y_local = com_y - updated_img_lu_pix[:, 1]
 
         new_retina = np.zeros(img_ret_shape)
         final_retina = np.zeros(img_ret_shape)
         for i in range(n_units):
             new_retina[Yt[i], Xt[i]] += rfs[i]
-            final_retina[Yout[i], Xout[i]] += updated_img_rfs[i]
+            final_retina[Yout[i], Xout[i]] += updated_gc_img[i]
 
         if show_repulsion_progress is True:
             # Show one last time with the final interpolated result
@@ -2402,18 +2398,18 @@ class ConstructRetina(RetinaMath):
             plt.ioff()  # Turn off interactive mode
 
         return (
-            updated_img_rfs,
-            updated_rf_lu_pix,
+            updated_gc_img,
+            updated_img_lu_pix,
             final_retina,
             com_x_local,
             com_y_local,
         )
 
-    def _get_rf_grid_mm(
+    def _get_img_grid_mm(
         self,
-        img_rfs_mask,
+        gc_img_mask,
         um_per_pix,
-        rf_lu_pix,
+        img_lu_pix,
         ret_lu_mm,
     ):
         """
@@ -2422,19 +2418,19 @@ class ConstructRetina(RetinaMath):
 
         Parameters
         ----------
-        img_rfs_mask : np.ndarray
+        gc_img_mask : np.ndarray
             3D array of boolean masks for RF centers, shape (n_rfs, n_pixels, n_pixels).
         um_per_pix : float or 1D array with length = n_rfs
             The number of micrometers per pixel in the rf_img.
-        rf_lu_pix : np.ndarray
+        img_lu_pix : np.ndarray
             2D array of the upper-left pixel coordinates of each RF, shape (n_rfs, 2), each row indicating (x, y).
         ret_lu_mm : tuple
             Left upper corner of retina image position in mm, (min_x_mm, max_y_mm).
         """
 
-        # Get the rf image size in pixels. img_rfs is [N, H, W]
-        rf_pix_y = img_rfs_mask.shape[1]
-        rf_pix_x = img_rfs_mask.shape[2]
+        # Get the rf image size in pixels. gc_img is [N, H, W]
+        rf_pix_y = gc_img_mask.shape[1]
+        rf_pix_x = gc_img_mask.shape[2]
 
         X_grid, Y_grid = np.meshgrid(
             np.arange(rf_pix_x),
@@ -2448,17 +2444,17 @@ class ConstructRetina(RetinaMath):
                 um_per_pix[:, np.newaxis, np.newaxis], (1, rf_pix_y, rf_pix_x)
             )
 
-        X_grid_3D = np.tile(X_grid, (rf_lu_pix.shape[0], 1, 1))
-        Y_grid_3D = np.tile(Y_grid, (rf_lu_pix.shape[0], 1, 1))
+        X_grid_3D = np.tile(X_grid, (img_lu_pix.shape[0], 1, 1))
+        Y_grid_3D = np.tile(Y_grid, (img_lu_pix.shape[0], 1, 1))
 
         X_grid_local_mm = X_grid_3D * um_per_pix / 1000
         Y_grid_local_mm = Y_grid_3D * um_per_pix / 1000
 
-        x_vec = rf_lu_pix[:, 0]
+        x_vec = img_lu_pix[:, 0]
         rf_lu_mm_x_mtx = np.tile(
             x_vec[:, np.newaxis, np.newaxis], (1, rf_pix_y, rf_pix_x)
         )
-        y_vec = rf_lu_pix[:, 1]
+        y_vec = img_lu_pix[:, 1]
         rf_lu_mm_y_mtx = np.tile(
             y_vec[:, np.newaxis, np.newaxis], (1, rf_pix_y, rf_pix_x)
         )
@@ -2473,13 +2469,13 @@ class ConstructRetina(RetinaMath):
 
         return X_grid_mm, Y_grid_mm
 
-    def _add_center_mask_area_to_df(self, img_rfs_final_mask, new_um_per_pix):
+    def _add_center_mask_area_to_df(self, gc_vae_img_final_mask, new_um_per_pix):
         """
         Get the area of the center mask for each RF in mm^2.
 
         Parameters
         ----------
-        img_rfs_final_mask : np.ndarray
+        gc_vae_img_final_mask : np.ndarray
             3D array of boolean masks for RF centers, shape (n_rfs, n_pixels, n_pixels).
         new_um_per_pix : float
             The number of micrometers per pixel in the rf_img.
@@ -2487,7 +2483,7 @@ class ConstructRetina(RetinaMath):
 
         # Get the area of the center mask for each RF in mm^2
         center_mask_area_mm2 = (
-            np.sum(img_rfs_final_mask, axis=(1, 2)) * new_um_per_pix**2 / 1000**2
+            np.sum(gc_vae_img_final_mask, axis=(1, 2)) * new_um_per_pix**2 / 1000**2
         )
 
         self.gc_vae_df["center_mask_area_mm2"] = center_mask_area_mm2
@@ -2599,7 +2595,7 @@ class ConstructRetina(RetinaMath):
             ]
         parameters = self.gc_df[parameter_names].values * parameter_scalers
 
-        img_rf = np.zeros((n_cells, new_sidelen, new_sidelen))
+        gc_fit_img = np.zeros((n_cells, new_sidelen, new_sidelen))
 
         for idx in range(n_cells):
             # Get DoG model fit parameters to popt
@@ -2607,54 +2603,17 @@ class ConstructRetina(RetinaMath):
 
             # Ellipses for DoG2D_fixed_surround. Circular params are mapped to ellipse_fixed params
             if DoG_model == "ellipse_fixed":
-                img_rf_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
+                gc_img_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
 
             elif DoG_model == "ellipse_independent":
-                img_rf_fitted = self.DoG2D_independent_surround((x_grid, y_grid), *popt)
+                gc_img_fitted = self.DoG2D_independent_surround((x_grid, y_grid), *popt)
 
             elif DoG_model == "circular":
-                img_rf_fitted = self.DoG2D_circular((x_grid, y_grid), *popt)
+                gc_img_fitted = self.DoG2D_circular((x_grid, y_grid), *popt)
 
-            img_rf[idx, :, :] = img_rf_fitted.reshape(new_sidelen, new_sidelen)
+            gc_fit_img[idx, :, :] = gc_img_fitted.reshape(new_sidelen, new_sidelen)
 
-        return img_rf, pix_scaler
-
-    def _get_fit_rf_img_params(self, img_rfs):
-        ecc_lim_mm = self.ecc_lim_mm
-        polar_lim_deg = self.polar_lim_deg
-        rot_deg = np.mean(polar_lim_deg)
-        ret_lu_mm = self.pol2cart(ecc_lim_mm[0], polar_lim_deg[1] - rot_deg)
-
-        # Prepare numpy nd array to hold left upeer corner pixel coordinates for each rf image
-        rf_lu_pix = np.zeros((img_rfs.shape[0], 2), dtype=int)
-
-        pos_ecc_mm = self.gc_df["pos_ecc_mm"].values
-        pos_polar_deg = self.gc_df["pos_polar_deg"].values
-
-        # Locate left upper corner of each rf img and lay images onto retina image
-        x_mm, y_mm = self.pol2cart(
-            pos_ecc_mm.astype(np.float64),
-            pos_polar_deg.astype(np.float64) - rot_deg,
-            deg=True,
-        )
-
-        data_microm_per_pix = self.context.apricot_metadata["data_microm_per_pix"]
-
-        um_per_pix = self.gc_df["gc_scaling_factors"].values * data_microm_per_pix
-
-        y_pix_c = (ret_lu_mm[1] - y_mm) * 1000 / um_per_pix
-        x_pix_c = (x_mm - ret_lu_mm[0]) * 1000 / um_per_pix
-        for i, row in self.gc_df.iterrows():
-            # Get the position of the rf upper left corner in pixels
-            # The xoc and yoc are the center of the rf image in the resampled data scale.
-            y_pix_lu = y_pix_c[i] - row.yoc_pix
-            x_pix_lu = x_pix_c[i] - row.xoc_pix
-
-            # Store the left upper corner pixel coordinates and width and height of each rf image.
-            # The width and height are necessary because some are cut off at the edges of the retina image.
-            rf_lu_pix[i, :] = [x_pix_lu, y_pix_lu]
-
-        return um_per_pix, rf_lu_pix, ret_lu_mm
+        return gc_fit_img, pix_scaler
 
     def _get_fit_rf_pixel_params(self):
         """ """
@@ -2720,25 +2679,26 @@ class ConstructRetina(RetinaMath):
             ) = self._get_fit_rf_pixel_params()
 
             # Create rf_img and rf_img_mask for FIT model
-            img_rfs, pix_scaler = self._get_fit_rf_images(new_sidelen)
-            img_rfs_mask = self.get_rf_masks(img_rfs, mask_threshold=mask_th)
-
-            # um_per_pix, rf_lu_pix, ret_lu_mm = self._get_fit_rf_img_params(img_rfs)
+            gc_fit_img, pix_scaler = self._get_fit_rf_images(new_sidelen)
+            gc_fit_img_mask = self.get_rf_masks(gc_fit_img, mask_threshold=mask_th)
 
             new_um_per_pix = new_um_per_pix / pix_scaler
 
-            ret_pix_mtx, rf_lu_pix, ret_lu_mm = self._get_full_retina_with_rf_images(
-                img_rfs,
+            ret_pix_mtx, img_lu_pix, ret_lu_mm = self._get_full_retina_with_rf_images(
+                gc_fit_img,
                 new_um_per_pix,
                 self.gc_df,
             )
 
-            X_grid_mm, Y_grid_mm = self._get_rf_grid_mm(
-                img_rfs_mask,
+            X_grid_mm, Y_grid_mm = self._get_img_grid_mm(
+                gc_fit_img_mask,
                 new_um_per_pix,
-                rf_lu_pix,
+                img_lu_pix,
                 ret_lu_mm,
             )
+
+            gc_img = gc_fit_img
+            gc_img_mask = gc_fit_img_mask
 
         elif self.spatial_model == "VAE":
             # Endow cells with spatial receptive fields using the generative variational autoencoder model
@@ -2765,34 +2725,34 @@ class ConstructRetina(RetinaMath):
 
             # 3) "Bad fit loop", provides eccentricity-scaled vae rfs with good DoG fits (error < 3SD from mean).
             print("\nBad fit loop: Generating receptive fields with good DoG fits...")
-            img_rfs = self._get_vae_rfs_with_good_fits(
+            gc_vae_img = self._get_vae_imgs_with_good_fits(
                 retina_vae, new_sidelen, new_um_per_pix
             )
 
             # 4) Get center masks
-            img_rfs_mask = self.get_rf_masks(img_rfs, mask_threshold=mask_th)
+            gc_vae_img_mask = self.get_rf_masks(gc_vae_img, mask_threshold=mask_th)
 
             # 5) Sum separate rf images onto one retina pixel matrix.
             # In the retina pixel matrix, for each rf get the upper left corner
             # pixel coordinates. Get the retina patch lu mm coordinates (padded).
-            ret_pix_mtx, rf_lu_pix, ret_lu_mm = self._get_full_retina_with_rf_images(
-                img_rfs, new_um_per_pix, self.gc_vae_df
+            ret_pix_mtx, img_lu_pix, ret_lu_mm = self._get_full_retina_with_rf_images(
+                gc_vae_img, new_um_per_pix, self.gc_vae_df
             )
 
             # 6) Apply repulsion adjustment to the receptive fields. Note that this will
             # change the positions of the receptive fields.
             print("\nApplying repulsion between the receptive fields...")
             (
-                img_rfs_final,
-                updated_rf_lu_pix,
+                gc_vae_img_final,
+                updated_img_lu_pix,
                 ret_pix_mtx_final,
                 com_x,
                 com_y,
             ) = self._apply_rf_repulsion(
                 ret_pix_mtx.shape,
-                img_rfs,
-                img_rfs_mask,
-                rf_lu_pix,
+                gc_vae_img,
+                gc_vae_img_mask,
+                img_lu_pix,
                 new_um_per_pix,
             )
 
@@ -2804,7 +2764,7 @@ class ConstructRetina(RetinaMath):
                 self.response_type,
                 fit_type="generated",
                 DoG_model=DoG_model,
-                spatial_data=img_rfs_final,
+                spatial_data=gc_vae_img_final,
                 um_per_pix=new_um_per_pix,
                 mark_outliers_bad=False,
             )
@@ -2821,33 +2781,33 @@ class ConstructRetina(RetinaMath):
             # and convert units to to mm, where applicable
             print("\nUpdating ganglion cell dataframe...")
             self.gc_vae_df = self._update_gc_vae_df(
-                _gc_vae_df, new_um_per_pix, new_sidelen, updated_rf_lu_pix, ret_lu_mm
+                _gc_vae_df, new_um_per_pix, new_sidelen, updated_img_lu_pix, ret_lu_mm
             )
 
             # Check that all fits are good. If this starts creating problems, probably
             # the best solution is to remove the bad fit units totally from the self.gc_vae_df, self.gc_df,
-            # img_rfs_final, updated_rf_lu_pix, ret_pix_mtx_final, com_x, com_y, and update self.n_units
+            # gc_vae_img_final, updated_img_lu_pix, ret_pix_mtx_final, com_x, com_y, and update self.n_units
             assert self.n_units == np.sum(
                 _gc_vae_df["good_filter_data"]
             ), "Some final VAE fits are bad, aborting..."
 
             # 9) Get final center masks for the generated spatial rfs
             print("\nGetting final masked rfs and retina...")
-            img_rfs_final_mask = self.get_rf_masks(
-                img_rfs_final, mask_threshold=mask_th
+            gc_vae_img_final_mask = self.get_rf_masks(
+                gc_vae_img_final, mask_threshold=mask_th
             )
             # Add center mask area to gc_vae_df for visualization
-            self._add_center_mask_area_to_df(img_rfs_final_mask, new_um_per_pix)
+            self._add_center_mask_area_to_df(gc_vae_img_final_mask, new_um_per_pix)
 
             # 10) Sum separate rf center masks onto one retina pixel matrix.
             ret_pix_mtx_final_masked, _, _ = self._get_full_retina_with_rf_images(
-                img_rfs_final_mask, new_um_per_pix, self.gc_vae_df
+                gc_vae_img_final_mask, new_um_per_pix, self.gc_vae_df
             )
 
-            X_grid_mm, Y_grid_mm = self._get_rf_grid_mm(
-                img_rfs_final_mask,
+            X_grid_mm, Y_grid_mm = self._get_img_grid_mm(
+                gc_vae_img_final_mask,
                 new_um_per_pix,
-                updated_rf_lu_pix,
+                updated_img_lu_pix,
                 ret_lu_mm,
             )
 
@@ -2863,9 +2823,9 @@ class ConstructRetina(RetinaMath):
             self.project_data.construct_retina["retina_vae"] = retina_vae
 
             self.project_data.construct_retina["gen_rfs"] = {
-                "img_rf": img_rfs,
-                "img_rf_mask": img_rfs_mask,
-                "img_rfs_adjusted": img_rfs_final,
+                "gc_vae_img": gc_vae_img,
+                "gc_vae_img_mask": gc_vae_img_mask,
+                "gc_vae_img_final": gc_vae_img_final,
                 "centre_of_mass_x": com_x,
                 "centre_of_mass_y": com_y,
             }
@@ -2876,8 +2836,8 @@ class ConstructRetina(RetinaMath):
                 "img_ret_adjusted": ret_pix_mtx_final,
             }
 
-            img_rfs = img_rfs_final
-            img_rfs_mask = img_rfs_final_mask
+            gc_img = gc_vae_img_final
+            gc_img_mask = gc_vae_img_final_mask
 
         # 12) Save the generated receptive field pix images, pix masks, and pixel locations in mm
         print("\nSaving data...")
@@ -2886,8 +2846,8 @@ class ConstructRetina(RetinaMath):
 
         # Collate data for saving
         spatial_rfs_file = {
-            "img_rfs": img_rfs,
-            "img_rfs_mask": img_rfs_mask,
+            "gc_img": gc_img,
+            "gc_img_mask": gc_img_mask,
             "X_grid_mm": X_grid_mm,
             "Y_grid_mm": Y_grid_mm,
         }

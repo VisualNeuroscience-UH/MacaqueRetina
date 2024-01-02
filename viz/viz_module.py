@@ -313,7 +313,7 @@ class Viz:
 
             # Ellipses for DoG2D_fixed_surround. Circular params are mapped to ellipse_fixed params
             if DoG_model == "ellipse_fixed":
-                img_rf_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
+                gc_img_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
                 e1 = Ellipse(
                     (popt[np.array([1, 2])]),
                     popt[3],
@@ -335,7 +335,7 @@ class Viz:
                 )
 
             elif DoG_model == "ellipse_independent":
-                img_rf_fitted = self.DoG2D_independent_surround((x_grid, y_grid), *popt)
+                gc_img_fitted = self.DoG2D_independent_surround((x_grid, y_grid), *popt)
                 e1 = Ellipse(
                     (popt[np.array([1, 2])]),
                     popt[3],
@@ -356,7 +356,7 @@ class Viz:
                     linestyle="--",
                 )
             elif DoG_model == "circular":
-                img_rf_fitted = self.DoG2D_circular((x_grid, y_grid), *popt)
+                gc_img_fitted = self.DoG2D_circular((x_grid, y_grid), *popt)
                 e1 = Ellipse(
                     (popt[np.array([1, 2])]),
                     popt[3],
@@ -381,7 +381,7 @@ class Viz:
             axes[idx, 0].add_artist(e2)
 
             sur = axes[idx, 1].imshow(
-                img_rf_fitted.reshape(pixel_array_shape_y, pixel_array_shape_x),
+                gc_img_fitted.reshape(pixel_array_shape_y, pixel_array_shape_x),
                 cmap=imshow_cmap,
                 origin="lower",
                 extent=(x_grid.min(), x_grid.max(), y_grid.min(), y_grid.max()),
@@ -951,7 +951,7 @@ class Viz:
         if savefigname:
             self._figsave(figurename=savefigname)
 
-    def show_spatial_statistics(self, savefigname=None):
+    def show_spatial_statistics(self, corr_ref_idx=1, savefigname=None):
         """
         Show histograms of receptive field parameters
 
@@ -961,12 +961,11 @@ class Viz:
         spatial_statistics_dict = self.project_data.fit["exp_spat_stat"][
             "spatial_statistics_dict"
         ]
-        spatial_statistics_dict.pop("ampl_c", None)
+
         model_fit_data = self.project_data.fit["exp_spat_stat"]["model_fit_data"]
 
         distributions = [key for key in spatial_statistics_dict.keys()]
-        n_distributions = len(spatial_statistics_dict)
-
+        n_distributions = len(distributions)
         # plot the distributions and fits.
         n_ax_cols = 3
         n_ax_rows = math.ceil(n_distributions / n_ax_cols)
@@ -1016,10 +1015,9 @@ class Viz:
         # Check correlations
         fig2, axes2 = plt.subplots(n_ax_rows, n_ax_cols, figsize=(13, 4))
         axes2 = axes2.flatten()
-        ref_index = 1
         for index in np.arange(n_distributions):
             ax2 = axes2[index]
-            data_all_x = ydata[:, ref_index]
+            data_all_x = ydata[:, corr_ref_idx]
             data_all_y = ydata[:, index]
 
             r, p = stats.pearsonr(data_all_x, data_all_y)
@@ -1036,7 +1034,7 @@ class Viz:
             )
             ax2.set_title(
                 "Correlation between {0} and {1}".format(
-                    distributions[ref_index], distributions[index]
+                    distributions[corr_ref_idx], distributions[index]
                 )
             )
 
@@ -1822,7 +1820,7 @@ class Viz:
         weights = cones_to_gcs["weights"]
         X_grid_mm = cones_to_gcs["X_grid_mm"]
         Y_grid_mm = cones_to_gcs["Y_grid_mm"]
-        img_rfs_mask = cones_to_gcs["img_rfs_mask"]
+        gc_img_mask = cones_to_gcs["gc_img_mask"]
 
         gc_df = self.data_io.get_data(self.context.my_retina["mosaic_file"])
 
@@ -1860,7 +1858,7 @@ class Viz:
             for cone_pos, prob in zip(cone_positions, connection_probs):
                 ax[idx].scatter(*cone_pos, alpha=prob, color="blue")
 
-            mask = img_rfs_mask[this_sample, ...]
+            mask = gc_img_mask[this_sample, ...]
             x_mm = X_grid_mm[this_sample, ...] * mask
             y_mm = Y_grid_mm[this_sample, ...] * mask
             x_mm = x_mm[x_mm != 0]
@@ -2485,10 +2483,10 @@ class Viz:
         if savefigname is not None:
             self._figsave(figurename=savefigname)
 
-    # PhotoReceptor visualization
-    def show_cone_response(self, image, image_after_optics, cone_response):
+    # Cone filtering (natural images and videos) and cone noise visualization
+    def show_cone_filter_response(self, image, image_after_optics, cone_response):
         """
-        PhotoReceptor call.
+        NaturalStimuliConeFilter call.
         """
         fig, ax = plt.subplots(nrows=2, ncols=3)
         axs = ax.ravel()
@@ -2547,28 +2545,28 @@ class Viz:
         """
         Show the individual RFs of the VAE retina
 
-        img_rf: (n_cells, n_pix, n_pix)
-        img_rf_mask: (n_cells, n_pix, n_pix)
-        img_rfs_adjusted: (n_cells, n_pix, n_pix)
+        gc_vae_img: (n_cells, n_pix, n_pix)
+        gc_vae_img_mask: (n_cells, n_pix, n_pix)
+        gc_vae_img_final: (n_cells, n_pix, n_pix)
         """
 
         gen_rfs = self.project_data.construct_retina["gen_rfs"]
 
-        img_rf = gen_rfs["img_rf"]
-        img_rf_mask = gen_rfs["img_rf_mask"]
-        img_rfs_adjusted = gen_rfs["img_rfs_adjusted"]
+        gc_vae_img = gen_rfs["gc_vae_img"]
+        gc_vae_img_mask = gen_rfs["gc_vae_img_mask"]
+        gc_vae_img_final = gen_rfs["gc_vae_img_final"]
 
         fig, axs = plt.subplots(3, n_samples, figsize=(n_samples, 3))
-        samples = np.random.choice(img_rf.shape[0], n_samples, replace=False)
+        samples = np.random.choice(gc_vae_img.shape[0], n_samples, replace=False)
         for i, sample in enumerate(samples):
-            axs[0, i].imshow(img_rf[sample], cmap="gray")
+            axs[0, i].imshow(gc_vae_img[sample], cmap="gray")
             axs[0, i].axis("off")
             axs[0, i].set_title("Cell " + str(sample))
 
-            axs[1, i].imshow(img_rf_mask[sample], cmap="gray")
+            axs[1, i].imshow(gc_vae_img_mask[sample], cmap="gray")
             axs[1, i].axis("off")
 
-            axs[2, i].imshow(img_rfs_adjusted[sample], cmap="gray")
+            axs[2, i].imshow(gc_vae_img_final[sample], cmap="gray")
             axs[2, i].axis("off")
 
         # On the left side of the first axis of each row, set text labels.
@@ -2597,23 +2595,23 @@ class Viz:
         """
         Show the individual RFs of the VAE retina
 
-        img_rf: (n_cells, n_pix, n_pix)
-        img_rfs_adjusted: (n_cells, n_pix, n_pix)
+        gc_vae_img: (n_cells, n_pix, n_pix)
+        gc_vae_img_final: (n_cells, n_pix, n_pix)
         """
 
         gen_rfs = self.project_data.construct_retina["gen_rfs"]
 
-        img_rf = gen_rfs["img_rf"]
-        img_rfs_adjusted = gen_rfs["img_rfs_adjusted"]
+        gc_vae_img = gen_rfs["gc_vae_img"]
+        gc_vae_img_final = gen_rfs["gc_vae_img_final"]
 
         fig, axs = plt.subplots(
             2, 1, figsize=(10, 10)
         )  # I assume you want a bigger figure size.
 
         # reshape and transpose arrays so that we have one row per cell
-        df_rf = pd.DataFrame(img_rf.reshape(img_rf.shape[0], -1).T)
+        df_rf = pd.DataFrame(gc_vae_img.reshape(gc_vae_img.shape[0], -1).T)
         df_pruned = pd.DataFrame(
-            img_rfs_adjusted.reshape(img_rfs_adjusted.shape[0], -1).T
+            gc_vae_img_final.reshape(gc_vae_img_final.shape[0], -1).T
         )
 
         # Show seaborn boxplot with RF values, one box for each cell
@@ -3255,7 +3253,7 @@ class Viz:
 
         if self.context.my_retina["spatial_model"] == "VAE":
             gen_rfs = gen_rfs
-            img_rf = gen_rfs["img_rf"]
+            gc_vae_img = gen_rfs["gc_vae_img"]
 
             new_um_per_pix = self.construct_retina.updated_vae_um_per_pix
 
@@ -3267,7 +3265,7 @@ class Viz:
                 self.context.apricot_metadata,
                 self.construct_retina.gc_type,
                 self.construct_retina.response_type,
-                spatial_data=img_rf,
+                spatial_data=gc_vae_img,
                 fit_type="concentric_rings",
                 new_um_per_pix=new_um_per_pix,
             )

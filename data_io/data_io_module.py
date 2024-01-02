@@ -756,9 +756,9 @@ class DataIO(DataIOBase):
         ----------
         data_dict : dict
             The dictionary containing the fields to be saved:
-                img_rfs_final : numpy.ndarray
+                gc_img : numpy.ndarray
                     The 3D image stack to be saved, with shape (N, H, W).
-                img_rfs_final_mask : numpy.ndarray
+                gc_img_mask : numpy.ndarray
                     The 3D image stack center mask to be saved, with shape (N, H, W).
                 X_grid_mm : numpy.ndarray
                     The X grid in mm, with shape (N, H, W).
@@ -784,8 +784,8 @@ class DataIO(DataIOBase):
 
         np.savez(
             stack_filename,
-            img_rfs=data_dict["img_rfs"],
-            img_rfs_mask=data_dict["img_rfs_mask"],
+            gc_img=data_dict["gc_img"],
+            gc_img_mask=data_dict["gc_img_mask"],
             X_grid_mm=data_dict["X_grid_mm"],
             Y_grid_mm=data_dict["Y_grid_mm"],
         )

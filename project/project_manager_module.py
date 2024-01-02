@@ -6,7 +6,7 @@ from data_io.data_io_module import DataIO
 from analysis.analysis_module import Analysis
 from viz.viz_module import Viz
 from retina.construct_retina_module import ConstructRetina
-from retina.working_retina_module import WorkingRetina, PhotoReceptor
+from retina.working_retina_module import WorkingRetina, NaturalStimuliConeFilter
 from retina.retina_math_module import RetinaMath
 from retina.fit_module import Fit
 from stimuli.visual_stimulus_module import VisualStimulus, AnalogInput
@@ -78,7 +78,7 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         data_io = DataIO(context)
         self.data_io = data_io
 
-        cones = PhotoReceptor(context, data_io)
+        cones = NaturalStimuliConeFilter(context, data_io)
         self.cones = cones
 
         project_data = ProjectData()

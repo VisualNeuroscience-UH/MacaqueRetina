@@ -194,16 +194,15 @@ response_type = "on"
 my_retina = {
     "gc_type": gc_type,
     "response_type": response_type,
-    # "ecc_limits_deg": [4.7, 6.3],  # eccentricity in degrees
-    "ecc_limits_deg": [9, 11],  # eccentricity in degrees
-    "pol_limits_deg": [-5, 5],  # polar angle in degrees
+    "ecc_limits_deg": [4.7, 6.3],  # eccentricity in degrees
+    "pol_limits_deg": [-3, 3],  # polar angle in degrees
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
     "dd_regr_model": "loglog",  # linear, quadratic, cubic, loglog. For midget < 20 deg, use quadratic; for parasol use loglog
     "visual_field_limit_for_dd_fit": math.inf,  # 20,  # degrees, math.inf for no limit
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
-    "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
+    "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies to FIT only, scales sum(unit center areas) = retina area
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
@@ -571,7 +570,7 @@ if __name__ == "__main__":
     and videos.
     """
     # PM.cones.natural_stimuli_cone_filter()
-    # PM.viz.show_cone_response(
+    # PM.viz.show_cone_filter_response(
     #     PM.cones.image, PM.cones.image_after_optics, PM.cones.cone_response
     # )
 
@@ -610,11 +609,11 @@ if __name__ == "__main__":
     # in the retina mosaic building process.
 
     # For FIT and VAE
-    PM.viz.show_cones_linked_to_gc(gc_list=[12], savefigname=None)
+    # PM.viz.show_cones_linked_to_gc(gc_list=[12], savefigname=None)
     # PM.viz.show_unit_density_vs_ecc(unit_type="gc", savefigname=None)  # gc or cone
 
     # TÄHÄN JÄIT: TOIMIVA VAE CONE 2 GC LINKKI. CONE PER GC MÄÄRÄ SUUREHKO. TARKISTA MÄÄRÄ(ECC). LINKITÄ TEMPORAALINEN KOHINA.
-    # OLIT TEKEMÄSSÄ FIT VERSIOTA CONE 2 GC LINKISTÄ (GENEROI IMG_RFS JA SIITÄ PARAMETREJA),
+    # OLIT TEKEMÄSSÄ FIT VERSIOTA CONE 2 GC LINKISTÄ (GENEROI gc_img JA SIITÄ PARAMETREJA),
     # MUTTA POSITIO TARKISTUSKUVASSA ON SELVÄSTI PIELESSÄ. KS CONSTRUCT RETINA _CREATE_SPATIAL_RFS
     # MAHDOLLISESTI PIIRRETYN ELLIPSIN KOORDINAATIT PIELESSÄ? VOI OLLA SKAALAUSKYSYMYS.
     # MYÖS KESKIPISTE ON SIVUSSA ESIM YLLÄ GC LIST 12 ESIMERKILLÄ.
@@ -626,7 +625,7 @@ if __name__ == "__main__":
     # For FIT (DoG fits, temporal kernels and tonic drives)
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
     # PM.viz.show_temporal_filter_response(n_curves=3, savefigname="temporal_filters.eps")
-    # PM.viz.show_spatial_statistics(savefigname="spatial_stats.eps")
+    PM.viz.show_spatial_statistics(savefigname="spatial_stats.eps")
 
     # For VAE
     # PM.viz.show_gen_exp_spatial_rf(ds_name="train_ds", n_samples=15, savefigname=None)

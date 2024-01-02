@@ -2067,10 +2067,10 @@ class WorkingRetina(RetinaMath):
             )
 
 
-class PhotoReceptor:
+class NaturalStimuliConeFilter:
     """
-    PhotoReceptor is with WorkingRetina, because the latter needs the cone filtering for natural stimuli
-    (optical aberration and nonlinear luminance response) and adds cone noise to generator potentials.
+    NaturalStimuliConeFilter is with WorkingRetina, because the latter needs the cone filtering for natural stimuli
+    (optical aberration and nonlinear luminance response).
     """
 
     def __init__(self, context, data_io) -> None:

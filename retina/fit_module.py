@@ -564,25 +564,25 @@ class Fit(RetinaMath):
 
             # Compute fitting error
             if DoG_model == "ellipse_independent":
-                img_rf_fitted = self.DoG2D_independent_surround((x_grid, y_grid), *popt)
+                gc_img_fitted = self.DoG2D_independent_surround((x_grid, y_grid), *popt)
             elif DoG_model == "ellipse_fixed":
-                img_rf_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
+                gc_img_fitted = self.DoG2D_fixed_surround((x_grid, y_grid), *popt)
             elif DoG_model == "circular":
-                img_rf_fitted = self.DoG2D_circular((x_grid, y_grid), *popt)
+                gc_img_fitted = self.DoG2D_circular((x_grid, y_grid), *popt)
 
-            img_rf_fitted = img_rf_fitted.reshape(num_pix_y, num_pix_x)
-            fit_deviations = img_rf_fitted - this_rf
+            gc_img_fitted = gc_img_fitted.reshape(num_pix_y, num_pix_x)
+            fit_deviations = gc_img_fitted - this_rf
 
             # MSE
             fit_error = np.sum(fit_deviations**2) / np.prod(this_rf.shape)
             error_all_viable_cells[cell_idx, 0] = fit_error
 
             # Save DoG fit sums
-            dog_filtersum_array[cell_idx, 0] = np.sum(img_rf_fitted[img_rf_fitted > 0])
+            dog_filtersum_array[cell_idx, 0] = np.sum(gc_img_fitted[gc_img_fitted > 0])
             dog_filtersum_array[cell_idx, 1] = (-1) * np.sum(
-                img_rf_fitted[img_rf_fitted < 0]
+                gc_img_fitted[gc_img_fitted < 0]
             )
-            dog_filtersum_array[cell_idx, 2] = np.sum(img_rf_fitted)
+            dog_filtersum_array[cell_idx, 2] = np.sum(gc_img_fitted)
             dog_filtersum_array[cell_idx, 3] = np.sum(this_rf[this_rf > 0])
 
             # For visualization
@@ -1133,8 +1133,8 @@ class Fit(RetinaMath):
         self.project_data.fit["exp_temp_filt"] = self.exp_temp_filt
         self.project_data.fit["exp_temp_stat"] = exp_temp_stat
         self.project_data.fit["exp_tonic_dr"] = exp_tonic_dr
-        self.project_data.fit["all_data_fits_df"]: self.all_data_fits_df
-        self.project_data.fit["good_idx_experimental"]: good_data_fit_idx
+        self.project_data.fit["all_data_fits_df"] = self.all_data_fits_df
+        self.project_data.fit["good_idx_experimental"] = good_data_fit_idx
 
         return (
             exp_stat_df,
