@@ -951,92 +951,155 @@ class Viz:
         if savefigname:
             self._figsave(figurename=savefigname)
 
-    def show_spatial_statistics(self, corr_ref_idx=1, savefigname=None):
+    def _delete_extra_axes(self, fig, axes, n_items, n_ax_rows, n_ax_cols):
         """
-        Show histograms of receptive field parameters
+        If the number of distributions is less than n_ax_rows * n_ax_cols, remove the empty axes
+        """
+        if n_items < n_ax_rows * n_ax_cols:
+            for idx in range(n_items, n_ax_rows * n_ax_cols):
+                fig.delaxes(axes[idx])
 
-        ConstructRetina call.
+    def show_spatial_statistics(self, correlation_reference=None, savefigname=None):
         """
+        Show histograms of receptive field parameters, and correlation between receptive field parameters.
+        ConstructRetina call.
+
+        Parameters
+        ----------
+        correlation_reference : str, optional
+            The name of the distribution to use as a reference for correlation.
+            If None, no correlation is shown.
+        savefigname : str, optional
+            The name of the file to save the figure. If None, the figure is not saved.
+        """
+
+        distr_of_interest = [
+            "xoc_pix",
+            "yoc_pix",
+            "semi_xc_pix",
+            "semi_yc_pix",
+            "ampl_s",
+            "relat_sur_diam",
+            "xy_aspect_ratio",
+            "orient_cen_rad",
+        ]
+
         ydata = self.project_data.fit["exp_spat_stat"]["ydata"]
         spatial_statistics_dict = self.project_data.fit["exp_spat_stat"][
             "spatial_statistics_dict"
         ]
 
         model_fit_data = self.project_data.fit["exp_spat_stat"]["model_fit_data"]
+        x_model_fit, y_model_fit = model_fit_data[0], model_fit_data[1]
 
-        distributions = [key for key in spatial_statistics_dict.keys()]
-        n_distributions = len(distributions)
+        distr_id_name = [
+            (idx, key)
+            for idx, key in enumerate(spatial_statistics_dict.keys())
+            if key in distr_of_interest
+        ]
+        dist_idx, distrs = zip(*distr_id_name)
+        n_distributions = len(distrs)
         # plot the distributions and fits.
         n_ax_cols = 3
         n_ax_rows = math.ceil(n_distributions / n_ax_cols)
         fig, axes = plt.subplots(n_ax_rows, n_ax_cols, figsize=(13, 4))
         axes = axes.flatten()
-        for index in np.arange(n_distributions):
-            ax = axes[index]
+        for idx, this_distr in enumerate(dist_idx):
+            ax = axes[idx]
+            _ax = ax.twinx()
 
-            bin_values, foo, foo2 = ax.hist(ydata[:, index], bins=20, density=True)
+            # bin_values, foo, foo2 = ax.hist(ydata[:, this_distr], bins=20, density=True)
+            bin_values, foo, foo2 = ax.hist(ydata[:, this_distr], bins=20)
+            ax.set_xlabel(distrs[idx])
+            ax.set_ylabel("Count")
 
-            if model_fit_data != None:  # Assumes tuple of arrays, see below
-                x_model_fit, y_model_fit = model_fit_data[0], model_fit_data[1]
-                ax.plot(
-                    x_model_fit[:, index],
-                    y_model_fit[:, index],
+            if model_fit_data != None:  # Assumes tuple of arrays
+                x_this_distr = x_model_fit[:, this_distr]
+                y_this_distr = y_model_fit[:, this_distr]
+
+                _ax.plot(
+                    x_this_distr,
+                    y_this_distr,
                     "r-",
                     linewidth=6,
                     alpha=0.6,
                 )
 
-                spatial_statistics_dict[distributions[index]]
-                shape = spatial_statistics_dict[distributions[index]]["shape"]
-                loc = spatial_statistics_dict[distributions[index]]["loc"]
-                scale = spatial_statistics_dict[distributions[index]]["scale"]
-                model_function = spatial_statistics_dict[distributions[index]][
-                    "distribution"
-                ]
+                _ax.set_ylim([0, 1.1 * y_this_distr.max()])
+                _ax.set_ylabel("Probability density")
+
+                spatial_statistics_dict[distrs[idx]]
+                shape = spatial_statistics_dict[distrs[idx]]["shape"]
+                loc = spatial_statistics_dict[distrs[idx]]["loc"]
+                scale = spatial_statistics_dict[distrs[idx]]["scale"]
+                model_function = spatial_statistics_dict[distrs[idx]]["distribution"]
 
                 ax.annotate(
                     "shape = {0:.2f}\nloc = {1:.2f}\nscale = {2:.2f}".format(
                         shape, loc, scale
                     ),
-                    xy=(0.6, 0.4),
+                    xy=(1, 1),  # Point at the right upper corner of the axis
                     xycoords="axes fraction",
+                    xytext=(-10, -10),  # Offset from the corner, adjust as needed
+                    textcoords="offset points",
+                    horizontalalignment="right",  # Right align text
+                    verticalalignment="top",  # Top align text
                 )
-                ax.set_title(
-                    "{0} fit for {1}".format(model_function, distributions[index])
-                )
+                ax.set_title("{0} fit for {1}".format(model_function, distrs[idx]))
 
                 # Rescale y axis if model fit goes high. Shows histogram better
-                if y_model_fit[:, index].max() > 1.5 * bin_values.max():
+                if y_model_fit[:, this_distr].max() > 1.5 * bin_values.max():
                     ax.set_ylim([ax.get_ylim()[0], 1.1 * bin_values.max()])
+
+        self._delete_extra_axes(fig, axes, n_distributions, n_ax_rows, n_ax_cols)
 
         if savefigname:
             self._figsave(figurename=savefigname)
 
         # Check correlations
-        fig2, axes2 = plt.subplots(n_ax_rows, n_ax_cols, figsize=(13, 4))
-        axes2 = axes2.flatten()
-        for index in np.arange(n_distributions):
-            ax2 = axes2[index]
-            data_all_x = ydata[:, corr_ref_idx]
-            data_all_y = ydata[:, index]
+        if correlation_reference is not None:
+            assert (
+                correlation_reference in distrs
+            ), f"correlation_reference must be None or a distribution: {','.join(map(str,distrs))}"
 
-            r, p = stats.pearsonr(data_all_x, data_all_y)
-            slope, intercept, r_value, p_value, std_err = stats.linregress(
-                data_all_x, data_all_y
-            )
-            ax2.plot(data_all_x, data_all_y, ".")
-            data_all_x.sort()
-            ax2.plot(data_all_x, intercept + slope * data_all_x, "b-")
-            ax2.annotate(
-                "\nr={0:.2g},\np={1:.2g}".format(r, p),
-                xy=(0.8, 0.4),
-                xycoords="axes fraction",
-            )
-            ax2.set_title(
-                "Correlation between {0} and {1}".format(
-                    distributions[corr_ref_idx], distributions[index]
+            distr_tuple_idx = distrs.index(
+                correlation_reference
+            )  # idx to distr tuple of str
+            corr_ref_idx = dist_idx[distr_tuple_idx]  # idx of distr data
+
+            fig2, axes2 = plt.subplots(n_ax_rows, n_ax_cols, figsize=(13, 4))
+            axes2 = axes2.flatten()
+
+            for idx, this_distr in enumerate(dist_idx):
+                ax2 = axes2[idx]
+                data_all_x = ydata[:, corr_ref_idx]
+                data_all_y = ydata[:, this_distr]
+                r, p = stats.pearsonr(data_all_x, data_all_y)
+                slope, intercept, r_value, p_value, std_err = stats.linregress(
+                    data_all_x, data_all_y
                 )
-            )
+                ax2.plot(data_all_x, data_all_y, ".")
+                data_all_x.sort()
+                ax2.plot(data_all_x, intercept + slope * data_all_x, "b-")
+                ax2.annotate(
+                    "\nr={0:.2g},\np={1:.2g}".format(r, p),
+                    xy=(1, 1),  # Point at the right upper corner of the axis
+                    xycoords="axes fraction",
+                    xytext=(-10, -10),  # Offset from the corner, adjust as needed
+                    textcoords="offset points",
+                    horizontalalignment="right",  # Right align text
+                    verticalalignment="top",  # Top align text
+                )
+                ax2.set_title(
+                    "Correlation between {0} and {1}".format(
+                        distrs[distr_tuple_idx], distrs[idx]
+                    )
+                )
+
+            self._delete_extra_axes(fig2, axes2, n_distributions, n_ax_rows, n_ax_cols)
+
+        if savefigname:
+            self._figsave(figurename=savefigname, suffix="_corr")
 
     def show_dendrite_diam_vs_ecc(self, log_x=False, log_y=False, savefigname=None):
         """
