@@ -1777,6 +1777,7 @@ class ConstructRetina(RetinaMath):
             )
 
             # Upsample the padded image
+            # img_temp = ndimage.zoom(img_padded, 1.0)
             img_temp = ndimage.zoom(img_padded, zoom_factor[i])
 
             # Crop the upsampled image to the new dimensions

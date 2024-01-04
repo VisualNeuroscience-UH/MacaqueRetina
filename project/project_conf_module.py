@@ -206,14 +206,14 @@ my_retina = {
     # "ecc_limits_deg": [36, 39.4],  # eccentricity in degrees
     # "pol_limits_deg": [-4, 4],  # polar angle in degrees
     "ecc_limits_deg": [4.7, 6.3],  # eccentricity in degrees
-    "pol_limits_deg": [-3, 3],  # polar angle in degrees
+    "pol_limits_deg": [-5, 5],  # polar angle in degrees
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
     "dd_regr_model": "loglog",  # linear, quadratic, cubic, loglog. For midget < 20 deg, use quadratic; for parasol use loglog
     "visual_field_limit_for_dd_fit": math.inf,  # 20,  # degrees, math.inf for no limit
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
-    "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder
+    "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies to FIT only, scales sum(unit center areas) = retina area
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
@@ -620,15 +620,15 @@ if __name__ == "__main__":
     # in the retina mosaic building process.
 
     # For FIT and VAE
-    PM.viz.show_cones_linked_to_gc(gc_list=[12], savefigname=None)
-    # PM.viz.show_cones_linked_to_gc(gc_list=[10, 13, 34], savefigname=None)
+    # PM.viz.show_cones_linked_to_gc(gc_list=[12], savefigname=None)
+    PM.viz.show_cones_linked_to_gc(gc_list=[32, 58, 63, 67, 6], savefigname=None)
     # PM.viz.show_unit_density_vs_ecc(unit_type="gc", savefigname=None)  # gc or cone
 
     # TÄHÄN JÄIT: TOIMIVA VAE CONE 2 GC LINKKI. CONE PER GC MÄÄRÄ SUUREHKO. TARKISTA MÄÄRÄ(ECC). LINKITÄ TEMPORAALINEN KOHINA.
     # OLIT TEKEMÄSSÄ FIT VERSIOTA CONE 2 GC LINKISTÄ (GENEROI gc_img JA SIITÄ PARAMETREJA),
     # MUTTA POSITIO TARKISTUSKUVASSA ON SELVÄSTI PIELESSÄ.
 
-    # TÄHÄN JÄIT:  3.1.2023: LUULTAVASTI fit POS_ECC_MM JA POS_POLAR_DEG PITÄÄ PÄIVITTÄÄ.
+    # TÄHÄN JÄIT:  4.1.2023: YMMÄRRÄ DD ECC SKAALAUS JA ZOOM FACTOR. KS PAPERI. EDELLEEN VIRHE DoG FIT VS GRID
 
     # PM.viz.show_DoG_model_fit(sample_list=[12, 14, 16, 18], savefigname=None)
     # PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)
