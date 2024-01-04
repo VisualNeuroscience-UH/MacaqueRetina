@@ -651,7 +651,7 @@ class ConstructRetina(RetinaMath):
             rad_s = radius_scaling_factors_coverage_1 * self.gc_df["rad_s_mm"]
             self.gc_df["rad_s_mm"] = rad_s
 
-    def _generate_DoG_with_rf_from_literature(self, ecc2dd_params):
+    def _generate_DoG_with_rf_from_literature(self):
         """
         Generate Difference of Gaussians (DoG) model with dendritic field sizes from literature.
 
@@ -660,41 +660,50 @@ class ConstructRetina(RetinaMath):
         At return, all units are in mm unless stated otherwise in the the column name
         """
 
-        dd_regr_model = self.dd_regr_model  # "linear", "quadratic", "cubic"
+        # dd_regr_model = self.dd_regr_model  # "linear", "quadratic", "cubic"
 
-        # Get eccentricity data for all model cells
-        gc_eccentricity = self.gc_df["pos_ecc_mm"].values
+        # # Get eccentricity data for all model cells
+        # gc_eccentricity = self.gc_df["pos_ecc_mm"].values
 
-        # Get rf diameter vs eccentricity
-        dict_key = "{0}_{1}".format(self.gc_type, dd_regr_model)
-        diam_fit_params = ecc2dd_params[dict_key]
+        # # Get rf diameter vs eccentricity
+        # dict_key = "{0}_{1}".format(self.gc_type, dd_regr_model)
+        # diam_fit_params = ecc2dd_params[dict_key]
 
-        if dd_regr_model == "linear":
-            lit_cen_diameter_um = (
-                diam_fit_params["intercept"]
-                + diam_fit_params["slope"] * gc_eccentricity
-            )  # Units are micrometers
-        elif dd_regr_model == "quadratic":
-            lit_cen_diameter_um = (
-                diam_fit_params["intercept"]
-                + diam_fit_params["slope"] * gc_eccentricity
-                + diam_fit_params["square"] * gc_eccentricity**2
-            )
-        elif dd_regr_model == "cubic":
-            lit_cen_diameter_um = (
-                diam_fit_params["intercept"]
-                + diam_fit_params["slope"] * gc_eccentricity
-                + diam_fit_params["square"] * gc_eccentricity**2
-                + diam_fit_params["cube"] * gc_eccentricity**3
-            )
-        elif dd_regr_model == "exponential":
-            lit_cen_diameter_um = diam_fit_params["constant"] + np.exp(
-                gc_eccentricity / diam_fit_params["lamda"]
-            )
-        elif dd_regr_model == "loglog":
-            lit_cen_diameter_um = diam_fit_params["a"] * np.power(
-                gc_eccentricity, diam_fit_params["b"]
-            )
+        # if dd_regr_model == "linear":
+        #     lit_cen_diameter_um = (
+        #         diam_fit_params["intercept"]
+        #         + diam_fit_params["slope"] * gc_eccentricity
+        #     )  # Units are micrometers
+        # elif dd_regr_model == "quadratic":
+        #     lit_cen_diameter_um = (
+        #         diam_fit_params["intercept"]
+        #         + diam_fit_params["slope"] * gc_eccentricity
+        #         + diam_fit_params["square"] * gc_eccentricity**2
+        #     )
+        # elif dd_regr_model == "cubic":
+        #     lit_cen_diameter_um = (
+        #         diam_fit_params["intercept"]
+        #         + diam_fit_params["slope"] * gc_eccentricity
+        #         + diam_fit_params["square"] * gc_eccentricity**2
+        #         + diam_fit_params["cube"] * gc_eccentricity**3
+        #     )
+        # elif dd_regr_model == "exponential":
+        #     lit_cen_diameter_um = diam_fit_params["constant"] + np.exp(
+        #         gc_eccentricity / diam_fit_params["lamda"]
+        #     )
+        # elif dd_regr_model == "loglog":
+        #     lit_cen_diameter_um = diam_fit_params["a"] * np.power(
+        #         gc_eccentricity, diam_fit_params["b"]
+        #     )
+
+        # # Scale factor for rad_c and semi_x and semi_y from pix at data eccentricity to pix at the actual eccentricity
+        # # Units are pixels for the Chichilnisky data and they are at large eccentricity
+        # gc_scaling_factors = (lit_cen_diameter_um / 2) / (self.exp_cen_radius_mm * 1000)
+
+        # # Save scaling factors to gc_df for later use
+        # self.gc_df["gc_scaling_factors"] = gc_scaling_factors
+
+        gc_scaling_factors = self.gc_df["gc_scaling_factors"]
 
         # Create all gc units from parameters fitted to experimental data
         n_cells = len(self.gc_df)
@@ -704,13 +713,6 @@ class ConstructRetina(RetinaMath):
             self.gc_df[param_name] = self._get_random_samples(
                 shape, loc, scale, n_cells, distribution
             )
-
-        # Scale factor for rad_c and semi_x and semi_y from pix at data eccentricity to pix at the actual eccentricity
-        # Units are pixels for the Chichilnisky data and they are at large eccentricity
-        gc_scaling_factors = (lit_cen_diameter_um / 2) / (self.exp_cen_radius_mm * 1000)
-
-        # Save scaling factors to gc_df for later use
-        self.gc_df["gc_scaling_factors"] = gc_scaling_factors
 
         um_per_pixel = self.context.apricot_metadata["data_microm_per_pix"]
         if self.context.my_retina["DoG_model"] in [
@@ -1677,7 +1679,7 @@ class ConstructRetina(RetinaMath):
 
         return img_flipped, img_reshaped
 
-    def _get_gc_vae_img_params(self, ecc2dd_params):
+    def _get_gc_img_params(self, ecc2dd_params):
         """
         Place rf images to pixel space
         First we calculate the dendritic diameter as a function of eccentricity for each gc unit.
@@ -1691,15 +1693,18 @@ class ConstructRetina(RetinaMath):
         gc_pos_ecc_mm is expected to be slightly different each time, because of placement optimization process.
         """
 
-        gc_pos_ecc_mm = np.array(self.gc_vae_df.pos_ecc_mm.values)
+        gc_pos_ecc_mm = np.array(self.gc_df.pos_ecc_mm.values)
         exp_um_per_pix = self.context.apricot_metadata["data_microm_per_pix"]
         # Mean fitted dendritic diameter for the original experimental data
         exp_dd_um = self.exp_cen_radius_mm * 2 * 1000  # in micrometers
         exp_pix_per_side = self.context.apricot_metadata["data_spatialfilter_height"]
 
-        key = list(ecc2dd_params.keys())[0]
-        parameters = ecc2dd_params[key]
-        if self.context.my_retina["dd_regr_model"] in ["linear", "quadratic", "cubic"]:
+        # Get rf diameter vs eccentricity
+        dd_regr_model = self.dd_regr_model
+        dict_key = "{0}_{1}".format(self.gc_type, dd_regr_model)
+        parameters = ecc2dd_params[dict_key]
+
+        if dd_regr_model in ["linear", "quadratic", "cubic"]:
             lit_dd_at_gc_ecc_um = np.polyval(
                 [
                     parameters.get("cube", 0),
@@ -1709,11 +1714,11 @@ class ConstructRetina(RetinaMath):
                 ],
                 gc_pos_ecc_mm,
             )
-        elif self.context.my_retina["dd_regr_model"] == "exponential":
+        elif dd_regr_model == "exponential":
             lit_dd_at_gc_ecc_um = parameters.get("constant", 0) + np.exp(
                 gc_pos_ecc_mm / parameters.get("lamda", 0)
             )
-        elif self.context.my_retina["dd_regr_model"] == "loglog":
+        elif dd_regr_model == "loglog":
             # Calculate dendritic diameter from the power law relationship
             # D = a * E^b, where E is the eccentricity and D is the dendritic diameter
             a = parameters["a"]
@@ -1731,42 +1736,40 @@ class ConstructRetina(RetinaMath):
         gc_um_per_pix = gc_scaling_factors * exp_um_per_pix
 
         # Get min and max values of gc_um_per_pix
-        min_um_per_pix = np.min(gc_um_per_pix)
+        new_um_per_pix = np.min(gc_um_per_pix)
         max_um_per_pix = np.max(gc_um_per_pix)
 
         # Get new img stack sidelength whose pixel size = min(gc_um_per_pix),
         new_pix_per_side = int(
-            np.round((max_um_per_pix / min_um_per_pix) * exp_pix_per_side)
+            np.round((max_um_per_pix / new_um_per_pix) * exp_pix_per_side)
         )
 
         # Save scaling factors to gc_df for VAE model type
-        self.gc_vae_df["gc_scaling_factors"] = gc_scaling_factors
+        self.gc_df["gc_scaling_factors"] = gc_scaling_factors
         # The pixel grid will be fixed for all units, but the unit eccentricities vary.
         # Thus we need to zoom units to the same size.
-        self.gc_vae_df["zoom_factor"] = gc_um_per_pix / min_um_per_pix
+        self.gc_df["zoom_factor"] = gc_um_per_pix / new_um_per_pix
 
-        return new_pix_per_side, min_um_per_pix
+        return new_pix_per_side, new_um_per_pix
 
     def _get_resampled_scaled_gc_img(
         self,
         rfs,
-        new_pix_per_side,
+        pix_per_side,
+        zoom_factor,
     ):
         # Resample all images to new img stack. Use scipy.ndimage.zoom,
-        img_upsampled = np.zeros((len(rfs), new_pix_per_side, new_pix_per_side))
-        for i, img in enumerate(rfs):
-            # zoom_factor = this_gc_um_per_pix / min_um_per_pix
-            # Corrects for variable unit sizes which is a function of eccentricities
-            zoom_factor = self.gc_vae_df["zoom_factor"][i]
+        img_upsampled = np.zeros((len(rfs), pix_per_side, pix_per_side))
 
+        for i, img in enumerate(rfs):
             # Pad the image with zeros to achieve the new dimensions
-            # If new_pix_per_side - img.shape[0] is even:
-            if (new_pix_per_side - img.shape[0]) % 2 == 0:
-                padding = int((new_pix_per_side - img.shape[0]) / 2)
-            elif (new_pix_per_side - img.shape[0]) % 2 == 1:
+            # If pix_per_side - img.shape[0] is even:
+            if (pix_per_side - img.shape[0]) % 2 == 0:
+                padding = int((pix_per_side - img.shape[0]) / 2)
+            elif (pix_per_side - img.shape[0]) % 2 == 1:
                 padding = (
-                    int((new_pix_per_side - img.shape[0]) / 2),
-                    int((new_pix_per_side - img.shape[0]) / 2) + 1,
+                    int((pix_per_side - img.shape[0]) / 2),
+                    int((pix_per_side - img.shape[0]) / 2) + 1,
                 )  # (before, after)
 
             img_padded = np.pad(
@@ -1774,10 +1777,10 @@ class ConstructRetina(RetinaMath):
             )
 
             # Upsample the padded image
-            img_temp = ndimage.zoom(img_padded, zoom_factor)
+            img_temp = ndimage.zoom(img_padded, zoom_factor[i])
 
             # Crop the upsampled image to the new dimensions
-            crop_length = new_pix_per_side / 2
+            crop_length = pix_per_side / 2
             img_cropped = img_temp[
                 int(img_temp.shape[0] / 2 - crop_length) : int(
                     img_temp.shape[0] / 2 + crop_length
@@ -2070,13 +2073,14 @@ class ConstructRetina(RetinaMath):
             index=np.arange(nsamples),
             columns=["xoc_pix", "yoc_pix"],
         )
-
+        zoom_factor = self.gc_vae_df["zoom_factor"].values
         # Loop until there are no bad fits
         for _ in range(100):
             # Upsample according to smallest rf diameter
             img_after_resample = self._get_resampled_scaled_gc_img(
                 img_to_resample[idx_to_process, :, :],
                 new_pix_per_side,
+                zoom_factor[idx_to_process],
             )
 
             # Fit elliptical gaussians to the img[idx_to_process]
@@ -2513,7 +2517,7 @@ class ConstructRetina(RetinaMath):
                 np.pi * self.gc_df["semi_xc_mm"] * self.gc_df["semi_yc_mm"]
             )
 
-    def _get_gc_fit_img(self, new_pix_per_side):
+    def _get_gc_fit_img(self):
         """
         Make receptive field images from the generated FIT parameters.
         """
@@ -2526,10 +2530,9 @@ class ConstructRetina(RetinaMath):
         exp_pix_per_side = num_pix_y
 
         # Scalar scaling factor for the new image
-        pix_scaler = new_pix_per_side / exp_pix_per_side
 
         # Make fit to all cells
-        grid_indices = np.linspace(0, new_pix_per_side - 1, new_pix_per_side)
+        grid_indices = np.linspace(0, exp_pix_per_side - 1, exp_pix_per_side)
         # the grid is (H, W) = (num_pix_y, num_pix_x)
         x_grid, y_grid = np.meshgrid(grid_indices, grid_indices)
 
@@ -2544,17 +2547,6 @@ class ConstructRetina(RetinaMath):
                 "ampl_s",
                 "relat_sur_diam",
                 "offset",
-            ]
-            parameter_scalers = [
-                1,
-                pix_scaler,
-                pix_scaler,
-                pix_scaler,
-                pix_scaler,
-                1,
-                1,
-                1,
-                1,
             ]
 
         elif DoG_model == "ellipse_independent":
@@ -2573,21 +2565,6 @@ class ConstructRetina(RetinaMath):
                 "orient_sur_rad",
                 "offset",
             ]
-            parameter_scalers = [
-                1,
-                pix_scaler,
-                pix_scaler,
-                pix_scaler,
-                pix_scaler,
-                1,
-                1,
-                pix_scaler,
-                pix_scaler,
-                pix_scaler,
-                pix_scaler,
-                1,
-                1,
-            ]
 
         elif DoG_model == "circular":
             parameter_names = [
@@ -2599,18 +2576,10 @@ class ConstructRetina(RetinaMath):
                 "rad_s_pix",
                 "offset",
             ]
-            parameter_scalers = [
-                1,
-                pix_scaler,
-                pix_scaler,
-                pix_scaler,
-                1,
-                pix_scaler,
-                1,
-            ]
-        parameters = self.gc_df[parameter_names].values * parameter_scalers
 
-        gc_fit_img = np.zeros((n_cells, new_pix_per_side, new_pix_per_side))
+        parameters = self.gc_df[parameter_names].values
+
+        gc_fit_img = np.zeros((n_cells, exp_pix_per_side, exp_pix_per_side))
 
         for idx in range(n_cells):
             # Get DoG model fit parameters to popt
@@ -2627,36 +2596,10 @@ class ConstructRetina(RetinaMath):
                 gc_img_fitted = self.DoG2D_circular((x_grid, y_grid), *popt)
 
             gc_fit_img[idx, :, :] = gc_img_fitted.reshape(
-                new_pix_per_side, new_pix_per_side
+                exp_pix_per_side, exp_pix_per_side
             )
 
         return gc_fit_img
-
-    def _get_gc_fit_img_params(self):
-        """
-        Scale the receptive field images to the smallest scaling factor,
-        derived from dendritic field diameter at requested ecc / dendritic field diameter at experimental ecc.
-        """
-        exp_um_per_pix = self.context.apricot_metadata["data_microm_per_pix"]
-        exp_pix_per_side = self.context.apricot_metadata["data_spatialfilter_height"]
-        gc_scaling_factors = self.gc_df["gc_scaling_factors"].values
-
-        # Calculate total experimental pixel grid length in um
-        exp_sidelen_um = exp_pix_per_side * exp_um_per_pix
-
-        # Calculate new total pixel grid length in um
-        new_sidelen_um = exp_sidelen_um * gc_scaling_factors.min()
-
-        # Get new pixel grid length
-        new_pix_per_side = int(
-            np.round(
-                (gc_scaling_factors.max() / gc_scaling_factors.min()) * exp_pix_per_side
-            )
-        )
-
-        new_um_per_pix = new_sidelen_um / new_pix_per_side
-
-        return new_pix_per_side, new_um_per_pix
 
     def _create_spatial_rfs(self):
         """
@@ -2682,32 +2625,33 @@ class ConstructRetina(RetinaMath):
 
         # Endow cells with spatial elliptical receptive fields.
         # Units become mm unless specified in column names.
+        # self.gc_df and self.gc_vae_df may be updated silently below
 
         mask_th = self.context.my_retina["center_mask_threshold"]
 
+        new_pix_per_side, new_um_per_pix = self._get_gc_img_params(ecc2dd_params)
+
         if self.spatial_model == "FIT":
-            # self.gc_df is updated silently
             if self.rf_coverage_adjusted_to_1 == True:
                 # Assumes that the dendritic field diameter is proportional to the coverage
                 self._generate_DoG_with_rf_coverage_one()
+
             elif self.rf_coverage_adjusted_to_1 == False:
                 # Read the dendritic field diameter from literature data
-                self._generate_DoG_with_rf_from_literature(ecc2dd_params)
+                self._generate_DoG_with_rf_from_literature()
 
             # Add dendritic diameter to self.gc_df for visualization, in micrometers
             self._get_dd_in_um()
 
-            # As in VAE, calculate the min um per pix and corresponding new sidelen.
-            print(
-                "\nGetting image parameters for FIT model and generating RF images..."
-            )
-            (
-                new_pix_per_side,
-                new_um_per_pix,
-            ) = self._get_gc_fit_img_params()
-
             # Create gc_img and gc_img_mask for FIT model
-            gc_fit_img = self._get_gc_fit_img(new_pix_per_side)
+            print("\nGenerating RF images for FIT model...")
+            gc_fit_img = self._get_gc_fit_img()
+
+            # Upsample and zoom according to smallest rf diameter
+            gc_fit_img = self._get_resampled_scaled_gc_img(
+                gc_fit_img, new_pix_per_side, self.gc_df["zoom_factor"]
+            )
+
             gc_fit_img_mask = self.get_rf_masks(gc_fit_img, mask_threshold=mask_th)
 
             (
@@ -2751,23 +2695,16 @@ class ConstructRetina(RetinaMath):
             # The methods below will silently use and update self.gc_vae_df
             self.gc_vae_df = self.gc_df.copy()
 
-            # 2) Get new pixel parameters for rf generation downstream.
-            print("\nGetting pixel parameters...")
-            (
-                new_pix_per_side,
-                new_um_per_pix,
-            ) = self._get_gc_vae_img_params(ecc2dd_params)
-
-            # 3) "Bad fit loop", provides eccentricity-scaled vae rfs with good DoG fits (error < 3SD from mean).
+            # 2) "Bad fit loop", provides eccentricity-scaled vae rfs with good DoG fits (error < 3SD from mean).
             print("\nBad fit loop: Generating receptive fields with good DoG fits...")
             gc_vae_img = self._get_vae_imgs_with_good_fits(
                 retina_vae, new_pix_per_side, new_um_per_pix
             )
 
-            # 4) Get center masks
+            # 3) Get center masks
             gc_vae_img_mask = self.get_rf_masks(gc_vae_img, mask_threshold=mask_th)
 
-            # 5) Sum separate rf images onto one retina pixel matrix.
+            # 4) Sum separate rf images onto one retina pixel matrix.
             # In the retina pixel matrix, for each rf get the upper left corner
             # pixel coordinates. Get the retina patch lu mm coordinates (padded).
             (
@@ -2778,7 +2715,7 @@ class ConstructRetina(RetinaMath):
                 gc_vae_img, new_um_per_pix, self.gc_vae_df
             )
 
-            # 6) Apply repulsion adjustment to the receptive fields. Note that this will
+            # 5) Apply repulsion adjustment to the receptive fields. Note that this will
             # change the positions of the receptive fields.
             print("\nApplying repulsion between the receptive fields...")
             (
@@ -2795,7 +2732,7 @@ class ConstructRetina(RetinaMath):
                 new_um_per_pix,
             )
 
-            # 7) Redo the good fits for final statistics
+            # 6) Redo the good fits for final statistics
             print("\nFinal DoG fit to generated rfs...")
             DoG_model = self.context.my_retina["DoG_model"]
             self.fit.initialize(
@@ -2816,7 +2753,7 @@ class ConstructRetina(RetinaMath):
                 _,
             ) = self.fit.get_generated_spatial_fits(DoG_model)
 
-            # 8) Update self.gc_vae_df to include new positions and DoG fits after repulsion
+            # 7) Update self.gc_vae_df to include new positions and DoG fits after repulsion
             # and convert units to to mm, where applicable
             print("\nUpdating ganglion cell dataframe...")
             self.gc_vae_df = self._update_gc_vae_df(
@@ -2834,7 +2771,7 @@ class ConstructRetina(RetinaMath):
                 _gc_vae_df["good_filter_data"]
             ), "Some final VAE fits are bad, aborting..."
 
-            # 9) Get final center masks for the generated spatial rfs
+            # 8) Get final center masks for the generated spatial rfs
             print("\nGetting final masked rfs and retina...")
             final_gc_vae_img_mask = self.get_rf_masks(
                 final_gc_vae_img, mask_threshold=mask_th
@@ -2844,7 +2781,7 @@ class ConstructRetina(RetinaMath):
                 self.gc_vae_df, final_gc_vae_img_mask, new_um_per_pix
             )
 
-            # 10) Sum separate rf center masks onto one retina pixel matrix.
+            # 9) Sum separate rf center masks onto one retina pixel matrix.
             final_whole_ret_pix_mask, _, _ = self._get_full_retina_with_rf_images(
                 final_gc_vae_img_mask, new_um_per_pix, self.gc_vae_df
             )
@@ -2864,7 +2801,7 @@ class ConstructRetina(RetinaMath):
             # Remove the gc_vae_df from memory to prevent accidental use
             del self.gc_vae_df
 
-            # 11) Set vae data to project_data for later visualization
+            # 10) Set vae data to project_data for later visualization
             self.project_data.construct_retina["retina_vae"] = retina_vae
 
             self.project_data.construct_retina["gen_rfs"] = {
@@ -2884,7 +2821,7 @@ class ConstructRetina(RetinaMath):
             gc_img = final_gc_vae_img
             gc_img_mask = final_gc_vae_img_mask
 
-        # 12) Save the generated receptive field pix images, pix masks, and pixel locations in mm
+        # Save the generated receptive field pix images, pix masks, and pixel locations in mm
         print("\nSaving data...")
         output_path = self.context.output_folder
         filename_stem = self.context.my_retina["spatial_rfs_file"]

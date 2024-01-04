@@ -620,8 +620,8 @@ if __name__ == "__main__":
     # in the retina mosaic building process.
 
     # For FIT and VAE
-    # PM.viz.show_cones_linked_to_gc(gc_list=[12], savefigname=None)
     PM.viz.show_cones_linked_to_gc(gc_list=[12], savefigname=None)
+    # PM.viz.show_cones_linked_to_gc(gc_list=[10, 13, 34], savefigname=None)
     # PM.viz.show_unit_density_vs_ecc(unit_type="gc", savefigname=None)  # gc or cone
 
     # TÄHÄN JÄIT: TOIMIVA VAE CONE 2 GC LINKKI. CONE PER GC MÄÄRÄ SUUREHKO. TARKISTA MÄÄRÄ(ECC). LINKITÄ TEMPORAALINEN KOHINA.
