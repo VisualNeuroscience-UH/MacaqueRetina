@@ -104,6 +104,15 @@ _um : micrometer
 """
 
 """
+# TODO: Stodden_2016_Science: Software metadata should
+include, at a minimum, the title, authors,
+version, language, license, Uniform Resource
+Identifier/DOI, software description (including
+purpose, inputs, outputs, dependencies),
+and execution requirements.
+"""
+
+"""
 Main paths in different operating systems
 """
 if sys.platform == "linux":
@@ -194,6 +203,8 @@ response_type = "on"
 my_retina = {
     "gc_type": gc_type,
     "response_type": response_type,
+    # "ecc_limits_deg": [36, 39.4],  # eccentricity in degrees
+    # "pol_limits_deg": [-4, 4],  # polar angle in degrees
     "ecc_limits_deg": [4.7, 6.3],  # eccentricity in degrees
     "pol_limits_deg": [-3, 3],  # polar angle in degrees
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
@@ -388,7 +399,7 @@ refractory_params = {
 # "force" (f) : better for small retinas, slow
 # None : initial random placement. Nonvarying with fixed seed above. Good for testing and speed.
 gc_placement_params = {
-    "algorithm": "force",  # "voronoi" or "force" or None
+    "algorithm": None,  # "voronoi" or "force" or None
     "n_iterations": 200,  # v 20, f 5000
     "change_rate": 0.001,  # f 0.001, v 0.5
     "unit_repulsion_stregth": 5,  # 10 f only
@@ -401,7 +412,7 @@ gc_placement_params = {
 }
 
 cone_placement_params = {
-    "algorithm": "force",  # "voronoi" or "force" or None
+    "algorithm": None,  # "voronoi" or "force" or None
     "n_iterations": 100,  # v 20, f 5000
     "change_rate": 0.0001,  # f 0.001, v 0.5
     "unit_repulsion_stregth": 2,  # 10 f only
@@ -610,13 +621,14 @@ if __name__ == "__main__":
 
     # For FIT and VAE
     # PM.viz.show_cones_linked_to_gc(gc_list=[12], savefigname=None)
+    PM.viz.show_cones_linked_to_gc(gc_list=[12], savefigname=None)
     # PM.viz.show_unit_density_vs_ecc(unit_type="gc", savefigname=None)  # gc or cone
 
     # TÄHÄN JÄIT: TOIMIVA VAE CONE 2 GC LINKKI. CONE PER GC MÄÄRÄ SUUREHKO. TARKISTA MÄÄRÄ(ECC). LINKITÄ TEMPORAALINEN KOHINA.
     # OLIT TEKEMÄSSÄ FIT VERSIOTA CONE 2 GC LINKISTÄ (GENEROI gc_img JA SIITÄ PARAMETREJA),
-    # MUTTA POSITIO TARKISTUSKUVASSA ON SELVÄSTI PIELESSÄ. KS CONSTRUCT RETINA _CREATE_SPATIAL_RFS
-    # MAHDOLLISESTI PIIRRETYN ELLIPSIN KOORDINAATIT PIELESSÄ? VOI OLLA SKAALAUSKYSYMYS.
-    # MYÖS KESKIPISTE ON SIVUSSA ESIM YLLÄ GC LIST 12 ESIMERKILLÄ.
+    # MUTTA POSITIO TARKISTUSKUVASSA ON SELVÄSTI PIELESSÄ.
+
+    # TÄHÄN JÄIT:  3.1.2023: LUULTAVASTI fit POS_ECC_MM JA POS_POLAR_DEG PITÄÄ PÄIVITTÄÄ.
 
     # PM.viz.show_DoG_model_fit(sample_list=[12, 14, 16, 18], savefigname=None)
     # PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)
@@ -625,7 +637,7 @@ if __name__ == "__main__":
     # For FIT (DoG fits, temporal kernels and tonic drives)
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
     # PM.viz.show_temporal_filter_response(n_curves=3, savefigname="temporal_filters.eps")
-    PM.viz.show_spatial_statistics(savefigname="spatial_stats.eps")
+    # PM.viz.show_spatial_statistics(correlation_reference=None, savefigname=None)
 
     # For VAE
     # PM.viz.show_gen_exp_spatial_rf(ds_name="train_ds", n_samples=15, savefigname=None)

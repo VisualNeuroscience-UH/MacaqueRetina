@@ -1842,9 +1842,9 @@ class ConstructRetina(RetinaMath):
         gc_vae_df["ecc_group_idx"] = self.gc_vae_df["ecc_group_idx"]
         gc_vae_df["gc_scaling_factors"] = self.gc_vae_df["gc_scaling_factors"]
 
-        # Save this metadata to df, although it is the same for all units
-        gc_vae_df["um_per_pix"] = um_per_pix
-        gc_vae_df["sidelen_pix"] = sidelen_pix
+        # # Save this metadata to df, although it is the same for all units
+        # gc_vae_df["um_per_pix"] = um_per_pix
+        # gc_vae_df["sidelen_pix"] = sidelen_pix
 
         if self.context.my_retina["DoG_model"] == "ellipse_fixed":
             gc_vae_df["relat_sur_diam"] = gc_vae_df_in["relat_sur_diam"]
@@ -2480,24 +2480,26 @@ class ConstructRetina(RetinaMath):
         # pdb.set_trace()
         return X_grid_mm, Y_grid_mm
 
-    def _add_center_mask_area_to_df(self, final_gc_vae_img_mask, new_um_per_pix):
+    def _add_center_mask_area_to_df(self, df, final_gc_img_mask, um_per_pix):
         """
         Get the area of the center mask for each RF in mm^2.
 
         Parameters
         ----------
-        final_gc_vae_img_mask : np.ndarray
+        final_gc_img_mask : np.ndarray
             3D array of boolean masks for RF centers, shape (n_rfs, n_pixels, n_pixels).
-        new_um_per_pix : float
+        um_per_pix : float
             The number of micrometers per pixel in the rf_img.
         """
 
         # Get the area of the center mask for each RF in mm^2
         center_mask_area_mm2 = (
-            np.sum(final_gc_vae_img_mask, axis=(1, 2)) * new_um_per_pix**2 / 1000**2
+            np.sum(final_gc_img_mask, axis=(1, 2)) * um_per_pix**2 / 1000**2
         )
 
-        self.gc_vae_df["center_mask_area_mm2"] = center_mask_area_mm2
+        df["center_mask_area_mm2"] = center_mask_area_mm2
+
+        return df
 
     def _add_center_fit_area_to_df(self):
         if self.context.my_retina["DoG_model"] == "circular":
@@ -2527,9 +2529,9 @@ class ConstructRetina(RetinaMath):
         pix_scaler = new_pix_per_side / exp_pix_per_side
 
         # Make fit to all cells
-        position_indices = np.linspace(0, new_pix_per_side - 1, new_pix_per_side)
+        grid_indices = np.linspace(0, new_pix_per_side - 1, new_pix_per_side)
         # the grid is (H, W) = (num_pix_y, num_pix_x)
-        x_grid, y_grid = np.meshgrid(position_indices, position_indices)
+        x_grid, y_grid = np.meshgrid(grid_indices, grid_indices)
 
         if DoG_model == "ellipse_fixed":
             parameter_names = [
@@ -2724,7 +2726,11 @@ class ConstructRetina(RetinaMath):
                 gc_img_lu_pix,
                 whole_ret_lu_mm,
             )
-            # pdb.set_trace()
+
+            # Add center mask area (mm^2) to gc_vae_df for visualization
+            self.gc_df = self._add_center_mask_area_to_df(
+                self.gc_df, gc_fit_img_mask, new_um_per_pix
+            )
 
             gc_img = gc_fit_img
             gc_img_mask = gc_fit_img_mask
@@ -2834,7 +2840,9 @@ class ConstructRetina(RetinaMath):
                 final_gc_vae_img, mask_threshold=mask_th
             )
             # Add center mask area (mm^2) to gc_vae_df for visualization
-            self._add_center_mask_area_to_df(final_gc_vae_img_mask, new_um_per_pix)
+            self.gc_vae_df = self._add_center_mask_area_to_df(
+                self.gc_vae_df, final_gc_vae_img_mask, new_um_per_pix
+            )
 
             # 10) Sum separate rf center masks onto one retina pixel matrix.
             final_whole_ret_pix_mask, _, _ = self._get_full_retina_with_rf_images(
@@ -2900,6 +2908,7 @@ class ConstructRetina(RetinaMath):
         # Scale center and surround amplitude: center Gaussian volume in pixel space becomes one
         # Surround amplitude is scaled relative to center volume of one
         self.gc_df = self._scale_both_amplitudes(self.gc_df)
+        # pdb.set_trace()
 
         # Set more project_data for later visualization
         self.project_data.construct_retina["dd_vs_ecc"][
