@@ -205,15 +205,15 @@ my_retina = {
     "response_type": response_type,
     # "ecc_limits_deg": [36, 39.4],  # eccentricity in degrees
     # "pol_limits_deg": [-4, 4],  # polar angle in degrees
-    "ecc_limits_deg": [4.7, 6.3],  # eccentricity in degrees
-    "pol_limits_deg": [-5, 5],  # polar angle in degrees
+    "ecc_limits_deg": [4.7, 5.3],  # eccentricity in degrees
+    "pol_limits_deg": [-2, 2],  # polar angle in degrees
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
     "dd_regr_model": "loglog",  # linear, quadratic, cubic, loglog. For midget < 20 deg, use quadratic; for parasol use loglog
-    "visual_field_limit_for_dd_fit": math.inf,  # 20,  # degrees, math.inf for no limit
+    "ecc_limit_for_dd_fit": math.inf,  # 20,  # degrees, math.inf for no limit
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
-    "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
+    "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies to FIT only, scales sum(unit center areas) = retina area
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
@@ -288,7 +288,7 @@ my_stimulus_options = {
     "size_inner": 0.1,  # deg, Applies to annulus only
     "size_outer": 1,  # deg, Applies to annulus only
     "stimulus_position": (0, 0),
-    "stimulus_size": 2.0,  # 2,  # deg, radius for circle, sidelen/2 for rectangle.
+    "stimulus_size": 3.2,  # 2,  # deg, radius for circle, sidelen/2 for rectangle.
     "background": 128,
     "contrast": 0.5,  # Weber constrast
     "mean": 128,
@@ -400,15 +400,15 @@ refractory_params = {
 # None : initial random placement. Nonvarying with fixed seed above. Good for testing and speed.
 gc_placement_params = {
     "algorithm": None,  # "voronoi" or "force" or None
-    "n_iterations": 200,  # v 20, f 5000
-    "change_rate": 0.001,  # f 0.001, v 0.5
+    "n_iterations": 20,  # v 20, f 5000
+    "change_rate": 0.5,  # f 0.001, v 0.5
     "unit_repulsion_stregth": 5,  # 10 f only
     "unit_distance_threshold": 0.02,  # f only, adjusted with ecc
     "diffusion_speed": 0.0001,  # f only, adjusted with ecc
     "border_repulsion_stength": 10,  # f only
     "border_distance_threshold": 0.01,  # f only
     "show_placing_progress": False,  # True False
-    "show_skip_steps": 20,  # v 1, f 100
+    "show_skip_steps": 2,  # v 1, f 100
 }
 
 cone_placement_params = {
@@ -457,6 +457,8 @@ my_retina.update(my_retina_append)
 literature_data_folder = git_repo_root.joinpath(r"retina/literature_data")
 
 # Define digitized literature data files for gc density and dendritic diameters.
+# Dendritic diameter is the diameter of the circle that has the
+# same area as the dendritic field polygon, as defined in Watanabe 1989.
 # Data from Watanabe_1989_JCompNeurol and Perry_1984_Neurosci
 # Define literature data files for linear temporal models.
 # Data from Benardete_1999_VisNeurosci and Benardete_1997_VisNeurosci
@@ -620,9 +622,9 @@ if __name__ == "__main__":
     # in the retina mosaic building process.
 
     # For FIT and VAE
-    # PM.viz.show_cones_linked_to_gc(gc_list=[12], savefigname=None)
-    PM.viz.show_cones_linked_to_gc(gc_list=[32, 58, 63, 67, 6], savefigname=None)
-    # PM.viz.show_unit_density_vs_ecc(unit_type="gc", savefigname=None)  # gc or cone
+    PM.viz.show_cones_linked_to_gc(gc_list=[11], savefigname=None)
+    # PM.viz.show_cones_linked_to_gc(gc_list=[32, 58, 63, 67, 6], savefigname=None)
+    PM.viz.show_unit_density_vs_ecc(unit_type="gc", savefigname=None)  # gc or cone
 
     # TÄHÄN JÄIT: TOIMIVA VAE CONE 2 GC LINKKI. CONE PER GC MÄÄRÄ SUUREHKO. TARKISTA MÄÄRÄ(ECC). LINKITÄ TEMPORAALINEN KOHINA.
     # OLIT TEKEMÄSSÄ FIT VERSIOTA CONE 2 GC LINKISTÄ (GENEROI gc_img JA SIITÄ PARAMETREJA),
@@ -630,14 +632,14 @@ if __name__ == "__main__":
 
     # TÄHÄN JÄIT:  4.1.2023: YMMÄRRÄ DD ECC SKAALAUS JA ZOOM FACTOR. KS PAPERI. EDELLEEN VIRHE DoG FIT VS GRID
 
-    # PM.viz.show_DoG_model_fit(sample_list=[12, 14, 16, 18], savefigname=None)
+    PM.viz.show_DoG_model_fit(sample_list=[1, 2, 3, 48], savefigname=None)
     # PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)
     # PM.viz.show_dendrite_diam_vs_ecc(log_x=False, log_y=True, savefigname=None)
 
     # For FIT (DoG fits, temporal kernels and tonic drives)
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
-    # PM.viz.show_temporal_filter_response(n_curves=3, savefigname="temporal_filters.eps")
-    # PM.viz.show_spatial_statistics(correlation_reference=None, savefigname=None)
+    PM.viz.show_temporal_filter_response(n_curves=3, savefigname="temporal_filters.eps")
+    PM.viz.show_spatial_statistics(correlation_reference=None, savefigname=None)
 
     # For VAE
     # PM.viz.show_gen_exp_spatial_rf(ds_name="train_ds", n_samples=15, savefigname=None)
@@ -671,15 +673,15 @@ if __name__ == "__main__":
     ########################
 
     # # Based on my_stimulus_options above
-    # PM.stimulate.make_stimulus_video()
+    PM.stimulate.make_stimulus_video()
 
     ####################################
     ### Run multiple trials or cells ###
     ####################################
 
     # # Load stimulus to get working retina, necessary for running cells
-    # PM.working_retina.load_stimulus()
-    # PM.working_retina.run_with_my_run_options()
+    PM.working_retina.load_stimulus()
+    PM.working_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
@@ -726,7 +728,7 @@ if __name__ == "__main__":
     ################################################
 
     # # Based on my_run_options above
-    # PM.viz.show_all_gc_responses(savefigname=None)
+    PM.viz.show_all_gc_responses(savefigname=None)
 
     # PM.viz.show_stimulus_with_gcs(
     #     example_gc=3,  # or my_run_options["cell_index"]

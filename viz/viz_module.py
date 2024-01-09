@@ -1684,6 +1684,8 @@ class Viz:
     def show_unit_placement_progress(
         self,
         original_positions,
+        ecc_lim_mm=None,
+        polar_lim_deg=None,
         positions=None,
         init=False,
         iteration=0,
@@ -1692,8 +1694,8 @@ class Viz:
         **fig_args,
     ):
         if init is True:
-            ecc_lim_mm = self.construct_retina.ecc_lim_mm
-            polar_lim_deg = self.construct_retina.polar_lim_deg
+            # ecc_lim_mm = self.construct_retina.ecc_lim_mm
+            # polar_lim_deg = self.construct_retina.polar_lim_deg
 
             # Init plotting
             # Convert self.polar_lim_deg to Cartesian coordinates
@@ -1790,6 +1792,8 @@ class Viz:
         self,
         reference_retina,
         center_mask,
+        ecc_lim_mm=None,
+        polar_lim_deg=None,
         new_retina=None,
         init=False,
         iteration=0,
@@ -1798,8 +1802,6 @@ class Viz:
         **fig_args,
     ):
         if init is True:
-            ecc_lim_mm = self.construct_retina.ecc_lim_mm
-            polar_lim_deg = self.construct_retina.polar_lim_deg
 
             boundary_polygon = self.boundary_polygon(
                 ecc_lim_mm, polar_lim_deg, um_per_pix=um_per_pix, sidelen=sidelen
