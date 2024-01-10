@@ -795,6 +795,7 @@ class DataIO(DataIOBase):
             Y_grid_mm=data_dict["Y_grid_mm"],
             um_per_pix=data_dict["um_per_pix"],
             pix_per_side=data_dict["pix_per_side"],
+            cones_to_gcs_weights=data_dict["cones_to_gcs_weights"],
         )
 
         # np.save(

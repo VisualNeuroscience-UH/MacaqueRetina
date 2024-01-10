@@ -213,9 +213,9 @@ my_retina = {
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic # Gain control for parasol cells only
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
-    "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
+    "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
-    "rf_coverage_adjusted_to_1": False,  # False or True. Applies to FIT only, scales sum(unit center areas) = retina area
+    "rf_coverage_adjusted_to_1": True,  # False or True. Applies to FIT only, scales sum(unit center areas) = retina area
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
     "model_file_name": None,  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[DEVICE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only
     "ray_tune_trial_id": None,  # Trial_id for tune, None for loading single run after "train_model". Applies to VAE "load_model" only
@@ -378,6 +378,7 @@ cone_general_params = {
     "cone2gc_parasol": 27,  # um 27
     "cone2gc_cutoff_SD": 1,  # 3 SD is 99.7% of Gaussian
     "cone_noise_autocorr": 0.013,  # sec
+    "cone_noise_SD": 1.0,  # a.u.
 }
 
 # Recovery function from Berry_1998_JNeurosci, Uzzell_2004_JNeurophysiol
@@ -672,7 +673,7 @@ if __name__ == "__main__":
     ########################
 
     # # Based on my_stimulus_options above
-    # PM.stimulate.make_stimulus_video()
+    PM.stimulate.make_stimulus_video()
 
     ####################################
     ### Run multiple trials or cells ###

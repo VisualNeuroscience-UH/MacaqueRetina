@@ -216,6 +216,8 @@ class GanglionCellData:
         X grid in millimeters.
     Y_grid_mm : np.ndarray, computed
         Y grid in millimeters.
+    cones_to_gcs_weights : np.ndarray, computed
+        Weights mapping cones to ganglion cells.
     df : pandas.DataFrame
         DataFrame containing parameters of the ganglion cell mosaic.
 
@@ -301,6 +303,7 @@ class GanglionCellData:
     img_lu_pix: np.ndarray = None
     X_grid_mm: np.ndarray = None
     Y_grid_mm: np.ndarray = None
+    cones_to_gcs_weights: np.ndarray = None
 
     def __post_init__(self):
         columns = [
@@ -731,7 +734,7 @@ class ConstructRetina(RetinaMath):
             b = params["b"]
             return np.power(dd / a, 1 / b)
 
-    def _generate_DoG_with_rf_coverage_one(self, gc):
+    def _generate_DoG_with_rf_coverage_one(self, ret, gc):
         """
         Generate Difference of Gaussians (DoG) model with full retinal field coverage.
 
@@ -779,7 +782,7 @@ class ConstructRetina(RetinaMath):
         """
         # Calculate area scaling factors for each eccentricity group
         area_scaling_factors_coverage1 = np.zeros(area_rfs_cen_mm2.shape)
-        for index, sector_area_mm2 in enumerate(self.sector_surface_areas_mm2):
+        for index, sector_area_mm2 in enumerate(ret.sector_surface_areas_mm2):
             area_scaling_factor = (sector_area_mm2) / np.sum(
                 area_rfs_cen_mm2[gc.df["ecc_group_idx"] == index]
             )
@@ -817,6 +820,8 @@ class ConstructRetina(RetinaMath):
 
             rad_s = radius_scaling_factors_coverage_1 * gc.df["rad_s_mm"]
             gc.df["rad_s_mm"] = rad_s
+
+        return gc
 
     def _generate_DoG_with_rf_from_literature(self, gc):
         """
@@ -1528,9 +1533,9 @@ class ConstructRetina(RetinaMath):
             "gc_img_mask": gc.img_mask,
         }
 
-        ret.cones_to_gcs_weights = weights
+        gc.cones_to_gcs_weights = weights
 
-        return ret
+        return gc
 
     def _place_units(self, ret, gc):
         # Initial Positioning by Group
@@ -2780,7 +2785,7 @@ class ConstructRetina(RetinaMath):
         if gc.spatial_model == "FIT":
             if ret.rf_coverage_adjusted_to_1 == True:
                 # Assumes that the dendritic field diameter is proportional to the coverage
-                self._generate_DoG_with_rf_coverage_one()
+                gc = self._generate_DoG_with_rf_coverage_one(ret, gc)
 
             elif ret.rf_coverage_adjusted_to_1 == False:
                 # Read the dendritic field diameter from literature data
@@ -2907,24 +2912,6 @@ class ConstructRetina(RetinaMath):
                 "img_ret_adjusted": ret.whole_ret_img,
             }
 
-        # Save the generated receptive field pix images, pix masks, and pixel locations in mm
-        print("\nSaving data...")
-        output_path = self.context.output_folder
-
-        # Collate data for saving
-        spatial_rfs_file = {
-            "gc_img": gc.img,
-            "gc_img_mask": gc.img_mask,
-            "X_grid_mm": gc.X_grid_mm,
-            "Y_grid_mm": gc.Y_grid_mm,
-            "um_per_pix": gc.um_per_pix,
-            "pix_per_side": gc.pix_per_side,
-        }
-
-        self.data_io.save_generated_rfs(
-            spatial_rfs_file, output_path, filename_stem=self.spatial_rfs_file_filename
-        )
-
         # Add fitted DoG center area to gc_df for visualization
         gc = self._add_center_fit_area_to_df(gc)
 
@@ -2944,6 +2931,22 @@ class ConstructRetina(RetinaMath):
 
         ### Generation of spatial receptive fields ends here ###
         #########################################################
+
+    def _create_temporal_rfs(self, gc):
+        if gc.temporal_model == "fixed":
+            gc = self._create_fixed_temporal_rfs(gc)  # Chichilnisky data
+
+            # For fixed model, we borrow theamplitude of firing rates from the Bnardete & Kaplan data
+            gc_to_get_A = deepcopy(gc)
+            gc_to_get_A = self._create_dynamic_temporal_rfs(
+                gc_to_get_A
+            )  # Benardete & Kaplan data
+            gc.df["A"] = gc_to_get_A.df["A"]
+
+        elif gc.temporal_model == "dynamic":
+            gc = self._create_dynamic_temporal_rfs(gc)  # Benardete & Kaplan data
+
+        return gc
 
     def build(self):
         """
@@ -2973,18 +2976,18 @@ class ConstructRetina(RetinaMath):
 
         # -- Second, endow cells with spatial receptive fields
         ret, gc = self._create_spatial_rfs(ret, gc)
-        ret = self._link_cone_noise_units_to_gcs(ret, gc)
+        gc = self._link_cone_noise_units_to_gcs(ret, gc)
 
         # -- Third, endow cells with temporal receptive fields
-        if gc.temporal_model == "fixed":
-            gc = self._create_fixed_temporal_rfs(gc)  # Chichilnisky data
-        elif gc.temporal_model == "dynamic":
-            gc = self._create_dynamic_temporal_rfs(gc)  # Benardete & Kaplan data
+        gc = self._create_temporal_rfs(gc)
 
         # -- Fourth, endow cells with tonic drive
         gc = self._create_tonic_drive(gc)
 
         print(f"Built RGC mosaic with {gc.n_units} cells")
+
+        # Save the receptive field images and associated data
+        self.save_gc_img(gc)
 
         # Save the receptive field mosaic
         self.save_gc_csv(gc)
@@ -2992,6 +2995,26 @@ class ConstructRetina(RetinaMath):
         # Save the project data
         # Attach data requested by other classes to project_data
         self.project_data.construct_retina["gc_df"] = gc.df
+
+    def save_gc_img(self, gc):
+        # Save the generated receptive field pix images, pix masks, and pixel locations in mm
+        print("\nSaving data...")
+        output_path = self.context.output_folder
+
+        # Collate data for saving
+        spatial_rfs_file = {
+            "gc_img": gc.img,
+            "gc_img_mask": gc.img_mask,
+            "X_grid_mm": gc.X_grid_mm,
+            "Y_grid_mm": gc.Y_grid_mm,
+            "um_per_pix": gc.um_per_pix,
+            "pix_per_side": gc.pix_per_side,
+            "cones_to_gcs_weights": gc.cones_to_gcs_weights,
+        }
+
+        self.data_io.save_generated_rfs(
+            spatial_rfs_file, output_path, filename_stem=self.spatial_rfs_file_filename
+        )
 
     def get_data_at_latent_space(self, retina_vae):
         """

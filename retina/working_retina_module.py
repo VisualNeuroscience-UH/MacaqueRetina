@@ -179,11 +179,12 @@ class WorkingRetina(RetinaMath):
         self.microm_per_pix = 0
         self.temporal_filter_len = 0
 
-        if self.spatial_model == "VAE":
-            rfs_npz = self.data_io.get_data(filename=my_retina["spatial_rfs_file"])
-            self.spat_rf = rfs_npz["gc_img"]
-            self.um_per_pix = rfs_npz["um_per_pix"]
-            self.sidelen_pix = rfs_npz["pix_per_side"]
+        # if self.spatial_model == "VAE":
+        rfs_npz = self.data_io.get_data(filename=my_retina["spatial_rfs_file"])
+        self.spat_rf = rfs_npz["gc_img"]
+        self.um_per_pix = rfs_npz["um_per_pix"]
+        self.sidelen_pix = rfs_npz["pix_per_side"]
+        self.cones_to_gcs_weights = rfs_npz["cones_to_gcs_weights"]
 
         self._initialize_stimulus_pixel_space()
 
@@ -1875,12 +1876,15 @@ class WorkingRetina(RetinaMath):
               -cone signals were spread over a disc with a radius of 27 µm for diffuse cone bipolar cells 
             and 9 µm for midget cone bipolar cells 25(viite 25: Boycott & Wässle, 1991, niiden Table 1)
             ADD SHARED NOISE FIELD TO GENERATOR POTENTIALS AT GC CENTER
+            
+            
             """
-            # self.cones.fit_cone_density_vs_eccentricity()
-            # self.cones.place_cones_to_retina()
-            # cone_noise = self.cones.create_cone_noise(self.gc_df)
-            # generator_potentials = generator_potentials + cone_noise
             # pdb.set_trace()
+            # self.cones_to_gcs_weights
+            # cone_noise_autocorr = 13 * b2u.ms
+            # cone_noise_sd = 1.0
+            # cone_noise = self._create_cone_noise(tvec, num_cells)
+            # generator_potentials = generator_potentials + cone_noise
 
             # Dynamic contrast gain control with linear-nonlinear model
             # has no separate nonlinearity, so we can use the generator potential directly
