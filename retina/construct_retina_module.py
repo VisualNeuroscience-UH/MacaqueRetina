@@ -58,7 +58,7 @@ class Retina:
         self.whole_ret_lu_mm = None
         self.cones_to_gcs_weights = None
 
-        self.my_retina = my_retina
+        # self.my_retina = my_retina
         self.gc_placement_params = my_retina["gc_placement_params"]
         self.cone_placement_params = my_retina["cone_placement_params"]
         self.cone_general_params = my_retina["cone_general_params"]
@@ -67,6 +67,7 @@ class Retina:
         self.dd_regr_model = my_retina["dd_regr_model"]
         self.deg_per_mm = my_retina["deg_per_mm"]
         self.spatial_model = my_retina["spatial_model"]
+        self.temporal_model = my_retina["temporal_model"]
 
         ecc_limits_deg = my_retina["ecc_limits_deg"]
         ecc_limit_for_dd_fit = my_retina["ecc_limit_for_dd_fit"]
@@ -2870,8 +2871,10 @@ class ConstructRetina(RetinaMath):
         ret = self._link_cone_noise_units_to_gcs(ret, gc)
 
         # -- Third, endow cells with temporal receptive fields
-        gc = self._create_fixed_temporal_rfs(gc)  # Chichilnisky data
-        gc = self._create_dynamic_temporal_rfs(gc)  # Benardete & Kaplan data
+        if ret.temporal_model == "fixed":
+            gc = self._create_fixed_temporal_rfs(gc)  # Chichilnisky data
+        elif ret.temporal_model == "dynamic":
+            gc = self._create_dynamic_temporal_rfs(gc)  # Benardete & Kaplan data
 
         # -- Fourth, endow cells with tonic drive
         gc = self._create_tonic_drive(gc)
