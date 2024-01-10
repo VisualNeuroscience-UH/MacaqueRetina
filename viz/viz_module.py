@@ -189,18 +189,21 @@ class Viz:
         if n_curves is not None:
             cell_ixs_list = np.random.choice(cell_ixs_list, n_curves, replace=False)
 
+        fig, ax = plt.subplots(figsize=(8, 4))
+
         for this_cell_ix in cell_ixs_list:
             ydata = exp_temp_filt[f"{this_cell_ix}"]["ydata"]
             y_fit = exp_temp_filt[f"{this_cell_ix}"]["y_fit"]
-            plt.scatter(xdata, ydata)
-            plt.plot(
+            ax.scatter(xdata, ydata)
+            ax.plot(
                 xdata_finer,
                 y_fit,
                 c="grey",
             )
 
         N_cells = len(cell_ixs_list)
-        plt.title(f"{title} ({N_cells} cells)")
+        # ax.title(f"{title} ({N_cells} cells)")
+        ax.set_title(f"{title} ({N_cells} cells)")
 
         if savefigname:
             self._figsave(figurename=savefigname)
@@ -1802,7 +1805,6 @@ class Viz:
         **fig_args,
     ):
         if init is True:
-
             boundary_polygon = self.boundary_polygon(
                 ecc_lim_mm, polar_lim_deg, um_per_pix=um_per_pix, sidelen=sidelen
             )
