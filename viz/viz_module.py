@@ -2174,6 +2174,11 @@ class Viz:
         ax : matplotlib.axes.Axes, optional
             Matplotlib Axes object to plot on. If not provided, uses the current axis.
         """
+
+        assert (
+            self.context.my_retina["temporal_model"] == "fixed"
+        ), "No fixed temporal filter for dynamic temporal model, aborting..."
+
         spat_temp_filter_to_show = self.project_data.working_retina[
             "spat_temp_filter_to_show"
         ]
@@ -2415,6 +2420,11 @@ class Viz:
         savefigname : str or None, optional
             If a string is provided, the figure will be saved with this filename.
         """
+
+        assert (
+            self.context.my_retina["temporal_model"] == "fixed"
+        ), "No fixed temporal filter for dynamic temporal model, aborting..."
+
         spat_temp_filter_to_show = self.project_data.working_retina[
             "spat_temp_filter_to_show"
         ]

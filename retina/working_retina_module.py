@@ -95,23 +95,23 @@ class WorkingRetina(RetinaMath):
 
         """
 
+        my_retina = self.context.my_retina
+
         # Read fitted parameters from file
-        gc_dataframe = self.data_io.get_data(
-            filename=self.context.my_retina["mosaic_file"]
-        )
-        self.gc_type = self.context.my_retina["gc_type"]
-        self.response_type = self.context.my_retina["response_type"]
-        self.deg_per_mm = self.context.my_retina["deg_per_mm"]
-        stimulus_center = self.context.my_retina["stimulus_center"]
-        self.DoG_model = self.context.my_retina["DoG_model"]
+        gc_dataframe = self.data_io.get_data(filename=my_retina["mosaic_file"])
+        self.gc_type = my_retina["gc_type"]
+        self.response_type = my_retina["response_type"]
+        self.deg_per_mm = my_retina["deg_per_mm"]
+        stimulus_center = my_retina["stimulus_center"]
+        self.DoG_model = my_retina["DoG_model"]
 
         stimulus_width_pix = self.context.my_stimulus_options["image_width"]
         stimulus_height_pix = self.context.my_stimulus_options["image_height"]
         pix_per_deg = self.context.my_stimulus_options["pix_per_deg"]
         fps = self.context.my_stimulus_options["fps"]
 
-        self.spatial_model = self.context.my_retina["spatial_model"]
-        self.temporal_model = self.context.my_retina["temporal_model"]
+        self.spatial_model = my_retina["spatial_model"]
+        self.temporal_model = my_retina["temporal_model"]
 
         # Metadata for Apricot dataset.
         self.data_microm_per_pixel = self.context.apricot_metadata[
@@ -179,6 +179,12 @@ class WorkingRetina(RetinaMath):
         self.microm_per_pix = 0
         self.temporal_filter_len = 0
 
+        if self.spatial_model == "VAE":
+            rfs_npz = self.data_io.get_data(filename=my_retina["spatial_rfs_file"])
+            self.spat_rf = rfs_npz["gc_img"]
+            self.um_per_pix = rfs_npz["um_per_pix"]
+            self.sidelen_pix = rfs_npz["pix_per_side"]
+
         self._initialize_stimulus_pixel_space()
 
         self.microm_per_pix = (1 / self.deg_per_mm) / self.pix_per_deg * 1000
@@ -186,12 +192,7 @@ class WorkingRetina(RetinaMath):
         # Get temporal parameters from stimulus video
         self.temporal_filter_len = int(self.data_filter_duration / (1000 / self.fps))
 
-        self.spatial_model = self.context.my_retina["spatial_model"]
-
-        if self.spatial_model == "VAE":
-            self.spat_rf = self.data_io.get_data(
-                filename=self.context.my_retina["spatial_rfs_file"],
-            )
+        self.spatial_model = my_retina["spatial_model"]
 
         self.initialized = True
 
@@ -594,7 +595,7 @@ class WorkingRetina(RetinaMath):
             stim_um_per_pix = 1000 / (self.pix_per_deg * self.deg_per_mm)
             # Same metadata in all units, thus index [0]
             self.spatial_filter_sidelen = int(
-                (gc_df.um_per_pix[0] / stim_um_per_pix) * gc_df.sidelen_pix[0]
+                (self.um_per_pix / stim_um_per_pix) * self.sidelen_pix
             )
 
         gc_df_stimpix["ampl_c"] = gc_df.ampl_c_norm
@@ -2019,17 +2020,6 @@ class WorkingRetina(RetinaMath):
             "stimulus_cropped": self._get_spatially_cropped_video(cell_indices),
         }
 
-        spat_temp_filter_to_show = {
-            "spatial_filters": spatial_filters,
-            "temporal_filters": self.get_temporal_filters(cell_indices),
-            "data_filter_duration": self.data_filter_duration,
-            "temporal_filter_len": self.temporal_filter_len,
-            "gc_type": self.gc_type,
-            "response_type": self.response_type,
-            "temporal_model": self.temporal_model,
-            "spatial_filter_sidelen": self.spatial_filter_sidelen,
-        }
-
         gc_responses_to_show = {
             "n_trials": n_trials,
             "n_cells": n_cells,
@@ -2042,10 +2032,22 @@ class WorkingRetina(RetinaMath):
 
         # Attach data requested by other classes to project_data
         self.project_data.working_retina["stim_to_show"] = stim_to_show
-        self.project_data.working_retina[
-            "spat_temp_filter_to_show"
-        ] = spat_temp_filter_to_show
         self.project_data.working_retina["gc_responses_to_show"] = gc_responses_to_show
+
+        if self.temporal_model == "fixed":
+            spat_temp_filter_to_show = {
+                "spatial_filters": spatial_filters,
+                "temporal_filters": self.get_temporal_filters(cell_indices),
+                "data_filter_duration": self.data_filter_duration,
+                "temporal_filter_len": self.temporal_filter_len,
+                "gc_type": self.gc_type,
+                "response_type": self.response_type,
+                "temporal_model": self.temporal_model,
+                "spatial_filter_sidelen": self.spatial_filter_sidelen,
+            }
+            self.project_data.working_retina[
+                "spat_temp_filter_to_show"
+            ] = spat_temp_filter_to_show
 
     def run_with_my_run_options(self):
         """
