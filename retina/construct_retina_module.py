@@ -127,6 +127,105 @@ class Retina:
 
 @dataclass
 class GanglionCellData:
+    """
+    A class to store and process data related to ganglion cell receptive fields.
+
+    Attributes
+    ----------
+    gc_type : str
+        Type of ganglion cell.
+    response_type : str
+        Type of response exhibited by the ganglion cell.
+    spatial_model : str
+        The spatial model used for the ganglion cell.
+    DoG_model : str
+        Difference of Gaussian (DoG) model used.
+    mask_threshold : float
+        Threshold value for the receptive field center mask.
+    n_units : int, computed
+        The number of units.
+    um_per_pix : float, computed
+        Micrometers per pixel.
+    pix_per_side : int, computed
+        Number of pixels per side.
+    um_per_side : float, computed
+        Micrometers per side.
+    img : np.ndarray, computed
+        Receptive field image.
+    img_mask : np.ndarray, computed
+        Receptive field center mask.
+    img_lu_pix : np.ndarray, computed
+        Left upper corner of the receptive field image in pixels.
+    X_grid_mm : np.ndarray, computed
+        X grid in millimeters.
+    Y_grid_mm : np.ndarray, computed
+        Y grid in millimeters.
+    df : pandas.DataFrame
+        DataFrame containing parameters of the ganglion cell mosaic.
+
+        Columns present in all cases:
+        - `pos_ecc_mm`: Eccentricity in mm
+        - `pos_polar_deg`: Polar angle in degrees
+        - `ecc_group_idx`: Eccentricity group index
+        - `gc_scaling_factors`: Scaling factors for each eccentricity group
+        - `zoom_factor`: Zoom factor for each eccentricity group
+        - `xoc_pix`: X coordinate of center in pixels inside the rf image
+        - `yoc_pix`: Y coordinate of center in pixels inside the rf image
+        - `ampl_c`: Amplitude of center
+        - `ampl_s`: Amplitude of surround
+        - `den_diam_um`: Dendritic field diameter in micrometers
+        - `center_mask_area_mm2`: Area of center mask in mm^2
+        - `center_fit_area_mm2`: Area of center DoG fit in mm^2
+        - `relat_sur_ampl`: Relative surround amplitude
+        - `ampl_c_norm`: Normalized amplitude of center
+        - `ampl_s_norm`: Normalized amplitude of surround
+        - `tonicdrive` : Tonic drive of the ganglion cell
+
+        In addition the following column names appear depending on the gc_type, spatial, temporal
+        and DoG_models.
+
+        Temporal parameters, fixed model
+        - `n`: Order of the filters
+        - `p1`: Normalization factor for the first filter
+        - `p2`: Normalization factor for the second filter
+        - `tau1`: Time constant of the first filter in ms
+        - `tau2`: Time constant of the second filter in ms
+
+        Temporal parameters, dynamic model.
+        Midget has separate cen and sur filters.
+        Parasol has gain control with params T0 and Chalf.
+        - `A`, `A_cen`, `A_sur`: Gain of the model
+        - `HS`, `HS_cen`, `HS_sur`: Strength of high-pass stage
+        - `TS_cen`, `TS_sur`: Time constant of the high-pass stage
+        - `TL`: Time constant of the low-pass stage
+        - `NL`, `NL_cen`, `NL_sur`: Number of low-pass stages
+        - `NLTL`, `NLTL_cen`, `NLTL_sur`: NL * TL
+        - `deltaNLTL_sur`: NLTL_sur - NLTL_cen
+        - `D`, `D_cen`: Initial delay before filtering
+        - `Chalf`: Semi-saturation contrast of TS
+        - `T0`: Time constant of the zero contrast
+
+        Spatial parameters
+        - `xos_pix`, `yos_pix`: X and Y coordinates of the surround in pixels
+        - `offset`: Offset of the DoG model
+        - `com_x_pix`, `com_y_pix`: X and Y coordinates of the center of mass in pixels
+        - `orient_cen_rad`: Orientation of the center in radians
+        - `orient_sur_rad`: Orientation of the surround in radians
+        - `rad_c_mm`, `rad_c_pix`: Radius of the center in mm and pixels
+        - `rad_s_mm`, `rad_s_pix`: Radius of the surround in mm and pixels
+        - `relat_sur_diam`: Relative surround diameter
+        - `semi_xc_mm`, `semi_xc_pix`: Semi-major axis of the center in mm and pixels
+        - `semi_yc_mm`, `semi_yc_pix`: Semi-minor axis of the center in mm and pixels
+        - `semi_xs_mm`, `semi_xs_pix`: Semi-major axis of the surround in mm and pixels
+        - `semi_ys_mm`, `semi_ys_pix`: Semi-minor axis of the surround in mm and pixels
+        - `xy_aspect_ratio`: Aspect ratio of the ellipse
+
+    Methods
+    -------
+    __post_init__(self):
+        Initializes the DataFrame with specified columns based on the ganglion cell properties.
+    """
+
     gc_type: str
     response_type: str
     spatial_model: str
@@ -139,54 +238,33 @@ class GanglionCellData:
     pix_per_side: int = None
     um_per_side: float = None
 
-    img: np.ndarray = None
-    img_mask: np.ndarray = None
-    img_lu_pix: np.ndarray = None
-    center_of_mass: np.ndarray = None
-    X_grid_mm: np.ndarray = None
-    Y_grid_mm: np.ndarray = None
+    # Receptive field image related attributes
+    img: np.ndarray = None  
+    img_mask: np.ndarray = None  
+    img_lu_pix: np.ndarray = None  
+    X_grid_mm: np.ndarray = None  
+    Y_grid_mm: np.ndarray = None  
 
     def __post_init__(self):
-        # gc.df is a dataframe containing all parameters of the ganglion cell mosaic
-        # Columns present in all cases, not always used though.
         columns = [
-            # Spatial parameters
-            "pos_ecc_mm",  # Eccentricity in mm
-            "pos_polar_deg",  # Polar angle in degrees
-            "ecc_group_idx",  # Eccentricity group index
-            "gc_scaling_factors",  # Scaling factors for each eccentricity group
-            "zoom_factor",  # Zoom factor for each eccentricity group
-            "xoc_pix",  # X coordinate of center in pixels inside the rf image
-            "yoc_pix",  # Y coordinate of center in pixels inside the rf image
-            "ampl_c",  # Amplitude of center
-            "ampl_s",  # Amplitude of surround
-            "den_diam_um",  # Dendritic field diameter in micrometers
-            "center_mask_area_mm2",  # Area of center mask in mm^2
-            "center_fit_area_mm2",  # Area of center DoG fit in mm^2
-            "relat_sur_ampl",  # Relative surround amplitude
-            "ampl_c_norm",  # Normalized amplitude of center
-            "ampl_s_norm",  # Normalized amplitude of surround
-            # Temporal parameters
-            "n",  # Order of the filters
-            "p1",  # Normalization factor for the first filter
-            "p2",  #  Normalization factor for the second filter
-            "tau1",  # Time constant of the first filter in ms
-            "tau2",  # Time constant of the second filter in ms
-            "A",
-            # Baseline activation before spike generation
+            "pos_ecc_mm",  
+            "pos_polar_deg",  
+            "ecc_group_idx",  
+            "gc_scaling_factors",  
+            "zoom_factor",  
+            "xoc_pix",  
+            "yoc_pix",  
+            "ampl_c",  
+            "ampl_s",  
+            "den_diam_um",  
+            "center_mask_area_mm2",  
+            "center_fit_area_mm2",  
+            "relat_sur_ampl",  
+            "ampl_c_norm",  
+            "ampl_s_norm",  
             "tonicdrive",
         ]
         self.df = pd.DataFrame(columns=columns)
-
-        # In addition the following column names appear depending on the gc_type, spatial, temporal
-        # and DoG_models.
-        # 'A_cen', 'A_sur', 'Chalf', 'D', 'D_cen', 'HS', 'HS_cen', 'HS_sur',
-        # 'NL', 'NLTL', 'NLTL_cen', 'NLTL_sur', 'NL_cen', 'NL_sur', 'T0', 'TL',
-        # 'TS_cen', 'TS_sur', 'com_x_pix', 'com_y_pix', 'deltaNLTL_sur', 'offset',
-        # 'orient_cen_rad', 'orient_sur_rad', 'rad_c_mm', 'rad_c_pix', 'rad_s_mm',
-        # 'rad_s_pix', 'relat_sur_diam', 'semi_xc_mm', 'semi_xc_pix', 'semi_xs_mm',
-        # 'semi_xs_pix', 'semi_yc_mm', 'semi_yc_pix', 'semi_ys_mm', 'semi_ys_pix',
-        # 'xos_pix', 'xy_aspect_ratio', 'yos_pix'
 
 
 class ConstructRetina(RetinaMath):
@@ -2880,6 +2958,7 @@ class ConstructRetina(RetinaMath):
         gc = self._create_tonic_drive(gc)
 
         print(f"Built RGC mosaic with {gc.n_units} cells")
+        pdb.set_trace()
         # Save the receptive field mosaic
         self.save_gc_csv(gc)
 
