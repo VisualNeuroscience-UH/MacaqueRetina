@@ -61,7 +61,7 @@ class Retina:
         self.my_retina = my_retina
         self.gc_placement_params = my_retina["gc_placement_params"]
         self.cone_placement_params = my_retina["cone_placement_params"]
-        self.cone_params = my_retina["cone_params"]
+        self.cone_general_params = my_retina["cone_general_params"]
 
         self.rf_coverage_adjusted_to_1 = my_retina["rf_coverage_adjusted_to_1"]
         self.dd_regr_model = my_retina["dd_regr_model"]
@@ -146,31 +146,46 @@ class GanglionCellData:
     Y_grid_mm: np.ndarray = None
 
     def __post_init__(self):
+        # gc.df is a dataframe containing all parameters of the ganglion cell mosaic
+        # Columns present in all cases, not always used though.
         columns = [
-            "pos_ecc_mm",
-            "pos_polar_deg",
-            "ecc_group_idx",
-            "gc_scaling_factors",
-            "zoom_factor",
-            "xoc_pix",
-            "yoc_pix",
-            "com_x_pix",
-            "com_y_pix",
-            "relat_sur_diam",
-            "semi_xc_mm",
-            "semi_yc_mm",
-            "den_diam_um",
-            "orient_cen_rad",
-            "xy_aspect_ratio",
-            "ampl_c",
-            "ampl_s",
-            "center_mask_area_mm2",
-            "center_fit_area_mm2",
-            "relat_sur_ampl",
-            "ampl_c_norm",
-            "ampl_s_norm",
+            # Spatial parameters
+            "pos_ecc_mm",  # Eccentricity in mm
+            "pos_polar_deg",  # Polar angle in degrees
+            "ecc_group_idx",  # Eccentricity group index
+            "gc_scaling_factors",  # Scaling factors for each eccentricity group
+            "zoom_factor",  # Zoom factor for each eccentricity group
+            "xoc_pix",  # X coordinate of center in pixels inside the rf image
+            "yoc_pix",  # Y coordinate of center in pixels inside the rf image
+            "ampl_c",  # Amplitude of center
+            "ampl_s",  # Amplitude of surround
+            "den_diam_um",  # Dendritic field diameter in micrometers
+            "center_mask_area_mm2",  # Area of center mask in mm^2
+            "center_fit_area_mm2",  # Area of center DoG fit in mm^2
+            "relat_sur_ampl",  # Relative surround amplitude
+            "ampl_c_norm",  # Normalized amplitude of center
+            "ampl_s_norm",  # Normalized amplitude of surround
+            # Temporal parameters
+            "n",  # Order of the filters
+            "p1",  # Normalization factor for the first filter
+            "p2",  #  Normalization factor for the second filter
+            "tau1",  # Time constant of the first filter in ms
+            "tau2",  # Time constant of the second filter in ms
+            "A",
+            # Baseline activation before spike generation
+            "tonicdrive",
         ]
         self.df = pd.DataFrame(columns=columns)
+
+        # In addition the following column names appear depending on the gc_type, spatial, temporal
+        # and DoG_models.
+        # 'A_cen', 'A_sur', 'Chalf', 'D', 'D_cen', 'HS', 'HS_cen', 'HS_sur',
+        # 'NL', 'NLTL', 'NLTL_cen', 'NLTL_sur', 'NL_cen', 'NL_sur', 'T0', 'TL',
+        # 'TS_cen', 'TS_sur', 'com_x_pix', 'com_y_pix', 'deltaNLTL_sur', 'offset',
+        # 'orient_cen_rad', 'orient_sur_rad', 'rad_c_mm', 'rad_c_pix', 'rad_s_mm',
+        # 'rad_s_pix', 'relat_sur_diam', 'semi_xc_mm', 'semi_xc_pix', 'semi_xs_mm',
+        # 'semi_xs_pix', 'semi_yc_mm', 'semi_yc_pix', 'semi_ys_mm', 'semi_ys_pix',
+        # 'xos_pix', 'xy_aspect_ratio', 'yos_pix'
 
 
 class ConstructRetina(RetinaMath):
@@ -318,81 +333,80 @@ class ConstructRetina(RetinaMath):
 
         return distribution_parameters
 
-    def read_and_fit_unit_density_data(self, unit_type):
+    def read_and_fit_unit_density_data(self, ret):
         """
-        Read literature data from file and fit ganglion cell or cone density with respect to eccentricity.
-
-        Parameters
-        ----------
-        filepath : str
-            The path to the file containing the data.
-        unit_type : str
-            The type of unit, either "gc" or "cone".
+        Read literature data from file and fit ganglion cell and cone density with respect to eccentricity.
         """
-        if unit_type == "gc":
-            # Get ganglion cell density data from Perry_1984_Neurosci
-            filepaths = [self.context.literature_data_files["gc_density_fullpath"]]
-        elif unit_type == "cone":
-            # Get cone density data from Packer_1989_JCompNeurol
-            filepaths = [
-                self.context.literature_data_files["cone_density1_fullpath"],
-                self.context.literature_data_files["cone_density2_fullpath"],
-            ]
 
-        unit_eccentricity = np.array([])
-        unit_density = np.array([])
-        unit_density_dict = {}
-        for filepath in filepaths:
-            density = self.data_io.get_data(filepath)
-            _eccentricity = np.squeeze(density["Xdata"])
-            _density = np.squeeze(density["Ydata"])
-            unit_eccentricity = np.concatenate((unit_eccentricity, _eccentricity))
-            unit_density = np.concatenate((unit_density, _density))
+        def _sort_and_scale_density_data(eccentricity, density):
+            """
+            Sort and scale density data based on eccentricity.
+            """
+            index = np.argsort(eccentricity)
+            return eccentricity[index], density[index] * 1e3  # Scale density
 
-        # Sort eccentricity and use these indexed to sort density
-        unit_eccentricity_index = np.argsort(unit_eccentricity)
-        unit_eccentricity = unit_eccentricity[unit_eccentricity_index]
-        unit_density = unit_density[unit_eccentricity_index]
+        def _process_density_data(filepaths):
+            """
+            Process density data from given filepaths.
+            """
+            unit_eccentricity = np.array([])
+            unit_density = np.array([])
+            for filepath in filepaths:
+                density = self.data_io.get_data(filepath)
+                _eccentricity = np.squeeze(density["Xdata"])
+                _density = np.squeeze(density["Ydata"])
+                unit_eccentricity = np.concatenate((unit_eccentricity, _eccentricity))
+                unit_density = np.concatenate((unit_density, _density))
 
-        # Cells are in thousands, thus the 1e3
-        unit_density = unit_density * 1e3
+            # Sort and scale data
+            unit_eccentricity, unit_density = _sort_and_scale_density_data(
+                unit_eccentricity, unit_density
+            )
+            return unit_eccentricity, unit_density
 
-        if unit_type == "gc":
-            scale, mean, sigma, baseline0 = 1000, 0, 2, np.min(unit_density)
-            # scale, mean, alpha, beta = 1000, 0, 1, 2
-            this_function = self.gauss_plus_baseline_func
-            # this_function = self.generalized_gauss_func
+        def _fit_density_data(eccentricity, density, unit_type):
+            """
+            Fit density data based on unit type.
+            """
+            if unit_type == "gc":
+                this_function = self.gauss_plus_baseline_func
+                p0 = [1000, 0, 2, np.min(density)]
+            elif unit_type == "cone":
+                this_function = self.double_exponential_func
+                p0 = [0, -1, 0, 0]
+
             fit_parameters, _ = opt.curve_fit(
-                this_function,
-                unit_eccentricity,
-                unit_density,
-                # p0=[scale, mean, alpha, beta],
-                p0=[scale, mean, sigma, baseline0],
+                this_function, eccentricity, density, p0=p0
             )
-            unit_density_dict["fit_parameters"] = fit_parameters
-            unit_density_dict["unit_eccentricity"] = unit_eccentricity
-            unit_density_dict["unit_density"] = unit_density
-            unit_density_dict["function"] = this_function
-            self.gc_fit_function = this_function
 
-        elif unit_type == "cone":
-            this_function = self.double_exponential_func
-            fit_parameters, pcov = opt.curve_fit(
-                this_function,
-                unit_eccentricity,
-                unit_density,
-                p0=[0, -1, 0, 0],
-            )
-            unit_density_dict["fit_parameters"] = fit_parameters
-            unit_density_dict["unit_eccentricity"] = unit_eccentricity
-            unit_density_dict["unit_density"] = unit_density
-            unit_density_dict["function"] = this_function
-            self.cone_fit_function = this_function
+            # Save fit function and data for visualization
+            setattr(self, f"{unit_type}_fit_function", this_function)
+            self.project_data.construct_retina[f"{unit_type}_n_vs_ecc"] = {
+                "fit_parameters": fit_parameters,
+                "unit_eccentricity": eccentricity,
+                "unit_density": density,
+                "function": this_function,
+            }
 
-        # Save data for visualization
-        self.project_data.construct_retina[f"{unit_type}_n_vs_ecc"] = unit_density_dict
+            return fit_parameters
 
-        return fit_parameters
+        # Ganglion cell density data
+        gc_filepaths = [self.context.literature_data_files["gc_density_fullpath"]]
+        gc_eccentricity, gc_density = _process_density_data(gc_filepaths)
+        gc_fit_parameters = _fit_density_data(gc_eccentricity, gc_density, "gc")
+
+        # Cone density data
+        cone_filepaths = [
+            self.context.literature_data_files["cone_density1_fullpath"],
+            self.context.literature_data_files["cone_density2_fullpath"],
+        ]
+        cone_eccentricity, cone_density = _process_density_data(cone_filepaths)
+        cone_fit_parameters = _fit_density_data(cone_eccentricity, cone_density, "cone")
+
+        ret.gc_density_params = gc_fit_parameters
+        ret.cone_density_params = cone_fit_parameters
+
+        return ret
 
     def _fit_dd_vs_ecc(self, ret, gc):
         """
@@ -1351,7 +1365,7 @@ class ConstructRetina(RetinaMath):
         """
 
         print("Connecting cones to ganglion cells for shared cone noise...")
-        # cone_params = self.context.my_retina["cone_params"]
+        # cone_general_params = self.context.my_retina["cone_general_params"]
 
         cone_pos_mm = ret.cone_optimized_positions_mm
         x_mm, y_mm = self.pol2cart(
@@ -1362,10 +1376,10 @@ class ConstructRetina(RetinaMath):
         # distances = distance.cdist(cone_pos_mm, gc_pos_mm, metric="euclidean")
 
         if gc.gc_type == "parasol":
-            sd_cone = ret.cone_params["cone2gc_parasol"] / 1000
+            sd_cone = ret.cone_general_params["cone2gc_parasol"] / 1000
         elif gc.gc_type == "midget":
-            sd_cone = ret.cone_params["cone2gc_midget"] / 1000
-        cutoff_distance = ret.cone_params["cone2gc_cutoff_SD"] * sd_cone
+            sd_cone = ret.cone_general_params["cone2gc_midget"] / 1000
+        cutoff_distance = ret.cone_general_params["cone2gc_cutoff_SD"] * sd_cone
 
         weights = np.zeros((len(cone_pos_mm), len(gc_pos_mm)))
 
@@ -1825,7 +1839,7 @@ class ConstructRetina(RetinaMath):
 
         return gc
 
-    def _update_gc_vae_df(
+    def _update_vae_gc_df(
         self,
         ret,
         gc,
@@ -2621,6 +2635,20 @@ class ConstructRetina(RetinaMath):
         """
         Generation of spatial receptive fields (RFs) for the retinal ganglion cells (RGCs).
 
+        The RFs are generated using either a generative variational autoencoder (VAE) model or
+        a fit to the data from the literature. The VAE model is trained on the data from
+        the literature and generates RFs that are similar to the literature data.
+
+        The RFs are generated in the following steps:
+        1) Get the VAE model to generate receptive fields.
+        2) "Bad fit loop", provides eccentricity-scaled vae rfs with good DoG fits (error < 3SD from mean).
+        3) Get center masks.
+        4) Sum separate rf images onto one retina pixel matrix.
+        5) Apply repulsion adjustment to the receptive fields. Note that this will
+        change the positions of the receptive fields.
+        6) Redo the good fits for final statistics.
+
+
         RF become resampled, and the resolution will change if
         eccentricity is different from eccentricity of the original data.
         """
@@ -2677,9 +2705,6 @@ class ConstructRetina(RetinaMath):
             # Add center mask area (mm^2) to gc_vae_df for visualization
             gc = self._add_center_mask_area_to_df(gc)
 
-            # gc_img = gc_fit_img
-            # gc_img_mask = gc_fit_img_mask
-
         elif gc.spatial_model == "VAE":
             # Endow cells with spatial receptive fields using the generative variational autoencoder model
 
@@ -2692,9 +2717,6 @@ class ConstructRetina(RetinaMath):
                 self.context,
                 save_tuned_models=True,
             )
-
-            # # The methods below will silently use and update self.gc_vae_df
-            # self.gc_vae_df = self.gc_df.copy()
 
             # 2) "Bad fit loop", provides eccentricity-scaled vae rfs with good DoG fits (error < 3SD from mean).
             print("\nBad fit loop: Generating receptive fields with good DoG fits...")
@@ -2742,7 +2764,7 @@ class ConstructRetina(RetinaMath):
             # 7) Update self.gc_vae_df to include new positions and DoG fits after repulsion
             # and convert units to to mm, where applicable
             print("\nUpdating ganglion cell dataframe...")
-            gc = self._update_gc_vae_df(ret, gc, _gc_vae_df)
+            gc = self._update_vae_gc_df(ret, gc, _gc_vae_df)
 
             # Check that all fits are good. If this starts creating problems, probably
             # the best solution is to remove the bad fit units totally from the self.gc_vae_df, self.gc_df,
@@ -2764,14 +2786,6 @@ class ConstructRetina(RetinaMath):
 
             gc = self._get_img_grid_mm(ret, gc)
 
-            # Save original and new df:s. For vae, gc_df contains the original
-            # positions which were updated during the repulsion step
-            # self.gc_df_original = self.gc_df.copy()
-            # self.gc_df = self.gc_vae_df
-
-            # Remove the gc_vae_df from memory to prevent accidental use
-            # del self.gc_vae_df
-
             # 10) Set vae data to project_data for later visualization
             self.project_data.construct_retina["retina_vae"] = retina_vae
 
@@ -2789,9 +2803,6 @@ class ConstructRetina(RetinaMath):
                 "img_ret_adjusted": ret.whole_ret_img,
             }
 
-            # gc_img = final_gc_vae_img
-            # gc_img_mask = final_gc_vae_img_mask
-
         # Save the generated receptive field pix images, pix masks, and pixel locations in mm
         print("\nSaving data...")
         output_path = self.context.output_folder
@@ -2808,7 +2819,6 @@ class ConstructRetina(RetinaMath):
         self.data_io.save_generated_rfs(
             spatial_rfs_file, output_path, filename_stem=filename_stem
         )
-        # self.spatial_rfs_file = spatial_rfs_file
 
         # Add fitted DoG center area to gc_df for visualization
         gc = self._add_center_fit_area_to_df(gc)
@@ -2833,6 +2843,8 @@ class ConstructRetina(RetinaMath):
     def build(self):
         """
         Builds the receptive field mosaic. This is the main method to call.
+
+        When ret or gc are updated, they are returned from the method.
         """
         my_retina = self.context.my_retina
         ret = Retina(my_retina)
@@ -2845,10 +2857,9 @@ class ConstructRetina(RetinaMath):
         )
 
         # -- First, place the ganglion cell midpoints (units mm)
-        # Run GC density fit to data, get func_params. Data from Perry_1984_Neurosci
-        ret.gc_density_params = self.read_and_fit_unit_density_data("gc")
-        # Run cone density fit to data, get func_params. Data from Packer_1989_JCompNeurol
-        ret.cone_density_params = self.read_and_fit_unit_density_data("cone")
+        # Run GC and cone density fit to data, get func_params.
+        # GC data from Perry_1984_Neurosci, cone data from Packer_1989_JCompNeurol
+        ret = self.read_and_fit_unit_density_data(ret)
 
         # Place ganglion cells and cones to desired retina.
         ret, gc = self._place_units(ret, gc)
@@ -2866,7 +2877,6 @@ class ConstructRetina(RetinaMath):
         gc = self._create_tonic_drive(gc)
 
         print(f"Built RGC mosaic with {gc.n_units} cells")
-
         # Save the receptive field mosaic
         self.save_gc_csv(gc)
 
