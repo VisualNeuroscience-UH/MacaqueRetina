@@ -2917,6 +2917,8 @@ class ConstructRetina(RetinaMath):
             "gc_img_mask": gc.img_mask,
             "X_grid_mm": gc.X_grid_mm,
             "Y_grid_mm": gc.Y_grid_mm,
+            "um_per_pix": gc.um_per_pix,
+            "pix_per_side": gc.pix_per_side,
         }
 
         self.data_io.save_generated_rfs(
@@ -2983,7 +2985,7 @@ class ConstructRetina(RetinaMath):
         gc = self._create_tonic_drive(gc)
 
         print(f"Built RGC mosaic with {gc.n_units} cells")
-        pdb.set_trace()
+
         # Save the receptive field mosaic
         self.save_gc_csv(gc)
 

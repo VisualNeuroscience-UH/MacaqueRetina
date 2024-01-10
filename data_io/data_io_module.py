@@ -764,6 +764,11 @@ class DataIO(DataIOBase):
                     The X grid in mm, with shape (N, H, W).
                 Y_grid_mm : numpy.ndarray
                     The Y grid in mm, with shape (N, H, W).
+                um_per_pix : float
+                    The micrometers per pixel.
+                pix_per_side : int
+                    The number of pixels per side of the image.
+
         output_path : str or Path
             The path to the output folder where the image files and the stack will be saved.
         """
@@ -788,6 +793,8 @@ class DataIO(DataIOBase):
             gc_img_mask=data_dict["gc_img_mask"],
             X_grid_mm=data_dict["X_grid_mm"],
             Y_grid_mm=data_dict["Y_grid_mm"],
+            um_per_pix=data_dict["um_per_pix"],
+            pix_per_side=data_dict["pix_per_side"],
         )
 
         # np.save(
