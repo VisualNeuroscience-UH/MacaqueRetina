@@ -3347,7 +3347,7 @@ class Viz:
 
         # cr for concentric rings, i.e. the symmetric DoG model
         # Scales pix to mm for semi_xc i.e. central radius for cd fits
-        gc_vae_cr_df = self.construct_retina._update_gc_vae_df(
+        gc_vae_cr_df = self.construct_retina._update_vae_gc_df(
             all_data_fits_df, new_um_per_pix
         )
 

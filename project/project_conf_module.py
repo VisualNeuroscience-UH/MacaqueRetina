@@ -354,6 +354,8 @@ proportion_of_OFF_response_type = 0.60
 # > 0.999 for ecc 0.1 - 4 mm, and > 0.97 for ecc 0.1 - 20 mm.
 deg_per_mm = 1 / 0.229
 
+optical_aberration = 2 / 60  # deg , 2 arcmin, Navarro 1993 JOSAA
+
 # Parameters for cortical - visual coordinate transformation.
 # a for macaques between 0.3 - 0.9, Schwartz 1994 citing Wilson et al 1990 "The perception of form"
 # in Visual perception: The neurophysiological foundations, Academic Press
@@ -367,7 +369,7 @@ visual2cortical_params = {
 
 # Compressing cone nonlinearity. Parameters are manually scaled to give dynamic cone ouput.
 # Equation, data from Baylor_1987_JPhysiol
-cone_params = {
+cone_general_params = {
     "rm": 25,  # pA
     "k": 2.77e-4,  # at 500 nm
     "sensitivity_min": 5e2,
@@ -443,8 +445,8 @@ my_retina_append = {
     "proportion_of_ON_response_type": proportion_of_ON_response_type,
     "proportion_of_OFF_response_type": proportion_of_OFF_response_type,
     "deg_per_mm": deg_per_mm,
-    "optical_aberration": 2 / 60,  # deg , 2 arcmin, Navarro 1993 JOSAA
-    "cone_params": cone_params,
+    "optical_aberration": optical_aberration,
+    "cone_general_params": cone_general_params,
     "refractory_params": refractory_params,
     "gc_placement_params": gc_placement_params,
     "cone_placement_params": cone_placement_params,
@@ -622,24 +624,21 @@ if __name__ == "__main__":
     # in the retina mosaic building process.
 
     # For FIT and VAE
-    PM.viz.show_cones_linked_to_gc(gc_list=[11], savefigname=None)
+    # PM.viz.show_cones_linked_to_gc(gc_list=[11], savefigname=None)
     # PM.viz.show_cones_linked_to_gc(gc_list=[32, 58, 63, 67, 6], savefigname=None)
     PM.viz.show_unit_density_vs_ecc(unit_type="gc", savefigname=None)  # gc or cone
 
-    # TÄHÄN JÄIT: TOIMIVA VAE CONE 2 GC LINKKI. CONE PER GC MÄÄRÄ SUUREHKO. TARKISTA MÄÄRÄ(ECC). LINKITÄ TEMPORAALINEN KOHINA.
-    # OLIT TEKEMÄSSÄ FIT VERSIOTA CONE 2 GC LINKISTÄ (GENEROI gc_img JA SIITÄ PARAMETREJA),
-    # MUTTA POSITIO TARKISTUSKUVASSA ON SELVÄSTI PIELESSÄ.
+    # TÄHÄN JÄIT: TOIMIVA VAE CONE 2 GC LINKKI. CONE PER GC MÄÄRÄ SUUREHKO.
+    # TARKISTA MÄÄRÄ(ECC). LINKITÄ TEMPORAALINEN KOHINA.
 
-    # TÄHÄN JÄIT:  4.1.2023: YMMÄRRÄ DD ECC SKAALAUS JA ZOOM FACTOR. KS PAPERI. EDELLEEN VIRHE DoG FIT VS GRID
-
-    PM.viz.show_DoG_model_fit(sample_list=[1, 2, 3, 48], savefigname=None)
+    # PM.viz.show_DoG_model_fit(sample_list=[1, 2, 3, 48], savefigname=None)
     # PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)
     # PM.viz.show_dendrite_diam_vs_ecc(log_x=False, log_y=True, savefigname=None)
 
     # For FIT (DoG fits, temporal kernels and tonic drives)
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
-    PM.viz.show_temporal_filter_response(n_curves=3, savefigname="temporal_filters.eps")
-    PM.viz.show_spatial_statistics(correlation_reference=None, savefigname=None)
+    # PM.viz.show_temporal_filter_response(n_curves=3, savefigname="temporal_filters.eps")
+    # PM.viz.show_spatial_statistics(correlation_reference=None, savefigname=None)
 
     # For VAE
     # PM.viz.show_gen_exp_spatial_rf(ds_name="train_ds", n_samples=15, savefigname=None)
@@ -673,7 +672,7 @@ if __name__ == "__main__":
     ########################
 
     # # Based on my_stimulus_options above
-    PM.stimulate.make_stimulus_video()
+    # PM.stimulate.make_stimulus_video()
 
     ####################################
     ### Run multiple trials or cells ###

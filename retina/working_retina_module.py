@@ -2078,12 +2078,12 @@ class NaturalStimuliConeFilter:
         self._data_io = data_io
 
         self.optical_aberration = self.context.my_retina["optical_aberration"]
-        self.rm = self.context.my_retina["cone_params"]["rm"]
-        self.k = self.context.my_retina["cone_params"]["k"]
-        self.cone_sensitivity_min = self.context.my_retina["cone_params"][
+        self.rm = self.context.my_retina["cone_general_params"]["rm"]
+        self.k = self.context.my_retina["cone_general_params"]["k"]
+        self.cone_sensitivity_min = self.context.my_retina["cone_general_params"][
             "sensitivity_min"
         ]
-        self.cone_sensitivity_max = self.context.my_retina["cone_params"][
+        self.cone_sensitivity_max = self.context.my_retina["cone_general_params"][
             "sensitivity_max"
         ]
 
