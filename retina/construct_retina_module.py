@@ -52,13 +52,69 @@ from dataclasses import dataclass
 
 
 class Retina:
+    """
+    A class housing the retina-level parameters. Most values are defined in the project configuration file.
+
+    Parameters
+    ----------
+    my_retina : dict
+        A dictionary containing various parameters and settings for the retina.
+        Defined in the project configuration file.
+
+    Attributes
+    ----------
+    whole_ret_img : np.ndarray, computed
+        An image representing the whole retina.
+    whole_ret_lu_mm : np.ndarray, computed
+        Coordinates of the left upper corner of the whole retina image in millimeters.
+    cones_to_gcs_weights : np.ndarray, computed
+        Weights mapping cones to ganglion cells.
+    gc_placement_params : dict
+        Parameters for placing ganglion cells.
+    cone_placement_params : dict
+        Parameters for placing cones.
+    cone_general_params : dict
+        Natural stimulus filtering parameters and cone to gcs connetcion parameters.
+    rf_coverage_adjusted_to_1 : bool
+        Indicates if receptive field coverage is adjusted to 1.
+    dd_regr_model : object
+        Regression model for dendritic diameter.
+    deg_per_mm : float
+        Degrees visual field per millimeter of the retina.
+    ecc_lim_mm : np.ndarray
+        Eccentricity limits in millimeters.
+    ecc_limit_for_dd_fit_mm : float
+        Eccentricity limit for dendritic density fit in millimeters.
+    polar_lim_deg : np.ndarray
+        Polar limits in degrees.
+    gc_proportion : float
+        Proportion of a specific type of ganglion cell based on type and response.
+
+    Methods
+    -------
+    __init__(self, my_retina)
+        Initializes the Retina instance with the given parameters.
+
+    Raises
+    ------
+    ValueError
+        If an unknown ganglion cell type is specified in `my_retina`.
+
+    Notes
+    -----
+    - `my_retina` should contain keys like 'gc_placement_params', 'cone_placement_params',
+      'cone_general_params', etc., with corresponding values.
+    - The class includes several assertions to validate the input data types and lengths.
+    - Proportions of different types of ganglion cells and their responses are calculated
+      based on the provided parameters in `my_retina`.
+    """
+
     def __init__(self, my_retina):
         # Computed downstream
         self.whole_ret_img = None
         self.whole_ret_lu_mm = None
         self.cones_to_gcs_weights = None
 
-        # self.my_retina = my_retina
         self.gc_placement_params = my_retina["gc_placement_params"]
         self.cone_placement_params = my_retina["cone_placement_params"]
         self.cone_general_params = my_retina["cone_general_params"]
@@ -66,8 +122,6 @@ class Retina:
         self.rf_coverage_adjusted_to_1 = my_retina["rf_coverage_adjusted_to_1"]
         self.dd_regr_model = my_retina["dd_regr_model"]
         self.deg_per_mm = my_retina["deg_per_mm"]
-        self.spatial_model = my_retina["spatial_model"]
-        self.temporal_model = my_retina["temporal_model"]
 
         ecc_limits_deg = my_retina["ecc_limits_deg"]
         ecc_limit_for_dd_fit = my_retina["ecc_limit_for_dd_fit"]
@@ -138,6 +192,8 @@ class GanglionCellData:
         Type of response exhibited by the ganglion cell.
     spatial_model : str
         The spatial model used for the ganglion cell.
+    temporal_model : str
+        The temporal model used in the retina simulation.
     DoG_model : str
         Difference of Gaussian (DoG) model used.
     mask_threshold : float
@@ -229,39 +285,40 @@ class GanglionCellData:
     gc_type: str
     response_type: str
     spatial_model: str
+    temporal_model: str
     DoG_model: str
     mask_threshold: float
 
-    # Computed values
+    # Computed values below
     n_units: int = None
+
+    # Receptive field image related attributes
     um_per_pix: float = None
     pix_per_side: int = None
     um_per_side: float = None
-
-    # Receptive field image related attributes
-    img: np.ndarray = None  
-    img_mask: np.ndarray = None  
-    img_lu_pix: np.ndarray = None  
-    X_grid_mm: np.ndarray = None  
-    Y_grid_mm: np.ndarray = None  
+    img: np.ndarray = None
+    img_mask: np.ndarray = None
+    img_lu_pix: np.ndarray = None
+    X_grid_mm: np.ndarray = None
+    Y_grid_mm: np.ndarray = None
 
     def __post_init__(self):
         columns = [
-            "pos_ecc_mm",  
-            "pos_polar_deg",  
-            "ecc_group_idx",  
-            "gc_scaling_factors",  
-            "zoom_factor",  
-            "xoc_pix",  
-            "yoc_pix",  
-            "ampl_c",  
-            "ampl_s",  
-            "den_diam_um",  
-            "center_mask_area_mm2",  
-            "center_fit_area_mm2",  
-            "relat_sur_ampl",  
-            "ampl_c_norm",  
-            "ampl_s_norm",  
+            "pos_ecc_mm",
+            "pos_polar_deg",
+            "ecc_group_idx",
+            "gc_scaling_factors",
+            "zoom_factor",
+            "xoc_pix",
+            "yoc_pix",
+            "ampl_c",
+            "ampl_s",
+            "den_diam_um",
+            "center_mask_area_mm2",
+            "center_fit_area_mm2",
+            "relat_sur_ampl",
+            "ampl_c_norm",
+            "ampl_s_norm",
             "tonicdrive",
         ]
         self.df = pd.DataFrame(columns=columns)
@@ -2931,6 +2988,7 @@ class ConstructRetina(RetinaMath):
             my_retina["gc_type"],
             my_retina["response_type"],
             my_retina["spatial_model"],
+            my_retina["temporal_model"],
             my_retina["DoG_model"],
             my_retina["center_mask_threshold"],
         )
@@ -2949,9 +3007,9 @@ class ConstructRetina(RetinaMath):
         ret = self._link_cone_noise_units_to_gcs(ret, gc)
 
         # -- Third, endow cells with temporal receptive fields
-        if ret.temporal_model == "fixed":
+        if gc.temporal_model == "fixed":
             gc = self._create_fixed_temporal_rfs(gc)  # Chichilnisky data
-        elif ret.temporal_model == "dynamic":
+        elif gc.temporal_model == "dynamic":
             gc = self._create_dynamic_temporal_rfs(gc)  # Benardete & Kaplan data
 
         # -- Fourth, endow cells with tonic drive
