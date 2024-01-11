@@ -148,17 +148,17 @@ class ApricotData:
 
         return spat_data_array, cen_rot_rad_all
 
-    def read_tonicdrive(self, remove_bad_data_idx=True):
-        tonicdrive = np.array(
+    def read_tonic_drive(self, remove_bad_data_idx=True):
+        tonic_drive = np.array(
             [
                 self.data[cellnum][0][0][0][0][0][1][0][0][0][0][0]
                 for cellnum in range(self.n_cells)
             ]
         )
         if remove_bad_data_idx is True:
-            tonicdrive[self.manually_picked_bad_data_idx] = 0.0
+            tonic_drive[self.manually_picked_bad_data_idx] = 0.0
 
-        return tonicdrive
+        return tonic_drive
 
     def read_temporal_filter_data(self, flip_negs=False, normalize=False):
         time_rk1 = np.array(

@@ -1257,11 +1257,11 @@ class Viz:
 
         xs = exp_tonic_dr["xs"]
         pdf = exp_tonic_dr["pdf"]
-        tonicdrive_array = exp_tonic_dr["tonicdrive_array"]
+        tonic_drive_array = exp_tonic_dr["tonic_drive_array"]
         title = exp_tonic_dr["title"]
 
         plt.plot(xs, pdf)
-        plt.hist(tonicdrive_array, density=True)
+        plt.hist(tonic_drive_array, density=True)
         plt.title(title)
         plt.xlabel("Tonic drive (a.u.)")
 

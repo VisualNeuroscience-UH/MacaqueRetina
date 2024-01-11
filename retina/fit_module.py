@@ -721,8 +721,8 @@ class Fit(RetinaMath):
         # if remove_bad_data_idx=True.
         temporal_filter_sums = self.apricot_data.compute_temporal_filter_sums()
 
-        tonicdrives_df = pd.DataFrame(
-            self.apricot_data.read_tonicdrive(), columns=["tonicdrive"]
+        tonic_drives_df = pd.DataFrame(
+            self.apricot_data.read_tonic_drive(), columns=["tonic_drive"]
         )
 
         # Collect everything into one big dataframe
@@ -732,7 +732,7 @@ class Fit(RetinaMath):
                 spatial_filter_sums,
                 temp_fits_df,
                 temporal_filter_sums,
-                tonicdrives_df,
+                tonic_drives_df,
             ],
             axis=1,
         )
@@ -964,7 +964,7 @@ class Fit(RetinaMath):
 
         return temporal_exp_stat_df, temp_stat
 
-    def _fit_tonicdrive_statistics(self, good_data_fit_idx):
+    def _fit_tonic_drive_statistics(self, good_data_fit_idx):
         """
         Fits tonic drive statistics to tonic drive value fits using gamma distribution.
 
@@ -982,14 +982,14 @@ class Fit(RetinaMath):
             Dictionary containing the following visualization data:
             - xs: an array of 100 x-values to plot the probability density function of the gamma distribution
             - pdf: an array of 100 y-values representing the probability density function of the gamma distribution
-            - tonicdrive_array: a numpy array of tonic drive values used for fitting
+            - tonic_drive_array: a numpy array of tonic drive values used for fitting
             - title: a string representing the title of the plot, which includes the gc_type and response_type.
         """
 
-        tonicdrive_array = np.array(
-            self.all_data_fits_df.iloc[good_data_fit_idx].tonicdrive
+        tonic_drive_array = np.array(
+            self.all_data_fits_df.iloc[good_data_fit_idx].tonic_drive
         )
-        shape, loc, scale = stats.gamma.fit(tonicdrive_array)
+        shape, loc, scale = stats.gamma.fit(tonic_drive_array)
 
         x_min, x_max = stats.gamma.ppf([0.001, 0.999], a=shape, loc=loc, scale=scale)
         xs = np.linspace(x_min, x_max, 100)
@@ -999,13 +999,13 @@ class Fit(RetinaMath):
         exp_tonic_dr = {
             "xs": xs,
             "pdf": pdf,
-            "tonicdrive_array": tonicdrive_array,
+            "tonic_drive_array": tonic_drive_array,
             "title": title,
         }
 
         td_df = pd.DataFrame.from_dict(
             {
-                "tonicdrive": {
+                "tonic_drive": {
                     "shape": shape,
                     "loc": loc,
                     "scale": scale,
@@ -1113,7 +1113,7 @@ class Fit(RetinaMath):
         )
 
         # Get statistics for tonic drives of good data indices
-        tonicdrive_exp_stat_df, exp_tonic_dr = self._fit_tonicdrive_statistics(
+        tonic_drive_exp_stat_df, exp_tonic_dr = self._fit_tonic_drive_statistics(
             good_data_fit_idx
         )
 
@@ -1124,7 +1124,7 @@ class Fit(RetinaMath):
 
         # Collect everything into one big dataframe
         exp_stat_df = pd.concat(
-            [spatial_exp_stat_df, temporal_exp_stat_df, tonicdrive_exp_stat_df],
+            [spatial_exp_stat_df, temporal_exp_stat_df, tonic_drive_exp_stat_df],
             axis=0,
         )
 

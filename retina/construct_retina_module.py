@@ -237,7 +237,7 @@ class GanglionCellData:
         - `relat_sur_ampl`: Relative surround amplitude
         - `ampl_c_norm`: Normalized amplitude of center
         - `ampl_s_norm`: Normalized amplitude of surround
-        - `tonicdrive` : Tonic drive of the ganglion cell
+        - `tonic_drive` : Tonic drive of the ganglion cell
 
         In addition the following column names appear depending on the gc_type, spatial, temporal
         and DoG_models.
@@ -322,7 +322,7 @@ class GanglionCellData:
             "relat_sur_ampl",
             "ampl_c_norm",
             "ampl_s_norm",
-            "tonicdrive",
+            "tonic_drive",
         ]
         self.df = pd.DataFrame(columns=columns)
 

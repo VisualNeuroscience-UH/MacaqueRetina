@@ -446,7 +446,7 @@ class WorkingRetina(RetinaMath):
         def equation(k, fr, td):
             return logistic_function(0, max_fr=fr, k=k, x0=1) - td
 
-        tonic_drives = self.gc_df.iloc[cell_indices].tonicdrive
+        tonic_drives = self.gc_df.iloc[cell_indices].tonic_drive
         # Check that generator potential is 2D, if not, add 0th dimension
         if len(generator_potential.shape) == 1:
             generator_potential = generator_potential[np.newaxis, :]
@@ -962,12 +962,12 @@ class WorkingRetina(RetinaMath):
             params_all.shape[0] == generator_potentials.shape[0]
         ), "Number of cells in params_all and generator_potentials must match, aborting..."
 
-        tonicdrive = params_all["tonicdrive"]
-        # Expanding tonicdrive to match the shape of generator_potentials
-        tonicdrive = np.expand_dims(tonicdrive, axis=1)
+        tonic_drive = params_all["tonic_drive"]
+        # Expanding tonic_drive to match the shape of generator_potentials
+        tonic_drive = np.expand_dims(tonic_drive, axis=1)
         # Apply nonlinearity
-        # tonicdrive**2 is added to mimick spontaneous firing rates
-        firing_rates = np.maximum(generator_potentials + tonicdrive**2, 0)
+        # tonic_drive**2 is added to mimick spontaneous firing rates
+        firing_rates = np.maximum(generator_potentials + tonic_drive**2, 0)
 
         return firing_rates
 
@@ -1272,7 +1272,7 @@ class WorkingRetina(RetinaMath):
     def _create_cone_noise(self, tvec, num_cells):
         cone_params = self.context.my_retina["cone_general_params"]
         cone_noise_autocorr = cone_params["cone_noise_autocorr"]
-        cone_noise_SD = cone_params["cone_noise_SD"]
+        cone_noise_coefficient = cone_params["cone_noise_coefficient"]
 
         return cone_noise
 
@@ -1889,7 +1889,7 @@ class WorkingRetina(RetinaMath):
             # pdb.set_trace()
             # self.cones_to_gcs_weights
             # cone_noise_autocorr = 13 * b2u.ms
-            # cone_noise_sd = 1.0
+            # cone_noise_coefficient = 1.0
             # cone_noise = self._create_cone_noise(tvec, num_cells)
             # generator_potentials = generator_potentials + cone_noise
             # invert noise for OFF cells
