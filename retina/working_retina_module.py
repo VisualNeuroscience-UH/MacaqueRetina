@@ -1269,6 +1269,13 @@ class WorkingRetina(RetinaMath):
 
         return impulse_to_show
 
+    def _create_cone_noise(self, tvec, num_cells):
+        cone_params = self.context.my_retina["cone_general_params"]
+        cone_noise_autocorr = cone_params["cone_noise_autocorr"]
+        cone_noise_SD = cone_params["cone_noise_SD"]
+
+        return cone_noise
+
     def get_w_z_coords(self):
         """
         Create w_coord, z_coord for cortical and visual coordinates, respectively
@@ -1885,6 +1892,7 @@ class WorkingRetina(RetinaMath):
             # cone_noise_sd = 1.0
             # cone_noise = self._create_cone_noise(tvec, num_cells)
             # generator_potentials = generator_potentials + cone_noise
+            # invert noise for OFF cells
 
             # Dynamic contrast gain control with linear-nonlinear model
             # has no separate nonlinearity, so we can use the generator potential directly

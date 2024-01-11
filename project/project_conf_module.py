@@ -673,7 +673,7 @@ if __name__ == "__main__":
     ########################
 
     # # Based on my_stimulus_options above
-    PM.stimulate.make_stimulus_video()
+    # PM.stimulate.make_stimulus_video()
 
     ####################################
     ### Run multiple trials or cells ###
