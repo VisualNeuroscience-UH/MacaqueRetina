@@ -1228,12 +1228,15 @@ class Viz:
         suptitle = exp_temp_stat["suptitle"]
         all_data_fits_df = self.project_data.fit["all_data_fits_df"]
         good_idx_experimental = self.project_data.fit["good_idx_experimental"]
-
-        plt.subplots(2, 3)
-        plt.suptitle(suptitle)
+        # pdb.set_trace()
+        fig, ax_all = plt.subplots(2, 3)
+        # plt.suptitle(suptitle)
+        fig.suptitle(suptitle)
         for i, param_name in enumerate(temporal_filter_parameters):
-            plt.subplot(2, 3, i + 1)
-            ax = plt.gca()
+            row = i // 3
+            col = i % 3
+            # plt.subplot(2, 3, i + 1)
+            ax = ax_all[row, col]
             shape, loc, scale = distrib_params[i, :]
             param_array = np.array(
                 all_data_fits_df.iloc[good_idx_experimental][param_name]
@@ -1259,11 +1262,11 @@ class Viz:
         pdf = exp_tonic_dr["pdf"]
         tonic_drive_array = exp_tonic_dr["tonic_drive_array"]
         title = exp_tonic_dr["title"]
-
-        plt.plot(xs, pdf)
-        plt.hist(tonic_drive_array, density=True)
-        plt.title(title)
-        plt.xlabel("Tonic drive (a.u.)")
+        fig, ax = plt.subplots()
+        ax.plot(xs, pdf)
+        ax.hist(tonic_drive_array, density=True)
+        ax.set_title(title)
+        ax.set_xlabel("Tonic drive (a.u.)")
 
     def show_exp_build_process(self, show_all_spatial_fits=False):
         """
