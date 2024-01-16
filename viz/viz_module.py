@@ -905,7 +905,7 @@ class Viz:
         if self.context.my_retina["DoG_model"] == "circular":
             semi_xc = gc_df["rad_c_mm"]
             semi_yc = gc_df["rad_c_mm"]
-            angle_in_deg = np.zeros(len(self.construct_retina.gc_df))
+            angle_in_deg = np.zeros(len(gc_df))
         elif self.context.my_retina["DoG_model"] in [
             "ellipse_independent",
             "ellipse_fixed",
@@ -926,7 +926,7 @@ class Viz:
             xcoord.flatten(),
             ycoord.flatten(),
             "b.",
-            label=self.construct_retina.gc_type,
+            label=self.context.my_retina["gc_type"],
         )
         # Ellipse parameters: Ellipse(xy, width, height, angle=0, **kwargs). Only possible one at the time, unfortunately.
         for index in np.arange(len(xcoord)):
