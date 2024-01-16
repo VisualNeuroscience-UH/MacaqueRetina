@@ -213,7 +213,7 @@ my_retina = {
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "fixed",  # fixed, dynamic # Gain control for parasol cells only
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
-    "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder
+    "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
     "rf_coverage_adjusted_to_1": True,  # False or True. Applies to FIT only, scales sum(unit center areas) = retina area
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
@@ -577,7 +577,6 @@ if __name__ == "__main__":
     ###    Check cone response    ###
     #################################
 
-    # TODO: enable cone filtering to stimuli, partially not implemented
     """
     For artificial stimuli, we want to measure the true transfer function of the retina.
     E.g. the Chichilnisky model receptive fields were measured from isolated retinas,
@@ -589,6 +588,9 @@ if __name__ == "__main__":
     # PM.viz.show_cone_filter_response(
     #     PM.cones.image, PM.cones.image_after_optics, PM.cones.cone_response
     # )
+
+    # TÄHÄN JÄIT: ETSI KIRJALLISUUDESTA TAUSTA AKTIIVISUUKSIA JA DYNAAMISIA MODULAATIOITA
+    # SELVITÄ MIKSI FIXED JA VAE EROAVAT, JA MISTÄ TILEE FIXED SUSTAINED FIRING JOIHINKIN YKSIKÖIHIN
 
     ###########################################
     ##   Sample figure data from literature  ##
@@ -628,9 +630,6 @@ if __name__ == "__main__":
     # PM.viz.show_cones_linked_to_gc(gc_list=[11], savefigname=None)
     # PM.viz.show_cones_linked_to_gc(gc_list=[32, 58, 63, 67, 6], savefigname=None)
     # PM.viz.show_unit_density_vs_ecc(unit_type="gc", savefigname=None)  # gc or cone
-
-    # TÄHÄN JÄIT: TOIMIVA VAE CONE 2 GC LINKKI. CONE PER GC MÄÄRÄ SUUREHKO.
-    # TARKISTA MÄÄRÄ(ECC). LINKITÄ TEMPORAALINEN KOHINA.
 
     # PM.viz.show_DoG_model_fit(sample_list=[1, 2, 3, 48], savefigname=None)
     # PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)
@@ -673,7 +672,7 @@ if __name__ == "__main__":
     ########################
 
     # # Based on my_stimulus_options above
-    PM.stimulate.make_stimulus_video()
+    # PM.stimulate.make_stSimulus_video()
 
     ####################################
     ### Run multiple trials or cells ###
