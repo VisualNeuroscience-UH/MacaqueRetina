@@ -182,7 +182,7 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 
 # For "load_model" training_mode, the model is loaded from model_file_name at output_folder (primary)
 # or input_folder. The correct model name (including time stamp) must be given in the model_file_name.
-gc_type = "parasol"  # "parasol" or "midget
+gc_type = "parasol"  # "parasol" or "midget"
 response_type = "on"
 
 # VAE RF is generated in experimental data space originating from macaque peripheral retina.
@@ -213,7 +213,7 @@ my_retina = {
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "fixed",  # fixed, dynamic # Gain control for parasol cells only
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
-    "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
+    "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
     "rf_coverage_adjusted_to_1": True,  # False or True. Applies to FIT only, scales sum(unit center areas) = retina area
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
@@ -378,7 +378,7 @@ cone_general_params = {
     "cone2gc_parasol": 27,  # um 27
     "cone2gc_cutoff_SD": 1,  # 3 SD is 99.7% of Gaussian
     "cone_noise_autocorr": 0.013,  # sec
-    "cone_noise_coefficient": 1.0,  # In relation to tonic_drive
+    "cone_noise_magnitude": 0.1,  # pA
 }
 
 # Recovery function from Berry_1998_JNeurosci, Uzzell_2004_JNeurophysiol
@@ -627,7 +627,7 @@ if __name__ == "__main__":
     # For FIT and VAE
     # PM.viz.show_cones_linked_to_gc(gc_list=[11], savefigname=None)
     # PM.viz.show_cones_linked_to_gc(gc_list=[32, 58, 63, 67, 6], savefigname=None)
-    PM.viz.show_unit_density_vs_ecc(unit_type="gc", savefigname=None)  # gc or cone
+    # PM.viz.show_unit_density_vs_ecc(unit_type="gc", savefigname=None)  # gc or cone
 
     # TÄHÄN JÄIT: TOIMIVA VAE CONE 2 GC LINKKI. CONE PER GC MÄÄRÄ SUUREHKO.
     # TARKISTA MÄÄRÄ(ECC). LINKITÄ TEMPORAALINEN KOHINA.
@@ -673,7 +673,7 @@ if __name__ == "__main__":
     ########################
 
     # # Based on my_stimulus_options above
-    # PM.stimulate.make_stimulus_video()
+    PM.stimulate.make_stimulus_video()
 
     ####################################
     ### Run multiple trials or cells ###

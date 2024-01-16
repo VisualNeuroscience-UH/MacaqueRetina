@@ -2938,12 +2938,13 @@ class ConstructRetina(RetinaMath):
         if gc.temporal_model == "fixed":
             gc = self._create_fixed_temporal_rfs(gc)  # Chichilnisky data
 
-            # For fixed model, we borrow theamplitude of firing rates from the Bnardete & Kaplan data
+            # For fixed model, we borrow the gain and mean firing rates from the Bnardete & Kaplan data
             gc_to_get_A = deepcopy(gc)
             gc_to_get_A = self._create_dynamic_temporal_rfs(
                 gc_to_get_A
             )  # Benardete & Kaplan data
             gc.df["A"] = gc_to_get_A.df["A"]
+            gc.df["Mean"] = gc_to_get_A.df["Mean"]
 
         elif gc.temporal_model == "dynamic":
             gc = self._create_dynamic_temporal_rfs(gc)  # Benardete & Kaplan data

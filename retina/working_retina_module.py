@@ -3,10 +3,12 @@ import numpy as np
 
 import pandas as pd
 from scipy.signal import convolve
+from scipy.signal.windows import gaussian
 from scipy.interpolate import interp1d
 from scipy.spatial import Delaunay
-from scipy.optimize import fsolve, curve_fit
+from scipy.optimize import fsolve, curve_fit, least_squares
 from scipy.ndimage import gaussian_filter
+from scipy.special import erf
 from skimage.transform import resize
 import torch
 
@@ -24,6 +26,7 @@ import brian2.units as b2u
 # Local
 from cxsystem2.core.tools import write_to_file, load_from_file
 from retina.retina_math_module import RetinaMath
+from project.project_utilities_module import ProjectUtilities as PU
 
 # Builtin
 from pathlib import Path
@@ -949,7 +952,8 @@ class WorkingRetina(RetinaMath):
         generator_potential = torch.zeros(len(tvec) + D_tp).to(device)
 
         # Add gain
-        generator_potential[D_tp:] = A * yvec
+        # generator_potential[D_tp:] = A * yvec
+        generator_potential[D_tp:] = yvec
 
         return generator_potential
 
@@ -968,6 +972,116 @@ class WorkingRetina(RetinaMath):
         # Apply nonlinearity
         # tonic_drive**2 is added to mimick spontaneous firing rates
         firing_rates = np.maximum(generator_potentials + tonic_drive**2, 0)
+
+        return firing_rates
+
+    def _generator_to_firing_rate_noise(
+        self,
+        tvec,
+        params_all,
+        generator_potentials,
+    ):
+        """
+        Add Gaussian noise with autocorrelation to generator potentials and apply gain and mean firing rates to scale cone noise.
+
+        This function generates Gaussian noise with a given autocorrelation and sums this noise to the generator potentials.
+        It applies a gain to the generator potentials and mean firing rates to scale cone noise.
+
+        Parameters
+        ----------
+        tvec : ndarray
+            Time vector.
+        params_all : DataFrame
+            Dataframe containing parameters for each cell, including mean firing rates ('Mean') and gain ('A').
+        generator_potentials : ndarray
+            Array of generator potentials.
+
+        Returns
+        -------
+        ndarray
+            The firing rates after adding Gaussian noise and applying gain and mean firing rates adjustments.
+
+        Raises
+        ------
+        AssertionError
+            If the number of cells in `params_all` and `generator_potentials` do not match.
+
+        Notes
+        -----
+        The method internally uses a nested function `_create_cone_noise` to generate Gaussian noise with a specified
+        autocorrelation. The noise is then normalized and combined with the generator potentials to calculate the
+        firing rates.
+        """
+        assert (
+            params_all.shape[0] == generator_potentials.shape[0]
+        ), "Number of cells in params_all and generator_potentials must match, aborting..."
+
+        noise_corr = self.context.my_retina["cone_general_params"][
+            "cone_noise_autocorr"
+        ]
+
+        noise_corr = noise_corr * b2u.second
+        gc_noise_mean = params_all.Mean.values
+        gc_gain = params_all.A.values
+        cones_to_gcs_weights = self.cones_to_gcs_weights
+        n_cones = cones_to_gcs_weights.shape[0]
+
+        # @PU.time_function
+        def _create_cone_noise(tvec, n_cones, FWHM):
+            """
+            Generate Gaussian noise with a given autocorrelation.
+
+            Parameters:
+            tvec (numpy array): Time vector.
+            n_cones (int): Number of Gaussian noise sources.
+            FWHM (float): Full width at half maximum of the autocorrelation of each Gaussian.
+
+            Returns:
+            cone_noise (numpy array): Noise with Gaussian distribution.
+            """
+
+            # Determine the length of the Gaussian kernel for convolution
+            kernel_length = len(tvec)
+
+            # Convert FWHM to standard deviation of the Gaussian kernel
+            sigma = FWHM / (2 * np.sqrt(2 * np.log(2)))
+
+            # Drop unit from sigma and tvec
+            sigma = sigma / b2u.second
+            tvec = tvec / b2u.second
+
+            # Compute sigma in time points
+            sigma_tp = sigma / (tvec[1] - tvec[0])
+
+            # Generate a Gaussian kernel
+            kernel = gaussian(kernel_length, sigma_tp)
+
+            # Initialize the summed Gaussian noise function
+            cone_noise = np.zeros((len(tvec), n_cones))
+
+            # Generate and sum the weighted autocorrelated Gaussian noises
+            for this_cone in range(n_cones):
+                # Generate Gaussian noise
+                noise = np.random.normal(0, 1, len(tvec))
+
+                # Apply Gaussian kernel to get the desired autocorrelation
+                cone_noise[:, this_cone] = convolve(noise, kernel, mode="same") / sum(
+                    kernel
+                )
+
+            return cone_noise
+
+        cone_noise = _create_cone_noise(tvec, n_cones, noise_corr)
+
+        # Normalize weights by columns (ganglion cells)
+        weights_norm = cones_to_gcs_weights / np.sum(cones_to_gcs_weights, axis=0)
+
+        gc_noise = cone_noise @ weights_norm
+
+        firing_rates_light = generator_potentials * gc_gain[:, np.newaxis]
+        firing_rates_cone_noise = gc_noise.T * gc_noise_mean[:, np.newaxis]
+
+        firing_rates = firing_rates_light + firing_rates_cone_noise
 
         return firing_rates
 
@@ -1268,13 +1382,6 @@ class WorkingRetina(RetinaMath):
         impulse_to_show["temporal_model"] = self.temporal_model
 
         return impulse_to_show
-
-    def _create_cone_noise(self, tvec, num_cells):
-        cone_params = self.context.my_retina["cone_general_params"]
-        cone_noise_autocorr = cone_params["cone_noise_autocorr"]
-        cone_noise_coefficient = cone_params["cone_noise_coefficient"]
-
-        return cone_noise
 
     def get_w_z_coords(self):
         """
@@ -1873,35 +1980,15 @@ class WorkingRetina(RetinaMath):
                     generator_potentials_t[idx, :] = gen_pot_cen + gen_pot_sur
 
             generator_potentials = generator_potentials_t.cpu().numpy()
-            """
-            TÄHÄN JÄIT: ADD SHARED NOISE TO GENERATOR POTENTIALS
-            CONE DENSITY GENERATORS
-              -cone density Packer_1989_JCompNeurol
-              -tappien kohinan autokorrelaatioaika (FWHM) 13+-1 ms mean+-SEM
-              -spread Boycott_1991_EurJNeurosci, Ala-Laurila_2011_NatNeurosci
-            GAUSSIAN BLUR SPREAD FOR EACH UNIT TYPE TO GENERATE NOISE FIELDS
-              -cone signals were spread over a disc with a radius of 27 µm for diffuse cone bipolar cells 
-            and 9 µm for midget cone bipolar cells 25(viite 25: Boycott & Wässle, 1991, niiden Table 1)
-            ADD SHARED NOISE FIELD TO GENERATOR POTENTIALS AT GC CENTER
-            
-            
-            """
-            # pdb.set_trace()
-            # self.cones_to_gcs_weights
-            # cone_noise_autocorr = 13 * b2u.ms
-            # cone_noise_coefficient = 1.0
-            # cone_noise = self._create_cone_noise(tvec, num_cells)
-            # generator_potentials = generator_potentials + cone_noise
-            # invert noise for OFF cells
 
-            # Dynamic contrast gain control with linear-nonlinear model
-            # has no separate nonlinearity, so we can use the generator potential directly
-            params_all = self.gc_df.loc[cell_indices]
+            # # Dynamic contrast gain control with linear-nonlinear model
+            # # has no separate nonlinearity, so we can use the generator potential directly
+            # params_all = self.gc_df.loc[cell_indices]
 
-            # Here, spontaneous firing rates are added as tonic_drive**2 from Chichilnisky data
-            firing_rates = self._generator_to_firing_rate_dynamic(
-                params_all, generator_potentials
-            )
+            # # Here, spontaneous firing rates are added as tonic_drive**2 from Chichilnisky data
+            # firing_rates = self._generator_to_firing_rate_noise(
+            #     tvec, params_all, generator_potentials
+            # )
 
         elif self.temporal_model == "fixed":  # Linear model
             # Amplitude will be scaled by first (positive) lowpass filter.
@@ -1917,10 +2004,19 @@ class WorkingRetina(RetinaMath):
                 cell_indices, stimulus_cropped, spatiotemporal_filters
             )
 
-            # Applies scaling and logistic function to instantaneous firing rates to get veridical ap firing
-            firing_rates = self._generator_to_firing_rate_fixed(
-                cell_indices, generator_potentials
-            )
+            # # Applies scaling and logistic function to instantaneous firing rates to get veridical ap firing
+            # firing_rates = self._generator_to_firing_rate_fixed(
+            #     cell_indices, generator_potentials
+            # )
+
+        # Dynamic contrast gain control with linear-nonlinear model
+        # has no separate nonlinearity, so we can use the generator potential directly
+        params_all = self.gc_df.loc[cell_indices]
+
+        # Here, spontaneous firing rates are added as tonic_drive**2 from Chichilnisky data
+        firing_rates = self._generator_to_firing_rate_noise(
+            tvec, params_all, generator_potentials
+        )
 
         # Let's interpolate the rate to video_dt intervals
         tvec_original = np.arange(1, self.stimulus_video.video_n_frames + 1) * video_dt
