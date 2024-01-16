@@ -1612,6 +1612,7 @@ class ConstructRetina(RetinaMath):
                 "T0",
                 "Chalf",
                 "D",
+                "Mean",
             ]
 
         elif cell_type == "midget":
@@ -1628,6 +1629,7 @@ class ConstructRetina(RetinaMath):
                 "HS_sur",
                 "TS_sur",
                 "deltaNLTL_sur",
+                "Mean",
             ]
 
         col_names = ["Minimum", "Maximum", "Median", "Mean", "SD", "SEM"]
