@@ -4,6 +4,8 @@ from argparse import ArgumentError
 import copy
 import pdb
 import sys
+import timeit
+
 
 # Analysis
 import numpy as np
@@ -231,6 +233,27 @@ class ProjectUtilities:
                 )
 
         return lines
+
+    def time_function(func):
+        """Decorator to time a function."""
+
+        def wrapper(*args, **kwargs):
+            # Start the timer
+            start_time = timeit.default_timer()
+
+            # Call the function
+            result = func(*args, **kwargs)
+
+            # End the timer
+            end_time = timeit.default_timer()
+
+            # Calculate the total time taken
+            time_taken = end_time - start_time
+            print(f"Function {func.__name__} took {time_taken} seconds to complete.")
+
+            return result
+
+        return wrapper
 
 
 class DataSampler:
