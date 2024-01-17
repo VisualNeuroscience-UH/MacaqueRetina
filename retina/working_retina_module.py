@@ -1998,7 +1998,6 @@ class WorkingRetina(RetinaMath):
 
         params_all = self.gc_df.loc[cell_indices]
 
-        # Here, spontaneous firing rates are added as tonic_drive**2 from Chichilnisky data
         firing_rates = self._generator_to_firing_rate_noise(
             tvec, params_all, generator_potentials
         )
