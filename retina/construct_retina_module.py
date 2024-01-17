@@ -650,6 +650,21 @@ class ConstructRetina(RetinaMath):
         elif dd_regr_model == "loglog":
             # Define the model function for the power law relationship
             # Note that we're fitting the log of the function, so we need to use the linear form
+
+            # def linear_func(E, a, b):
+            #     return a + E * b
+
+            # fit_parameters, pcov = opt.curve_fit(
+            #     linear_func, data_all_x, np.log10(data_all_y), p0=[1, 1]
+            # )
+
+            # a = fit_parameters[0]
+            # b = fit_parameters[1]
+
+            # a = (
+            #     10**a
+            # )  # Adjust the constant for later power fit of the form y = a * x^b
+
             def power_func(E, a, b):
                 return a * np.power(E, b)
 
@@ -677,6 +692,61 @@ class ConstructRetina(RetinaMath):
         }
 
         return dendr_diam_parameters
+
+    def _fit_cone_noise_vs_freq(self, gc):
+        """
+        Fit cone noise power with respect to frequency. Loglog fit.
+
+        Returns
+        -------
+        dict
+            dictionary containing cone noise parameters and related data for visualization
+        """
+
+        # Read cone noise data and return loglog fit 
+        cone_noise_parameters = {}
+
+        cone_noise = self.data_io.get_data(
+            self.context.literature_data_files["cone_noise_fullpath"]
+        )
+
+        data_set_x = np.squeeze(cone_noise["Xdata"])
+        data_set_y = np.squeeze(cone_noise["Ydata"])
+
+        data_set_x_index = np.argsort(data_set_x)
+        data_set_x = data_set_x[data_set_x_index]
+        data_set_y = data_set_y[data_set_x_index]
+
+        dict_key = "loglog"
+
+        def linear_func(E, a, b):
+            return a + E * b
+
+        fit_parameters, pcov = opt.curve_fit(
+            linear_func, np.log10(data_set_x), np.log10(data_set_y), p0=[1, 1]
+        )
+        fit_parameters[0] = 10 ** fit_parameters[0]  # Adjust the constant
+
+        a = fit_parameters[0]
+        b = fit_parameters[1]
+
+
+        # Save the parameters
+        cone_noise_parameters[dict_key] = {
+            "a": a,
+            "b": b,
+        }
+
+        gc.cone_noise_parameters = cone_noise_parameters
+
+        self.project_data.construct_retina["cone_noise_vs_freq"] = {
+            "data_all_x": data_set_x,
+            "data_all_y": data_set_y,
+            "fit_parameters": fit_parameters,
+            "title": "cone_noise_vs_freq, loglog fit",
+        }
+
+        return gc
 
     def _get_ecc_from_dd(self, dendr_diam_parameters, dd_regr_model, dd):
         """
@@ -2980,6 +3050,7 @@ class ConstructRetina(RetinaMath):
         # -- Second, endow cells with spatial receptive fields
         ret, gc = self._create_spatial_rfs(ret, gc)
         gc = self._link_cone_noise_units_to_gcs(ret, gc)
+        gc = self._fit_cone_noise_vs_freq(gc)
 
         # -- Third, endow cells with temporal receptive fields
         gc = self._create_temporal_rfs(gc)
@@ -2989,7 +3060,7 @@ class ConstructRetina(RetinaMath):
 
         print(f"Built RGC mosaic with {gc.n_units} cells")
 
-        # Save the receptive field images and associated data
+        # Save the receptive field images, associated metadata and cone noise data
         self.save_gc_img(gc)
 
         # Save the receptive field mosaic
@@ -3013,6 +3084,7 @@ class ConstructRetina(RetinaMath):
             "um_per_pix": gc.um_per_pix,
             "pix_per_side": gc.pix_per_side,
             "cones_to_gcs_weights": gc.cones_to_gcs_weights,
+            "cone_noise_parameters": gc.cone_noise_parameters,
         }
 
         self.data_io.save_generated_rfs(

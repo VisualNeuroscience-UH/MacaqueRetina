@@ -182,7 +182,7 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 
 # For "load_model" training_mode, the model is loaded from model_file_name at output_folder (primary)
 # or input_folder. The correct model name (including time stamp) must be given in the model_file_name.
-gc_type = "parasol"  # "parasol" or "midget"
+gc_type = "midget"  # "parasol" or "midget"
 response_type = "on"
 
 # VAE RF is generated in experimental data space originating from macaque peripheral retina.
@@ -211,9 +211,9 @@ my_retina = {
     "dd_regr_model": "loglog",  # linear, quadratic, cubic, loglog. For midget < 20 deg, use quadratic; for parasol use loglog
     "ecc_limit_for_dd_fit": math.inf,  # 20,  # degrees, math.inf for no limit
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
-    "temporal_model": "fixed",  # fixed, dynamic # Gain control for parasol cells only
+    "temporal_model": "fixed",  # fixed, dynamic
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
-    "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
+    "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
     "rf_coverage_adjusted_to_1": True,  # False or True. Applies to FIT only, scales sum(unit center areas) = retina area
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
@@ -293,7 +293,7 @@ my_stimulus_options = {
     "contrast": 0.5,  # Weber constrast
     "mean": 128,
     "temporal_frequency": 0.1,  # 0.01,  # 4.0,  # 40,  # Hz
-    "spatial_frequency": 2.0,
+    "spatial_frequency": 2.0,  # cpd
     "orientation": 0,  # degrees
     "phase_shift": 0,  # math.pi,  # radians
     "stimulus_video_name": f"{stimulus_folder}.mp4",
@@ -369,6 +369,8 @@ visual2cortical_params = {
 
 # Compressing cone nonlinearity. Parameters are manually scaled to give dynamic cone ouput.
 # Equation, data from Baylor_1987_JPhysiol
+# Cone noise parameters from Angueyra_2013_NatNeurosci and Ala-laurila_2011_NatNeurosci
+# Noise magnitude is a free parameter for now.
 cone_general_params = {
     "rm": 25,  # pA
     "k": 2.77e-4,  # at 500 nm
@@ -378,7 +380,7 @@ cone_general_params = {
     "cone2gc_parasol": 27,  # um 27
     "cone2gc_cutoff_SD": 1,  # 3 SD is 99.7% of Gaussian
     "cone_noise_autocorr": 0.013,  # sec
-    "cone_noise_magnitude": 0.1,  # pA
+    "cone_noise_magnitude": 1.0,
 }
 
 # Recovery function from Berry_1998_JNeurosci, Uzzell_2004_JNeurophysiol
@@ -519,6 +521,7 @@ cone_density1_fullpath = (
 cone_density2_fullpath = (
     literature_data_folder / "Packer_1989_JCompNeurol_ConeDensity_Fig6A_insert_c.npz"
 )
+cone_noise_fullpath = literature_data_folder / "Angueyra_2013_NatNeurosci_Fig6E_c.npz"
 
 literature_data_files = {
     "gc_density_fullpath": gc_density_fullpath,
@@ -530,6 +533,7 @@ literature_data_files = {
     "spatial_DoG_fullpath": spatial_DoG_fullpath,
     "cone_density1_fullpath": cone_density1_fullpath,
     "cone_density2_fullpath": cone_density2_fullpath,
+    "cone_noise_fullpath": cone_noise_fullpath,
 }
 
 
@@ -591,6 +595,10 @@ if __name__ == "__main__":
 
     # TÄHÄN JÄIT: ETSI KIRJALLISUUDESTA TAUSTA AKTIIVISUUKSIA JA DYNAAMISIA MODULAATIOITA
     # SELVITÄ MIKSI FIXED JA VAE EROAVAT, JA MISTÄ TILEE FIXED SUSTAINED FIRING JOIHINKIN YKSIKÖIHIN
+    # MIETI TAPPIKOHINAN LINKITYS UUDELLEEN:
+    #  - PERIFERIASSA GRIDI LIIAN HARVA
+    #  - KESKELLÄ GRIDI LIIAN TIHEÄ
+    # FIT IRTI GRIDISTÄ EDELLEEN.
 
     ###########################################
     ##   Sample figure data from literature  ##
@@ -599,11 +607,11 @@ if __name__ == "__main__":
     # # # If possible, sample only temporal hemiretina
     # from project.project_utilities_module import DataSampler
 
-    # filename = "Packer_1989_JCompNeurol_ConeDensity_Fig6A_insert.jpg"
+    # filename = "Angueyra_2013_NatNeurosci_Fig6E.jpg"
     # filename_full = git_repo_root.joinpath(r"retina/literature_data", filename)
     # # Fig lowest and highest tick values in the image, use these as calibration points
-    # min_X, max_X, min_Y, max_Y = (0, 1.25, 25, 225)
-    # ds = DataSampler(filename_full, min_X, max_X, min_Y, max_Y, logX=False, logY=False)
+    # min_X, max_X, min_Y, max_Y = (1, 600, 0.001, 1)
+    # ds = DataSampler(filename_full, min_X, max_X, min_Y, max_Y, logX=True, logY=True)
     # ds.collect_and_save_points()
     # ds.quality_control(restore=True)
 
@@ -629,11 +637,12 @@ if __name__ == "__main__":
     # For FIT and VAE
     # PM.viz.show_cones_linked_to_gc(gc_list=[11], savefigname=None)
     # PM.viz.show_cones_linked_to_gc(gc_list=[32, 58, 63, 67, 6], savefigname=None)
-    # PM.viz.show_unit_density_vs_ecc(unit_type="gc", savefigname=None)  # gc or cone
+    # PM.viz.show_unit_density_vs_ecc(unit_type="cone", savefigname=None)  # gc or cone
 
     # PM.viz.show_DoG_model_fit(sample_list=[1, 2, 3, 48], savefigname=None)
     # PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)
     # PM.viz.show_dendrite_diam_vs_ecc(log_x=False, log_y=True, savefigname=None)
+    PM.viz.show_cone_noise_vs_freq(savefigname=None)
 
     # For FIT (DoG fits, temporal kernels and tonic drives)
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
@@ -679,8 +688,8 @@ if __name__ == "__main__":
     ####################################
 
     # # Load stimulus to get working retina, necessary for running cells
-    PM.working_retina.load_stimulus()
-    PM.working_retina.run_with_my_run_options()
+    # PM.working_retina.load_stimulus()
+    # PM.working_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
@@ -727,7 +736,7 @@ if __name__ == "__main__":
     ################################################
 
     # # Based on my_run_options above
-    PM.viz.show_all_gc_responses(savefigname=None)
+    # PM.viz.show_all_gc_responses(savefigname=None)
 
     # PM.viz.show_stimulus_with_gcs(
     #     example_gc=3,  # or my_run_options["cell_index"]

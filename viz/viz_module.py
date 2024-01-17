@@ -1216,6 +1216,44 @@ class Viz:
         if savefigname:
             self._figsave(figurename=savefigname)
 
+    def show_cone_noise_vs_freq(self, savefigname=None):
+        """
+        Plot cone noise as a function of temporal frequency.
+        """
+        cone_noise_vs_freq = self.project_data.construct_retina["cone_noise_vs_freq"]
+        data_all_x = cone_noise_vs_freq["data_all_x"]
+        data_all_y = cone_noise_vs_freq["data_all_y"]
+        fit_parameters = cone_noise_vs_freq["fit_parameters"]
+        title = cone_noise_vs_freq["title"]
+
+        fig, ax = plt.subplots(nrows=1, ncols=1)
+        ax.plot(data_all_x, data_all_y, "b.", label="Data")
+
+        ax.set_xlabel("Frequency (Hz)")
+        ax.set_ylabel("Cone noise power (pA^2/Hz)")
+        ax.legend()
+
+        a = fit_parameters[0]
+        b = fit_parameters[1]
+        # Calculate the fitted values using the power law relationship
+        fitted_y = a * np.power(data_all_x, b)
+        ax.plot(data_all_x, fitted_y, "k--", label="Log-log fit")
+        ax.annotate(
+            f"Data loglog fit: \nD={a:.2f} * E^{b:.2f}",
+            xycoords="axes fraction",
+            xy=(0.5, 0.15),
+            ha="left",
+            color="k",
+        )
+
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+
+        plt.title(title)
+
+        if savefigname:
+            self._figsave(figurename=savefigname)
+
     def show_temp_stat(self):
         """
         Show the temporal statistics of the retina units.
