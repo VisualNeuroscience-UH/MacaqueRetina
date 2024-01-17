@@ -334,8 +334,8 @@ class DataSampler:
         # From bottom upwards, y min is the largest pixel value
         y_upright = pix_y_min - y
         if self.logX:
-            x_scaled_log = x_rightwards / x_range_pix * np.log10(
-                (self.max_X - self.min_X)
+            x_scaled_log = (x_rightwards / x_range_pix) * (
+                np.log10(self.max_X) - np.log10(self.min_X)
             ) + np.log10(self.min_X)
             x_scaled = np.power(10, x_scaled_log)
         else:
@@ -343,8 +343,8 @@ class DataSampler:
                 x_rightwards / x_range_pix * (self.max_X - self.min_X) + self.min_X
             )
         if self.logY:
-            y_scaled_log = (y_upright / y_range_pix) * np.log10(
-                (self.max_Y - self.min_Y)
+            y_scaled_log = (y_upright / y_range_pix) * (
+                np.log10(self.max_Y) - np.log10(self.min_Y)
             ) + np.log10(self.min_Y)
 
             y_scaled = np.power(10, y_scaled_log)
@@ -366,7 +366,7 @@ class DataSampler:
             x_data_log = np.log10(x_data)
             x_rightwards_log = x_data_log - np.log10(self.min_X)
             x = (
-                x_rightwards_log / np.log10((self.max_X - self.min_X))
+                x_rightwards_log / (np.log10(self.max_X) - np.log10(self.min_X))
             ) * x_range_pix + pix_x_min
         else:
             x = (x_data - self.min_X) / (
@@ -376,7 +376,7 @@ class DataSampler:
             y_data_log = np.log10(y_data)
             y_upwards_log = y_data_log - np.log10(self.min_Y)
             y_upwards_pix = (
-                y_upwards_log / np.log10((self.max_Y - self.min_Y))
+                y_upwards_log / (np.log10(self.max_Y) - np.log10(self.min_Y))
             ) * y_range_pix
             y = pix_y_min - y_upwards_pix
         else:
