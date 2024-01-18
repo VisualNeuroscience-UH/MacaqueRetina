@@ -103,11 +103,14 @@ class WorkingRetina(RetinaMath):
 
         # Read fitted parameters from file
         gc_dataframe = self.data_io.get_data(filename=my_retina["mosaic_file"])
+
+        # General retina params
         self.gc_type = my_retina["gc_type"]
         self.response_type = my_retina["response_type"]
         self.deg_per_mm = my_retina["deg_per_mm"]
         stimulus_center = my_retina["stimulus_center"]
         self.DoG_model = my_retina["DoG_model"]
+        self.cone_general_params = my_retina["cone_general_params"]
 
         stimulus_width_pix = self.context.my_stimulus_options["image_width"]
         stimulus_height_pix = self.context.my_stimulus_options["image_height"]
@@ -1032,9 +1035,6 @@ class WorkingRetina(RetinaMath):
 
         cone_noise = _create_cone_noise(tvec, n_cones, NL, TL, HS, TS, A0, M0, D)
 
-        # Save for visualization
-        # self.project_data.working_retina["noise_fft_mean"] = noise_fft_mean
-
         # Normalize weights by columns (ganglion cells)
         weights_norm = cones_to_gcs_weights / np.sum(cones_to_gcs_weights, axis=0)
 
@@ -1043,10 +1043,13 @@ class WorkingRetina(RetinaMath):
         # Normalize noise to have unit variance
         gc_noise_norm = gc_noise / np.std(gc_noise, axis=0)
 
+        # Manual multiplier from conf file
+        magn = self.cone_general_params["cone_noise_magnitude"]
         gc_noise_mean = params_all.Mean.values
+        firing_rates_cone_noise = gc_noise_norm.T * gc_noise_mean[:, np.newaxis] * magn
+
         gc_gain = params_all.A.values
         firing_rates_light = generator_potentials * gc_gain[:, np.newaxis]
-        firing_rates_cone_noise = gc_noise_norm.T * gc_noise_mean[:, np.newaxis]
 
         # Truncating nonlinearity
         firing_rates = np.maximum(firing_rates_light + firing_rates_cone_noise, 0)

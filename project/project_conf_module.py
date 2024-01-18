@@ -182,7 +182,7 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 
 # For "load_model" training_mode, the model is loaded from model_file_name at output_folder (primary)
 # or input_folder. The correct model name (including time stamp) must be given in the model_file_name.
-gc_type = "midget"  # "parasol" or "midget"
+gc_type = "parasol"  # "parasol" or "midget"
 response_type = "on"
 
 # VAE RF is generated in experimental data space originating from macaque peripheral retina.
@@ -379,8 +379,7 @@ cone_general_params = {
     "cone2gc_midget": 9,  # um, 1 SD of Gaussian
     "cone2gc_parasol": 27,  # um 27
     "cone2gc_cutoff_SD": 1,  # 3 SD is 99.7% of Gaussian
-    "cone_noise_autocorr": 0.013,  # sec
-    "cone_noise_magnitude": 1.0,
+    "cone_noise_magnitude": 1,  # Relative amplitude
 }
 
 # Recovery function from Berry_1998_JNeurosci, Uzzell_2004_JNeurophysiol
@@ -688,8 +687,8 @@ if __name__ == "__main__":
     ####################################
 
     # # Load stimulus to get working retina, necessary for running cells
-    # PM.working_retina.load_stimulus()
-    # PM.working_retina.run_with_my_run_options()
+    PM.working_retina.load_stimulus()
+    PM.working_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
@@ -736,7 +735,7 @@ if __name__ == "__main__":
     ################################################
 
     # # Based on my_run_options above
-    # PM.viz.show_all_gc_responses(savefigname=None)
+    PM.viz.show_all_gc_responses(savefigname=None)
 
     # PM.viz.show_stimulus_with_gcs(
     #     example_gc=3,  # or my_run_options["cell_index"]
