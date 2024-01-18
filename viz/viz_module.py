@@ -1223,7 +1223,7 @@ class Viz:
         cone_noise_vs_freq = self.project_data.construct_retina["cone_noise_vs_freq"]
         data_all_x = cone_noise_vs_freq["data_all_x"]
         data_all_y = cone_noise_vs_freq["data_all_y"]
-        fit_parameters = cone_noise_vs_freq["fit_parameters"]
+        loglog_params = cone_noise_vs_freq["loglog_params"]
         title = cone_noise_vs_freq["title"]
 
         fig, ax = plt.subplots(nrows=1, ncols=1)
@@ -1233,10 +1233,12 @@ class Viz:
         ax.set_ylabel("Cone noise power (pA^2/Hz)")
         ax.legend()
 
-        a = fit_parameters[0]
-        b = fit_parameters[1]
+        a = loglog_params[0]
+        b = loglog_params[1]
+        
         # Calculate the fitted values using the power law relationship
         fitted_y = a * np.power(data_all_x, b)
+        
         ax.plot(data_all_x, fitted_y, "k--", label="Log-log fit")
         ax.annotate(
             f"Data loglog fit: \nD={a:.2f} * E^{b:.2f}",
