@@ -118,6 +118,7 @@ class ProjectManager(ProjectBase, ProjectUtilities):
             pol2cart=retina_math.pol2cart,
             gauss_plus_baseline_func=retina_math.gauss_plus_baseline_func,
             sector2area_mm2=retina_math.sector2area_mm2,
+            victor_model_frequency_domain=retina_math.victor_model_frequency_domain,
         )
 
         self.viz = viz

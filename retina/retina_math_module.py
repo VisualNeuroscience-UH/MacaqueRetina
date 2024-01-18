@@ -224,6 +224,52 @@ class RetinaMath:
 
         return (radius, phi)
 
+    # General function fitting methods
+    def hyperbolic_function(self, x, y_max, x_half):
+        # Define the generalized hyperbolic function
+        return y_max / (1 + x / x_half)
+
+    def log_hyperbolic_function(self, x_log, log_y_max, x_half_log):
+        # Define the hyperbolic function in log space
+        return log_y_max - np.log(1 + np.exp(x_log - x_half_log))
+
+    def victor_model_frequency_domain(self, f, NL, TL, HS, TS, A0, M0, D):
+        """
+        The model by Victor 1987 JPhysiol
+        """
+        # Linearized low-pass filter in frequency domain
+        x_hat = (1 + 1j * f * TL) ** (-NL)
+
+        # Adaptive high-pass filter (linearized representation)
+        y_hat = (1 - HS / (1 + 1j * f * TS)) * x_hat
+
+        # Impulse generation stage
+        r_hat = A0 * np.exp(-1j * f * D) * y_hat + M0
+        # Power spectrum is the square of the magnitude of the impulse generation stage output
+        power_spectrum = np.abs(r_hat) ** 2
+
+        return power_spectrum
+
+    # Define a wrapper function for curve_fit that works on log-transformed data
+    def wrapper_log_space(
+        self, log_f, log_NL, log_TL, log_HS, log_TS, log_A0, log_M0, log_D
+    ):
+        # Convert log_f back to linear frequency for the model
+        f = np.exp(log_f)
+        # Calculate power spectrum using the model
+        power_spectrum = self.victor_model_frequency_domain(
+            f,
+            np.exp(log_NL),
+            np.exp(log_TL),
+            np.exp(log_HS),
+            np.exp(log_TS),
+            np.exp(log_A0),
+            np.exp(log_M0),
+            np.exp(log_D),
+        )
+        # Return the log of the power spectrum for fitting
+        return np.log(power_spectrum)
+
     # Fit method
     def lowpass(self, t, n, p, tau):
         """

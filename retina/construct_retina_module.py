@@ -694,17 +694,7 @@ class ConstructRetina(RetinaMath):
         return dendr_diam_parameters
 
     def _fit_cone_noise_vs_freq(self, gc):
-        """
-        Fit cone noise power with respect to frequency. Loglog fit.
-
-        Returns
-        -------
-        dict
-            dictionary containing cone noise parameters and related data for visualization
-        """
-
-        # Read cone noise data and return loglog fit 
-        cone_noise_parameters = {}
+        """ """
 
         cone_noise = self.data_io.get_data(
             self.context.literature_data_files["cone_noise_fullpath"]
@@ -714,36 +704,46 @@ class ConstructRetina(RetinaMath):
         data_set_y = np.squeeze(cone_noise["Ydata"])
 
         data_set_x_index = np.argsort(data_set_x)
-        data_set_x = data_set_x[data_set_x_index]
-        data_set_y = data_set_y[data_set_x_index]
+        frequency_data = data_set_x[data_set_x_index]
+        power_data = data_set_y[data_set_x_index]
 
-        dict_key = "loglog"
+        # # In linear scale their values are
+        initial_guesses = [30, 0.002, 1.0, 0.04, 500, 30, 0.002]
+        # Parameters are log_NL, log_TL, log_HS, log_TS, log_A0, log_M0, log_D.
+        log_initial_guesses = [np.log(p) for p in initial_guesses]  # needs to be list
 
-        def linear_func(E, a, b):
-            return a + E * b
+        # pdb.set_trace()
+        # Log-transform the frequency and power data
+        log_frequency_data = np.log(frequency_data)
+        log_power_data = np.log(power_data)
 
-        fit_parameters, pcov = opt.curve_fit(
-            linear_func, np.log10(data_set_x), np.log10(data_set_y), p0=[1, 1]
+        # Ensure no zero or negative values
+        lower_bounds = [1, 1e-6, 1e-6, 1e-6, 1e-6, 1e-6, 1e-6]
+        # Use np.inf if no upper bound is needed
+        upper_bounds = [100, 0.1, 100, 0.1, 1000, 100, 0.1]
+
+        # Take the log of bounds, except where the upper bound is np.inf
+        log_lower_bounds = [np.log(low) for low in lower_bounds]
+        log_upper_bounds = [np.log(up) for up in upper_bounds]
+
+        bounds = (log_lower_bounds, log_upper_bounds)
+
+        popt_log, pcov_log = opt.curve_fit(
+            # RetinaMath.wrapper_log_space,
+            self.wrapper_log_space,
+            log_frequency_data,
+            log_power_data,
+            p0=log_initial_guesses,
+            bounds=bounds,
         )
-        fit_parameters[0] = 10 ** fit_parameters[0]  # Adjust the constant
 
-        a = fit_parameters[0]
-        b = fit_parameters[1]
-
-
-        # Save the parameters
-        cone_noise_parameters[dict_key] = {
-            "a": a,
-            "b": b,
-        }
-
-        gc.cone_noise_parameters = cone_noise_parameters
+        gc.cone_noise_parameters = np.exp(popt_log)
 
         self.project_data.construct_retina["cone_noise_vs_freq"] = {
             "data_all_x": data_set_x,
             "data_all_y": data_set_y,
-            "fit_parameters": fit_parameters,
-            "title": "cone_noise_vs_freq, loglog fit",
+            "cone_noise_parameters": gc.cone_noise_parameters,
+            "title": "cone_noise_vs_freq, asymmetric concave fit",
         }
 
         return gc
@@ -3087,7 +3087,7 @@ class ConstructRetina(RetinaMath):
             "cone_noise_parameters": gc.cone_noise_parameters,
         }
 
-        self.data_io.save_generated_rfs(
+        self.data_io.save_np_dict_to_npz(
             spatial_rfs_file, output_path, filename_stem=self.spatial_rfs_file_filename
         )
 

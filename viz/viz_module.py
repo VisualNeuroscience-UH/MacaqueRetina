@@ -1218,43 +1218,58 @@ class Viz:
 
     def show_cone_noise_vs_freq(self, savefigname=None):
         """
-        Plot cone noise as a function of temporal frequency.
+        Plot cone noise as a function of temporal frequency using the model by Victor 1987 JPhysiol.
         """
         cone_noise_vs_freq = self.project_data.construct_retina["cone_noise_vs_freq"]
         data_all_x = cone_noise_vs_freq["data_all_x"]
         data_all_y = cone_noise_vs_freq["data_all_y"]
-        loglog_params = cone_noise_vs_freq["loglog_params"]
+        cone_noise_parameters = cone_noise_vs_freq["cone_noise_parameters"]
         title = cone_noise_vs_freq["title"]
 
-        fig, ax = plt.subplots(nrows=1, ncols=1)
+        fig, ax = plt.subplots()
         ax.plot(data_all_x, data_all_y, "b.", label="Data")
 
         ax.set_xlabel("Frequency (Hz)")
         ax.set_ylabel("Cone noise power (pA^2/Hz)")
-        ax.legend()
 
-        a = loglog_params[0]
-        b = loglog_params[1]
+        # Calculate the fitted values using Victor's model
+        fitted_y = self.victor_model_frequency_domain(
+            data_all_x, *cone_noise_parameters
+        )
 
-        # Calculate the fitted values using the power law relationship
-        fitted_y = a * np.power(data_all_x, b)
+        ax.plot(data_all_x, fitted_y, "k--", label="Victor Model Fit")
 
-        ax.plot(data_all_x, fitted_y, "k--", label="Log-log fit")
+        # Victor's model parameters are NL, TL, HS, TS, A0, M0, D
+        NL, TL, HS, TS, A0, M0, D = cone_noise_parameters
+
+        # Annotation with the equations
+        equation_annotation = (
+            "Victor Model Equations:\n"
+            "Low-pass filter: x̂ = (1 + 1j * f * TL)^(-NL)\n"
+            "High-pass filter: ŷ = (1 - HS / (1 + 1j * f * TS)) * x̂\n"
+            "Impulse generation: r̂ = A0 * exp(-1j * f * D) * ŷ + M0\n"
+            f"Parameters:\n"
+            f"  NL={NL:.2f}, TL={TL:.2e} s, HS={HS:.2f}\n"
+            f"  TS={TS:.2e} s, A0={A0:.2f}, M0={M0:.2f}, D={D:.2e} s"
+        )
+
         ax.annotate(
-            f"Data loglog fit: \nD={a:.2f} * E^{b:.2f}",
+            equation_annotation,
             xycoords="axes fraction",
-            xy=(0.5, 0.15),
+            xy=(0.1, 0.1),
             ha="left",
             color="k",
+            fontsize=8,
         )
 
         ax.set_xscale("log")
         ax.set_yscale("log")
 
         plt.title(title)
+        ax.legend()
 
         if savefigname:
-            self._figsave(figurename=savefigname)
+            plt.savefig(savefigname)
 
     def show_temp_stat(self):
         """
