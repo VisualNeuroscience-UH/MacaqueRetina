@@ -252,8 +252,10 @@ class DataIO(DataIOBase):
         elif filename_extension in [".avi", ".mp4"]:
             video_data = cv2.VideoCapture(str(data_fullpath_filename))
             data = self._video_capture2numpy_array(video_data)
-        elif filename_extension in [".npy", ".npz"]:
+        elif filename_extension in [".npy"]:
             data = np.load(data_fullpath_filename)
+        elif filename_extension in [".npz"]:
+            data = np.load(data_fullpath_filename, allow_pickle=True)
         elif filename_extension in [".h5", ".hdf5"]:
             data = self.load_dict_from_hdf5(data_fullpath_filename)
         else:
@@ -748,29 +750,71 @@ class DataIO(DataIOBase):
 
         return result_grid
 
-    def save_generated_rfs(self, data_dict, output_path, filename_stem="rf_values"):
+    # def _save_generated_rfs(self, data_dict, output_path, filename_stem="rf_values"):
+    #     """
+    #     Save rf image data.
+
+    #     Parameters
+    #     ----------
+    #     data_dict : dict
+    #         The dictionary containing the fields to be saved:
+    #             gc_img : numpy.ndarray
+    #                 The 3D image stack to be saved, with shape (N, H, W).
+    #             gc_img_mask : numpy.ndarray
+    #                 The 3D image stack center mask to be saved, with shape (N, H, W).
+    #             X_grid_mm : numpy.ndarray
+    #                 The X grid in mm, with shape (N, H, W).
+    #             Y_grid_mm : numpy.ndarray
+    #                 The Y grid in mm, with shape (N, H, W).
+    #             um_per_pix : float
+    #                 The micrometers per pixel.
+    #             pix_per_side : int
+    #                 The number of pixels per side of the image.
+
+    #     output_path : str or Path
+    #         The path to the output folder where the image files and the stack will be saved.
+    #     """
+
+    #     if isinstance(output_path, str):
+    #         output_path = Path(output_path)
+
+    #     output_path.mkdir(parents=True, exist_ok=True)
+
+    #     # Save the original img_stack as numpy or pickle format
+    #     stack_filename = (
+    #         output_path / f"{filename_stem}"
+    #     )  # or "rf_values.pkl" for pickle format
+
+    #     # If extension is not npy, add it
+    #     if not stack_filename.suffix == ".npz":
+    #         stack_filename = stack_filename.with_suffix(".npz")
+
+    #     np.savez(
+    #         stack_filename,
+    #         gc_img=data_dict["gc_img"],
+    #         gc_img_mask=data_dict["gc_img_mask"],
+    #         X_grid_mm=data_dict["X_grid_mm"],
+    #         Y_grid_mm=data_dict["Y_grid_mm"],
+    #         um_per_pix=data_dict["um_per_pix"],
+    #         pix_per_side=data_dict["pix_per_side"],
+    #         cones_to_gcs_weights=data_dict["cones_to_gcs_weights"],
+    # )
+
+    def save_np_dict_to_npz(self, data_dict, output_path, filename_stem=""):
         """
-        Save rf image data.
+        Save a dictionary of numerical values to an NPZ file.
 
         Parameters
         ----------
         data_dict : dict
-            The dictionary containing the fields to be saved:
-                gc_img : numpy.ndarray
-                    The 3D image stack to be saved, with shape (N, H, W).
-                gc_img_mask : numpy.ndarray
-                    The 3D image stack center mask to be saved, with shape (N, H, W).
-                X_grid_mm : numpy.ndarray
-                    The X grid in mm, with shape (N, H, W).
-                Y_grid_mm : numpy.ndarray
-                    The Y grid in mm, with shape (N, H, W).
-                um_per_pix : float
-                    The micrometers per pixel.
-                pix_per_side : int
-                    The number of pixels per side of the image.
+            The dictionary containing numerical data to be saved.
+            Each key-value pair corresponds to a variable name and its associated numpy array.
 
         output_path : str or Path
-            The path to the output folder where the image files and the stack will be saved.
+            The path to the output folder where the NPZ file will be saved.
+
+        filename_stem : str, optional
+            The stem of the filename for the saved file. Default is "data_values".
         """
 
         if isinstance(output_path, str):
@@ -778,29 +822,17 @@ class DataIO(DataIOBase):
 
         output_path.mkdir(parents=True, exist_ok=True)
 
-        # Save the original img_stack as numpy or pickle format
-        stack_filename = (
-            output_path / f"{filename_stem}"
-        )  # or "rf_values.pkl" for pickle format
+        if filename_stem.endswith(".npz"):
+            filename = filename_stem
+        else:
+            filename = filename_stem + ".npz"
 
-        # If extension is not npy, add it
-        if not stack_filename.suffix == ".npz":
-            stack_filename = stack_filename.with_suffix(".npz")
+        # Construct the filename for saving
+        npz_filename = output_path / filename
 
-        np.savez(
-            stack_filename,
-            gc_img=data_dict["gc_img"],
-            gc_img_mask=data_dict["gc_img_mask"],
-            X_grid_mm=data_dict["X_grid_mm"],
-            Y_grid_mm=data_dict["Y_grid_mm"],
-            um_per_pix=data_dict["um_per_pix"],
-            pix_per_side=data_dict["pix_per_side"],
-            cones_to_gcs_weights=data_dict["cones_to_gcs_weights"],
-        )
-
-        # np.save(
-        #     stack_filename, img_stack
-        # )  # or pickle.dump(img_stack, open(stack_filename, "wb"))
+        # Save all items in the dictionary as separate arrays in an NPZ file
+        # np.savez(npz_filename, **data_dict)
+        np.savez_compressed(npz_filename, allow_pickle=True, **data_dict)
 
     def save_spikes_for_cxsystem(
         self,
