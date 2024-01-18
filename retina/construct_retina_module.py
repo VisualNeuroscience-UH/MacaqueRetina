@@ -708,7 +708,7 @@ class ConstructRetina(RetinaMath):
         power_data = data_set_y[data_set_x_index]
 
         # # In linear scale their values are
-        initial_guesses = [30, 0.002, 1.0, 0.04, 500, 30, 0.002]
+        initial_guesses = [3, 0.002, 1.0, 0.04, 500, 30, 0.002]
         # Parameters are log_NL, log_TL, log_HS, log_TS, log_A0, log_M0, log_D.
         log_initial_guesses = [np.log(p) for p in initial_guesses]  # needs to be list
 
@@ -717,10 +717,14 @@ class ConstructRetina(RetinaMath):
         log_frequency_data = np.log(frequency_data)
         log_power_data = np.log(power_data)
 
-        # Ensure no zero or negative values
-        lower_bounds = [1, 1e-6, 1e-6, 1e-6, 1e-6, 1e-6, 1e-6]
-        # Use np.inf if no upper bound is needed
-        upper_bounds = [100, 0.1, 100, 0.1, 1000, 100, 0.1]
+        # # Wide bounds
+        # lower_bounds = [1, 1e-6, 1e-6, 1e-6, 1e-6, 1e-6, 1e-6]
+        # # Use np.inf if no upper bound is needed
+        # upper_bounds = [100, 0.1, 100, 0.1, 1000, 100, 0.1]
+
+        # Tighter bounds
+        lower_bounds = [1, 1e-3, 0.1, 1e-6, 1e-6, 1e-6, 1e-3]
+        upper_bounds = [5, 0.05, 10, 0.05, 800, 50, 0.05]
 
         # Take the log of bounds, except where the upper bound is np.inf
         log_lower_bounds = [np.log(low) for low in lower_bounds]
@@ -740,8 +744,8 @@ class ConstructRetina(RetinaMath):
         gc.cone_noise_parameters = np.exp(popt_log)
 
         self.project_data.construct_retina["cone_noise_vs_freq"] = {
-            "data_all_x": data_set_x,
-            "data_all_y": data_set_y,
+            "data_all_x": frequency_data,
+            "data_all_y": power_data,
             "cone_noise_parameters": gc.cone_noise_parameters,
             "title": "cone_noise_vs_freq, asymmetric concave fit",
         }
