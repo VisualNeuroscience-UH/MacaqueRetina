@@ -1235,10 +1235,10 @@ class Viz:
 
         a = loglog_params[0]
         b = loglog_params[1]
-        
+
         # Calculate the fitted values using the power law relationship
         fitted_y = a * np.power(data_all_x, b)
-        
+
         ax.plot(data_all_x, fitted_y, "k--", label="Log-log fit")
         ax.annotate(
             f"Data loglog fit: \nD={a:.2f} * E^{b:.2f}",
