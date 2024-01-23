@@ -21,6 +21,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.patches import Ellipse, Polygon, Circle
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 
 import seaborn as sns
 
@@ -1856,13 +1857,14 @@ class Viz:
         ecc_lim_mm=None,
         polar_lim_deg=None,
         new_retina=None,
-        init=False,
+        stage="",
         iteration=0,
         um_per_pix=None,
         sidelen=0,
+        savefigname=None,
         **fig_args,
     ):
-        if init is True:
+        if stage == "init":
             boundary_polygon = self.boundary_polygon(
                 ecc_lim_mm, polar_lim_deg, um_per_pix=um_per_pix, sidelen=sidelen
             )
@@ -1885,7 +1887,7 @@ class Viz:
                 "boundary_polygon": boundary_polygon,
             }
 
-        else:
+        elif stage in ["update", "final"]:
             fig = fig_args["fig"]
             ax1 = fig_args["ax1"]
             ax2 = fig_args["ax2"]
@@ -1902,6 +1904,16 @@ class Viz:
             max_val = np.max(reference_retina)
             min_val = np.min(reference_retina)
             ax1.set_title(f"original retina\nmax = {max_val:.2f}\nmin = {min_val:.2f}")
+            ax1.set_xlabel("")
+            ax1.set_ylabel("")
+            ax1.set_xticks([])
+            ax1.set_yticks([])
+
+            if stage == "final":
+                # Colorbar
+                divider = make_axes_locatable(ax1)
+                cax = divider.append_axes("right", size="5%", pad=0.05)
+                plt.colorbar(ax1.imshow(reference_retina), cax=cax)
 
             # Set new data and redraw
             ax2.clear()
@@ -1912,6 +1924,15 @@ class Viz:
             ax2.set_title(
                 f"center mask iteration {iteration}\nmax = {max_val:.2f}\nmin = {min_val:.2f}"
             )
+            ax2.set_xlabel("")
+            ax2.set_ylabel("")
+            ax2.set_xticks([])
+            ax2.set_yticks([])
+            if stage == "final":
+                # Colorbar
+                divider = make_axes_locatable(ax2)
+                cax = divider.append_axes("right", size="5%", pad=0.05)
+                plt.colorbar(ax2.imshow(center_mask), cax=cax)
 
             ax3.clear()
             ax3.add_patch(polygon3)
@@ -1919,7 +1940,16 @@ class Viz:
             max_val = np.max(new_retina)
             min_val = np.min(new_retina)
             ax3_title = f"new retina iteration {iteration}\nmax = {max_val:.2f}\nmin = {min_val:.2f}"
+            ax3.set_xlabel("")
+            ax3.set_ylabel("")
+            ax3.set_xticks([])
+            ax3.set_yticks([])
             ax3.set_title(ax3_title)
+            if stage == "final":
+                # Colorbar
+                divider = make_axes_locatable(ax3)
+                cax = divider.append_axes("right", size="5%", pad=0.05)
+                plt.colorbar(ax3.imshow(new_retina), cax=cax)
 
             if "additional_points" in fig_args:
                 points = fig_args["additional_points"]
@@ -1933,6 +1963,10 @@ class Viz:
             # Redraw and pause
             fig.canvas.draw()
             plt.pause(0.001)
+
+            if stage == "final":
+                if savefigname:
+                    self._figsave(figurename=savefigname)
 
     def show_cones_linked_to_gc(self, gc_list=None, savefigname=None):
         """

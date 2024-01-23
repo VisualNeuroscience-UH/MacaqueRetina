@@ -2402,6 +2402,7 @@ class ConstructRetina(RetinaMath):
         border_repulsion_stength = self.rf_repulsion_params["border_repulsion_stength"]
         cooling_rate = self.rf_repulsion_params["cooling_rate"]
         show_only_unit = self.rf_repulsion_params["show_only_unit"]
+        savefigname = self.rf_repulsion_params["savefigname"]
 
         n_units, H, W = gc.img.shape
         assert H == W, "RF must be square, aborting..."
@@ -2413,7 +2414,7 @@ class ConstructRetina(RetinaMath):
                 np.zeros(img_ret_shape),
                 ecc_lim_mm=ret.ecc_lim_mm,
                 polar_lim_deg=ret.polar_lim_deg,
-                init=True,
+                stage="init",
                 um_per_pix=gc.um_per_pix,
                 sidelen=H,
             )
@@ -2563,14 +2564,23 @@ class ConstructRetina(RetinaMath):
                 for i in range(n_units):
                     center_mask[Yt[i], Xt[i]] += rfs_mask[i]
 
+                if iteration == n_iterations - show_skip_steps:
+                    stage = "final"
+                    _savefigname = savefigname
+                else:
+                    stage = "update"
+                    _savefigname = None
+
                 if iteration % show_skip_steps == 0:
                     self.viz.show_repulsion_progress(
                         reference_retina,
                         center_mask,
                         new_retina=retina_viz,
+                        stage=stage,
                         iteration=iteration,
                         um_per_pix=gc.um_per_pix,
                         sidelen=H,
+                        savefigname=_savefigname,
                         **fig_args,
                     )
 
