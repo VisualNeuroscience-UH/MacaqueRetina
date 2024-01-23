@@ -979,6 +979,8 @@ class WorkingRetina(RetinaMath):
 
     def _generator_to_firing_rate_noise(
         self,
+        cell_indices,
+        n_trials,
         tvec,
         params_all,
         generator_potentials,
@@ -1005,8 +1007,19 @@ class WorkingRetina(RetinaMath):
         ), "Number of cells in params_all and generator_potentials must match, aborting..."
 
         cones_to_gcs_weights = self.cones_to_gcs_weights
-        n_cones = cones_to_gcs_weights.shape[0]
         NL, TL, HS, TS, A0, M0, D = self.cone_noise_parameters
+
+        if n_trials > 1:
+            cones_to_gcs_weights = np.tile(
+                cones_to_gcs_weights[:, cell_indices], (1, n_trials)
+            )
+        elif generator_potentials.shape[0] > 1:
+            cones_to_gcs_weights = cones_to_gcs_weights[:, cell_indices]
+        else:
+            raise ValueError(
+                "Number of cells or number of trials must be 1, aborting..."
+            )
+        n_cones = cones_to_gcs_weights.shape[0]
 
         def _create_cone_noise(tvec, n_cones, NL, TL, HS, TS, A0, M0, D):
             tvec = tvec / b2u.second
@@ -1963,9 +1976,11 @@ class WorkingRetina(RetinaMath):
 
         params_all = self.gc_df.loc[cell_indices]
 
+        # Here we choose between n cells and n trials. One of them must be 1
         firing_rates = self._generator_to_firing_rate_noise(
-            tvec, params_all, generator_potentials
+            cell_indices, n_trials, tvec, params_all, generator_potentials
         )
+        n_cells_or_trials = np.max([n_cells, n_trials])
 
         # Let's interpolate the rate to video_dt intervals
         tvec_original = np.arange(1, self.stimulus_video.video_n_frames + 1) * video_dt
@@ -1998,7 +2013,7 @@ class WorkingRetina(RetinaMath):
             clip_end = refractory_params["clip_end"] * b2u.ms
 
             neuron_group = b2.NeuronGroup(
-                n_cells,
+                n_cells_or_trials,
                 model="""
                 lambda_ttlast = inst_rates(t, i) * dt * w: 1
                 t_diff = clip(t - lastspike - abs_refractory, clip_start, clip_end) : second
@@ -2014,7 +2029,7 @@ class WorkingRetina(RetinaMath):
 
         elif spike_generator_model == "poisson":
             # Create Brian PoissonGroup
-            poisson_group = b2.PoissonGroup(n_cells, rates="inst_rates(t, i)")
+            poisson_group = b2.PoissonGroup(n_cells_or_trials, rates="inst_rates(t, i)")
             spike_monitor = b2.SpikeMonitor(poisson_group)
             net = b2.Network(poisson_group, spike_monitor)
         else:
@@ -2030,38 +2045,40 @@ class WorkingRetina(RetinaMath):
         t_start = []
         t_end = []
 
-        # Run cells in parallel, trials in loop
-        tqdm_desc = "Simulating " + self.response_type + " " + self.gc_type + " mosaic"
-        for trial in tqdm(range(n_trials), desc=tqdm_desc):
-            net.restore()  # Restore the initial state
-            t_start.append(net.t)
-            net.run(duration)
-            t_end.append(net.t)
+        # Run cells/trials in parallel, trials in loop
+        # tqdm_desc = "Simulating " + self.response_type + " " + self.gc_type + " mosaic"
+        # for trial in tqdm(range(n_trials), desc=tqdm_desc):
+        net.restore()  # Restore the initial state
+        t_start.append(net.t)
+        net.run(duration)
+        t_end.append(net.t)
 
-            spiketrains = list(spike_monitor.spike_trains().values())
-            all_spiketrains.extend(spiketrains)
+        spiketrains = list(spike_monitor.spike_trains().values())
+        all_spiketrains.extend(spiketrains)
 
-            # Cxsystem spikemon save natively supports multiple monitors
-            spikemons.append(spike_monitor)
-            spikearrays.append(
-                [
-                    deepcopy(spike_monitor.it[0].__array__()),
-                    deepcopy(spike_monitor.it[1].__array__()),
-                ]
-            )
+        # Cxsystem spikemon save natively supports multiple monitors
+        spikemons.append(spike_monitor)
+        spikearrays.append(
+            [
+                deepcopy(spike_monitor.it[0].__array__()),
+                deepcopy(spike_monitor.it[1].__array__()),
+            ]
+        )
 
         if save_data is True:
             self.w_coord, self.z_coord = self.get_w_z_coords()
             self.data_io.save_spikes_for_cxsystem(
                 spikearrays,
-                n_cells,
+                n_cells_or_trials,
                 self.w_coord,
                 self.z_coord,
                 filename=filename,
                 analog_signal=interpolated_rates_array,
                 dt=simulation_dt,
             )
-            self.data_io.save_spikes_csv(all_spiketrains, n_cells, filename=filename)
+            self.data_io.save_spikes_csv(
+                all_spiketrains, n_cells_or_trials, filename=filename
+            )
             rgc_coords = self.gc_df[["x_deg", "y_deg"]].copy()
             self.data_io.save_structure_csv(rgc_coords, filename=filename)
 
