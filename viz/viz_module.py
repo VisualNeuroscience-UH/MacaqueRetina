@@ -2483,12 +2483,6 @@ class Viz:
         # Update average firing rate calculation based on the new hist_dt
         avg_fr = hist / n_samples / (hist_dt / b2u.second)
 
-        # # Smoothing remains the same
-        # xsmooth = np.arange(-3, 3 + 1)
-        # smoothing = stats.norm.pdf(xsmooth, scale=1)
-        # smoothed_avg_fr = np.convolve(smoothing, avg_fr, mode="same")
-
-        # ax[1].plot(bin_edges[:-1], smoothed_avg_fr, label="Measured")
         ax[1].plot(bin_edges[:-1], avg_fr, label="Measured")
 
         ax[1].set_ylabel("Firing rate (Hz)")
