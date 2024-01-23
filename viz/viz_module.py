@@ -1203,8 +1203,8 @@ class Viz:
                     ha="left",
                     color="k",
                 )
-                # set ylim
-                ax.set_ylim([1, 1000])
+                if log_y:
+                    ax.set_ylim([1, 1000])
 
         # Set x and y axis logarithmic, if called for
         if log_x:
