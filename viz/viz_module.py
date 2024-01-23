@@ -2435,16 +2435,13 @@ class Viz:
         tvec_new = gc_responses_to_show["tvec_new"]
 
         # Prepare data for manual visualization
+        for_eventplot = all_spiketrains  # list of different leght arrays
+        for_histogram = np.concatenate(all_spiketrains)
+        for_generatorplot = np.nanmean(generator_potential, axis=0)
         if n_trials > 1 and n_cells == 1:
-            for_eventplot = all_spiketrains  # list of different leght arrays
-            for_histogram = np.concatenate(all_spiketrains)
-            for_generatorplot = generator_potential.flatten()
             n_samples = n_trials
             sample_name = "Trials"
         elif n_trials == 1 and n_cells > 1:
-            for_eventplot = all_spiketrains
-            for_histogram = np.concatenate(all_spiketrains)
-            for_generatorplot = np.nanmean(generator_potential, axis=0)
             n_samples = n_cells
             sample_name = "Cell #"
         else:
