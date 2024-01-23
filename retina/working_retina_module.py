@@ -955,9 +955,6 @@ class WorkingRetina(RetinaMath):
         # Add delay
         D_tp = torch.round(D / dt).to(dtype=torch.int)
         generator_potential = torch.zeros(len(tvec) + D_tp).to(device)
-
-        # Add gain
-        # generator_potential[D_tp:] = A * yvec
         generator_potential[D_tp:] = yvec
 
         return generator_potential
@@ -1103,9 +1100,7 @@ class WorkingRetina(RetinaMath):
         # Add delay
         D_tp = torch.round(D / dt).to(dtype=torch.int)
         generator_potential = torch.zeros(len(tvec) + D_tp).to(device)
-
-        # Add gain
-        generator_potential[D_tp:] = A * yvec
+        generator_potential[D_tp:] = yvec
 
         return generator_potential
 
