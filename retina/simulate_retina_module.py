@@ -1220,6 +1220,23 @@ class SimulateRetina(RetinaMath):
         # However, we assume that the surround suppression is early (horizontal cells) and linear,
         # so we approximate s(t) = RF * stimulus
         svecs = center_surround_filters_sum
+        fig, ax = plt.subplots(1, 3)
+        # show frames 160, 162 and 163
+        # colorbar
+        im = ax[0].imshow(center_surround_filters[0, :, 160].reshape(43, 43))
+        fig.colorbar(im, ax=ax[0])
+        ax[0].set_title("Frame 160")
+
+        im = ax[1].imshow(center_surround_filters[0, :, 162].reshape(43, 43))
+        fig.colorbar(im, ax=ax[1])
+        ax[1].set_title("Frame 162")
+
+        im = ax[2].imshow(center_surround_filters[0, :, 163].reshape(43, 43))
+        fig.colorbar(im, ax=ax[2])
+        ax[2].set_title("Frame 163")
+        plt.show()
+
+        pdb.set_trace()
         return svecs
 
     def _get_impulse_response(self, cell_index, contrasts_for_impulse, video_dt):
@@ -1848,7 +1865,7 @@ class SimulateRetina(RetinaMath):
 
             # Get generator potentials
             device = self.context.device
-
+            pdb.set_trace()
             # Dummy variables to avoid jump to cpu. Impulse response is called above.
             get_impulse_response = torch.tensor(False, device=device)
             contrasts_for_impulse = torch.tensor([1.0], device=device)
