@@ -215,7 +215,7 @@ my_retina = {
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
-    "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
+    "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies to FIT only, scales sum(unit center areas) = retina area
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
@@ -282,20 +282,20 @@ my_stimulus_options = {
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
     "fps": 300,  # 300 for good cg integration
-    "duration_seconds": 1,  # actual frames = floor(duration_seconds * fps)
+    "duration_seconds": 2,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
-    "pattern": "temporal_square_pattern",  # One of the StimulusPatterns
+    "pattern": "sine_grating",  # One of the StimulusPatterns square_grating sine_grating
     "stimulus_form": "rectangular",
     "size_inner": 0.1,  # deg, Applies to annulus only
     "size_outer": 1,  # deg, Applies to annulus only
     "stimulus_position": (0.0, 0.0),
-    "stimulus_size": 2,  # 0.04,  # 2,  # deg, radius for circle, sidelen/2 for rectangle.
+    "stimulus_size": 1,  # 0.04,  # 2,  # deg, radius for circle, sidelen/2 for rectangle.
     "background": 128,
     "contrast": 0.95,  # Weber constrast
     "mean": 128,
-    "temporal_frequency": 0.1,  # 0.01,  # 4.0,  # 40,  # Hz
-    "spatial_frequency": 2.0,  # cpd
+    "temporal_frequency": 4.0,  # 0.01,  # 4.0,  # 40,  # Hz
+    "spatial_frequency": 5.0,  # cpd
     "orientation": 0,  # degrees
     "phase_shift": 0,  # math.pi,  # radians
     "stimulus_video_name": f"{stimulus_folder}.mp4",
@@ -319,7 +319,7 @@ my_run_options = {
     "n_trials": 1,  # For each of the response files
     # "cell_index": 2,  # list of ints or None for all cells
     # "n_trials": 10,  # For each of the response files
-    "spike_generator_model": "poisson",  # poisson or refractory
+    "spike_generator_model": "refractory",  # poisson or refractory
     "save_data": True,
     "gc_response_filenames": [f"gc_response_{x:02}" for x in range(n_files)],
     "simulation_dt": 0.0001,  # in sec 0.001 = 1 ms
@@ -381,7 +381,7 @@ cone_general_params = {
     "cone2gc_midget": 9,  # um, 1 SD of Gaussian
     "cone2gc_parasol": 27,  # um 27
     "cone2gc_cutoff_SD": 1,  # 3 SD is 99.7% of Gaussian
-    "cone_noise_magnitude": 1,  # Relative amplitude, 0 for no noise
+    "cone_noise_magnitude": 0,  # Relative amplitude, 0 for no noise
 }
 
 # Recovery function from Berry_1998_JNeurosci, Uzzell_2004_JNeurophysiol
@@ -418,7 +418,7 @@ gc_placement_params = {
 }
 
 cone_placement_params = {
-    "algorithm": "force",  # "voronoi" or "force" or None
+    "algorithm": None,  # "voronoi" or "force" or None
     "n_iterations": 300,  # v 20, f 300
     "change_rate": 0.0005,  # f 0.0005, v 0.5
     "unit_repulsion_stregth": 2,  # 10 f only
@@ -432,7 +432,7 @@ cone_placement_params = {
 
 # For VAE, this is enough to have good distribution between units.
 rf_repulsion_params = {
-    "n_iterations": 200,
+    "n_iterations": 1,  # 200
     "change_rate": 0.01,
     "cooling_rate": 0.999,  # each iteration change_rate = change_rate * cooling_rate
     "border_repulsion_stength": 5,
@@ -637,7 +637,7 @@ if __name__ == "__main__":
     # in the retina mosaic building process.
 
     # For FIT and VAE
-    # PM.viz.show_cones_linked_to_gc(gc_list=[10], savefigname="cones_linked_to_gc.svg")
+    # PM.viz.show_cones_linked_to_gc(gc_list=[10], savefigname=None)
     # PM.viz.show_cones_linked_to_gc(gc_list=[32, 58, 63, 67, 6], savefigname=None)
     # PM.viz.show_unit_density_vs_ecc(unit_type="cone", savefigname=None)  # gc or cone
 
@@ -682,8 +682,8 @@ if __name__ == "__main__":
     ### Create stimulus ###
     ########################
 
-    # # Based on my_stimulus_options above
-    # PM.stimulate.make_stimulus_video()
+    # Based on my_stimulus_options above
+    PM.stimulate.make_stimulus_video()
 
     ####################################
     ### Run multiple trials or cells ###
@@ -738,14 +738,14 @@ if __name__ == "__main__":
     ################################################
 
     # Based on my_run_options above
-    PM.viz.show_all_gc_responses(savefigname="midget_on_sine.eps")
+    PM.viz.show_all_gc_responses(savefigname=None)
 
-    # PM.viz.show_stimulus_with_gcs(
-    #     example_gc=[9],  # [int,], my_run_options["cell_index"]
-    #     frame_number=301,  # depends on fps, and video and baseline lengths
-    #     show_rf_id=True,
-    #     savefigname=None,
-    # )
+    PM.viz.show_stimulus_with_gcs(
+        example_gc=24,  # [int,], my_run_options["cell_index"]
+        frame_number=301,  # depends on fps, and video and baseline lengths
+        show_rf_id=False,
+        savefigname=None,
+    )
 
     #################################################################
     #################################################################
