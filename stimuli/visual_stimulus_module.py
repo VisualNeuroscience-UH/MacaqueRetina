@@ -139,84 +139,86 @@ class VideoBaseClass(object):
         # Return
         self.frames = frames.astype(np.uint8)
 
-    def _prepare_grating(self):
-        """Create temporospatial grating"""
+    def _prepare_grating(self, grating_type="sine"):
+        """Create temporospatial grating based on specified grating type."""
 
-        spatial_frequency = self.options["spatial_frequency"]
-        temporal_frequency = self.options["temporal_frequency"]
+        # Common setup for both grating types
+        spatial_frequency = self.options.get("spatial_frequency", 1)
+        temporal_frequency = self.options.get("temporal_frequency", 1)
         fps = self.options["fps"]
         duration_seconds = self.options["duration_seconds"]
         orientation = self.options["orientation"]
-
-        if not spatial_frequency:
-            print("Spatial_frequency missing, setting to 1")
-            spatial_frequency = 1
-        if not temporal_frequency:
-            print("Temporal_frequency missing, setting to 1")
-            temporal_frequency = 1
-
-        # Create sine wave
-        one_cycle = 2 * np.pi
-        cycles_per_degree = spatial_frequency
-        # image_width_in_degrees = self.options["image_width_in_deg"]
         image_width = self.options["image_width"]
         image_height = self.options["image_height"]
         image_width_in_degrees = image_width / self.options["pix_per_deg"]
-
-        # Calculate larger image size to allow rotations
         diameter = np.ceil(np.sqrt(image_height**2 + image_width**2)).astype(
             np.uint32
         )
         image_width_diameter = diameter
         image_height_diameter = diameter
-        image_width_diameter_in_degrees = (
-            image_width_diameter / self.options["pix_per_deg"]
-        )
+        n_frames = int(fps * duration_seconds)
+        self.frames = np.zeros((n_frames, image_height_diameter, image_width_diameter))
 
-        # Draw temporospatial grating
-        # NB! one_cycle * cycles_per_degree needs to be multiplied with the scaled width to have
-        # the desired number of cpd in output image
-        image_position_vector = np.linspace(
-            0,
-            one_cycle * cycles_per_degree * image_width_diameter_in_degrees,
-            image_width_diameter,
-        )
-        n_frames = self.frames.shape[0]
+        # Specific part for sine grating
+        if grating_type == "sine":
+            one_cycle = 2 * np.pi
+            cycles_per_degree = spatial_frequency
+            image_position_vector = np.linspace(
+                0,
+                one_cycle
+                * cycles_per_degree
+                * image_width_diameter
+                / self.options["pix_per_deg"],
+                image_width_diameter,
+            )
+            large_frames = np.tile(
+                image_position_vector, (image_height_diameter, n_frames, 1)
+            )
+            large_frames = np.moveaxis(large_frames, 1, 0)
+            temporal_shift_vector = np.linspace(
+                0,
+                temporal_frequency * one_cycle * duration_seconds
+                - (temporal_frequency * one_cycle) / fps,
+                n_frames,
+            )
+            large_frames += temporal_shift_vector[:, np.newaxis, np.newaxis]
+            self.frames = large_frames
+            # Turn to sine values
+            self.frames = np.sin(self.frames + self.options["phase_shift"])
 
-        # Recycling large_frames and self.frames below, instead of descriptive variable names for the evolving video, saves a lot of memory
-        # Create large 3D frames array covering the most distant corner when rotated
-        large_frames = np.tile(
-            image_position_vector, (image_height_diameter, n_frames, 1)
-        )
-        # Correct dimensions to image[0,1] and time[2]: OLD
-        # Correct dimensions to time[0] and image[1,2]: NEW
-        large_frames = np.moveaxis(large_frames, 1, 0)
-        total_temporal_shift = temporal_frequency * one_cycle * duration_seconds
-        one_frame_temporal_shift = (temporal_frequency * one_cycle) / fps
-        temporal_shift_vector = np.linspace(
-            0, total_temporal_shift - one_frame_temporal_shift, n_frames
-        )
-        assert (
-            len(temporal_shift_vector) == n_frames
-        ), "Temporal shift vector length does not match number of frames, aborting..."
-        # Shift grating phase in time. Broadcasting temporal vector automatically to correct dimension.
-        large_frames = large_frames + temporal_shift_vector[:, np.newaxis, np.newaxis]
+        # Specific part for square grating
+        elif grating_type == "square":
+            # n_cycles = spatial_frequency * image_width_in_degrees
+            cycle_width_pix = self.options["pix_per_deg"] / spatial_frequency
 
-        # Rotate to desired orientation
-        large_frames = ndimage.rotate(
-            large_frames, orientation, axes=(2, 1), reshape=False
-        )
+            phase_shift_in_pixels = cycle_width_pix * (
+                self.options["phase_shift"] / (2 * np.pi)
+            )
 
-        # Cut back to original image dimensions
-        marginal_height = (diameter - image_height) / 2
-        marginal_width = (diameter - image_width) / 2
-        marginal_height = np.round(marginal_height).astype(np.uint)
-        marginal_width = np.round(marginal_width).astype(np.uint)
-        self.frames = large_frames[
+            # X coords refects luminance values, % 2 < 1 is white, % 2 > 1 is black
+            bar_coords = np.arange(image_width_diameter) / (cycle_width_pix / 2)
+            # Apply the phase shift in the square grating calculation
+            for frame in range(n_frames):
+                temporal_shift = cycle_width_pix * temporal_frequency * frame / fps
+                relative_bar_coords = (
+                    bar_coords
+                    + ((temporal_shift + phase_shift_in_pixels) / (cycle_width_pix / 2))
+                ) % 2
+                self.frames[frame] = np.where(relative_bar_coords < 1, 1, -1)
+
+        # Common post-processing: Rotate and cut to original dimensions
+        for frame in range(n_frames):
+            self.frames[frame] = ndimage.rotate(
+                self.frames[frame], orientation, reshape=False
+            )
+        marginal_height = (diameter - image_height) // 2
+        marginal_width = (diameter - image_width) // 2
+        self.frames = self.frames[
             :, marginal_height:-marginal_height, marginal_width:-marginal_width
         ]
-        # remove rounding error
-        self.frames = self.frames[:, 0:image_height, 0:image_width]
+
+        # Set raw_intensity to [-1 1]
+        self.options["raw_intensity"] = (-1, 1)
 
     def _prepare_form(self, stimulus_size):
         center_deg = self.options["stimulus_position"]  # in degrees
@@ -367,41 +369,17 @@ class StimulusPattern:
         range of the stimulus pattern to [-1, 1].
         """
 
-        # Create temporospatial grating
-        self._prepare_grating()
+        self._prepare_grating(grating_type="sine")
 
         # Turn to sine values
         self.frames = np.sin(self.frames + self.options["phase_shift"])
-
-        # Set raw_intensity to [-1 1]
-        self.options["raw_intensity"] = (-1, 1)
 
     def square_grating(self):
         """
         Create a square wave grating stimulus pattern.
-
-        This method converts the sine grating into a square wave grating using a
-        thresholding process. The method sets the raw intensity range of the
-        stimulus pattern to [-1, 1] and applies a threshold at zero to create the
-        square wave effect.
-
-        Threshold can be adjusted between [-1, 1] for uneven grating patterns.
         """
 
-        # Create temporospatial grating
-        self._prepare_grating()
-
-        # Turn to sine values
-        self.frames = np.sin(self.frames + self.options["phase_shift"])
-
-        # Set raw_intensity to [-1 1]
-        self.options["raw_intensity"] = (-1, 1)
-
-        # Turn to square grating values, threshold at zero.
-        threshold = (
-            0  # Change this between [-1 1] if you want uneven grating. Default is 0
-        )
-        self.frames = (self.frames > threshold) * self.frames / self.frames * 2 - 1
+        self._prepare_grating(grating_type="square")
 
     def white_gaussian_noise(self):
         """
