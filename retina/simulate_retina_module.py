@@ -1008,17 +1008,11 @@ class SimulateRetina(RetinaMath):
         cones_to_gcs_weights = self.cones_to_gcs_weights
         NL, TL, HS, TS, A0, M0, D = self.cone_noise_parameters
 
-        if n_trials > 1:
-            cones_to_gcs_weights = np.tile(
-                cones_to_gcs_weights[:, cell_indices], (1, n_trials)
-            )
-        elif generator_potentials.shape[0] > 1:
-            cones_to_gcs_weights = cones_to_gcs_weights[:, cell_indices]
-        else:
-            raise ValueError(
-                "Number of cells or number of trials must be 1, aborting..."
-            )
+        cones_to_gcs_weights = cones_to_gcs_weights[:, cell_indices]
         n_cones = cones_to_gcs_weights.shape[0]
+
+        # Normalize weights by columns (ganglion cells)
+        weights_norm = cones_to_gcs_weights / np.sum(cones_to_gcs_weights, axis=0)
 
         def _create_cone_noise(tvec, n_cones, NL, TL, HS, TS, A0, M0, D):
             tvec = tvec / b2u.second
@@ -1036,18 +1030,27 @@ class SimulateRetina(RetinaMath):
             )
 
             noise_fft = noise_fft * asymmetric_scale[:, np.newaxis]
-            # noise_fft_mean = np.mean(np.abs(noise_fft), axis=1)
+
             # Transform back to time domain
             cone_noise = np.real(fftpack.ifft(noise_fft, axis=0))
 
             return cone_noise
 
-        cone_noise = _create_cone_noise(tvec, n_cones, NL, TL, HS, TS, A0, M0, D)
-
-        # Normalize weights by columns (ganglion cells)
-        weights_norm = cones_to_gcs_weights / np.sum(cones_to_gcs_weights, axis=0)
-
-        gc_noise = cone_noise @ weights_norm
+        # Make independent cone noise for multiple trials
+        if n_trials > 1:
+            for trial in range(n_trials):
+                cone_noise = _create_cone_noise(
+                    tvec, n_cones, NL, TL, HS, TS, A0, M0, D
+                )
+                if trial == 0:
+                    gc_noise = cone_noise @ weights_norm
+                else:
+                    gc_noise = np.concatenate(
+                        (gc_noise, cone_noise @ weights_norm), axis=1
+                    )
+        elif generator_potentials.shape[0] > 1:
+            cone_noise = _create_cone_noise(tvec, n_cones, NL, TL, HS, TS, A0, M0, D)
+            gc_noise = cone_noise @ weights_norm
 
         # Normalize noise to have unit variance
         gc_noise_norm = gc_noise / np.std(gc_noise, axis=0)
@@ -1220,23 +1223,7 @@ class SimulateRetina(RetinaMath):
         # However, we assume that the surround suppression is early (horizontal cells) and linear,
         # so we approximate s(t) = RF * stimulus
         svecs = center_surround_filters_sum
-        fig, ax = plt.subplots(1, 3)
-        # show frames 160, 162 and 163
-        # colorbar
-        im = ax[0].imshow(center_surround_filters[0, :, 160].reshape(43, 43))
-        fig.colorbar(im, ax=ax[0])
-        ax[0].set_title("Frame 160")
 
-        im = ax[1].imshow(center_surround_filters[0, :, 162].reshape(43, 43))
-        fig.colorbar(im, ax=ax[1])
-        ax[1].set_title("Frame 162")
-
-        im = ax[2].imshow(center_surround_filters[0, :, 163].reshape(43, 43))
-        fig.colorbar(im, ax=ax[2])
-        ax[2].set_title("Frame 163")
-        plt.show()
-
-        pdb.set_trace()
         return svecs
 
     def _get_impulse_response(self, cell_index, contrasts_for_impulse, video_dt):
@@ -1865,7 +1852,7 @@ class SimulateRetina(RetinaMath):
 
             # Get generator potentials
             device = self.context.device
-            pdb.set_trace()
+
             # Dummy variables to avoid jump to cpu. Impulse response is called above.
             get_impulse_response = torch.tensor(False, device=device)
             contrasts_for_impulse = torch.tensor([1.0], device=device)
