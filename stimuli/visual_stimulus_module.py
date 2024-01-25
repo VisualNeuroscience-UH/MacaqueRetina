@@ -1073,7 +1073,7 @@ class AnalogInput:
 
         assert Nx != 0, "N units not set, aborting..."
 
-        # Initialize WorkingRetina
+        # Initialize SimulateRetina
         self.wr_initialize()
         w_coord, z_coord = self.get_w_z_coords()
 

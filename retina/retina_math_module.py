@@ -95,7 +95,7 @@ class RetinaMath:
 
         return diameters
 
-    # RetinaConstruction & WorkingRetina methods
+    # RetinaConstruction & SimulateRetina methods
     def pol2cart_df(self, df):
         """
         Convert retinal positions (eccentricity, polar angle) to visual space positions in degrees (x, y).
@@ -161,7 +161,7 @@ class RetinaMath:
 
         return np.array(masks)
 
-    # WorkingRetina methods
+    # SimulateRetina methods
     def pol2cart(self, radius, phi, deg=True):
         """
         Converts polar coordinates to Cartesian coordinates
@@ -401,7 +401,7 @@ class RetinaMath:
 
         return spatial_rf
 
-    # Fit & WorkingRetina method
+    # Fit & SimulateRetina method
     def DoG2D_fixed_surround(
         self,
         xy_tuple,

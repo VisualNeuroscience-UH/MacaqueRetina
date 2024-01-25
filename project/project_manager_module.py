@@ -6,7 +6,7 @@ from data_io.data_io_module import DataIO
 from analysis.analysis_module import Analysis
 from viz.viz_module import Viz
 from retina.construct_retina_module import ConstructRetina
-from retina.working_retina_module import WorkingRetina, NaturalStimuliConeFilter
+from retina.working_retina_module import SimulateRetina, PreGCProcessing
 from retina.retina_math_module import RetinaMath
 from retina.fit_module import Fit
 from stimuli.visual_stimulus_module import VisualStimulus, AnalogInput
@@ -48,7 +48,7 @@ class ProjectData:
 
     def __init__(self) -> None:
         self.construct_retina = {}
-        self.working_retina = {}
+        self.simulate_retina = {}
         self.fit = {}
 
 
@@ -78,7 +78,7 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         data_io = DataIO(context)
         self.data_io = data_io
 
-        cones = NaturalStimuliConeFilter(context, data_io)
+        cones = PreGCProcessing(context, data_io)
         self.cones = cones
 
         project_data = ProjectData()
@@ -130,20 +130,22 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         )
         self.viz.construct_retina = self.construct_retina
 
-        self.working_retina = WorkingRetina(context, data_io, cones, viz, project_data)
-        # self.viz.working_retina = self.working_retina
+        self.simulate_retina = SimulateRetina(
+            context, data_io, cones, viz, project_data
+        )
+        # self.viz.simulate_retina = self.simulate_retina
 
         experiment = Experiment(context, data_io)
         self.experiment = experiment
         self.experiment.stimulate = stimulate
-        self.experiment.working_retina = self.working_retina
+        self.experiment.simulate_retina = self.simulate_retina
 
         analog_input = AnalogInput(
             context,
             data_io,
             viz,
-            wr_initialize=self.working_retina._initialize,
-            get_w_z_coords=self.working_retina.get_w_z_coords,
+            wr_initialize=self.simulate_retina._initialize,
+            get_w_z_coords=self.simulate_retina.get_w_z_coords,
         )
 
         self.analog_input = analog_input
@@ -191,16 +193,16 @@ class ProjectManager(ProjectBase, ProjectUtilities):
             )
 
     @property
-    def working_retina(self):
+    def simulate_retina(self):
         return self._working_retina
 
-    @working_retina.setter
-    def working_retina(self, value):
-        if isinstance(value, WorkingRetina):
+    @simulate_retina.setter
+    def simulate_retina(self, value):
+        if isinstance(value, SimulateRetina):
             self._working_retina = value
         else:
             raise AttributeError(
-                "Trying to set improper working_retina. working_retina must be a WorkingRetina instance."
+                "Trying to set improper simulate_retina. simulate_retina must be a SimulateRetina instance."
             )
 
     @property

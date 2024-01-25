@@ -43,7 +43,7 @@ class Viz:
     """
     Methods to viz_module the retina
 
-    Some methods import object instance as call parameter (ConstructRetina, WorkingRetina, etc).
+    Some methods import object instance as call parameter (ConstructRetina, SimulateRetina, etc).
     """
 
     cmap = "gist_earth"  # viridis or cividis would be best for color-blind
@@ -2085,7 +2085,7 @@ class Viz:
         if savefigname:
             self._figsave(figurename=savefigname)
 
-    # WorkingRetina visualization
+    # SimulateRetina visualization
     def show_stimulus_with_gcs(
         self,
         frame_number=0,
@@ -2095,7 +2095,7 @@ class Viz:
         savefigname=None,
     ):
         """
-        Plots the 1SD ellipses of the RGC mosaic. This method is a WorkingRetina call.
+        Plots the 1SD ellipses of the RGC mosaic. This method is a SimulateRetina call.
 
         Parameters
         ----------
@@ -2110,7 +2110,7 @@ class Viz:
         show_rf_id : bool, optional
             If True, the index of each ganglion cell will be printed at the center of its ellipse. Default is False..
         """
-        stim_to_show = self.project_data.working_retina["stim_to_show"]
+        stim_to_show = self.project_data.simulate_retina["stim_to_show"]
 
         stimulus_video = stim_to_show["stimulus_video"]
         gc_df_stimpix = stim_to_show["gc_df_stimpix"]
@@ -2211,7 +2211,7 @@ class Viz:
             Matplotlib Axes object to plot on. If not provided, uses the current axis.
         """
 
-        stim_to_show = self.project_data.working_retina["stim_to_show"]
+        stim_to_show = self.project_data.simulate_retina["stim_to_show"]
         stimulus_video = stim_to_show["stimulus_video"]
         gc_df_stimpix = stim_to_show["gc_df_stimpix"]
         qmin_all, qmax_all, rmin_all, rmax_all = stim_to_show["qr_min_max"]
@@ -2271,7 +2271,7 @@ class Viz:
             self.context.my_retina["temporal_model"] == "fixed"
         ), "No fixed temporal filter for dynamic temporal model, aborting..."
 
-        spat_temp_filter_to_show = self.project_data.working_retina[
+        spat_temp_filter_to_show = self.project_data.simulate_retina[
             "spat_temp_filter_to_show"
         ]
         temporal_filters = spat_temp_filter_to_show["temporal_filters"]
@@ -2308,7 +2308,7 @@ class Viz:
             Matplotlib Axes object to plot on. If not provided, uses the current axis.
 
         """
-        stim_to_show = self.project_data.working_retina["stim_to_show"]
+        stim_to_show = self.project_data.simulate_retina["stim_to_show"]
         spatial_filter_sidelen = stim_to_show["spatial_filter_sidelen"]
         stimulus_video = stim_to_show["stimulus_video"]
         stimulus_cropped_all = stim_to_show["stimulus_cropped"]
@@ -2340,7 +2340,7 @@ class Viz:
         ax : matplotlib.axes.Axes, optional
             Matplotlib Axes object to plot on. If not provided, uses the current axis.
         """
-        stim_to_show = self.project_data.working_retina["stim_to_show"]
+        stim_to_show = self.project_data.simulate_retina["stim_to_show"]
         stimulus_cropped_all = stim_to_show["stimulus_cropped"]
         stimulus_cropped = stimulus_cropped_all[cell_index]
         stimulus_video = stim_to_show["stimulus_video"]
@@ -2380,7 +2380,7 @@ class Viz:
         ax : matplotlib.axes.Axes, optional
             Matplotlib Axes object to plot on. If not provided, uses the current axis.
         """
-        stim_to_show = self.project_data.working_retina["stim_to_show"]
+        stim_to_show = self.project_data.simulate_retina["stim_to_show"]
         stimulus_cropped_all = stim_to_show["stimulus_cropped"]
         stimulus_cropped = stimulus_cropped_all[cell_index]
         stimulus_video = stim_to_show["stimulus_video"]
@@ -2412,7 +2412,7 @@ class Viz:
 
     def show_all_gc_responses(self, savefigname=None):
         """
-        Visualize ganglion cell (gc) responses based on the data in the WorkingRetina object.
+        Visualize ganglion cell (gc) responses based on the data in the SimulateRetina object.
 
         Parameters
         ----------
@@ -2421,11 +2421,11 @@ class Viz:
 
         Attributes Accessed
         --------------------
-        project_data.working_retina : dict
+        project_data.simulate_retina : dict
             Dictionary attached to ProjectData class instance containing the gc responses
             and other information to show.
         """
-        gc_responses_to_show = self.project_data.working_retina["gc_responses_to_show"]
+        gc_responses_to_show = self.project_data.simulate_retina["gc_responses_to_show"]
         n_trials = gc_responses_to_show["n_trials"]
         n_cells = gc_responses_to_show["n_cells"]
         all_spiketrains = gc_responses_to_show["all_spiketrains"]
@@ -2494,7 +2494,7 @@ class Viz:
         Display the spatiotemporal filter for a given cell in the retina.
 
         This method retrieves the specified cell's spatial and temporal filters
-        from the 'working_retina' attribute of the 'project_data' object.
+        from the 'simulate_retina' attribute of the 'project_data' object.
 
         Parameters
         ----------
@@ -2508,7 +2508,7 @@ class Viz:
             self.context.my_retina["temporal_model"] == "fixed"
         ), "No fixed temporal filter for dynamic temporal model, aborting..."
 
-        spat_temp_filter_to_show = self.project_data.working_retina[
+        spat_temp_filter_to_show = self.project_data.simulate_retina[
             "spat_temp_filter_to_show"
         ]
         spatial_filters = spat_temp_filter_to_show["spatial_filters"]
@@ -2558,7 +2558,7 @@ class Viz:
             self._figsave(figurename=savefigname)
 
     def show_impulse_response(self, savefigname=None):
-        viz_dict = self.project_data.working_retina["impulse_to_show"]
+        viz_dict = self.project_data.simulate_retina["impulse_to_show"]
 
         tvec = viz_dict["tvec"]  # in seconds
         svec = viz_dict["svec"]
@@ -2621,7 +2621,7 @@ class Viz:
             The filename for saving the figure. If None, the figure is not saved.
         """
 
-        uniformify_data = self.project_data.working_retina["uniformify_data"]
+        uniformify_data = self.project_data.simulate_retina["uniformify_data"]
         uniformify_index = uniformify_data["uniformify_index"]
         total_region = uniformify_data["total_region"]
         unity_region = uniformify_data["unity_region"]
@@ -2646,7 +2646,7 @@ class Viz:
     # Cone filtering (natural images and videos) and cone noise visualization
     def show_cone_filter_response(self, image, image_after_optics, cone_response):
         """
-        NaturalStimuliConeFilter call.
+        PreGCProcessing call.
         """
         fig, ax = plt.subplots(nrows=2, ncols=3)
         axs = ax.ravel()

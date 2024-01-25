@@ -215,7 +215,7 @@ my_retina = {
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
-    "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder
+    "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies to FIT only, scales sum(unit center areas) = retina area
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
@@ -277,7 +277,7 @@ the median is removed to get the zero level to approximately match the original 
 """
 
 my_stimulus_options = {
-    # Shared btw stimulus and working_retina
+    # Shared btw stimulus and simulate_retina
     "image_width": 240,  # 752 for nature1.avi
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
@@ -285,7 +285,7 @@ my_stimulus_options = {
     "duration_seconds": 1,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
-    "pattern": "sine_grating",  # One of the StimulusPatterns
+    "pattern": "temporal_square_pattern",  # One of the StimulusPatterns
     "stimulus_form": "rectangular",
     "size_inner": 0.1,  # deg, Applies to annulus only
     "size_outer": 1,  # deg, Applies to annulus only
@@ -294,7 +294,7 @@ my_stimulus_options = {
     "background": 128,
     "contrast": 0.95,  # Weber constrast
     "mean": 128,
-    "temporal_frequency": 4.0,  # 0.01,  # 4.0,  # 40,  # Hz
+    "temporal_frequency": 0.1,  # 0.01,  # 4.0,  # 40,  # Hz
     "spatial_frequency": 2.0,  # cpd
     "orientation": 0,  # degrees
     "phase_shift": 0,  # math.pi,  # radians
@@ -627,7 +627,7 @@ if __name__ == "__main__":
     Build and test your retina here, one gc type at a time. 
     """
 
-    # PM.construct_retina.build()  # Main method for building the retina
+    PM.construct_retina.build()  # Main method for building the retina
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # Thus, they are called after the retina is built.
@@ -689,9 +689,9 @@ if __name__ == "__main__":
     ### Run multiple trials or cells ###
     ####################################
 
-    # # Load stimulus to get working retina, necessary for running cells
-    # PM.working_retina.load_stimulus()
-    # PM.working_retina.run_with_my_run_options()
+    # Load stimulus to get working retina, necessary for running cells
+    PM.simulate_retina.load_stimulus()
+    PM.simulate_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
@@ -710,7 +710,7 @@ if __name__ == "__main__":
 
     # # Contrast applies only for parasol cells with dynamic model, use [1.0] for others
     # contrasts_for_impulse = [0.01, 1.0]
-    # PM.working_retina.run_cells(
+    # PM.simulate_retina.run_cells(
     #     cell_index=[16],  # list of ints
     #     get_impulse_response=True,  # Return with impulse response
     #     contrasts_for_impulse=contrasts_for_impulse,  # List of contrasts
@@ -718,7 +718,7 @@ if __name__ == "__main__":
     # savename = (
     #     f"{gc_type}_{response_type}_{my_retina['temporal_model']}_impulse" + ".eps"
     # )
-    # # The PM.working_retina load_stimulus and run_cells must be active for impulse response viz
+    # # The PM.simulate_retina load_stimulus and run_cells must be active for impulse response viz
     # PM.viz.show_impulse_response(savefigname=None)
 
     ##########################################
@@ -726,9 +726,9 @@ if __name__ == "__main__":
     ##########################################
 
     # # Get uniformity data and exit
-    # PM.working_retina.run_cells(get_uniformity_data=True)
+    # PM.simulate_retina.run_cells(get_uniformity_data=True)
     # savename = f"{gc_type}_{response_type}_{my_retina['spatial_model']}_unity" + ".eps"
-    # # The PM.working_retina load_stimulus and run_cells with option
+    # # The PM.simulate_retina load_stimulus and run_cells with option
     # # get_uniformity_data=True must be active for unity viz
     # PM.viz.show_unity(savefigname=None)
 
@@ -737,8 +737,8 @@ if __name__ == "__main__":
     ###   or multiple cells for single trial     ###
     ################################################
 
-    # # Based on my_run_options above
-    # PM.viz.show_all_gc_responses(savefigname="midget_on_sine.eps")
+    # Based on my_run_options above
+    PM.viz.show_all_gc_responses(savefigname="midget_on_sine.eps")
 
     # PM.viz.show_stimulus_with_gcs(
     #     example_gc=[9],  # [int,], my_run_options["cell_index"]

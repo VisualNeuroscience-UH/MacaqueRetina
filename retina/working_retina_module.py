@@ -39,7 +39,7 @@ import time
 b2.prefs["logging.display_brian_error_message"] = False
 
 
-class WorkingRetina(RetinaMath):
+class SimulateRetina(RetinaMath):
     def __init__(self, context, data_io, cones, viz, project_data) -> None:
         self._context = context.set_context(self)
         self._data_io = data_io
@@ -1408,7 +1408,7 @@ class WorkingRetina(RetinaMath):
             Visual stimulus to project to the ganglion cell mosaic
         """
 
-        # Set basic working_retina attributes
+        # Set basic simulate_retina attributes
         if self.initialized is False:
             self._initialize()
 
@@ -1781,7 +1781,7 @@ class WorkingRetina(RetinaMath):
             impulse_to_show = self._get_impulse_response(
                 cell_index, contrasts_for_impulse, video_dt
             )
-            self.project_data.working_retina["impulse_to_show"] = impulse_to_show
+            self.project_data.simulate_retina["impulse_to_show"] = impulse_to_show
             return
 
         cell_indices = np.atleast_1d(cell_indices)
@@ -1796,7 +1796,7 @@ class WorkingRetina(RetinaMath):
         if get_uniformity_data is True:
             uniformify_data = self._get_uniformity_index(cell_indices, center_masks)
             uniformify_data["mask_threshold"] = mask_threshold
-            self.project_data.working_retina["uniformify_data"] = uniformify_data
+            self.project_data.simulate_retina["uniformify_data"] = uniformify_data
             return
 
         # Get spatial filters
@@ -2104,8 +2104,8 @@ class WorkingRetina(RetinaMath):
         }
 
         # Attach data requested by other classes to project_data
-        self.project_data.working_retina["stim_to_show"] = stim_to_show
-        self.project_data.working_retina["gc_responses_to_show"] = gc_responses_to_show
+        self.project_data.simulate_retina["stim_to_show"] = stim_to_show
+        self.project_data.simulate_retina["gc_responses_to_show"] = gc_responses_to_show
 
         if self.temporal_model == "fixed":
             spat_temp_filter_to_show = {
@@ -2118,7 +2118,7 @@ class WorkingRetina(RetinaMath):
                 "temporal_model": self.temporal_model,
                 "spatial_filter_sidelen": self.spatial_filter_sidelen,
             }
-            self.project_data.working_retina[
+            self.project_data.simulate_retina[
                 "spat_temp_filter_to_show"
             ] = spat_temp_filter_to_show
 
@@ -2146,9 +2146,9 @@ class WorkingRetina(RetinaMath):
             )
 
 
-class NaturalStimuliConeFilter:
+class PreGCProcessing:
     """
-    NaturalStimuliConeFilter is with WorkingRetina, because the latter needs the cone filtering for natural stimuli
+    PreGCProcessing is with SimulateRetina, because the latter needs the cone filtering for natural stimuli
     (optical aberration and nonlinear luminance response).
     """
 
