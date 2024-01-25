@@ -4,7 +4,7 @@ from argparse import ArgumentError
 import copy
 import pdb
 import sys
-import timeit
+import time
 
 
 # Analysis
@@ -234,22 +234,57 @@ class ProjectUtilities:
 
         return lines
 
-    def time_function(func):
-        """Decorator to time a function."""
-
+    def timing_decorator(func):
         def wrapper(*args, **kwargs):
-            # Start the timer
-            start_time = timeit.default_timer()
+            start = time.time()
+            result = func(*args, **kwargs)
+            end = time.time()
+            print(f"\nDECORATOR: {func.__name__} took {end - start} seconds to run.\n")
+            return result
 
-            # Call the function
+        return wrapper
+
+    def print_decorator(func):
+        def wrapper(*args, **kwargs):
+            result = func(*args, **kwargs)
+            # Iterate over result variables
+            for i, this_result in enumerate(result):
+                print(f"\nDECORATOR: {func.__name__} returned {this_result}")
+            print("\n")
+            return result
+
+        return wrapper
+
+    def print_shape_decorator(func):
+        def wrapper(*args, **kwargs):
             result = func(*args, **kwargs)
 
-            # End the timer
-            end_time = timeit.default_timer()
+            # Check if the result is a single NumPy array
+            if isinstance(result, np.ndarray):
+                print(f"\nDECORATOR: {func.__name__} returned shape {result.shape}")
+            else:
+                # If not, iterate over result variables
+                for i, this_result in enumerate(result):
+                    if isinstance(this_result, np.ndarray):
+                        print(
+                            f"\nDECORATOR: {func.__name__} returned {this_result.shape}"
+                        )
 
-            # Calculate the total time taken
-            time_taken = end_time - start_time
-            print(f"Function {func.__name__} took {time_taken} seconds to complete.")
+            print("\n")
+            return result
+
+        return wrapper
+
+    def cache_decorator(func):
+        # Note that this can work only with functional/non-OOP style methods (no self use/update)
+        cache = {}
+
+        def wrapper(*args):
+            if args in cache:
+                return cache[args]
+            result = func(*args)
+            cache[args] = result
+            print(f"\nDECORATOR: {func.__name__} cached args {args}")
 
             return result
 
