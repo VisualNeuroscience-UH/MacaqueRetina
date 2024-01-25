@@ -1270,7 +1270,7 @@ class Viz:
         ax.legend()
 
         if savefigname:
-            plt.savefig(savefigname)
+            self._figsave(figurename=savefigname)
 
     def show_temp_stat(self):
         """
