@@ -43,7 +43,6 @@ class WorkingRetina(RetinaMath):
     def __init__(self, context, data_io, cones, viz, project_data) -> None:
         self._context = context.set_context(self)
         self._data_io = data_io
-        # viz.client_object = self  # injecting client object pointer into viz object
         self._cones = cones
         self._viz = viz
         self._project_data = project_data

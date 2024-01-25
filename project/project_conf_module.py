@@ -183,7 +183,7 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 # For "load_model" training_mode, the model is loaded from model_file_name at output_folder (primary)
 # or input_folder. The correct model name (including time stamp) must be given in the model_file_name.
 gc_type = "parasol"  # "parasol" or "midget"
-response_type = "on"
+response_type = "on"  # "on" or "off"
 
 # VAE RF is generated in experimental data space originating from macaque peripheral retina.
 # VAE RF sizes need to be scaled according to eccentricity.
@@ -205,17 +205,19 @@ my_retina = {
     "response_type": response_type,
     # "ecc_limits_deg": [36, 39.4],  # eccentricity in degrees
     # "pol_limits_deg": [-4, 4],  # polar angle in degrees
-    "ecc_limits_deg": [4.7, 5.3],  # eccentricity in degrees
-    "pol_limits_deg": [-2, 2],  # polar angle in degrees
+    "ecc_limits_deg": [4.5, 5.5],  # eccentricity in degrees
+    "pol_limits_deg": [-3, 3],  # polar angle in degrees
+    # "ecc_limits_deg": [4.8, 5.2],  # eccentricity in degrees
+    # "pol_limits_deg": [-1.0, 1.0],  # polar angle in degrees
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
     "dd_regr_model": "loglog",  # linear, quadratic, cubic, loglog. For midget < 20 deg, use quadratic; for parasol use loglog
-    "ecc_limit_for_dd_fit": math.inf,  # 20,  # degrees, math.inf for no limit
+    "ecc_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
-    "temporal_model": "fixed",  # fixed, dynamic
+    "temporal_model": "dynamic",  # fixed, dynamic
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
     "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
-    "rf_coverage_adjusted_to_1": True,  # False or True. Applies to FIT only, scales sum(unit center areas) = retina area
+    "rf_coverage_adjusted_to_1": False,  # False or True. Applies to FIT only, scales sum(unit center areas) = retina area
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
     "model_file_name": None,  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[DEVICE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only
     "ray_tune_trial_id": None,  # Trial_id for tune, None for loading single run after "train_model". Applies to VAE "load_model" only
@@ -283,16 +285,16 @@ my_stimulus_options = {
     "duration_seconds": 1,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
-    "pattern": "temporal_square_pattern",  # One of the StimulusPatterns
+    "pattern": "sine_grating",  # One of the StimulusPatterns
     "stimulus_form": "rectangular",
     "size_inner": 0.1,  # deg, Applies to annulus only
     "size_outer": 1,  # deg, Applies to annulus only
-    "stimulus_position": (0, 0),
-    "stimulus_size": 3.2,  # 2,  # deg, radius for circle, sidelen/2 for rectangle.
+    "stimulus_position": (0.0, 0.0),
+    "stimulus_size": 2,  # 0.04,  # 2,  # deg, radius for circle, sidelen/2 for rectangle.
     "background": 128,
-    "contrast": 0.5,  # Weber constrast
+    "contrast": 0.95,  # Weber constrast
     "mean": 128,
-    "temporal_frequency": 0.1,  # 0.01,  # 4.0,  # 40,  # Hz
+    "temporal_frequency": 4.0,  # 0.01,  # 4.0,  # 40,  # Hz
     "spatial_frequency": 2.0,  # cpd
     "orientation": 0,  # degrees
     "phase_shift": 0,  # math.pi,  # radians
@@ -375,11 +377,11 @@ cone_general_params = {
     "rm": 25,  # pA
     "k": 2.77e-4,  # at 500 nm
     "sensitivity_min": 5e2,
-    "sensitivity_max": 1e4,
+    "sensitivity_max": 2e4,
     "cone2gc_midget": 9,  # um, 1 SD of Gaussian
     "cone2gc_parasol": 27,  # um 27
     "cone2gc_cutoff_SD": 1,  # 3 SD is 99.7% of Gaussian
-    "cone_noise_magnitude": 1,  # Relative amplitude
+    "cone_noise_magnitude": 1,  # Relative amplitude, 0 for no noise
 }
 
 # Recovery function from Berry_1998_JNeurosci, Uzzell_2004_JNeurophysiol
@@ -404,21 +406,21 @@ refractory_params = {
 # None : initial random placement. Nonvarying with fixed seed above. Good for testing and speed.
 gc_placement_params = {
     "algorithm": None,  # "voronoi" or "force" or None
-    "n_iterations": 20,  # v 20, f 5000
-    "change_rate": 0.5,  # f 0.001, v 0.5
+    "n_iterations": 5000,  # v 20, f 5000
+    "change_rate": 0.001,  # f 0.001, v 0.5
     "unit_repulsion_stregth": 5,  # 10 f only
     "unit_distance_threshold": 0.02,  # f only, adjusted with ecc
     "diffusion_speed": 0.0001,  # f only, adjusted with ecc
     "border_repulsion_stength": 10,  # f only
     "border_distance_threshold": 0.01,  # f only
     "show_placing_progress": False,  # True False
-    "show_skip_steps": 2,  # v 1, f 100
+    "show_skip_steps": 100,  # v 1, f 100
 }
 
 cone_placement_params = {
-    "algorithm": None,  # "voronoi" or "force" or None
-    "n_iterations": 100,  # v 20, f 5000
-    "change_rate": 0.0001,  # f 0.001, v 0.5
+    "algorithm": "force",  # "voronoi" or "force" or None
+    "n_iterations": 300,  # v 20, f 300
+    "change_rate": 0.0005,  # f 0.0005, v 0.5
     "unit_repulsion_stregth": 2,  # 10 f only
     "unit_distance_threshold": 0.1,  # f only, adjusted with ecc
     "diffusion_speed": 0.001,  # f only, adjusted with ecc
@@ -430,13 +432,14 @@ cone_placement_params = {
 
 # For VAE, this is enough to have good distribution between units.
 rf_repulsion_params = {
-    "n_iterations": 100,
+    "n_iterations": 200,
     "change_rate": 0.01,
     "cooling_rate": 0.999,  # each iteration change_rate = change_rate * cooling_rate
     "border_repulsion_stength": 5,
     "show_repulsion_progress": False,  # True False
     "show_only_unit": None,  # None or int for unit idx
-    "show_skip_steps": 1,
+    "show_skip_steps": 5,
+    "savefigname": None,
 }
 
 my_retina_append = {
@@ -603,7 +606,7 @@ if __name__ == "__main__":
     ##   Sample figure data from literature  ##
     ###########################################
 
-    # # # If possible, sample only temporal hemiretina
+    # # If possible, sample only temporal hemiretina
     # from project.project_utilities_module import DataSampler
 
     # filename = "Angueyra_2013_NatNeurosci_Fig6E.jpg"
@@ -624,7 +627,7 @@ if __name__ == "__main__":
     Build and test your retina here, one gc type at a time. 
     """
 
-    PM.construct_retina.build()  # Main method for building the retina
+    # PM.construct_retina.build()  # Main method for building the retina
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # Thus, they are called after the retina is built.
@@ -634,19 +637,19 @@ if __name__ == "__main__":
     # in the retina mosaic building process.
 
     # For FIT and VAE
-    # PM.viz.show_cones_linked_to_gc(gc_list=[11], savefigname=None)
+    # PM.viz.show_cones_linked_to_gc(gc_list=[10], savefigname="cones_linked_to_gc.svg")
     # PM.viz.show_cones_linked_to_gc(gc_list=[32, 58, 63, 67, 6], savefigname=None)
     # PM.viz.show_unit_density_vs_ecc(unit_type="cone", savefigname=None)  # gc or cone
 
-    # PM.viz.show_DoG_model_fit(sample_list=[1, 2, 3, 48], savefigname=None)
+    # PM.viz.show_DoG_model_fit(sample_list=[10], savefigname="DoG_model_fit.eps")
     # PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)
-    # PM.viz.show_dendrite_diam_vs_ecc(log_x=False, log_y=True, savefigname=None)
-    PM.viz.show_cone_noise_vs_freq(savefigname=None)
+    # PM.viz.show_dendrite_diam_vs_ecc(log_x=False, log_y=False, savefigname=None)
+    # PM.viz.show_coneq_noise_vs_freq(savefigname="cone_noise_vs_freq.svg")
 
     # For FIT (DoG fits, temporal kernels and tonic drives)
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
     # PM.viz.show_temporal_filter_response(n_curves=3, savefigname="temporal_filters.eps")
-    # PM.viz.show_spatial_statistics(correlation_reference=None, savefigname=None)
+    # PM.viz.show_spatial_statistics(correlation_reference="ampl_s", savefigname=None)
 
     # For VAE
     # PM.viz.show_gen_exp_spatial_rf(ds_name="train_ds", n_samples=15, savefigname=None)
@@ -680,15 +683,15 @@ if __name__ == "__main__":
     ########################
 
     # # Based on my_stimulus_options above
-    # PM.stimulate.make_stSimulus_video()
+    # PM.stimulate.make_stimulus_video()
 
     ####################################
     ### Run multiple trials or cells ###
     ####################################
 
     # # Load stimulus to get working retina, necessary for running cells
-    PM.working_retina.load_stimulus()
-    PM.working_retina.run_with_my_run_options()
+    # PM.working_retina.load_stimulus()
+    # PM.working_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
@@ -735,10 +738,10 @@ if __name__ == "__main__":
     ################################################
 
     # # Based on my_run_options above
-    PM.viz.show_all_gc_responses(savefigname=None)
+    # PM.viz.show_all_gc_responses(savefigname="midget_on_sine.eps")
 
     # PM.viz.show_stimulus_with_gcs(
-    #     example_gc=3,  # or my_run_options["cell_index"]
+    #     example_gc=[9],  # [int,], my_run_options["cell_index"]
     #     frame_number=301,  # depends on fps, and video and baseline lengths
     #     show_rf_id=True,
     #     savefigname=None,
