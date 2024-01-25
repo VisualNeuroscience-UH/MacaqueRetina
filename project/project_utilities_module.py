@@ -276,7 +276,7 @@ class ProjectUtilities:
         return wrapper
 
     def cache_decorator(func):
-        # Note that this can work only with functional/non-OOP style methods (no self use/update)
+        # Note that this can work only with non-OOP style methods (no self use/update)
         cache = {}
 
         def wrapper(*args):
