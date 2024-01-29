@@ -2668,6 +2668,13 @@ class ConstructRetina(RetinaMath):
             2D array of the upper-left pixel coordinates of each RF, shape (n_rfs, 2), each row indicating (x, y).
         whole_ret_lu_mm : tuple
             Left upper corner of retina image position in mm, (min_x_mm, max_y_mm).
+
+        Returns
+        -------
+        gc : GC
+            GC object with added attributes X_grid_mm and Y_grid_mm. These attributes are 3D arrays of the
+            receptive field center x and y coordinate grids in mm, shape (n_rfs, n_pixels, n_pixels). Each
+            point in the grid is the center of the corresponding pixel in the receptive field image.
         """
 
         # Get the rf image size in pixels. gc.img is [N, H, W]
@@ -2686,11 +2693,14 @@ class ConstructRetina(RetinaMath):
                 gc.um_per_pix[:, np.newaxis, np.newaxis], (1, rf_pix_y, rf_pix_x)
             )
 
+        gc_mm_per_pix = gc.um_per_pix / 1000
+
         _X_grid = np.tile(X_grid, (gc.img_lu_pix.shape[0], 1, 1))
         _Y_grid = np.tile(Y_grid, (gc.img_lu_pix.shape[0], 1, 1))
 
-        X_grid_local_mm = _X_grid * gc.um_per_pix / 1000
-        Y_grid_local_mm = _Y_grid * gc.um_per_pix / 1000
+        # Set the grid to the center of each pixel
+        X_grid_local_mm = _X_grid * gc_mm_per_pix + gc_mm_per_pix / 2
+        Y_grid_local_mm = _Y_grid * gc_mm_per_pix + gc_mm_per_pix / 2
 
         x_vec = gc.img_lu_pix[:, 0]
         _rf_lu_pix_x = np.tile(
@@ -2700,15 +2710,15 @@ class ConstructRetina(RetinaMath):
         _rf_lu_pix_y = np.tile(
             y_vec[:, np.newaxis, np.newaxis], (1, rf_pix_y, rf_pix_x)
         )
-        _rf_lu_mm_x = _rf_lu_pix_x * gc.um_per_pix / 1000
-        _rf_lu_mm_y = _rf_lu_pix_y * gc.um_per_pix / 1000
+        _rf_lu_mm_x = _rf_lu_pix_x * gc_mm_per_pix
+        _rf_lu_mm_y = _rf_lu_pix_y * gc_mm_per_pix
 
         # x starts from the left
         X_grid_mm = ret.whole_ret_lu_mm[0] + _rf_lu_mm_x + X_grid_local_mm
 
         # y starts from the top
         Y_grid_mm = ret.whole_ret_lu_mm[1] - _rf_lu_mm_y - Y_grid_local_mm
-        # pdb.set_trace()
+
         gc.X_grid_mm = X_grid_mm
         gc.Y_grid_mm = Y_grid_mm
 
@@ -3061,9 +3071,19 @@ class ConstructRetina(RetinaMath):
         ret, gc = self._place_units(ret, gc)
         gc.n_units = len(gc.df)
 
+        # xx = 100
+        # x_mm, y_mm = self.pol2cart(gc.df["pos_ecc_mm"], gc.df["pos_polar_deg"])
+        # print(f"Placed RGCs at {x_mm[100], y_mm[100]} locations in mm")
+
         # -- Second, endow cells with spatial receptive fields
         ret, gc = self._create_spatial_rfs(ret, gc)
+        # self.viz.show_cones_linked_to_gc(gc_list=[100])
         gc = self._link_cone_noise_units_to_gcs(ret, gc)
+
+        # x_mm, y_mm = self.pol2cart(gc.df["pos_ecc_mm"], gc.df["pos_polar_deg"])
+        # print(f"Placed RGCs at {x_mm[100], y_mm[100]} locations in mm")
+        # pdb.set_trace()
+
         gc = self._fit_cone_noise_vs_freq(gc)
 
         # -- Third, endow cells with temporal receptive fields
