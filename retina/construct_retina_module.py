@@ -712,7 +712,6 @@ class ConstructRetina(RetinaMath):
         # Parameters are log_NL, log_TL, log_HS, log_TS, log_A0, log_M0, log_D.
         log_initial_guesses = [np.log(p) for p in initial_guesses]  # needs to be list
 
-        # pdb.set_trace()
         # Log-transform the frequency and power data
         log_frequency_data = np.log(frequency_data)
         log_power_data = np.log(power_data)
@@ -1579,7 +1578,7 @@ class ConstructRetina(RetinaMath):
         n_gcs = gc_pos_mm.shape[0]
 
         # Normalize center activation to probability distribution
-        img_cen = gc.img * gc.img_mask
+        img_cen = gc.img * gc.img_mask  # N, H, W
         img_prob = img_cen / np.sum(img_cen, axis=(1, 2))[:, None, None]
 
         for i in tqdm(
@@ -2125,7 +2124,7 @@ class ConstructRetina(RetinaMath):
             DataFrame with gc parameters.
         """
         # gc_img = gc.img
-        um_per_pix = gc.um_per_pix
+        mm_per_pix = gc.um_per_pix / 1000
         df = gc.df
 
         ecc_lim_mm = ret.ecc_lim_mm
@@ -2189,7 +2188,7 @@ class ConstructRetina(RetinaMath):
             gc_img.shape[1] == gc_img.shape[2]
         ), "rf images are not square, aborting..."
         pix_per_side = gc_img.shape[1]
-        pad_size_mm = pix_per_side * um_per_pix / 1000
+        pad_size_mm = pix_per_side * mm_per_pix
 
         min_x_mm_im = min_x_mm - pad_size_mm
         max_x_mm_im = max_x_mm + pad_size_mm
@@ -2197,8 +2196,8 @@ class ConstructRetina(RetinaMath):
         max_y_mm_im = max_y_mm + pad_size_mm
 
         # Get retina image size in pixels
-        ret_pix_x = int(np.ceil((max_x_mm_im - min_x_mm_im) * 1000 / um_per_pix))
-        ret_pix_y = int(np.ceil((max_y_mm_im - min_y_mm_im) * 1000 / um_per_pix))
+        ret_pix_x = int(np.ceil((max_x_mm_im - min_x_mm_im) / mm_per_pix))
+        ret_pix_y = int(np.ceil((max_y_mm_im - min_y_mm_im) / mm_per_pix))
 
         ret_img_pix = np.zeros((ret_pix_y, ret_pix_x))
 
@@ -2214,9 +2213,10 @@ class ConstructRetina(RetinaMath):
             pos_polar_deg.astype(np.float64) - rot_deg,
             deg=True,
         )
-
-        y_pix_c = (np.round((max_y_mm_im - y_mm) * 1000 / um_per_pix)).astype(np.int64)
-        x_pix_c = (np.round((x_mm - min_x_mm_im) * 1000 / um_per_pix)).astype(np.int64)
+        _x_mm = x_mm.copy()
+        _y_mm = y_mm.copy()
+        y_pix_c = (np.round((max_y_mm_im - y_mm) / mm_per_pix)).astype(np.int64)
+        x_pix_c = (np.round((x_mm - min_x_mm_im) / mm_per_pix)).astype(np.int64)
 
         exp_pix_per_side = self.context.apricot_metadata["data_spatialfilter_height"]
         pix_scaler = pix_per_side / exp_pix_per_side
@@ -2225,8 +2225,11 @@ class ConstructRetina(RetinaMath):
             # Get the position of the rf upper left corner in pixels
             # The xoc and yoc are the center of the rf image in the resampled data scale.
             # The pix_scaler is necessary because xoc and yoc are are shifted in the resampled data scale.
-            y_pix_lu = y_pix_c[i] - int(row.yoc_pix * pix_scaler)
-            x_pix_lu = x_pix_c[i] - int(row.xoc_pix * pix_scaler)
+            yoc_pix_scaled = int(row.yoc_pix * pix_scaler)
+            xoc_pix_scaled = int(row.xoc_pix * pix_scaler)
+
+            y_pix_lu = y_pix_c[i] - yoc_pix_scaled
+            x_pix_lu = x_pix_c[i] - xoc_pix_scaled
 
             # Get the rf image
             this_rf_img = gc_img[i, :, :]
@@ -2238,6 +2241,15 @@ class ConstructRetina(RetinaMath):
             # Store the left upper corner pixel coordinates and width and height of each rf image.
             # The width and height are necessary because some are cut off at the edges of the retina image.
             gc_img_lu_pix[i, :] = [x_pix_lu, y_pix_lu]
+
+            # Check rounding errors and reset x_mm and y_mm
+            y_mm[i] = max_y_mm_im - (y_pix_lu + yoc_pix_scaled) * mm_per_pix
+            x_mm[i] = min_x_mm_im + (x_pix_lu + xoc_pix_scaled) * mm_per_pix
+
+        # Reset the eccentricity and polar angle of the receptive field center
+        pos_ecc_mm, pos_polar_deg = self.cart2pol(x_mm, y_mm)
+        df["pos_ecc_mm"] = pos_ecc_mm
+        df["pos_polar_deg"] = pos_polar_deg
 
         gc.img_lu_pix = gc_img_lu_pix
 
@@ -2682,9 +2694,9 @@ class ConstructRetina(RetinaMath):
         rf_pix_x = gc.img_mask.shape[2]
 
         X_grid, Y_grid = np.meshgrid(
-            np.arange(rf_pix_x),
             np.arange(rf_pix_y),
-            indexing="xy",
+            np.arange(rf_pix_x),
+            indexing="ij",
         )
 
         # if gc.um_per_pix is 1D numpy array, tile it to 3D for efficient numerical operations
@@ -2721,6 +2733,26 @@ class ConstructRetina(RetinaMath):
 
         gc.X_grid_mm = X_grid_mm
         gc.Y_grid_mm = Y_grid_mm
+
+        # # TÄHÄN JÄIT. IMG ON SIVUSSA RF KESKIPISTEESTÄ
+        # # GRIDI ON PIELESSÄ JO TÄSSÄ. MASKI ON SIVUSSA, ELI IMG ON JO PIELESSÄ
+        # xx = 100
+        # fig, ax = plt.subplots(1, 2)
+        # ax[0].imshow(gc.img_mask[xx, ...])
+        # ax[1].scatter(X_grid_mm[xx, ...], Y_grid_mm[xx, ...])
+        # x_grid_mm = gc.X_grid_mm[xx, ...] * gc.img_mask[xx, ...]
+        # y_grid_mm = gc.Y_grid_mm[xx, ...] * gc.img_mask[xx, ...]
+        # x_grid_mm = x_grid_mm[x_grid_mm != 0]
+        # y_grid_mm = y_grid_mm[y_grid_mm != 0]
+        # ax[1].scatter(x_grid_mm, y_grid_mm)
+        # x_mm, y_mm = self.pol2cart(
+        #     gc.df["pos_ecc_mm"].values[xx],
+        #     gc.df["pos_polar_deg"].values[xx],
+        #     deg=True,
+        # )
+        # ax[1].scatter(x_mm, y_mm, color="red")
+        # plt.show()
+        # pdb.set_trace()
 
         return gc
 
@@ -3071,18 +3103,10 @@ class ConstructRetina(RetinaMath):
         ret, gc = self._place_units(ret, gc)
         gc.n_units = len(gc.df)
 
-        # xx = 100
-        # x_mm, y_mm = self.pol2cart(gc.df["pos_ecc_mm"], gc.df["pos_polar_deg"])
-        # print(f"Placed RGCs at {x_mm[100], y_mm[100]} locations in mm")
-
         # -- Second, endow cells with spatial receptive fields
         ret, gc = self._create_spatial_rfs(ret, gc)
         # self.viz.show_cones_linked_to_gc(gc_list=[100])
         gc = self._link_cone_noise_units_to_gcs(ret, gc)
-
-        # x_mm, y_mm = self.pol2cart(gc.df["pos_ecc_mm"], gc.df["pos_polar_deg"])
-        # print(f"Placed RGCs at {x_mm[100], y_mm[100]} locations in mm")
-        # pdb.set_trace()
 
         gc = self._fit_cone_noise_vs_freq(gc)
 
