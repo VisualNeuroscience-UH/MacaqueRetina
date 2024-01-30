@@ -182,7 +182,7 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 
 # For "load_model" training_mode, the model is loaded from model_file_name at output_folder (primary)
 # or input_folder. The correct model name (including time stamp) must be given in the model_file_name.
-gc_type = "parasol"  # "parasol" or "midget"
+gc_type = "midget"  # "parasol" or "midget"
 response_type = "on"  # "on" or "off"
 
 # VAE RF is generated in experimental data space originating from macaque peripheral retina.
@@ -282,7 +282,7 @@ my_stimulus_options = {
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
     "fps": 300,  # 300 for good cg integration
-    "duration_seconds": 2,  # actual frames = floor(duration_seconds * fps)
+    "duration_seconds": 1,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
     "pattern": "sine_grating",  # One of the StimulusPatterns square_grating sine_grating
@@ -637,14 +637,14 @@ if __name__ == "__main__":
     # in the retina mosaic building process.
 
     # For FIT and VAE
-    # PM.viz.show_cones_linked_to_gc(gc_list=[10], savefigname=None)
+    # PM.viz.show_cones_linked_to_gc(gc_list=[100, 101, 103], savefigname=None)
     # PM.viz.show_cones_linked_to_gc(gc_list=[32, 58, 63, 67, 6], savefigname=None)
     # PM.viz.show_unit_density_vs_ecc(unit_type="cone", savefigname=None)  # gc or cone
 
-    # PM.viz.show_DoG_model_fit(sample_list=[10], savefigname="DoG_model_fit.eps")
+    PM.viz.show_DoG_model_fit(sample_list=[10], savefigname=None)
     # PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)
     # PM.viz.show_dendrite_diam_vs_ecc(log_x=False, log_y=False, savefigname=None)
-    # PM.viz.show_coneq_noise_vs_freq(savefigname="cone_noise_vs_freq.svg")
+    # PM.viz.show_cone_noise_vs_freq(savefigname="cone_noise_vs_freq.svg")
 
     # For FIT (DoG fits, temporal kernels and tonic drives)
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
@@ -683,15 +683,15 @@ if __name__ == "__main__":
     ########################
 
     # Based on my_stimulus_options above
-    PM.stimulate.make_stimulus_video()
+    # PM.stimulate.make_stimulus_video()
 
     ####################################
     ### Run multiple trials or cells ###
     ####################################
 
     # Load stimulus to get working retina, necessary for running cells
-    PM.simulate_retina.load_stimulus()
-    PM.simulate_retina.run_with_my_run_options()
+    # PM.simulate_retina.load_stimulus()
+    # PM.simulate_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
@@ -738,14 +738,14 @@ if __name__ == "__main__":
     ################################################
 
     # Based on my_run_options above
-    PM.viz.show_all_gc_responses(savefigname=None)
+    # PM.viz.show_all_gc_responses(savefigname=None)
 
-    PM.viz.show_stimulus_with_gcs(
-        example_gc=24,  # [int,], my_run_options["cell_index"]
-        frame_number=301,  # depends on fps, and video and baseline lengths
-        show_rf_id=False,
-        savefigname=None,
-    )
+    # PM.viz.show_stimulus_with_gcs(
+    #     example_gc=24,  # [int,], my_run_options["cell_index"]
+    #     frame_number=301,  # depends on fps, and video and baseline lengths
+    #     show_rf_id=False,
+    #     savefigname=None,
+    # )
 
     #################################################################
     #################################################################
