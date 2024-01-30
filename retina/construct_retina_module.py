@@ -1967,7 +1967,8 @@ class ConstructRetina(RetinaMath):
         gc.um_per_pix = new_um_per_pix
         gc.pix_per_side = new_pix_per_side
         gc.um_per_side = new_um_per_pix * new_pix_per_side
-        gc.pix_scaler = new_pix_per_side / exp_pix_per_side
+
+        gc.exp_pix_per_side = exp_pix_per_side
 
         return gc
 
@@ -2234,24 +2235,33 @@ class ConstructRetina(RetinaMath):
         x_pix_c = (x_mm - min_x_mm_im) / mm_per_pix
 
         # Pix scaler is necessary when RF fit is done with experimental image grid
+        # pix_scaled = -zoom_factor * ((exp_pix_per_side / 2) - pix_c) + (pix_per_side / 2)
         if apply_pix_scaler is True:
-            pix_scaler = gc.pix_scaler
+            gc.df["zoom_factor"] = gc.df["zoom_factor"].astype(float)
+            df["yoc_pix"] = df["yoc_pix"].astype(float)
+            df["xoc_pix"] = df["xoc_pix"].astype(float)
+            yoc_pix_scaled = (
+                -gc.df["zoom_factor"] * ((gc.exp_pix_per_side / 2) - df["yoc_pix"])
+                + (pix_per_side / 2)
+            ).values
+            xoc_pix_scaled = (
+                -gc.df["zoom_factor"] * ((gc.exp_pix_per_side / 2) - df["xoc_pix"])
+                + (pix_per_side / 2)
+            ).values
         else:
-            pix_scaler = 1
+            yoc_pix_scaled = df["yoc_pix"].values
+            xoc_pix_scaled = df["xoc_pix"].values
 
         for i, row in df.iterrows():
             # Get the position of the rf upper left corner in pixels
             # The xoc and yoc are the center of the rf in the rf image in the resampled data scale.
-            # The pix_scaler is necessary because xoc and yoc are are shifted in the resampled data scale.
-            yoc_pix_scaled = row.yoc_pix * pix_scaler
-            xoc_pix_scaled = row.xoc_pix * pix_scaler
 
-            y_pix_lu = y_pix_c[i] - yoc_pix_scaled
-            x_pix_lu = x_pix_c[i] - xoc_pix_scaled
+            _y_pix_lu = y_pix_c[i] - yoc_pix_scaled[i]
+            _x_pix_lu = x_pix_c[i] - xoc_pix_scaled[i]
 
             # Turn to int for indexing
-            y_pix_lu = int(np.round(y_pix_lu))
-            x_pix_lu = int(np.round(x_pix_lu))
+            y_pix_lu = int(np.round(_y_pix_lu))
+            x_pix_lu = int(np.round(_x_pix_lu))
 
             # Get the rf image
             this_rf_img = gc_img[i, :, :]
@@ -2260,6 +2270,7 @@ class ConstructRetina(RetinaMath):
                 y_pix_lu : y_pix_lu + pix_per_side,
                 x_pix_lu : x_pix_lu + pix_per_side,
             ] += this_rf_img
+
             # Store the left upper corner pixel coordinates and width and height of each rf image.
             # The width and height are necessary because some are cut off at the edges of the retina image.
             gc_img_lu_pix[i, :] = [x_pix_lu, y_pix_lu]
@@ -2267,6 +2278,14 @@ class ConstructRetina(RetinaMath):
         gc.img_lu_pix = gc_img_lu_pix
 
         ret.whole_ret_lu_mm = np.array([min_x_mm_im, max_y_mm_im])
+
+        # Apply center shift by zooming back to eccentricity and polar angle
+        if apply_pix_scaler is True:
+            y_mm = max_y_mm_im - ((gc_img_lu_pix[:, 1] + yoc_pix_scaled) * mm_per_pix)
+            x_mm = min_x_mm_im + ((gc_img_lu_pix[:, 0] + xoc_pix_scaled) * mm_per_pix)
+            pos_ecc_mm, pos_polar_deg = self.cart2pol(x_mm, y_mm)
+            df["pos_ecc_mm"] = pos_ecc_mm
+            df["pos_polar_deg"] = pos_polar_deg
 
         return ret, gc, ret_img_pix
 
@@ -2713,12 +2732,12 @@ class ConstructRetina(RetinaMath):
 
         mm_per_pix = gc.um_per_pix / 1000
 
-        _X_grid = np.tile(X_grid, (gc.img_lu_pix.shape[0], 1, 1))
         _Y_grid = np.tile(Y_grid, (gc.img_lu_pix.shape[0], 1, 1))
+        _X_grid = np.tile(X_grid, (gc.img_lu_pix.shape[0], 1, 1))
 
         # The grid starts at the center of left upper pixel
-        X_grid_local_mm = _X_grid * mm_per_pix
         Y_grid_local_mm = _Y_grid * mm_per_pix
+        X_grid_local_mm = _X_grid * mm_per_pix
 
         x_vec = gc.img_lu_pix[:, 0]
         _rf_lu_pix_x = np.tile(
@@ -2856,7 +2875,7 @@ class ConstructRetina(RetinaMath):
             ]
 
         gc.parameter_names = parameter_names
-        
+
         return gc
 
     def _create_spatial_rfs(self, ret, gc):
