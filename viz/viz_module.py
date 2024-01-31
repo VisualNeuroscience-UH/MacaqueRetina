@@ -893,7 +893,11 @@ class Viz:
         savefigname : str, optional
             The name of the file to save the figure. If None, the figure is not saved.
         """
-        gc_df = self.project_data.construct_retina["gc_df"]
+
+        # gc_df = self.project_data.construct_retina["gc"].df
+        mosaic_file = self.context.my_retina["mosaic_file"]
+        gc_df = self.data_io.get_data(mosaic_file)
+        # pdb.set_trace()
         ecc_mm = gc_df["pos_ecc_mm"].to_numpy()
         pol_deg = gc_df["pos_polar_deg"].to_numpy()
 
@@ -1221,11 +1225,12 @@ class Viz:
         """
         Plot cone noise as a function of temporal frequency using the model by Victor 1987 JPhysiol.
         """
-        cone_noise_vs_freq = self.project_data.construct_retina["cone_noise_vs_freq"]
-        data_all_x = cone_noise_vs_freq["data_all_x"]
-        data_all_y = cone_noise_vs_freq["data_all_y"]
-        cone_noise_parameters = cone_noise_vs_freq["cone_noise_parameters"]
-        title = cone_noise_vs_freq["title"]
+
+        ret_file_npz = self.data_io.get_data(self.context.my_retina["ret_file"])
+        data_all_x = ret_file_npz["frequency_data"]
+        data_all_y = ret_file_npz["power_data"]
+        cone_noise_parameters = ret_file_npz["cone_noise_parameters"]
+        title = "cone_noise_vs_freq"
 
         fig, ax = plt.subplots()
         ax.plot(data_all_x, data_all_y, "b.", label="Data")
@@ -1972,16 +1977,21 @@ class Viz:
         """
         Visualize a ganglion cell and its connected cones.
         """
-        cones_to_gcs = self.project_data.construct_retina["cones_to_gcs"]
-
-        gc_pos_mm = cones_to_gcs["gc_pos_mm"]
-        cone_positions = cones_to_gcs["cone_pos_mm"]
-        weights = cones_to_gcs["weights"]
-        X_grid_mm = cones_to_gcs["X_grid_mm"]
-        Y_grid_mm = cones_to_gcs["Y_grid_mm"]
-        gc_img_mask = cones_to_gcs["gc_img_mask"]
 
         gc_df = self.data_io.get_data(self.context.my_retina["mosaic_file"])
+        gc_npz = self.data_io.get_data(self.context.my_retina["spatial_rfs_file"])
+
+        x_mm, y_mm = self.pol2cart(
+            gc_df[["pos_ecc_mm"]].values, gc_df[["pos_polar_deg"]].values
+        )
+        gc_pos_mm = np.column_stack((x_mm, y_mm))
+        X_grid_mm = gc_npz["X_grid_mm"]
+        Y_grid_mm = gc_npz["Y_grid_mm"]
+        gc_img_mask = gc_npz["gc_img_mask"]
+
+        ret_npz = self.data_io.get_data(self.context.my_retina["ret_file"])
+        weights = ret_npz["cones_to_gcs_weights"]
+        cone_positions = ret_npz["cone_optimized_positions_mm"]
 
         fig, ax = plt.subplots(1, len(gc_list), figsize=(12, 10))
         if len(gc_list) == 1:
@@ -2023,7 +2033,7 @@ class Viz:
             x_mm = x_mm[x_mm != 0]
             y_mm = y_mm[y_mm != 0]
 
-            ax[idx].plot(x_mm, y_mm, ".g", label="RF center")
+            ax[idx].plot(x_mm, y_mm, ".g", label="RF center pixel midpoints")
 
             # Add DoG_patch to the plot
             ax[idx].add_patch(DoG_patch)
@@ -2032,6 +2042,89 @@ class Viz:
             ax[idx].set_ylabel("Y Position (mm)")
             ax[idx].set_title(
                 f"Ganglion Cell {this_sample} and Connected {n_connected} cones"
+            )
+            ax[idx].legend()
+            # Set equal aspect ratio
+            ax[idx].set_aspect("equal", adjustable="box")
+
+        if savefigname:
+            self._figsave(figurename=savefigname)
+
+    def show_DoG_img_grid(self, gc_list=None, savefigname=None):
+        """
+        Visualize a ganglion cell image, DoG fit and center grid points.
+        """
+
+        gc_df = self.data_io.get_data(self.context.my_retina["mosaic_file"])
+        gc_npz = self.data_io.get_data(self.context.my_retina["spatial_rfs_file"])
+
+        x_mm, y_mm = self.pol2cart(
+            gc_df[["pos_ecc_mm"]].values, gc_df[["pos_polar_deg"]].values
+        )
+        gc_pos_mm = np.column_stack((x_mm, y_mm))
+        X_grid_mm = gc_npz["X_grid_mm"]
+        Y_grid_mm = gc_npz["Y_grid_mm"]
+        gc_img_mask = gc_npz["gc_img_mask"]
+        gc_img = gc_npz["gc_img"]
+
+        gc_df = self.data_io.get_data(self.context.my_retina["mosaic_file"])
+        half_pix_mm = (gc_npz["um_per_pix"] / 1000) / 2
+        # pdb.set_trace()
+        fig, ax = plt.subplots(1, len(gc_list), figsize=(12, 10))
+        if len(gc_list) == 1:
+            ax = [ax]
+
+        for idx, this_sample in enumerate(gc_list):
+            # Plot each rf image
+
+            # extent (left, right, bottom, top)
+            left = X_grid_mm[this_sample, ...].min() - half_pix_mm
+            right = X_grid_mm[this_sample, ...].max() + half_pix_mm
+            bottom = Y_grid_mm[this_sample, ...].min() - half_pix_mm
+            top = Y_grid_mm[this_sample, ...].max() + half_pix_mm
+            extent = (left, right, bottom, top)
+            ax[idx].imshow(gc_img[this_sample, ...], extent=extent)
+
+            # Center grid points
+            mask = gc_img_mask[this_sample, ...]
+            x_mm = X_grid_mm[this_sample, ...] * mask
+            y_mm = Y_grid_mm[this_sample, ...] * mask
+            x_mm = x_mm[x_mm != 0]
+            y_mm = y_mm[y_mm != 0]
+            ax[idx].plot(x_mm, y_mm, ".g", label="RF center pixel midpoints")
+
+            # Create circle/ellipse patch for visualizing the RF
+            gc_position = gc_pos_mm[this_sample, :]
+            if self.context.my_retina["DoG_model"] == "circular":
+                DoG_patch = Circle(
+                    xy=gc_position,
+                    radius=gc_df.loc[this_sample, "rad_c_mm"],
+                    edgecolor="g",
+                    facecolor="none",
+                )
+            elif self.context.my_retina["DoG_model"] in [
+                "ellipse_independent",
+                "ellipse_fixed",
+            ]:
+                DoG_patch = Ellipse(
+                    xy=gc_position,
+                    width=2 * gc_df.loc[this_sample, "semi_xc_mm"],
+                    height=2 * gc_df.loc[this_sample, "semi_yc_mm"],
+                    angle=gc_df.loc[this_sample, "orient_cen_rad"] * 180 / np.pi,
+                    edgecolor="g",
+                    facecolor="none",
+                )
+
+            # Center point
+            ax[idx].scatter(*gc_position, color="red", label="Ganglion Cell")
+
+            # Add DoG_patch to the plot
+            ax[idx].add_patch(DoG_patch)
+
+            ax[idx].set_xlabel("X Position (mm)")
+            ax[idx].set_ylabel("Y Position (mm)")
+            ax[idx].set_title(
+                f"Ganglion Cell {this_sample} image, DoG fit and cnter grid points"
             )
             ax[idx].legend()
             # Set equal aspect ratio
