@@ -390,6 +390,7 @@ class ConstructRetina(RetinaMath):
             self.training_mode = my_retina["training_mode"]
 
         self.spatial_rfs_file_filename = my_retina["spatial_rfs_file"]
+        self.ret_filename = my_retina["ret_file"]
         self.mosaic_filename = my_retina["mosaic_file"]
         self.rf_repulsion_params = my_retina["rf_repulsion_params"]
 
@@ -693,7 +694,7 @@ class ConstructRetina(RetinaMath):
 
         return dendr_diam_parameters
 
-    def _fit_cone_noise_vs_freq(self, gc):
+    def _fit_cone_noise_vs_freq(self, ret):
         """ """
 
         cone_noise = self.data_io.get_data(
@@ -716,11 +717,6 @@ class ConstructRetina(RetinaMath):
         log_frequency_data = np.log(frequency_data)
         log_power_data = np.log(power_data)
 
-        # # Wide bounds
-        # lower_bounds = [1, 1e-6, 1e-6, 1e-6, 1e-6, 1e-6, 1e-6]
-        # # Use np.inf if no upper bound is needed
-        # upper_bounds = [100, 0.1, 100, 0.1, 1000, 100, 0.1]
-
         # Tighter bounds
         lower_bounds = [1, 1e-3, 0.1, 1e-6, 1e-6, 1e-6, 1e-3]
         upper_bounds = [5, 0.05, 10, 0.05, 800, 50, 0.05]
@@ -740,16 +736,11 @@ class ConstructRetina(RetinaMath):
             bounds=bounds,
         )
 
-        gc.cone_noise_parameters = np.exp(popt_log)
+        ret.cone_noise_parameters = np.exp(popt_log)
+        ret.frequency_data = frequency_data
+        ret.power_data = power_data
 
-        self.project_data.construct_retina["cone_noise_vs_freq"] = {
-            "data_all_x": frequency_data,
-            "data_all_y": power_data,
-            "cone_noise_parameters": gc.cone_noise_parameters,
-            "title": "cone_noise_vs_freq, asymmetric concave fit",
-        }
-
-        return gc
+        return ret
 
     def _get_ecc_from_dd(self, dendr_diam_parameters, dd_regr_model, dd):
         """
@@ -1559,12 +1550,8 @@ class ConstructRetina(RetinaMath):
         print("Connecting cones to ganglion cells for shared cone noise...")
 
         cone_pos_mm = ret.cone_optimized_positions_mm
-        x_mm, y_mm = self.pol2cart(
-            gc.df[["pos_ecc_mm"]].values, gc.df[["pos_polar_deg"]].values
-        )
-        gc_pos_mm = np.column_stack((x_mm, y_mm))
-
-        # distances = distance.cdist(cone_pos_mm, gc_pos_mm, metric="euclidean")
+        n_cones = cone_pos_mm.shape[0]
+        n_gcs = len(gc.df)
 
         if gc.gc_type == "parasol":
             sd_cone = ret.cone_general_params["cone2gc_parasol"] / 1000
@@ -1572,10 +1559,7 @@ class ConstructRetina(RetinaMath):
             sd_cone = ret.cone_general_params["cone2gc_midget"] / 1000
         cutoff_distance = ret.cone_general_params["cone2gc_cutoff_SD"] * sd_cone
 
-        weights = np.zeros((len(cone_pos_mm), len(gc_pos_mm)))
-
-        n_cones = cone_pos_mm.shape[0]
-        n_gcs = gc_pos_mm.shape[0]
+        weights = np.zeros((n_cones, n_gcs))
 
         # Normalize center activation to probability distribution
         img_cen = gc.img * gc.img_mask  # N, H, W
@@ -1597,18 +1581,9 @@ class ConstructRetina(RetinaMath):
             weights_mtx = probability * img_prob
             weights[i, :] = weights_mtx.sum(axis=(1, 2))
 
-        self.project_data.construct_retina["cones_to_gcs"] = {
-            "cone_pos_mm": cone_pos_mm,
-            "gc_pos_mm": gc_pos_mm,
-            "weights": weights,
-            "X_grid_mm": gc.X_grid_mm,
-            "Y_grid_mm": gc.Y_grid_mm,
-            "gc_img_mask": gc.img_mask,
-        }
+        ret.cones_to_gcs_weights = weights
 
-        gc.cones_to_gcs_weights = weights
-
-        return gc
+        return ret
 
     def _place_units(self, ret, gc):
         # Initial Positioning by Group
@@ -3116,9 +3091,9 @@ class ConstructRetina(RetinaMath):
         # -- Second, endow cells with spatial receptive fields
         ret, gc = self._create_spatial_rfs(ret, gc)
         # self.viz.show_cones_linked_to_gc(gc_list=[100])
-        gc = self._link_cone_noise_units_to_gcs(ret, gc)
+        ret = self._link_cone_noise_units_to_gcs(ret, gc)
 
-        gc = self._fit_cone_noise_vs_freq(gc)
+        ret = self._fit_cone_noise_vs_freq(ret)
 
         # -- Third, endow cells with temporal receptive fields
         gc = self._create_temporal_rfs(gc)
@@ -3130,33 +3105,50 @@ class ConstructRetina(RetinaMath):
 
         # Save the receptive field images, associated metadata and cone noise data
         self.save_gc_img(gc)
+        self.save_ret_img(ret)
 
         # Save the receptive field mosaic
         self.save_gc_csv(gc)
 
         # Save the project data
         # Attach data requested by other classes to project_data
-        self.project_data.construct_retina["gc_df"] = gc.df
+        # self.project_data.construct_retina["gc"] = gc
 
     def save_gc_img(self, gc):
         # Save the generated receptive field pix images, pix masks, and pixel locations in mm
-        print("\nSaving data...")
+        print("\nSaving gc data...")
         output_path = self.context.output_folder
 
         # Collate data for saving
-        spatial_rfs_file = {
+        spatial_rfs_dict = {
             "gc_img": gc.img,
             "gc_img_mask": gc.img_mask,
             "X_grid_mm": gc.X_grid_mm,
             "Y_grid_mm": gc.Y_grid_mm,
             "um_per_pix": gc.um_per_pix,
             "pix_per_side": gc.pix_per_side,
-            "cones_to_gcs_weights": gc.cones_to_gcs_weights,
-            "cone_noise_parameters": gc.cone_noise_parameters,
         }
 
         self.data_io.save_np_dict_to_npz(
-            spatial_rfs_file, output_path, filename_stem=self.spatial_rfs_file_filename
+            spatial_rfs_dict, output_path, filename_stem=self.spatial_rfs_file_filename
+        )
+
+    def save_ret_img(self, ret):
+        # Save the generated receptive field pix images, pix masks, and pixel locations in mm
+        print("\nSaving ret data...")
+        output_path = self.context.output_folder
+
+        # Collate data for saving
+        ret_dict = {
+            "cone_optimized_positions_mm": ret.cone_optimized_positions_mm,
+            "cones_to_gcs_weights": ret.cones_to_gcs_weights,
+            "cone_noise_parameters": ret.cone_noise_parameters,
+            "frequency_data": ret.frequency_data,
+            "power_data": ret.power_data,
+        }
+
+        self.data_io.save_np_dict_to_npz(
+            ret_dict, output_path, filename_stem=self.ret_filename
         )
 
     def get_data_at_latent_space(self, retina_vae):
