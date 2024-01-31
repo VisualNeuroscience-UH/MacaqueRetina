@@ -3104,17 +3104,17 @@ class ConstructRetina(RetinaMath):
         print(f"Built RGC mosaic with {gc.n_units} cells")
 
         # Save the receptive field images, associated metadata and cone noise data
-        self.save_gc_img(gc)
-        self.save_ret_img(ret)
+        self.save_gc_data(gc)
+        self.save_ret_data(ret)
 
         # Save the receptive field mosaic
-        self.save_gc_csv(gc)
+        self.save_gc_df2csv(gc)
 
         # Save the project data
         # Attach data requested by other classes to project_data
         # self.project_data.construct_retina["gc"] = gc
 
-    def save_gc_img(self, gc):
+    def save_gc_data(self, gc):
         # Save the generated receptive field pix images, pix masks, and pixel locations in mm
         print("\nSaving gc data...")
         output_path = self.context.output_folder
@@ -3133,7 +3133,7 @@ class ConstructRetina(RetinaMath):
             spatial_rfs_dict, output_path, filename_stem=self.spatial_rfs_file_filename
         )
 
-    def save_ret_img(self, ret):
+    def save_ret_data(self, ret):
         # Save the generated receptive field pix images, pix masks, and pixel locations in mm
         print("\nSaving ret data...")
         output_path = self.context.output_folder
@@ -3168,7 +3168,7 @@ class ConstructRetina(RetinaMath):
 
         return latent_data
 
-    def save_gc_csv(self, gc, filename=None):
+    def save_gc_df2csv(self, gc, filename=None):
         """
         Save the mosaic to a csv file
 
