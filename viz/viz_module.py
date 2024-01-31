@@ -2091,7 +2091,7 @@ class Viz:
             y_mm = Y_grid_mm[this_sample, ...] * mask
             x_mm = x_mm[x_mm != 0]
             y_mm = y_mm[y_mm != 0]
-            ax[idx].plot(x_mm, y_mm, ".g", label="RF center pixel midpoints")
+            ax[idx].plot(x_mm, y_mm, ".g", label="center mask")
 
             # Create circle/ellipse patch for visualizing the RF
             gc_position = gc_pos_mm[this_sample, :]
@@ -2116,16 +2116,14 @@ class Viz:
                 )
 
             # Center point
-            ax[idx].scatter(*gc_position, color="red", label="Ganglion Cell")
+            ax[idx].scatter(*gc_position, color="red", label="DoG midpoint")
 
             # Add DoG_patch to the plot
             ax[idx].add_patch(DoG_patch)
 
             ax[idx].set_xlabel("X Position (mm)")
             ax[idx].set_ylabel("Y Position (mm)")
-            ax[idx].set_title(
-                f"Ganglion Cell {this_sample}"
-            )
+            ax[idx].set_title(f"Ganglion Cell {this_sample}")
             ax[idx].legend()
             # Set equal aspect ratio
             ax[idx].set_aspect("equal", adjustable="box")
