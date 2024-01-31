@@ -2782,7 +2782,7 @@ class ConstructRetina(RetinaMath):
         Make receptive field images from the generated FIT parameters.
         """
 
-        n_cells = len(gc.df)
+        n_units = gc.n_units
         num_pix_y = self.context.apricot_metadata["data_spatialfilter_height"]
         num_pix_x = self.context.apricot_metadata["data_spatialfilter_width"]
         assert num_pix_y == num_pix_x, "Exp data matrix must be square, aborting..."
@@ -2794,10 +2794,10 @@ class ConstructRetina(RetinaMath):
         y_grid, x_grid = np.meshgrid(grid_indices, grid_indices, indexing="ij")
 
         gc = self._get_param_names(gc)
-        parameters = gc.df[gc.parameter_names].values
-        gc_fit_img = np.zeros((n_cells, exp_pix_per_side, exp_pix_per_side))
+        parameters = gc.df[gc.parameter_names].values.astype(float)
+        gc_fit_img = np.zeros((n_units, exp_pix_per_side, exp_pix_per_side))
 
-        for idx in range(n_cells):
+        for idx in range(n_units):
             # Get DoG model fit parameters to popt
             popt = parameters[idx, :]
 
