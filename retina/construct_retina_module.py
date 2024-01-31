@@ -1956,12 +1956,14 @@ class ConstructRetina(RetinaMath):
         # Resample all images to new img stack. Use scipy.ndimage.zoom,
         img_upsampled = np.zeros((len(rfs), pix_per_side, pix_per_side))
 
+        is_even = (pix_per_side - rfs[0, ...].shape[0]) % 2 == 0
+
         for i, img in enumerate(rfs):
             # Pad the image with zeros to achieve the new dimensions
             # If pix_per_side - img.shape[0] is even:
-            if (pix_per_side - img.shape[0]) % 2 == 0:
+            if is_even:
                 padding = int((pix_per_side - img.shape[0]) / 2)
-            elif (pix_per_side - img.shape[0]) % 2 == 1:
+            else:
                 padding = (
                     int((pix_per_side - img.shape[0]) / 2),
                     int((pix_per_side - img.shape[0]) / 2) + 1,
@@ -1974,11 +1976,11 @@ class ConstructRetina(RetinaMath):
             # Upsample the padded image
             img_temp = ndimage.zoom(img_padded, zoom_factor[i], grid_mode=False)
             # Correct for uneven dimensions after upsampling
-            if (pix_per_side - img.shape[0]) % 2 == 1:
+            if not is_even:
                 img_temp = ndimage.shift(img_temp, 0.5)
 
             # Crop the upsampled image to the new dimensions
-            if (pix_per_side - img.shape[0]) % 2 == 0:
+            if is_even:
                 crop_length = pix_per_side / 2
                 img_cropped = img_temp[
                     int(img_temp.shape[0] / 2 - crop_length) : int(
@@ -1988,7 +1990,7 @@ class ConstructRetina(RetinaMath):
                         img_temp.shape[1] / 2 + crop_length
                     ),
                 ]
-            elif (pix_per_side - img.shape[0]) % 2 == 1:
+            else:
                 crop_length = (pix_per_side - 1) / 2
                 img_cropped = img_temp[
                     int(img_temp.shape[0] / 2 - crop_length) : int(
@@ -2211,7 +2213,7 @@ class ConstructRetina(RetinaMath):
         x_pix_c = (x_mm - min_x_mm_im) / mm_per_pix
 
         # Pix scaler is necessary when RF fit is done with experimental image grid
-        # This functionality is here because the resetting of center position below needs the 
+        # This functionality is here because the resetting of center position below needs the
         # left up coordinates.
         # pix_scaled = -zoom_factor * ((exp_pix_per_side / 2) - pix_c) + (pix_per_side / 2)
         if apply_pix_scaler is True:
