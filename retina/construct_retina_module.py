@@ -1956,32 +1956,35 @@ class ConstructRetina(RetinaMath):
         # Resample all images to new img stack. Use scipy.ndimage.zoom,
         img_upsampled = np.zeros((len(rfs), pix_per_side, pix_per_side))
 
-        is_even = (pix_per_side - rfs[0, ...].shape[0]) % 2 == 0
+        orig_pix_per_side = rfs[0, ...].shape[0]
+        is_even = (pix_per_side - orig_pix_per_side) % 2 == 0
+
+        if is_even:
+            padding = int((pix_per_side - orig_pix_per_side) / 2)
+            crop_length = pix_per_side / 2
+        else:
+            padding = (
+                int((pix_per_side - orig_pix_per_side) / 2),
+                int((pix_per_side - orig_pix_per_side) / 2) + 1,
+            )  # (before, after)
+            crop_length = (pix_per_side - 1) / 2
 
         for i, img in enumerate(rfs):
             # Pad the image with zeros to achieve the new dimensions
-            # If pix_per_side - img.shape[0] is even:
-            if is_even:
-                padding = int((pix_per_side - img.shape[0]) / 2)
-            else:
-                padding = (
-                    int((pix_per_side - img.shape[0]) / 2),
-                    int((pix_per_side - img.shape[0]) / 2) + 1,
-                )  # (before, after)
-
             img_padded = np.pad(
                 img, pad_width=padding, mode="constant", constant_values=0
             )
 
             # Upsample the padded image
-            img_temp = ndimage.zoom(img_padded, zoom_factor[i], grid_mode=False)
+            img_temp = ndimage.zoom(
+                img_padded, zoom_factor[i], grid_mode=False, order=3
+            )
             # Correct for uneven dimensions after upsampling
             if not is_even:
                 img_temp = ndimage.shift(img_temp, 0.5)
 
             # Crop the upsampled image to the new dimensions
             if is_even:
-                crop_length = pix_per_side / 2
                 img_cropped = img_temp[
                     int(img_temp.shape[0] / 2 - crop_length) : int(
                         img_temp.shape[0] / 2 + crop_length
@@ -1991,7 +1994,6 @@ class ConstructRetina(RetinaMath):
                     ),
                 ]
             else:
-                crop_length = (pix_per_side - 1) / 2
                 img_cropped = img_temp[
                     int(img_temp.shape[0] / 2 - crop_length) : int(
                         img_temp.shape[0] / 2 + crop_length + 1
@@ -2921,10 +2923,19 @@ class ConstructRetina(RetinaMath):
             print("\nGenerating RF images for FIT model...")
             gc.img = self._get_gc_fit_img(gc)
 
+            # gc_img_copy = gc.img.copy()
             # Resample and zoom rf images according to smallest rf diameter
             gc.img = self._get_resampled_scaled_gc_img(
                 gc.img, gc.pix_per_side, gc.df["zoom_factor"]
             )
+            # fig, ax = plt.subplots(1, 2)
+            # xx = 129
+            # print(f"zoom factor for unit {xx}: {gc.df['zoom_factor'][xx]}")
+            # ax[0].imshow(gc_img_copy[xx])
+            # ax[1].imshow(gc.img[xx])
+            # plt.show()
+
+            # pdb.set_trace()
 
             gc.img_mask = self.get_rf_masks(gc.img, mask_threshold=gc.mask_threshold)
 
