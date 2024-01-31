@@ -2124,7 +2124,7 @@ class Viz:
             ax[idx].set_xlabel("X Position (mm)")
             ax[idx].set_ylabel("Y Position (mm)")
             ax[idx].set_title(
-                f"Ganglion Cell {this_sample} image, DoG fit and cnter grid points"
+                f"Ganglion Cell {this_sample}"
             )
             ax[idx].legend()
             # Set equal aspect ratio
