@@ -2050,7 +2050,7 @@ class Viz:
         if savefigname:
             self._figsave(figurename=savefigname)
 
-    def show_DoG_img_grid(self, gc_list=None, savefigname=None):
+    def show_DoG_img_grid(self, gc_list=None, n_samples=None, savefigname=None):
         """
         Visualize a ganglion cell image, DoG fit and center grid points.
         """
@@ -2069,7 +2069,14 @@ class Viz:
 
         gc_df = self.data_io.get_data(self.context.my_retina["mosaic_file"])
         half_pix_mm = (gc_npz["um_per_pix"] / 1000) / 2
-        # pdb.set_trace()
+
+        if isinstance(gc_list, list):
+            pass  # gc_list supercedes n_samples
+        elif isinstance(n_samples, int):
+            gc_list = np.random.choice(range(len(gc_df)), n_samples, replace=False)
+        else:
+            raise ValueError("Either gc_list or n_samples must be provided.")
+
         fig, ax = plt.subplots(1, len(gc_list), figsize=(12, 10))
         if len(gc_list) == 1:
             ax = [ax]
