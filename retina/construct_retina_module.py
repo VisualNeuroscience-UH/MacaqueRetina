@@ -2198,13 +2198,13 @@ class ConstructRetina(RetinaMath):
         # Prepare numpy nd array to hold left upper corner pixel coordinates for each rf image
         gc_img_lu_pix = np.zeros((gc_img.shape[0], 2), dtype=int)
 
-        pos_ecc_mm = df["pos_ecc_mm"].values
-        pos_polar_deg = df["pos_polar_deg"].values
+        pos_ecc_mm = df["pos_ecc_mm"].astype(float)
+        pos_polar_deg = df["pos_polar_deg"].astype(float)
 
         # Locate left upper corner of each rf img and lay images onto retina image
         x_mm, y_mm = self.pol2cart(
-            pos_ecc_mm.astype(np.float64),
-            pos_polar_deg.astype(np.float64) - rot_deg,
+            pos_ecc_mm,
+            pos_polar_deg - rot_deg,
             deg=True,
         )
 
@@ -2229,8 +2229,8 @@ class ConstructRetina(RetinaMath):
                 + (pix_per_side / 2)
             ).values
         else:
-            yoc_pix_scaled = df["yoc_pix"].values
-            xoc_pix_scaled = df["xoc_pix"].values
+            yoc_pix_scaled = df["yoc_pix"].astype(float)
+            xoc_pix_scaled = df["xoc_pix"].astype(float)
 
         for i, row in df.iterrows():
             # Get the position of the rf upper left corner in pixels
@@ -2242,6 +2242,10 @@ class ConstructRetina(RetinaMath):
             # Turn to int for indexing
             y_pix_lu = int(np.round(_y_pix_lu))
             x_pix_lu = int(np.round(_x_pix_lu))
+
+            # if i in [141, 157]:
+            #     print(f"y_pix_lu diff: {y_pix_lu - _y_pix_lu}")
+            #     print(f"x_pix_lu diff: {x_pix_lu - _x_pix_lu}")
 
             # Get the rf image
             this_rf_img = gc_img[i, :, :]
@@ -2713,9 +2717,8 @@ class ConstructRetina(RetinaMath):
             )
 
         mm_per_pix = gc.um_per_pix / 1000
-
-        _Y_grid = np.tile(Y_grid, (gc.img_lu_pix.shape[0], 1, 1))
-        _X_grid = np.tile(X_grid, (gc.img_lu_pix.shape[0], 1, 1))
+        _Y_grid = np.tile(Y_grid, (gc.n_units, 1, 1))
+        _X_grid = np.tile(X_grid, (gc.n_units, 1, 1))
 
         # The grid starts at the center of left upper pixel
         Y_grid_local_mm = _Y_grid * mm_per_pix
