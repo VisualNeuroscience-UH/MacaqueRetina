@@ -2109,6 +2109,7 @@ class ConstructRetina(RetinaMath):
         ----------
         gc_img : numpy.ndarray
             3D numpy array of receptive field images. The shape of the array should be (N, H, W).
+            Serves both img and img_mask inputs.
         um_per_pix : float
             The number of micrometers per pixel in the gc_img.
         df : pandas.DataFrame
@@ -2210,6 +2211,8 @@ class ConstructRetina(RetinaMath):
         x_pix_c = (x_mm - min_x_mm_im) / mm_per_pix
 
         # Pix scaler is necessary when RF fit is done with experimental image grid
+        # This functionality is here because the resetting of center position below needs the 
+        # left up coordinates.
         # pix_scaled = -zoom_factor * ((exp_pix_per_side / 2) - pix_c) + (pix_per_side / 2)
         if apply_pix_scaler is True:
             gc.df["zoom_factor"] = gc.df["zoom_factor"].astype(float)
@@ -2254,14 +2257,16 @@ class ConstructRetina(RetinaMath):
 
         ret.whole_ret_lu_mm = np.array([min_x_mm_im, max_y_mm_im])
 
-        # Apply center shift by zooming back to eccentricity and polar angle
+        # Reset center position: Apply shift by zooming back to eccentricity and polar angle
         if apply_pix_scaler is True:
             y_mm = max_y_mm_im - ((gc_img_lu_pix[:, 1] + yoc_pix_scaled) * mm_per_pix)
             x_mm = min_x_mm_im + ((gc_img_lu_pix[:, 0] + xoc_pix_scaled) * mm_per_pix)
             pos_ecc_mm, pos_polar_deg = self.cart2pol(x_mm, y_mm)
             df["pos_ecc_mm"] = pos_ecc_mm
             df["pos_polar_deg"] = pos_polar_deg
+            gc.df = df
 
+        # Separate exports for img, img_mask imports. Thus no direct assignment to ret object.
         return ret, gc, ret_img_pix
 
     def _get_vae_imgs_with_good_fits(self, gc, retina_vae):
