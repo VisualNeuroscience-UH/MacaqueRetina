@@ -2217,15 +2217,15 @@ class ConstructRetina(RetinaMath):
         # left up coordinates.
         # pix_scaled = -zoom_factor * ((exp_pix_per_side / 2) - pix_c) + (pix_per_side / 2)
         if apply_pix_scaler is True:
-            gc.df["zoom_factor"] = gc.df["zoom_factor"].astype(float)
+            df["zoom_factor"] = df["zoom_factor"].astype(float)
             df["yoc_pix"] = df["yoc_pix"].astype(float)
             df["xoc_pix"] = df["xoc_pix"].astype(float)
             yoc_pix_scaled = (
-                -gc.df["zoom_factor"] * ((gc.exp_pix_per_side / 2) - df["yoc_pix"])
+                -df["zoom_factor"] * ((gc.exp_pix_per_side / 2) - df["yoc_pix"])
                 + (pix_per_side / 2)
             ).values
             xoc_pix_scaled = (
-                -gc.df["zoom_factor"] * ((gc.exp_pix_per_side / 2) - df["xoc_pix"])
+                -df["zoom_factor"] * ((gc.exp_pix_per_side / 2) - df["xoc_pix"])
                 + (pix_per_side / 2)
             ).values
         else:
