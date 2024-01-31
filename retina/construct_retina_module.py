@@ -128,9 +128,9 @@ class Retina:
         pol_limits_deg = my_retina["pol_limits_deg"]
 
         # Turn list to numpy array and deg to mm
-        self.ecc_lim_mm = np.asarray(ecc_limits_deg) / self.deg_per_mm
+        self.ecc_lim_mm = np.asarray(ecc_limits_deg).astype(float) / self.deg_per_mm
         self.ecc_limit_for_dd_fit_mm = ecc_limit_for_dd_fit / self.deg_per_mm
-        self.polar_lim_deg = np.asarray(pol_limits_deg)  # Turn list to numpy array
+        self.polar_lim_deg = np.asarray(pol_limits_deg).astype(float)
 
         # Assertions
         assert (
@@ -1513,7 +1513,7 @@ class ConstructRetina(RetinaMath):
         self, ret, initial_positions, unit_density, unit_placement_params
     ):
         # Merge the Groups
-        all_positions = np.vstack(initial_positions)
+        all_positions = np.vstack(initial_positions).astype(float)
         all_positions_tuple = self.pol2cart(all_positions[:, 0], all_positions[:, 1])
         all_positions_mm = np.column_stack(all_positions_tuple)
 
@@ -2198,8 +2198,8 @@ class ConstructRetina(RetinaMath):
         # Prepare numpy nd array to hold left upper corner pixel coordinates for each rf image
         gc_img_lu_pix = np.zeros((gc_img.shape[0], 2), dtype=int)
 
-        pos_ecc_mm = df["pos_ecc_mm"].astype(float)
-        pos_polar_deg = df["pos_polar_deg"].astype(float)
+        pos_ecc_mm = df["pos_ecc_mm"].values.astype(float)
+        pos_polar_deg = df["pos_polar_deg"].values.astype(float)
 
         # Locate left upper corner of each rf img and lay images onto retina image
         x_mm, y_mm = self.pol2cart(

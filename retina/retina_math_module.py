@@ -182,6 +182,9 @@ class RetinaMath:
         tuple
             A tuple containing the Cartesian coordinates (x, y) in same units as the radius.
         """
+        # Check that radius and phi are floats or numpy arrays
+        assert type(radius) in [float, np.float64, np.ndarray], "Radius must be a float"
+        assert type(phi) in [float, np.float64, np.ndarray], "Phi must be a float"
 
         if deg is True:
             theta = phi * np.pi / 180
@@ -213,6 +216,9 @@ class RetinaMath:
         tuple
             A tuple containing the polar coordinates (radius, phi).
         """
+        # Check that x and y are floats or numpy arrays
+        assert type(x) in [float, np.float64, np.ndarray], "x must be a float"
+        assert type(y) in [float, np.float64, np.ndarray], "y must be a float"
 
         radius = np.sqrt(x**2 + y**2)
         theta = np.arctan2(y, x)
