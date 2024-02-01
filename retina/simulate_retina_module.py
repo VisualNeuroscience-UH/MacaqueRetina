@@ -179,7 +179,7 @@ class SimulateRetina(RetinaMath):
         self.stimulus_height_pix = stimulus_height_pix
         self.stimulus_width_deg = stimulus_width_pix / pix_per_deg
         self.stimulus_height_deg = stimulus_height_pix / pix_per_deg
-        self.pix_per_deg = pix_per_deg  # angular resolution (eg. van Hateren 1 arcmin/pix => 60 pix/deg)
+        self.pix_per_deg = pix_per_deg  # stimulus angular resolution (eg. van Hateren 1 arcmin/pix => 60 pix/deg)
         self.fps = fps
         self.spatial_filter_sidelen = 0
         self.microm_per_pix = 0
