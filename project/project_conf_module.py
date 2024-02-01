@@ -210,12 +210,12 @@ my_retina = {
     # "ecc_limits_deg": [4.8, 5.2],  # eccentricity in degrees
     # "pol_limits_deg": [-1.0, 1.0],  # polar angle in degrees
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
-    "dd_regr_model": "loglog",  # linear, quadratic, cubic, loglog. For midget < 20 deg, use quadratic; for parasol use loglog
+    "dd_regr_model": "quadratic",  # linear, quadratic, cubic, loglog. For midget < 20 deg, use quadratic; for parasol use loglog
     "ecc_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
-    "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
+    "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies to FIT only, scales sum(unit center areas) = retina area
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
@@ -643,11 +643,11 @@ if __name__ == "__main__":
     # TÄHÄN JÄIT:
     # FIT HIEMAN SIVUSSA GRIDISTÄ EDELLEEN.
 
-    # PM.viz.show_cones_linked_to_gc(gc_list=[141, 157], savefigname=None)
+    PM.viz.show_cones_linked_to_gc(gc_list=[141, 157], savefigname=None)
     # PM.viz.show_DoG_img_grid(gc_list=[10, 17, 11], savefigname=None)
-    PM.viz.show_DoG_img_grid(
-        gc_list=[68, 73, 80, 88, 98, 123, 129, 145], savefigname=None
-    )
+    # PM.viz.show_DoG_img_grid(
+    #     gc_list=[68, 73, 80, 88, 98, 123, 129, 145], savefigname=None
+    # )
     # PM.viz.show_DoG_img_grid(gc_list=[141, 157], savefigname=None)
     # PM.viz.show_DoG_img_grid(n_samples=8)
     # PM.viz.show_cones_linked_to_gc(gc_list=[32, 58, 63, 67, 6], savefigname=None)
@@ -668,7 +668,7 @@ if __name__ == "__main__":
     # PM.viz.show_latent_tsne_space()
     # PM.viz.show_gen_spat_post_hist()
     # PM.viz.show_latent_space_and_samples()
-    # PM.viz.show_retina_img(savefigname=None)
+    PM.viz.show_retina_img(savefigname=None)
     # PM.viz.show_rf_imgs(n_samples=10, savefigname="parasol_on_vae_gen_rf.eps")
     # PM.viz.show_rf_violinplot()  # Pixel values for each unit
 

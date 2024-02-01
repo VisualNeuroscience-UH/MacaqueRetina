@@ -2770,7 +2770,7 @@ class Viz:
         Show the image of whole retina with all the receptive fields summed up.
         """
 
-        gen_ret = self.project_data.construct_retina["gen_ret"]
+        gen_ret = self.project_data.construct_retina["ret"]
 
         img_ret = gen_ret["img_ret"]
         img_ret_masked = gen_ret["img_ret_masked"]
