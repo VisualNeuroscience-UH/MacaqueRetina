@@ -2052,7 +2052,7 @@ class ConstructRetina(RetinaMath):
         # + offset of receptive field center from the left upper corner of receptive field
         x_mm = ret.whole_ret_lu_mm[0] + rf_lu_mm[:, 0] + xoc_mm
         y_mm = ret.whole_ret_lu_mm[1] - rf_lu_mm[:, 1] - yoc_mm
-        (pos_ecc_mm, pos_polar_deg) = self.cart2pol(x_mm, y_mm)
+        (pos_ecc_mm, pos_polar_deg) = self.cart2pol(x_mm.values, y_mm.values)
 
         _df["pos_ecc_mm"] = pos_ecc_mm
         _df["pos_polar_deg"] = pos_polar_deg
