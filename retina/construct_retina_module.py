@@ -2918,6 +2918,7 @@ class ConstructRetina(RetinaMath):
 
             elif ret.rf_coverage_adjusted_to_1 == False:
                 # Read the dendritic field diameter from literature data
+                # Provides mm-scaled DoG ellipse semi x,y and radius values
                 gc = self._generate_DoG_with_rf_from_literature(gc)
 
             # Add dendritic diameter to self.gc_df for visualization, in micrometers
@@ -2931,7 +2932,10 @@ class ConstructRetina(RetinaMath):
             ret, gc, ret.whole_ret_img = self._get_full_retina_with_rf_images(
                 ret, gc, gc.img, apply_pix_scaler=True
             )
-
+            viz_whole_ret_img = ret.whole_ret_img
+            ret, gc, ret.whole_ret_img_mask = self._get_full_retina_with_rf_images(
+                ret, gc, gc.img_mask, apply_pix_scaler=True
+            )
             gc = self._get_img_grid_mm(ret, gc)
 
             # Add center mask area (mm^2) to gc_vae_df for visualization
@@ -3029,11 +3033,11 @@ class ConstructRetina(RetinaMath):
                 "centre_of_mass_y": gc.df["com_y_pix"],
             }
 
-            self.project_data.construct_retina["gen_ret"] = {
-                "img_ret": viz_whole_ret_img,
-                "img_ret_masked": ret.whole_ret_img_mask,
-                "img_ret_adjusted": ret.whole_ret_img,
-            }
+        self.project_data.construct_retina["ret"] = {
+            "img_ret": viz_whole_ret_img,
+            "img_ret_masked": ret.whole_ret_img_mask,
+            "img_ret_adjusted": ret.whole_ret_img,
+        }
 
         # Add fitted DoG center area to gc_df for visualization
         gc = self._add_center_fit_area_to_df(gc)
