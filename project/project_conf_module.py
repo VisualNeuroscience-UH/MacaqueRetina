@@ -445,6 +445,7 @@ rf_repulsion_params = {
 my_retina_append = {
     "mosaic_file": gc_type + "_" + response_type + "_mosaic.csv",
     "spatial_rfs_file": gc_type + "_" + response_type + "_spatial_rfs.npz",
+    "ret_file": gc_type + "_" + response_type + "_ret.npz",
     "proportion_of_parasol_gc_type": proportion_of_parasol_gc_type,
     "proportion_of_midget_gc_type": proportion_of_midget_gc_type,
     "proportion_of_ON_response_type": proportion_of_ON_response_type,
@@ -600,7 +601,7 @@ if __name__ == "__main__":
     # MIETI TAPPIKOHINAN LINKITYS UUDELLEEN:
     #  - PERIFERIASSA GRIDI LIIAN HARVA
     #  - KESKELLÄ GRIDI LIIAN TIHEÄ
-    # FIT IRTI GRIDISTÄ EDELLEEN.
+    # FIT HIEMAN SIVUSSA GRIDISTÄ EDELLEEN.
 
     ###########################################
     ##   Sample figure data from literature  ##
@@ -631,17 +632,28 @@ if __name__ == "__main__":
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # Thus, they are called after the retina is built.
+    # TODO: Check what project_data should be saved to npz files for viz.
 
     # The show_exp_build_process method visualizes the spatial and temporal filter responses, ganglion cell positions and density,
     # mosaic layout, spatial and temporal statistics, dendrite diameter versus eccentricity, and tonic drives
     # in the retina mosaic building process.
 
     # For FIT and VAE
-    # PM.viz.show_cones_linked_to_gc(gc_list=[100, 101, 103], savefigname=None)
+
+    # TÄHÄN JÄIT:
+    # FIT HIEMAN SIVUSSA GRIDISTÄ EDELLEEN.
+
+    # PM.viz.show_cones_linked_to_gc(gc_list=[141, 157], savefigname=None)
+    # PM.viz.show_DoG_img_grid(gc_list=[10, 17, 11], savefigname=None)
+    PM.viz.show_DoG_img_grid(
+        gc_list=[68, 73, 80, 88, 98, 123, 129, 145], savefigname=None
+    )
+    # PM.viz.show_DoG_img_grid(gc_list=[141, 157], savefigname=None)
+    # PM.viz.show_DoG_img_grid(n_samples=8)
     # PM.viz.show_cones_linked_to_gc(gc_list=[32, 58, 63, 67, 6], savefigname=None)
     # PM.viz.show_unit_density_vs_ecc(unit_type="cone", savefigname=None)  # gc or cone
 
-    PM.viz.show_DoG_model_fit(sample_list=[10], savefigname=None)
+    # PM.viz.show_DoG_model_fit(sample_list=[10], savefigname=None)
     # PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)
     # PM.viz.show_dendrite_diam_vs_ecc(log_x=False, log_y=False, savefigname=None)
     # PM.viz.show_cone_noise_vs_freq(savefigname="cone_noise_vs_freq.svg")
@@ -743,7 +755,7 @@ if __name__ == "__main__":
     # PM.viz.show_stimulus_with_gcs(
     #     example_gc=24,  # [int,], my_run_options["cell_index"]
     #     frame_number=301,  # depends on fps, and video and baseline lengths
-    #     show_rf_id=False,
+    #     show_rf_id=True,
     #     savefigname=None,
     # )
 
