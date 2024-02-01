@@ -182,7 +182,7 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 
 # For "load_model" training_mode, the model is loaded from model_file_name at output_folder (primary)
 # or input_folder. The correct model name (including time stamp) must be given in the model_file_name.
-gc_type = "midget"  # "parasol" or "midget"
+gc_type = "parasol"  # "parasol" or "midget"
 response_type = "on"  # "on" or "off"
 
 # VAE RF is generated in experimental data space originating from macaque peripheral retina.
@@ -215,7 +215,7 @@ my_retina = {
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "dynamic",  # fixed, dynamic
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
-    "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder
+    "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies to FIT only, scales sum(unit center areas) = retina area
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
@@ -405,21 +405,21 @@ refractory_params = {
 # "force" (f) : better for small retinas, slow
 # None : initial random placement. Nonvarying with fixed seed above. Good for testing and speed.
 gc_placement_params = {
-    "algorithm": None,  # "voronoi" or "force" or None
-    "n_iterations": 5000,  # v 20, f 5000
+    "algorithm": "force",  # "voronoi" or "force" or None
+    "n_iterations": 3000,  # v 20, f 5000
     "change_rate": 0.001,  # f 0.001, v 0.5
     "unit_repulsion_stregth": 5,  # 10 f only
     "unit_distance_threshold": 0.02,  # f only, adjusted with ecc
     "diffusion_speed": 0.0001,  # f only, adjusted with ecc
     "border_repulsion_stength": 10,  # f only
     "border_distance_threshold": 0.01,  # f only
-    "show_placing_progress": False,  # True False
+    "show_placing_progress": True,  # True False
     "show_skip_steps": 100,  # v 1, f 100
 }
 
 cone_placement_params = {
-    "algorithm": None,  # "voronoi" or "force" or None
-    "n_iterations": 300,  # v 20, f 300
+    "algorithm": "force",  # "voronoi" or "force" or None
+    "n_iterations": 200,  # v 20, f 300
     "change_rate": 0.0005,  # f 0.0005, v 0.5
     "unit_repulsion_stregth": 2,  # 10 f only
     "unit_distance_threshold": 0.1,  # f only, adjusted with ecc
@@ -432,11 +432,11 @@ cone_placement_params = {
 
 # For VAE, this is enough to have good distribution between units.
 rf_repulsion_params = {
-    "n_iterations": 1,  # 200
+    "n_iterations": 200,  # 200
     "change_rate": 0.01,
     "cooling_rate": 0.999,  # each iteration change_rate = change_rate * cooling_rate
     "border_repulsion_stength": 5,
-    "show_repulsion_progress": False,  # True False
+    "show_repulsion_progress": True,  # True False
     "show_only_unit": None,  # None or int for unit idx
     "show_skip_steps": 5,
     "savefigname": None,
@@ -601,7 +601,6 @@ if __name__ == "__main__":
     # MIETI TAPPIKOHINAN LINKITYS UUDELLEEN:
     #  - PERIFERIASSA GRIDI LIIAN HARVA
     #  - KESKELLÄ GRIDI LIIAN TIHEÄ
-    # FIT HIEMAN SIVUSSA GRIDISTÄ EDELLEEN.
 
     ###########################################
     ##   Sample figure data from literature  ##
@@ -639,12 +638,8 @@ if __name__ == "__main__":
     # in the retina mosaic building process.
 
     # For FIT and VAE
-
-    # TÄHÄN JÄIT:
-    # FIT HIEMAN SIVUSSA GRIDISTÄ EDELLEEN.
-
-    PM.viz.show_cones_linked_to_gc(gc_list=[141, 157], savefigname=None)
-    # PM.viz.show_DoG_img_grid(gc_list=[10, 17, 11], savefigname=None)
+    # PM.viz.show_cones_linked_to_gc(gc_list=[141, 157], savefigname=None)
+    PM.viz.show_DoG_img_grid(gc_list=[10, 17, 11], savefigname=None)
     # PM.viz.show_DoG_img_grid(
     #     gc_list=[68, 73, 80, 88, 98, 123, 129, 145], savefigname=None
     # )
@@ -657,6 +652,7 @@ if __name__ == "__main__":
     # PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)
     # PM.viz.show_dendrite_diam_vs_ecc(log_x=False, log_y=False, savefigname=None)
     # PM.viz.show_cone_noise_vs_freq(savefigname="cone_noise_vs_freq.svg")
+    PM.viz.show_retina_img(savefigname=None)
 
     # For FIT (DoG fits, temporal kernels and tonic drives)
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
@@ -668,7 +664,6 @@ if __name__ == "__main__":
     # PM.viz.show_latent_tsne_space()
     # PM.viz.show_gen_spat_post_hist()
     # PM.viz.show_latent_space_and_samples()
-    PM.viz.show_retina_img(savefigname=None)
     # PM.viz.show_rf_imgs(n_samples=10, savefigname="parasol_on_vae_gen_rf.eps")
     # PM.viz.show_rf_violinplot()  # Pixel values for each unit
 
@@ -702,8 +697,8 @@ if __name__ == "__main__":
     ####################################
 
     # Load stimulus to get working retina, necessary for running cells
-    # PM.simulate_retina.load_stimulus()
-    # PM.simulate_retina.run_with_my_run_options()
+    PM.simulate_retina.load_stimulus()
+    PM.simulate_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
@@ -750,14 +745,14 @@ if __name__ == "__main__":
     ################################################
 
     # Based on my_run_options above
-    # PM.viz.show_all_gc_responses(savefigname=None)
+    PM.viz.show_all_gc_responses(savefigname=None)
 
-    # PM.viz.show_stimulus_with_gcs(
-    #     example_gc=24,  # [int,], my_run_options["cell_index"]
-    #     frame_number=301,  # depends on fps, and video and baseline lengths
-    #     show_rf_id=True,
-    #     savefigname=None,
-    # )
+    PM.viz.show_stimulus_with_gcs(
+        example_gc=24,  # [int,], my_run_options["cell_index"]
+        frame_number=301,  # depends on fps, and video and baseline lengths
+        show_rf_id=True,
+        savefigname=None,
+    )
 
     #################################################################
     #################################################################

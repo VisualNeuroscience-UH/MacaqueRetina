@@ -190,8 +190,9 @@ class SimulateRetina(RetinaMath):
         self.spat_rf = rfs_npz["gc_img"]
         self.um_per_pix = rfs_npz["um_per_pix"]
         self.sidelen_pix = rfs_npz["pix_per_side"]
-        self.cones_to_gcs_weights = rfs_npz["cones_to_gcs_weights"]
-        self.cone_noise_parameters = rfs_npz["cone_noise_parameters"]
+        ret_npz = self.data_io.get_data(filename=my_retina["ret_file"])
+        self.cones_to_gcs_weights = ret_npz["cones_to_gcs_weights"]
+        self.cone_noise_parameters = ret_npz["cone_noise_parameters"]
 
         self._initialize_stimulus_pixel_space()
 

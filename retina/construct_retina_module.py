@@ -2980,7 +2980,8 @@ class ConstructRetina(RetinaMath):
             viz_whole_ret_img = ret.whole_ret_img
 
             print("\nApplying repulsion between the receptive fields...")
-            ret, gc = self._apply_rf_repulsion(ret, gc)
+            # TODO tarkista repulsio ja update df lokaatiot, jos tarpeen
+            # ret, gc = self._apply_rf_repulsion(ret, gc)
 
             ret, gc, ret.whole_ret_img_mask = self._get_full_retina_with_rf_images(
                 ret, gc, gc.img_mask, apply_pix_scaler=False
@@ -3082,11 +3083,11 @@ class ConstructRetina(RetinaMath):
                 "centre_of_mass_y": gc.df["com_y_pix"],
             }
 
-        # self.project_data.construct_retina["ret"] = {
-        #     "img_ret": viz_whole_ret_img,
-        #     "img_ret_masked": ret.whole_ret_img_mask,
-        #     "img_ret_adjusted": ret.whole_ret_img,
-        # }
+        self.project_data.construct_retina["ret"] = {
+            "img_ret": viz_whole_ret_img,
+            "img_ret_masked": ret.whole_ret_img_mask,
+            "img_ret_adjusted": ret.whole_ret_img,
+        }
 
         # Add fitted DoG center area to gc_df for visualization
         gc = self._add_center_fit_area_to_df(gc)
