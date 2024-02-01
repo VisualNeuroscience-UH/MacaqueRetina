@@ -2785,23 +2785,29 @@ class ConstructRetina(RetinaMath):
         """
 
         n_units = gc.n_units
-        num_pix_y = self.context.apricot_metadata["data_spatialfilter_height"]
-        num_pix_x = self.context.apricot_metadata["data_spatialfilter_width"]
-        assert num_pix_y == num_pix_x, "Exp data matrix must be square, aborting..."
-        exp_pix_per_side = num_pix_y
+        exp_pix_per_side = gc.exp_pix_per_side
+        pix_per_side = gc.pix_per_side
+        pix_scaler = pix_per_side / exp_pix_per_side
 
         # Make fit to all cells
-        grid_indices = np.linspace(0, exp_pix_per_side - 1, exp_pix_per_side)
+        grid_indices = np.linspace(0, pix_per_side - 1, pix_per_side)
         # the grid is (H, W) = (num_pix_y, num_pix_x)
         y_grid, x_grid = np.meshgrid(grid_indices, grid_indices, indexing="ij")
 
         gc = self._get_param_names(gc)
+
+        # We generate img with the final pixel scale, whereas parameters come from
+        # the experimental pixel scale. Thus we need to scale the pixel parameters.
+        apply_scale = np.array(
+            [pix_scaler if "pix" in x else 1.0 for x in gc.parameter_names]
+        )
         parameters = gc.df[gc.parameter_names].values.astype(float)
-        gc_fit_img = np.zeros((n_units, exp_pix_per_side, exp_pix_per_side))
+        parameters_scaled = parameters * apply_scale
+        gc_fit_img = np.zeros((n_units, pix_per_side, pix_per_side))
 
         for idx in range(n_units):
             # Get DoG model fit parameters to popt
-            popt = parameters[idx, :]
+            popt = parameters_scaled[idx, :]
 
             # Ellipses for DoG2D_fixed_surround. Circular params are mapped to ellipse_fixed params
             if gc.DoG_model == "ellipse_fixed":
@@ -2813,9 +2819,7 @@ class ConstructRetina(RetinaMath):
             elif gc.DoG_model == "circular":
                 gc_img_fitted = self.DoG2D_circular((x_grid, y_grid), *popt)
 
-            gc_fit_img[idx, :, :] = gc_img_fitted.reshape(
-                exp_pix_per_side, exp_pix_per_side
-            )
+            gc_fit_img[idx, :, :] = gc_img_fitted.reshape(pix_per_side, pix_per_side)
 
         return gc_fit_img
 
@@ -2922,21 +2926,6 @@ class ConstructRetina(RetinaMath):
             # Create gc_img from DoG model
             print("\nGenerating RF images for FIT model...")
             gc.img = self._get_gc_fit_img(gc)
-
-            # gc_img_copy = gc.img.copy()
-            # Resample and zoom rf images according to smallest rf diameter
-            gc.img = self._get_resampled_scaled_gc_img(
-                gc.img, gc.pix_per_side, gc.df["zoom_factor"]
-            )
-            # fig, ax = plt.subplots(1, 2)
-            # xx = 129
-            # print(f"zoom factor for unit {xx}: {gc.df['zoom_factor'][xx]}")
-            # ax[0].imshow(gc_img_copy[xx])
-            # ax[1].imshow(gc.img[xx])
-            # plt.show()
-
-            # pdb.set_trace()
-
             gc.img_mask = self.get_rf_masks(gc.img, mask_threshold=gc.mask_threshold)
 
             ret, gc, ret.whole_ret_img = self._get_full_retina_with_rf_images(
