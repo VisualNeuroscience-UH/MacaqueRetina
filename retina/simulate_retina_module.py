@@ -136,12 +136,21 @@ class ReceptiveFields:
     retina parameters, the spatial and temporal filters.
     """
 
-    def __init__(self, my_retina, apricot_metadata, get_data, pol2cart_df):
+    def __init__(
+        self,
+        my_retina,
+        apricot_metadata,
+        get_data,
+        pol2cart_df,
+        cell_index,
+        spike_generator_model,
+    ):
         # Parameters directly passed to the constructor
         self.my_retina = my_retina
         self.apricot_metadata = apricot_metadata
         self.get_data = get_data
         self.pol2cart_df = pol2cart_df
+        self.spike_generator_model = spike_generator_model
 
         # Default values for computed variables
         self.spatial_filter_sidelen = 0
@@ -201,7 +210,6 @@ class ReceptiveFields:
         df = df.drop(["pos_ecc_mm", "pos_polar_deg"], axis=1)
 
         self.df = df
-        self.n_units = len(df)
 
         rfs_npz = self.get_data(filename=self.my_retina["spatial_rfs_file"])
         self.spat_rf = rfs_npz["gc_img"]
@@ -210,6 +218,26 @@ class ReceptiveFields:
         ret_npz = self.get_data(filename=self.my_retina["ret_file"])
         self.cones_to_gcs_weights = ret_npz["cones_to_gcs_weights"]
         self.cone_noise_parameters = ret_npz["cone_noise_parameters"]
+
+        # Run all cells
+        if cell_index is None:
+            self.n_cells = len(df.index)  # all cells
+            cell_indices = np.arange(self.n_cells)
+        # Run a subset of cells
+        elif isinstance(cell_index, (list)):
+            cell_indices = np.array(cell_index)
+            self.n_cells = len(cell_indices)
+        # Run one cell
+        elif isinstance(cell_index, (int)):
+            cell_indices = np.array([cell_index])
+            self.n_cells = len(cell_indices)
+        else:
+            raise AssertionError(
+                "cell_index must be None, an integer or list, aborting..."
+            )
+        if isinstance(cell_indices, (int, np.int32, np.int64)):
+            cell_indices = np.array([cell_indices])
+        self.cell_indices = np.atleast_1d(cell_indices)
 
     def __str__(self):
         return f"{self.gc_type}_{self.response_type} with {self.n_units} units."
@@ -339,6 +367,7 @@ class VisualSignal:
         my_stimulus_options,
         stimulus_center,
         load_stimulus_from_videofile,
+        simulation_dt,
         stimulus_video=None,
     ):
         # Parameters directly passed to the constructor
@@ -380,6 +409,12 @@ class VisualSignal:
             np.min(self.stimulus_video.frames) >= 0
             and np.max(self.stimulus_video.frames) <= 255
         ), "Stimulus pixel values must be between 0 and 255"
+
+        self.video_dt = (1 / self.stimulus_video.fps) * b2u.second  # input
+        self.stim_len_tp = self.stimulus_video.video_n_frames
+        self.duration = self.stim_len_tp * self.video_dt
+        self.simulation_dt = simulation_dt * b2u.second  # output
+        self.tvec = range(self.stim_len_tp) * self.video_dt
 
     def _vspace_to_pixspace(self, x, y):
         """
@@ -600,9 +635,7 @@ class SimulateRetina(RetinaMath):
 
         return temporal_filter
 
-    def _get_spatially_cropped_video(
-        self, vs, rf, cell_indices, contrast=True, reshape=False
-    ):
+    def _get_spatially_cropped_video(self, vs, rf, contrast=True, reshape=False):
         """
         Crops the video to the surroundings of the specified Retinal Ganglion Cells (RGCs).
 
@@ -613,9 +646,6 @@ class SimulateRetina(RetinaMath):
 
         Parameters
         ----------
-        cell_indices : array of ints
-            Indices for the RGCs. The function will crop the video around each cell
-            specified in this array.
 
         contrast : bool, optional
             If True, the video is rescaled to have pixel values between -1 and 1.
@@ -642,15 +672,12 @@ class SimulateRetina(RetinaMath):
         and rmin and rmax specify the range in the r-dimension (vertical).
         """
 
-        if isinstance(cell_indices, (int, np.int32, np.int64)):
-            cell_indices = np.array([cell_indices])
-
         sidelen = rf.spatial_filter_sidelen
-
+        cell_indices = rf.cell_indices.copy()
         # Original frames are now [time points, height, width]
         video_copy = vs.stimulus_video.frames.copy()
         video_copy = np.transpose(video_copy, (1, 2, 0))
-        video_copy = np.tile(video_copy, (len(cell_indices), 1, 1, 1))
+        video_copy = np.tile(video_copy, (rf.n_cells, 1, 1, 1))
 
         qmin, qmax, rmin, rmax = self._get_crop_pixels(rf, cell_indices)
 
@@ -709,12 +736,12 @@ class SimulateRetina(RetinaMath):
             n_frames = np.shape(vs.stimulus_video.frames)[0]
             # reshape the video
             stimulus_cropped = stimulus_cropped.reshape(
-                (len(cell_indices), sidelen**2, n_frames)
+                (rf.n_cells, sidelen**2, n_frames)
             )
 
         return stimulus_cropped
 
-    def _get_uniformity_index(self, rf, vs, cell_indices, center_masks):
+    def _get_uniformity_index(self, vs, rf, center_masks):
         """
         Calculate the uniformity index for retinal ganglion cell receptive fields.
 
@@ -746,14 +773,12 @@ class SimulateRetina(RetinaMath):
         """
         height = vs.stimulus_height_pix
         width = vs.stimulus_width_pix
-
-        if isinstance(cell_indices, (int, np.int32, np.int64)):
-            cell_indices = np.array([cell_indices])
+        cell_indices = rf.cell_indices.copy()
 
         qmin, qmax, rmin, rmax = self._get_crop_pixels(rf, cell_indices)
 
-        stim_region = np.zeros((len(cell_indices), height, width), dtype=np.int32)
-        center_region = np.zeros((len(cell_indices), height, width), dtype=np.int32)
+        stim_region = np.zeros((rf.n_cells, height, width), dtype=np.int32)
+        center_region = np.zeros((rf.n_cells, height, width), dtype=np.int32)
 
         # Create the r and q indices for each cell, ensure they're integer type
         sidelen = rf.spatial_filter_sidelen
@@ -772,9 +797,7 @@ class SimulateRetina(RetinaMath):
         r_matrix, q_matrix = np.broadcast_arrays(r_indices, q_indices)
 
         # create a cell index array
-        unit_region_idx = (
-            np.arange(len(cell_indices)).astype(np.int32).reshape(-1, 1, 1)
-        )
+        unit_region_idx = np.arange(rf.n_cells).astype(np.int32).reshape(-1, 1, 1)
 
         # expand the indices arrays to the shape of r_matrix and q_matrix using broadcasting
         unit_region_idx = unit_region_idx + np.zeros_like(r_matrix, dtype=np.int32)
@@ -782,9 +805,7 @@ class SimulateRetina(RetinaMath):
         # use the index arrays to select the elements from video_copy
         stim_region[unit_region_idx, r_matrix, q_matrix] = 1
 
-        center_masks = center_masks.astype(bool).reshape(
-            (len(cell_indices), sidelen, sidelen)
-        )
+        center_masks = center_masks.astype(bool).reshape((rf.n_cells, sidelen, sidelen))
 
         center_region[
             unit_region_idx * center_masks,
@@ -970,7 +991,6 @@ class SimulateRetina(RetinaMath):
     def _generator_to_firing_rate_noise(
         self,
         rf,
-        cell_indices,
         n_trials,
         tvec,
         params_all,
@@ -1000,7 +1020,7 @@ class SimulateRetina(RetinaMath):
         cones_to_gcs_weights = rf.cones_to_gcs_weights
         NL, TL, HS, TS, A0, M0, D = rf.cone_noise_parameters
 
-        cones_to_gcs_weights = cones_to_gcs_weights[:, cell_indices]
+        cones_to_gcs_weights = cones_to_gcs_weights[:, rf.cell_indices]
         n_cones = cones_to_gcs_weights.shape[0]
 
         # Normalize weights by columns (ganglion cells)
@@ -1320,8 +1340,7 @@ class SimulateRetina(RetinaMath):
 
         elif rf.temporal_model == "fixed":  # Linear model
             # Amplitude will be scaled by first (positive) lowpass filter.
-            # for idx, this_cell_index in enumerate(cell_index):
-            temporal_filter = self.get_temporal_filters(rf, cell_index)
+            temporal_filter = self.get_temporal_filters(rf)
             yvecs = np.repeat(
                 temporal_filter[:, np.newaxis, :], len(contrasts_for_impulse), axis=1
             )
@@ -1381,7 +1400,7 @@ class SimulateRetina(RetinaMath):
 
         return w_coord, z_coord
 
-    def get_temporal_filters(self, rf, cell_indices):
+    def get_temporal_filters(self, rf):
         """
         Retrieve temporal filters for an array of cells.
 
@@ -1391,8 +1410,6 @@ class SimulateRetina(RetinaMath):
 
         Parameters
         ----------
-        cell_indices : array_like
-            List or 1-D array of cell indices for which to generate temporal filters.
 
         Returns
         -------
@@ -1406,14 +1423,14 @@ class SimulateRetina(RetinaMath):
           - self.temporal_filter_len: an integer specifying the length of a temporal filter.
         """
 
-        temporal_filters = np.zeros((len(cell_indices), rf.temporal_filter_len))
+        temporal_filters = np.zeros((len(rf.cell_indices), rf.temporal_filter_len))
 
-        for idx, cell_index in enumerate(cell_indices):
+        for idx, cell_index in enumerate(rf.cell_indices):
             temporal_filters[idx, :] = self._create_temporal_filter(rf, cell_index)
 
         return temporal_filters
 
-    def get_spatial_filters(self, rf, cell_indices, mask_threshold=None):
+    def get_spatial_filters(self, rf, mask_threshold=None):
         """
         Generate spatial filters for given cell indices.
 
@@ -1424,8 +1441,6 @@ class SimulateRetina(RetinaMath):
 
         Parameters
         ----------
-        cell_indices : array_like
-            List or 1-D array of cell indices for which to generate spatial filters.
         mask_threshold : float or None, optional
             If float, return center masks instead of spatial filters. The default is None.
 
@@ -1455,8 +1470,8 @@ class SimulateRetina(RetinaMath):
             ), "mask_threshold must be between 0 and 1, aborting..."
 
         s = rf.spatial_filter_sidelen
-        spatial_filters = np.zeros((len(cell_indices), s, s))
-        for idx, cell_index in enumerate(cell_indices):
+        spatial_filters = np.zeros((len(rf.cell_indices), s, s))
+        for idx, cell_index in enumerate(rf.cell_indices):
             if rf.spatial_model == "FIT":
                 spatial_filters[idx, ...] = self._create_spatial_filter_FIT(
                     rf, cell_index
@@ -1473,7 +1488,7 @@ class SimulateRetina(RetinaMath):
             )
 
         # Reshape to N cells, s**2 pixels
-        spatial_filters = np.reshape(spatial_filters, (len(cell_indices), s**2))
+        spatial_filters = np.reshape(spatial_filters, (len(rf.cell_indices), s**2))
 
         return spatial_filters
 
@@ -1516,8 +1531,7 @@ class SimulateRetina(RetinaMath):
         The `num_pixels` and `time_steps` should be the same for `stimulus_cropped` and `spatiotemporal_filter`.
         """
 
-        stim_len_tp = stimulus_cropped.shape[-1]
-        # stimulus_size_pix = stimulus_cropped.shape[1]
+        # stim_len_tp = stimulus_cropped.shape[-1]
         num_cells = len(cell_indices)
         video_dt = (1 / vs.stimulus_video.fps) * b2u.second
 
@@ -1546,7 +1560,7 @@ class SimulateRetina(RetinaMath):
             )
 
             output = torch.empty(
-                (num_cells, stim_len_tp),
+                (num_cells, vs.stim_len_tp),
                 device=device,
             )
             for i in range(num_cells):
@@ -1568,7 +1582,9 @@ class SimulateRetina(RetinaMath):
                 >= filter_length * 1 / vs.stimulus_video.fps
             ), f"baseline_start_seconds must be longer than filter length ({filter_length * video_dt}), aborting..."
 
-            generator_potential = np.empty((num_cells, stim_len_tp - filter_length + 1))
+            generator_potential = np.empty(
+                (num_cells, vs.stim_len_tp - filter_length + 1)
+            )
             for idx in range(num_cells):
                 generator_potential[idx, :] = convolve(
                     stimulus_cropped[idx], spatiotemporal_filter[idx], mode="valid"
@@ -1586,7 +1602,7 @@ class SimulateRetina(RetinaMath):
         # Internal test for convolution operation
         generator_potential_duration_tp = generator_potential.shape[-1]
         assert (
-            stim_len_tp == generator_potential_duration_tp
+            vs.stim_len_tp == generator_potential_duration_tp
         ), "Duration mismatch, check convolution operation, aborting..."
 
         return generator_potential
@@ -1695,6 +1711,7 @@ class SimulateRetina(RetinaMath):
             self.context.my_stimulus_options,
             self.context.my_retina["stimulus_center"],
             self.data_io.load_stimulus_from_videofile,
+            simulation_dt,
             stimulus_video=stimulus,
         )
 
@@ -1703,62 +1720,32 @@ class SimulateRetina(RetinaMath):
             self.context.apricot_metadata,
             self.data_io.get_data,
             self.pol2cart_df,
+            cell_index,
+            spike_generator_model,
         )
 
         rf._link_rf_to_vs(vs)
 
-        # Save spike generation model
-        self.spike_generator_model = spike_generator_model
-
-        video_dt = (1 / vs.stimulus_video.fps) * b2u.second  # input
-        stim_len_tp = vs.stimulus_video.video_n_frames
-        duration = stim_len_tp * video_dt
-        simulation_dt = simulation_dt * b2u.second  # output
-        tvec = range(stim_len_tp) * video_dt
-
-        # Run all cells
-        if cell_index is None:
-            n_cells = len(rf.df.index)  # all cells
-            cell_indices = np.arange(n_cells)
-        # Run a subset of cells
-        elif isinstance(cell_index, (list)):
-            cell_indices = np.array(cell_index)
-            n_cells = len(cell_indices)
-        # Run one cell
-        elif isinstance(cell_index, (int)):
-            cell_indices = np.array([cell_index])
-            n_cells = len(cell_indices)
-        else:
-            raise AssertionError(
-                "cell_index must be None, an integer or list, aborting..."
-            )
-
         if get_impulse_response is True:
             impulse_to_show = self._get_impulse_response(
-                rf, cell_index, contrasts_for_impulse, video_dt
+                rf, cell_index, contrasts_for_impulse, vs.video_dt
             )
             self.project_data.simulate_retina["impulse_to_show"] = impulse_to_show
             return
 
-        cell_indices = np.atleast_1d(cell_indices)
-
         # Get center masks
         mask_threshold = self.context.my_retina["center_mask_threshold"]
-        center_masks = self.get_spatial_filters(
-            rf, cell_indices, mask_threshold=mask_threshold
-        )
+        center_masks = self.get_spatial_filters(rf, mask_threshold=mask_threshold)
 
         # Get uniformity data and exit
         if get_uniformity_data is True:
-            uniformify_data = self._get_uniformity_index(
-                rf, vs, cell_indices, center_masks
-            )
+            uniformify_data = self._get_uniformity_index(vs, rf, center_masks)
             uniformify_data["mask_threshold"] = mask_threshold
             self.project_data.simulate_retina["uniformify_data"] = uniformify_data
             return
 
         # Get spatial filters
-        spatial_filters = self.get_spatial_filters(rf, cell_indices)
+        spatial_filters = self.get_spatial_filters(rf)
 
         # Scale spatial filters to sum one of centers for each unit to get veridical max contrast
         spatial_filters = (
@@ -1771,15 +1758,12 @@ class SimulateRetina(RetinaMath):
             spatial_filters = -spatial_filters
 
         # Get cropped stimulus, vectorized. One cropped sequence for each unit
-        stimulus_cropped = self._get_spatially_cropped_video(
-            vs, rf, cell_indices, reshape=True
-        )
+        stimulus_cropped = self._get_spatially_cropped_video(vs, rf, reshape=True)
 
         # Get instantaneous firing rates
         if rf.temporal_model == "dynamic":
             # Contrast gain control depends dynamically on contrast
             # Henri aloita tästä
-            num_cells = len(cell_indices)
 
             # Get stimulus contrast vector:
             if rf.gc_type == "parasol":
@@ -1815,7 +1799,7 @@ class SimulateRetina(RetinaMath):
 
             if rf.gc_type == "parasol":
                 columns = ["NL", "TL", "HS", "T0", "Chalf", "D", "A"]
-                params = rf.df.loc[cell_indices, columns]
+                params = rf.df.loc[rf.cell_indices, columns]
                 params_t = torch.tensor(params.values, device=device)
                 svecs_t = torch.tensor(svecs, device=device)
             elif rf.gc_type == "midget":
@@ -1827,7 +1811,7 @@ class SimulateRetina(RetinaMath):
                     "D_cen",
                     "A_cen",
                 ]
-                cen_df = rf.df.loc[cell_indices, columns_cen]
+                cen_df = rf.df.loc[rf.cell_indices, columns_cen]
                 params_cen = cen_df.values
                 params_cen_t = torch.tensor(params_cen, device=device)
                 svecs_cen_t = torch.tensor(svecs_cen, device=device)
@@ -1841,18 +1825,18 @@ class SimulateRetina(RetinaMath):
                     "D_cen",
                     "A_sur",
                 ]
-                sur_df = rf.df.loc[cell_indices, columns_sur]
+                sur_df = rf.df.loc[rf.cell_indices, columns_sur]
                 params_sur = sur_df.values
                 params_sur_t = torch.tensor(params_sur, device=device)
                 svecs_sur_t = torch.tensor(svecs_sur, device=device)
 
-            stim_len_tp_t = torch.tensor(stim_len_tp, device=device)
-            num_cells_t = torch.tensor(num_cells, device=device)
+            stim_len_tp_t = torch.tensor(vs.stim_len_tp, device=device)
+            num_cells_t = torch.tensor(rf.n_cells, device=device)
             generator_potentials_t = torch.empty(
                 (num_cells_t, stim_len_tp_t), device=device
             )
-            tvec_t = torch.tensor(tvec / b2u.ms, device=device)
-            video_dt_t = torch.tensor(video_dt / b2u.ms, device=device)
+            tvec_t = torch.tensor(vs.tvec / b2u.ms, device=device)
+            video_dt_t = torch.tensor(vs.video_dt / b2u.ms, device=device)
 
             tqdm_desc = "Preparing dynamic generator potential..."
             for idx in tqdm(
@@ -1872,7 +1856,7 @@ class SimulateRetina(RetinaMath):
                         impulse_contrast=contrasts_for_impulse,
                     )
                     # generator_potentials were unitwise delayed at start of the stimulus
-                    generator_potential = generator_potential[:stim_len_tp]
+                    generator_potential = generator_potential[: vs.stim_len_tp]
                     generator_potentials_t[idx, :] = generator_potential
 
                 elif rf.gc_type == "midget":
@@ -1921,7 +1905,7 @@ class SimulateRetina(RetinaMath):
 
         elif rf.temporal_model == "fixed":  # Linear model
             # Amplitude will be scaled by first (positive) lowpass filter.
-            temporal_filters = self.get_temporal_filters(rf, cell_indices)
+            temporal_filters = self.get_temporal_filters(rf)
 
             # Assuming spatial_filters.shape = (U, N) and temporal_filters.shape = (U, T)
             spatiotemporal_filters = (
@@ -1930,19 +1914,19 @@ class SimulateRetina(RetinaMath):
 
             print("Preparing fixed generator potential...")
             generator_potentials = self.convolve_stimulus_batched(
-                vs, cell_indices, stimulus_cropped, spatiotemporal_filters
+                vs, rf.cell_indices, stimulus_cropped, spatiotemporal_filters
             )
 
-        params_all = rf.df.loc[cell_indices]
+        params_all = rf.df.loc[rf.cell_indices]
 
         # Here we choose between n cells and n trials. One of them must be 1
         firing_rates = self._generator_to_firing_rate_noise(
-            rf, cell_indices, n_trials, tvec, params_all, generator_potentials
+            rf, n_trials, vs.tvec, params_all, generator_potentials
         )
-        n_cells_or_trials = np.max([n_cells, n_trials])
+        n_cells_or_trials = np.max([rf.n_cells, n_trials])
 
-        # Let's interpolate the rate to video_dt intervals
-        tvec_original = np.arange(1, vs.stimulus_video.video_n_frames + 1) * video_dt
+        # Let's interpolate the rate to vs.video_dt intervals
+        tvec_original = np.arange(1, vs.stimulus_video.video_n_frames + 1) * vs.video_dt
         rates_func = interp1d(
             tvec_original,
             firing_rates,
@@ -1951,16 +1935,18 @@ class SimulateRetina(RetinaMath):
             bounds_error=False,
         )
 
-        tvec_new = np.arange(0, duration, simulation_dt)
+        tvec_new = np.arange(0, vs.duration, vs.simulation_dt)
 
         # This needs to be 2D array for Brian
         interpolated_rates_array = rates_func(tvec_new)
 
         # Identical rates array for every trial; rows=time, columns=cell index
-        inst_rates = b2.TimedArray(interpolated_rates_array.T * b2u.Hz, simulation_dt)
+        inst_rates = b2.TimedArray(
+            interpolated_rates_array.T * b2u.Hz, vs.simulation_dt
+        )
 
         # Cells in parallel (NG), trial iterations (repeated runs)
-        if spike_generator_model == "refractory":
+        if rf.spike_generator_model == "refractory":
             # Create Brian NeuronGroup
             # calculate probability of firing for current timebin (eg .1 ms)
             # draw spike/nonspike from random distribution
@@ -1980,13 +1966,13 @@ class SimulateRetina(RetinaMath):
                 """,
                 threshold="rand()<lambda_ttlast",
                 refractory="(t-lastspike) < abs_refractory",
-                dt=simulation_dt,
+                dt=vs.simulation_dt,
             )
 
             spike_monitor = b2.SpikeMonitor(neuron_group)
             net = b2.Network(neuron_group, spike_monitor)
 
-        elif spike_generator_model == "poisson":
+        elif rf.spike_generator_model == "poisson":
             # Create Brian PoissonGroup
             poisson_group = b2.PoissonGroup(n_cells_or_trials, rates="inst_rates(t, i)")
             spike_monitor = b2.SpikeMonitor(poisson_group)
@@ -2009,7 +1995,7 @@ class SimulateRetina(RetinaMath):
         # for trial in tqdm(range(n_trials), desc=tqdm_desc):
         net.restore()  # Restore the initial state
         t_start.append(net.t)
-        net.run(duration)
+        net.run(vs.duration)
         t_end.append(net.t)
 
         spiketrains = list(spike_monitor.spike_trains().values())
@@ -2033,7 +2019,7 @@ class SimulateRetina(RetinaMath):
                 self.z_coord,
                 filename=filename,
                 analog_signal=interpolated_rates_array,
-                dt=simulation_dt,
+                dt=vs.simulation_dt,
             )
             self.data_io.save_spikes_csv(
                 all_spiketrains, n_cells_or_trials, filename=filename
@@ -2048,18 +2034,18 @@ class SimulateRetina(RetinaMath):
             "pix_per_deg": vs.pix_per_deg,
             "deg_per_mm": rf.deg_per_mm,
             "stimulus_center": vs.stimulus_center,
-            "qr_min_max": self._get_crop_pixels(rf, cell_indices),
+            "qr_min_max": self._get_crop_pixels(rf, rf.cell_indices),
             "spatial_filter_sidelen": rf.spatial_filter_sidelen,
-            "stimulus_cropped": self._get_spatially_cropped_video(vs, rf, cell_indices),
+            "stimulus_cropped": self._get_spatially_cropped_video(vs, rf),
         }
 
         gc_responses_to_show = {
             "n_trials": n_trials,
-            "n_cells": n_cells,
+            "n_cells": rf.n_cells,
             "all_spiketrains": all_spiketrains,
-            "duration": duration,
+            "duration": vs.duration,
             "generator_potential": firing_rates,
-            "video_dt": video_dt,
+            "video_dt": vs.video_dt,
             "tvec_new": tvec_new,
         }
 
@@ -2070,7 +2056,7 @@ class SimulateRetina(RetinaMath):
         if rf.temporal_model == "fixed":
             spat_temp_filter_to_show = {
                 "spatial_filters": spatial_filters,
-                "temporal_filters": self.get_temporal_filters(rf, cell_indices),
+                "temporal_filters": self.get_temporal_filters(rf),
                 "data_filter_duration": rf.data_filter_duration,
                 "temporal_filter_len": rf.temporal_filter_len,
                 "gc_type": rf.gc_type,
