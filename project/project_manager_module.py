@@ -6,7 +6,11 @@ from data_io.data_io_module import DataIO
 from analysis.analysis_module import Analysis
 from viz.viz_module import Viz
 from retina.construct_retina_module import ConstructRetina
-from retina.simulate_retina_module import SimulateRetina, PreGCProcessing
+from retina.simulate_retina_module import (
+    SimulateRetina,
+    PreGCProcessing,
+    ReceptiveFields,
+)
 from retina.retina_math_module import RetinaMath
 from retina.fit_module import Fit
 from stimuli.visual_stimulus_module import VisualStimulus, AnalogInput
@@ -133,7 +137,6 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         self.simulate_retina = SimulateRetina(
             context, data_io, cones, viz, project_data
         )
-        # self.viz.simulate_retina = self.simulate_retina
 
         experiment = Experiment(context, data_io)
         self.experiment = experiment
@@ -144,7 +147,8 @@ class ProjectManager(ProjectBase, ProjectUtilities):
             context,
             data_io,
             viz,
-            wr_initialize=self.simulate_retina._initialize,
+            ReceptiveFields=ReceptiveFields,
+            pol2cart_df=self.simulate_retina.pol2cart_df,
             get_w_z_coords=self.simulate_retina.get_w_z_coords,
         )
 
