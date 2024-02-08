@@ -1702,7 +1702,7 @@ class SimulateRetina(RetinaMath):
              `get_impulse_response` is True. Defaults to None.
          get_uniformity_data : bool, optional
              If True, computes and returns a spatial uniformity index and data for visualization,
-             and skips the standard LN pipeline.. Defaults to False.
+             and skips the standard LN pipeline. Defaults to False.
 
          Returns
          -------
