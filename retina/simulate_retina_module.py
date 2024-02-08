@@ -165,6 +165,14 @@ class ReceptiveFields:
         self.cone_general_params = self.my_retina["cone_general_params"]
         self.spatial_model = self.my_retina["spatial_model"]
         self.temporal_model = self.my_retina["temporal_model"]
+        self.mask_threshold = my_retina["center_mask_threshold"]
+
+        assert isinstance(
+            self.mask_threshold, float
+        ), "mask_threshold must be float, aborting..."
+        assert (
+            self.mask_threshold >= 0 and self.mask_threshold <= 1
+        ), "mask_threshold must be between 0 and 1, aborting..."
 
         self.data_microm_per_pixel = self.apricot_metadata["data_microm_per_pix"]
         self.data_filter_fps = self.apricot_metadata["data_fps"]
@@ -739,9 +747,11 @@ class SimulateRetina(RetinaMath):
                 (rf.n_cells, sidelen**2, n_frames)
             )
 
-        return stimulus_cropped
+        vs.stimulus_cropped = stimulus_cropped
 
-    def _get_uniformity_index(self, vs, rf, center_masks):
+        return vs
+
+    def _get_uniformity_index(self, vs, rf):
         """
         Calculate the uniformity index for retinal ganglion cell receptive fields.
 
@@ -752,12 +762,6 @@ class SimulateRetina(RetinaMath):
 
         Parameters
         ----------
-        cell_indices : int or ndarray of int
-            Indices of the cells to be considered for the calculation. Can be a single
-            integer or an array of integers.
-        center_masks : ndarray of bool
-            Boolean array where `True` indicates the presence of a cell's receptive
-            field center within the visual stimulus region.
 
         Returns
         -------
@@ -805,6 +809,7 @@ class SimulateRetina(RetinaMath):
         # use the index arrays to select the elements from video_copy
         stim_region[unit_region_idx, r_matrix, q_matrix] = 1
 
+        center_masks = rf.center_masks.copy()
         center_masks = center_masks.astype(bool).reshape((rf.n_cells, sidelen, sidelen))
 
         center_region[
@@ -875,9 +880,10 @@ class SimulateRetina(RetinaMath):
             "total_region": delaunay_mask,
             "unity_region": unity_region,
             "unit_region": unit_region,
+            "mask_threshold": rf.mask_threshold,
         }
 
-        return uniformify_data
+        self.project_data.simulate_retina["uniformify_data"] = uniformify_data
 
     def _create_temporal_signal_cg(
         self, tvec, svec, dt, params, device, show_impulse=False, impulse_contrast=1.0
@@ -1187,21 +1193,14 @@ class SimulateRetina(RetinaMath):
             plt.show()
         sys.exit()
 
-    def _create_dynamic_contrast(
-        self, stimulus_cropped, spatial_filters, gc_type, masks, surround=False
-    ):
+    def _create_dynamic_contrast(self, vs, rf):
         """
         Create dynamic contrast signal by multiplying the stimulus with the spatial filter
         masks are used for midget cells, where center and surround have distinct dynamics.
 
         Parameters
         ----------
-        stimulus_cropped : array
-            Stimulus cropped to the size of the spatial filter
-        spatial_filters : array
-            Spatial filter
-        masks : array
-            Mask for center (ones), None for parasols
+
 
         Returns
         -------
@@ -1210,35 +1209,37 @@ class SimulateRetina(RetinaMath):
         """
 
         # Reshape masks and spatial_filters to match the dimensions of stimulus_cropped
+        spatial_filters = rf.spatial_filters.copy()
         spatial_filters_reshaped = np.expand_dims(spatial_filters, axis=2)
-
-        if gc_type == "parasol":
-            masks = np.ones_like(spatial_filters_reshaped)  # mask with all ones
-        elif gc_type == "midget":
-            if surround is True:
-                # Surround is always negative at this stage
-                masks = spatial_filters < 0
-            masks = np.expand_dims(masks, axis=2)
-
-        # Multiply the arrays using broadcasting.
-        # This is the stimulus contrast viewed through spatial rf filter
-        center_surround_filters = spatial_filters_reshaped * stimulus_cropped * masks
-
-        # # Activate to show surround and exit, QA
-        # if surround is True:
-        #     self._show_surround_and_exit(center_surround_filters, spatial_filters)
-
-        # Sum over spatial dimension. Collapses the filter into one temporal signal.
-        center_surround_filters_sum = np.nansum(center_surround_filters, axis=1)
 
         # victor_1987_JPhysiol: input to model is s(t)), the signed Weber contrast at the centre.
         # However, we assume that the surround suppression is early (horizontal cells) and linear,
         # so we approximate s(t) = RF * stimulus
-        svecs = center_surround_filters_sum
+        if rf.gc_type == "parasol":
+            masks = np.ones_like(spatial_filters_reshaped)  # mask with all ones
+            # Multiply the arrays using broadcasting.
+            # This is the stimulus contrast viewed through spatial rf filter
+            center_surround_filters = (
+                spatial_filters_reshaped * vs.stimulus_cropped * masks
+            )
+            # Sum over spatial dimension. Collapses the filter into one temporal signal.
+            vs.svecs = np.nansum(center_surround_filters, axis=1)
+        elif rf.gc_type == "midget":
+            # Surround is always negative at this stage
+            masks_sur = spatial_filters < 0
+            surround_filters = (
+                spatial_filters_reshaped * vs.stimulus_cropped * masks_sur
+            )
+            vs.svecs_sur = np.nansum(surround_filters, axis=1)
 
-        return svecs
+            center_filters = (
+                spatial_filters_reshaped * vs.stimulus_cropped * rf.center_masks
+            )
+            vs.svecs_cen = np.nansum(center_filters, axis=1)
 
-    def _get_impulse_response(self, rf, cell_index, contrasts_for_impulse, video_dt):
+        return vs
+
+    def _get_impulse_response(self, rf, contrasts_for_impulse, video_dt):
         """
         Provides impulse response for distinct ganglion cell and response types.
         Much of the run_cells code is copied here, but with the stimulus replaced by an impulse.
@@ -1268,7 +1269,7 @@ class SimulateRetina(RetinaMath):
             contrasts_for_impulse, list
         ), "Impulse must specify contrasts as list, aborting..."
 
-        yvecs = np.empty((len(cell_index), len(contrasts_for_impulse), stim_len_tp))
+        yvecs = np.empty((rf.n_cells, len(contrasts_for_impulse), stim_len_tp))
         if rf.temporal_model == "dynamic":
             # cpu on purpose, less issues, very fast anyway
             device = torch.device("cpu")
@@ -1276,21 +1277,19 @@ class SimulateRetina(RetinaMath):
             tvec_t = torch.tensor(tvec / b2u.ms, device=device)
             video_dt_t = torch.tensor(video_dt / b2u.ms, device=device)
 
-            for idx, this_cell_index in enumerate(cell_index):
+            for idx, this_cell_index in enumerate(rf.cell_indices):
                 if rf.gc_type == "parasol":
                     # Get unit params
                     columns = ["NL", "TL", "HS", "T0", "Chalf", "D", "A"]
-                    params_df = rf.df.loc[cell_index, columns]
-                    params = params_df.values
+                    params = rf.df.loc[this_cell_index, columns].values
                     params_t = torch.tensor(params, device=device)
-                    unit_params = params_t[idx, :]
 
                     for contrast in contrasts_for_impulse:
                         yvec = self._create_temporal_signal_cg(
                             tvec_t,
                             svec_t,
                             video_dt_t,
-                            unit_params,
+                            params_t,
                             device,
                             show_impulse=True,
                             impulse_contrast=contrast,
@@ -1306,11 +1305,9 @@ class SimulateRetina(RetinaMath):
                         "D_cen",
                         "A_cen",
                     ]
-                    cen_df = rf.df.loc[cell_index, columns_cen]
-                    params_cen = cen_df.values
+                    params_cen = rf.df.loc[this_cell_index, columns_cen].values
                     params_cen_t = torch.tensor(params_cen, device=device)
-                    unit_params_cen = params_cen_t[idx, :]
-                    lp_cen = self._create_lowpass_response(tvec_t, unit_params_cen)
+                    lp_cen = self._create_lowpass_response(tvec_t, params_cen_t)
 
                     columns_sur = [
                         "NL_sur",
@@ -1320,18 +1317,16 @@ class SimulateRetina(RetinaMath):
                         "D_cen",
                         "A_sur",
                     ]
-                    sur_df = rf.df.loc[cell_index, columns_sur]
-                    params_sur = sur_df.values
+                    params_sur = rf.df.loc[this_cell_index, columns_sur].values
                     params_sur_t = torch.tensor(params_sur, device=device)
-                    unit_params_sur = params_sur_t[idx, :]
-                    lp_sur = self._create_lowpass_response(tvec_t, unit_params_sur)
+                    lp_sur = self._create_lowpass_response(tvec_t, params_sur_t)
                     h_cen = lp_cen / torch.sum(lp_cen + lp_sur)
 
                     yvec = self._create_temporal_signal(
                         tvec_t,
                         svec_t,
                         video_dt_t,
-                        unit_params_cen,
+                        params_sur_t,
                         h_cen,
                         device,
                         show_impulse=True,
@@ -1340,9 +1335,9 @@ class SimulateRetina(RetinaMath):
 
         elif rf.temporal_model == "fixed":  # Linear model
             # Amplitude will be scaled by first (positive) lowpass filter.
-            temporal_filter = self.get_temporal_filters(rf)
+            rf = self._get_linear_temporal_filters(rf)
             yvecs = np.repeat(
-                temporal_filter[:, np.newaxis, :], len(contrasts_for_impulse), axis=1
+                rf.temporal_filter[:, np.newaxis, :], len(contrasts_for_impulse), axis=1
             )
             if rf.response_type == "off":
                 # Spatial OFF filters have been inverted to max upwards for construction of RFs.
@@ -1367,12 +1362,12 @@ class SimulateRetina(RetinaMath):
         impulse_to_show["start_delay"] = start_delay
         impulse_to_show["contrasts"] = contrasts_for_impulse
         impulse_to_show["impulse_responses"] = yvecs
-        impulse_to_show["Unit idx"] = list(cell_index)
+        impulse_to_show["Unit idx"] = list(rf.cell_indices)
         impulse_to_show["gc_type"] = rf.gc_type
         impulse_to_show["response_type"] = rf.response_type
         impulse_to_show["temporal_model"] = rf.temporal_model
 
-        return impulse_to_show
+        self.project_data.simulate_retina["impulse_to_show"] = impulse_to_show
 
     def get_w_z_coords(self, rf):
         """
@@ -1400,7 +1395,7 @@ class SimulateRetina(RetinaMath):
 
         return w_coord, z_coord
 
-    def get_temporal_filters(self, rf):
+    def _get_linear_temporal_filters(self, rf):
         """
         Retrieve temporal filters for an array of cells.
 
@@ -1428,9 +1423,23 @@ class SimulateRetina(RetinaMath):
         for idx, cell_index in enumerate(rf.cell_indices):
             temporal_filters[idx, :] = self._create_temporal_filter(rf, cell_index)
 
-        return temporal_filters
+        rf.temporal_filters = temporal_filters
 
-    def get_spatial_filters(self, rf, mask_threshold=None):
+        return rf
+
+    def _get_linear_spatiotemporal_filters(self, rf):
+        """
+        Generate spatiotemporal filters for given cell indices."""
+
+        # Assuming spatial_filters.shape = (U, N) and temporal_filters.shape = (U, T)
+        spatiotemporal_filters = (
+            rf.spatial_filters[:, :, None] * rf.temporal_filters[:, None, :]
+        )
+        rf.spatiotemporal_filters = spatiotemporal_filters
+
+        return rf
+
+    def get_spatial_filters(self, rf):
         """
         Generate spatial filters for given cell indices.
 
@@ -1441,8 +1450,6 @@ class SimulateRetina(RetinaMath):
 
         Parameters
         ----------
-        mask_threshold : float or None, optional
-            If float, return center masks instead of spatial filters. The default is None.
 
         Returns
         -------
@@ -1461,16 +1468,9 @@ class SimulateRetina(RetinaMath):
           - self.spatial_model: a string indicating the type of model used. Expected values are 'FIT' or 'VAE'.
           - self.spatial_filter_sidelen: an integer specifying the side length of a spatial filter.
         """
-        if mask_threshold is not None:
-            assert isinstance(
-                mask_threshold, float
-            ), "mask_threshold must be float, aborting..."
-            assert (
-                mask_threshold >= 0 and mask_threshold <= 1
-            ), "mask_threshold must be between 0 and 1, aborting..."
 
         s = rf.spatial_filter_sidelen
-        spatial_filters = np.zeros((len(rf.cell_indices), s, s))
+        spatial_filters = np.zeros((rf.n_cells, s, s))
         for idx, cell_index in enumerate(rf.cell_indices):
             if rf.spatial_model == "FIT":
                 spatial_filters[idx, ...] = self._create_spatial_filter_FIT(
@@ -1482,19 +1482,31 @@ class SimulateRetina(RetinaMath):
                 )
             else:
                 raise ValueError("Unknown model type, aborting...")
-        if mask_threshold is not None:
-            spatial_filters = self.get_rf_masks(
-                spatial_filters, mask_threshold=mask_threshold
-            )
 
         # Reshape to N cells, s**2 pixels
-        spatial_filters = np.reshape(spatial_filters, (len(rf.cell_indices), s**2))
+        spatial_filters = np.reshape(spatial_filters, (rf.n_cells, s**2))
 
-        return spatial_filters
+        # Get center masks
+        center_masks = self.get_rf_masks(
+            spatial_filters, mask_threshold=rf.mask_threshold
+        )
 
-    def convolve_stimulus_batched(
-        self, vs, cell_indices, stimulus_cropped, spatiotemporal_filter
-    ):
+        # Scale spatial filters to sum one of centers for each unit to get veridical max contrast
+        spatial_filters = (
+            spatial_filters / np.sum(spatial_filters * center_masks, axis=1)[:, None]
+        )
+
+        # Spatial OFF filters have been inverted to max upwards for construction of RFs.
+        # We need to invert them back to max downwards for simulation.
+        if rf.response_type == "off":
+            spatial_filters = -spatial_filters
+
+        rf.spatial_filters = spatial_filters
+        rf.center_masks = center_masks
+
+        return rf
+
+    def _convolve_stimulus_batched(self, vs, rf):
         """
         Convolves the stimulus with the spatiotemporal filter for a given set of cells.
 
@@ -1505,14 +1517,6 @@ class SimulateRetina(RetinaMath):
 
         Parameters
         ----------
-        cell_indices : array_like
-            Indices of the cells to convolve the stimulus with.
-        stimulus_cropped : ndarray
-            Cropped stimulus to be convolved with the spatiotemporal filter, shape should be
-            [num_cells, num_pixels, time_steps].
-        spatiotemporal_filter : ndarray
-            Spatiotemporal filter used in the convolution, shape should be
-            [num_cells, num_pixels, time_steps].
 
         Returns
         -------
@@ -1525,24 +1529,18 @@ class SimulateRetina(RetinaMath):
         AssertionError
             If there is a mismatch between the duration of the stimulus and the duration of the generator potential.
 
-        Notes
-        -----
-        The `num_cells` should be the same for `cell_indices`, `stimulus_cropped`, and `spatiotemporal_filter`.
-        The `num_pixels` and `time_steps` should be the same for `stimulus_cropped` and `spatiotemporal_filter`.
         """
 
-        # stim_len_tp = stimulus_cropped.shape[-1]
-        num_cells = len(cell_indices)
-        video_dt = (1 / vs.stimulus_video.fps) * b2u.second
+        num_cells = rf.n_cells
 
         # Move to GPU if possible. Both give the same result, but PyTorch@GPU is faster.
         if "torch" in sys.modules:
             device = self.context.device
 
             # Dimensions are [batch_size, num_channels, time_steps]. We use pixels as channels.
-            stimulus_cropped = torch.tensor(stimulus_cropped).float().to(device)
+            stimulus_cropped = torch.tensor(vs.stimulus_cropped).float().to(device)
             spatiotemporal_filter = (
-                torch.tensor(spatiotemporal_filter).float().to(device)
+                torch.tensor(rf.spatiotemporal_filters).float().to(device)
             )
 
             # Convolving two signals involves "flipping" one signal and then sliding it
@@ -1576,23 +1574,25 @@ class SimulateRetina(RetinaMath):
             # Run convolution. NOTE: expensive computation. Solution without torch.
             # if mode is "valid", the output consists only of those elements that do not rely on the zero-padding
             # if baseline is shorter than filter, the output is truncated
-            filter_length = spatiotemporal_filter.shape[-1]
+            filter_length = rf.spatiotemporal_filters.shape[-1]
             assert (
                 self.context.my_stimulus_options["baseline_start_seconds"]
                 >= filter_length * 1 / vs.stimulus_video.fps
-            ), f"baseline_start_seconds must be longer than filter length ({filter_length * video_dt}), aborting..."
+            ), f"baseline_start_seconds must be longer than filter length ({filter_length * vs.video_dt}), aborting..."
 
             generator_potential = np.empty(
                 (num_cells, vs.stim_len_tp - filter_length + 1)
             )
             for idx in range(num_cells):
                 generator_potential[idx, :] = convolve(
-                    stimulus_cropped[idx], spatiotemporal_filter[idx], mode="valid"
+                    rf.stimulus_cropped[idx],
+                    rf.spatiotemporal_filters[idx],
+                    mode="valid",
                 )
 
             # Add some padding to the beginning so that stimulus time and generator potential time match
             # (First time steps of stimulus are not convolved)
-            n_padding = int(self.data_filter_duration * b2u.ms / video_dt - 1)
+            n_padding = int(rf.data_filter_duration * b2u.ms / vs.video_dt - 1)
             generator_potential = np.pad(
                 generator_potential,
                 ((0, 0), (n_padding, 0)),
@@ -1605,7 +1605,9 @@ class SimulateRetina(RetinaMath):
             vs.stim_len_tp == generator_potential_duration_tp
         ), "Duration mismatch, check convolution operation, aborting..."
 
-        return generator_potential
+        vs.generator_potentials = generator_potential
+
+        return vs
 
     def run_cells(
         self,
@@ -1727,38 +1729,18 @@ class SimulateRetina(RetinaMath):
         rf._link_rf_to_vs(vs)
 
         if get_impulse_response is True:
-            impulse_to_show = self._get_impulse_response(
-                rf, cell_index, contrasts_for_impulse, vs.video_dt
-            )
-            self.project_data.simulate_retina["impulse_to_show"] = impulse_to_show
+            self._get_impulse_response(rf, contrasts_for_impulse, vs.video_dt)
             return
 
-        # Get center masks
-        mask_threshold = self.context.my_retina["center_mask_threshold"]
-        center_masks = self.get_spatial_filters(rf, mask_threshold=mask_threshold)
+        # Get spatial_filters and center masks
+        rf = self.get_spatial_filters(rf)
 
-        # Get uniformity data and exit
         if get_uniformity_data is True:
-            uniformify_data = self._get_uniformity_index(vs, rf, center_masks)
-            uniformify_data["mask_threshold"] = mask_threshold
-            self.project_data.simulate_retina["uniformify_data"] = uniformify_data
+            self._get_uniformity_index(vs, rf)
             return
-
-        # Get spatial filters
-        spatial_filters = self.get_spatial_filters(rf)
-
-        # Scale spatial filters to sum one of centers for each unit to get veridical max contrast
-        spatial_filters = (
-            spatial_filters / np.sum(spatial_filters * center_masks, axis=1)[:, None]
-        )
-
-        # Spatial OFF filters have been inverted to max upwards for construction of RFs.
-        # We need to invert them back to max downwards for simulation.
-        if rf.response_type == "off":
-            spatial_filters = -spatial_filters
 
         # Get cropped stimulus, vectorized. One cropped sequence for each unit
-        stimulus_cropped = self._get_spatially_cropped_video(vs, rf, reshape=True)
+        vs = self._get_spatially_cropped_video(vs, rf, reshape=True)
 
         # Get instantaneous firing rates
         if rf.temporal_model == "dynamic":
@@ -1766,29 +1748,7 @@ class SimulateRetina(RetinaMath):
             # Henri aloita tästä
 
             # Get stimulus contrast vector:
-            if rf.gc_type == "parasol":
-                svecs = self._create_dynamic_contrast(
-                    stimulus_cropped,
-                    spatial_filters,
-                    rf.gc_type,
-                    None,
-                    surround=False,
-                )
-            elif rf.gc_type == "midget":
-                svecs_cen = self._create_dynamic_contrast(
-                    stimulus_cropped,
-                    spatial_filters,
-                    rf.gc_type,
-                    center_masks,
-                    surround=False,
-                )
-                svecs_sur = self._create_dynamic_contrast(
-                    stimulus_cropped,
-                    spatial_filters,
-                    rf.gc_type,
-                    None,
-                    surround=True,
-                )
+            vs = self._create_dynamic_contrast(vs, rf)
 
             # Get generator potentials
             device = self.context.device
@@ -1799,9 +1759,9 @@ class SimulateRetina(RetinaMath):
 
             if rf.gc_type == "parasol":
                 columns = ["NL", "TL", "HS", "T0", "Chalf", "D", "A"]
-                params = rf.df.loc[rf.cell_indices, columns]
-                params_t = torch.tensor(params.values, device=device)
-                svecs_t = torch.tensor(svecs, device=device)
+                params = rf.df.loc[rf.cell_indices, columns].values
+                params_t = torch.tensor(params, device=device)
+                svecs_t = torch.tensor(vs.svecs, device=device)
             elif rf.gc_type == "midget":
                 columns_cen = [
                     "NL_cen",
@@ -1811,10 +1771,9 @@ class SimulateRetina(RetinaMath):
                     "D_cen",
                     "A_cen",
                 ]
-                cen_df = rf.df.loc[rf.cell_indices, columns_cen]
-                params_cen = cen_df.values
+                params_cen = rf.df.loc[rf.cell_indices, columns_cen].values
                 params_cen_t = torch.tensor(params_cen, device=device)
-                svecs_cen_t = torch.tensor(svecs_cen, device=device)
+                svecs_cen_t = torch.tensor(vs.svecs_cen, device=device)
                 # Note delay (D) for sur is the same as for cen, the cen-sur delay
                 # emerges from LP filter parameters
                 columns_sur = [
@@ -1825,10 +1784,9 @@ class SimulateRetina(RetinaMath):
                     "D_cen",
                     "A_sur",
                 ]
-                sur_df = rf.df.loc[rf.cell_indices, columns_sur]
-                params_sur = sur_df.values
+                params_sur = rf.df.loc[rf.cell_indices, columns_sur].values
                 params_sur_t = torch.tensor(params_sur, device=device)
-                svecs_sur_t = torch.tensor(svecs_sur, device=device)
+                svecs_sur_t = torch.tensor(vs.svecs_sur, device=device)
 
             stim_len_tp_t = torch.tensor(vs.stim_len_tp, device=device)
             num_cells_t = torch.tensor(rf.n_cells, device=device)
@@ -1856,7 +1814,7 @@ class SimulateRetina(RetinaMath):
                         impulse_contrast=contrasts_for_impulse,
                     )
                     # generator_potentials were unitwise delayed at start of the stimulus
-                    generator_potential = generator_potential[: vs.stim_len_tp]
+                    generator_potential = generator_potential[:stim_len_tp_t]
                     generator_potentials_t[idx, :] = generator_potential
 
                 elif rf.gc_type == "midget":
@@ -1901,27 +1859,23 @@ class SimulateRetina(RetinaMath):
 
                     generator_potentials_t[idx, :] = gen_pot_cen + gen_pot_sur
 
-            generator_potentials = generator_potentials_t.cpu().numpy()
+            vs.generator_potentials = generator_potentials_t.cpu().numpy()
 
         elif rf.temporal_model == "fixed":  # Linear model
             # Amplitude will be scaled by first (positive) lowpass filter.
-            temporal_filters = self.get_temporal_filters(rf)
-
-            # Assuming spatial_filters.shape = (U, N) and temporal_filters.shape = (U, T)
-            spatiotemporal_filters = (
-                spatial_filters[:, :, None] * temporal_filters[:, None, :]
-            )
+            rf = self._get_linear_temporal_filters(rf)
+            rf = self._get_linear_spatiotemporal_filters(rf)
 
             print("Preparing fixed generator potential...")
-            generator_potentials = self.convolve_stimulus_batched(
-                vs, rf.cell_indices, stimulus_cropped, spatiotemporal_filters
-            )
+            vs = self._convolve_stimulus_batched(vs, rf)
+
+        # TÄHÄN JÄIT: OLIT REFAKTOROIMASSA MODULIA KÄYTTÄMÄÄN VS JA RF OBJEKTEJA
 
         params_all = rf.df.loc[rf.cell_indices]
 
         # Here we choose between n cells and n trials. One of them must be 1
         firing_rates = self._generator_to_firing_rate_noise(
-            rf, n_trials, vs.tvec, params_all, generator_potentials
+            rf, n_trials, vs.tvec, params_all, vs.generator_potentials
         )
         n_cells_or_trials = np.max([rf.n_cells, n_trials])
 
@@ -2036,7 +1990,7 @@ class SimulateRetina(RetinaMath):
             "stimulus_center": vs.stimulus_center,
             "qr_min_max": self._get_crop_pixels(rf, rf.cell_indices),
             "spatial_filter_sidelen": rf.spatial_filter_sidelen,
-            "stimulus_cropped": self._get_spatially_cropped_video(vs, rf),
+            "stimulus_cropped": vs.stimulus_cropped,
         }
 
         gc_responses_to_show = {
@@ -2055,8 +2009,8 @@ class SimulateRetina(RetinaMath):
 
         if rf.temporal_model == "fixed":
             spat_temp_filter_to_show = {
-                "spatial_filters": spatial_filters,
-                "temporal_filters": self.get_temporal_filters(rf),
+                "spatial_filters": rf.spatial_filters,
+                "temporal_filters": rf.temporal_filters,
                 "data_filter_duration": rf.data_filter_duration,
                 "temporal_filter_len": rf.temporal_filter_len,
                 "gc_type": rf.gc_type,

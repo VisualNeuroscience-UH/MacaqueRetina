@@ -214,7 +214,7 @@ my_retina = {
     "dd_regr_model": "quadratic",  # linear, quadratic, cubic, loglog. For midget < 20 deg, use quadratic; for parasol use loglog
     "ecc_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
-    "temporal_model": "dynamic",  # fixed, dynamic
+    "temporal_model": "fixed",  # fixed, dynamic
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
     "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
@@ -283,7 +283,7 @@ my_stimulus_options = {
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
     "fps": 300,  # 300 for good cg integration
-    "duration_seconds": 6,  # actual frames = floor(duration_seconds * fps)
+    "duration_seconds": 1,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
     "pattern": "sine_grating",  # One of the StimulusPatterns square_grating sine_grating
@@ -406,7 +406,7 @@ refractory_params = {
 # "force" (f) : better for small retinas, slow
 # None : initial random placement. Nonvarying with fixed seed above. Good for testing and speed.
 gc_placement_params = {
-    "algorithm": "force",  # "voronoi" or "force" or None
+    "algorithm": None,  # "voronoi" or "force" or None
     "n_iterations": 3000,  # v 20, f 5000
     "change_rate": 0.001,  # f 0.001, v 0.5
     "unit_repulsion_stregth": 5,  # 10 f only
@@ -419,7 +419,7 @@ gc_placement_params = {
 }
 
 cone_placement_params = {
-    "algorithm": "force",  # "voronoi" or "force" or None
+    "algorithm": None,  # "voronoi" or "force" or None
     "n_iterations": 300,  # v 20, f 300
     "change_rate": 0.0004,  # f 0.0005, v 0.5
     "unit_repulsion_stregth": 2,  # 10 f only
@@ -433,7 +433,7 @@ cone_placement_params = {
 
 # For VAE, this is enough to have good distribution between units.
 rf_repulsion_params = {
-    "n_iterations": 200,  # 200
+    "n_iterations": 1,  # 200
     "change_rate": 0.01,
     "cooling_rate": 0.999,  # each iteration change_rate = change_rate * cooling_rate
     "border_repulsion_stength": 5,
@@ -628,7 +628,7 @@ if __name__ == "__main__":
     Build and test your retina here, one gc type at a time. 
     """
 
-    PM.construct_retina.build()  # Main method for building the retina
+    # PM.construct_retina.build()  # Main method for building the retina
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # Thus, they are called after the retina is built.
@@ -691,14 +691,13 @@ if __name__ == "__main__":
     ########################
 
     # Based on my_stimulus_options above
-    PM.stimulate.make_stimulus_video()
+    # PM.stimulate.make_stimulus_video()
 
     ####################################
     ### Run multiple trials or cells ###
     ####################################
 
     # Load stimulus to get working retina, necessary for running cells
-    PM.simulate_retina.load_stimulus()
     PM.simulate_retina.run_with_my_run_options()
 
     ##########################################
@@ -711,6 +710,21 @@ if __name__ == "__main__":
     # PM.viz.plot_local_rms_contrast(cell_index=2, savefigname=None)
     # PM.viz.plot_local_michelson_contrast(cell_index=2, savefigname=None)
     # PM.viz.show_single_gc_view(cell_index=2, frame_number=300, savefigname=None)
+
+    ################################################
+    ###   Show multiple trials for single cell,  ###
+    ###   or multiple cells for single trial     ###
+    ################################################
+
+    # # Based on my_run_options above
+    PM.viz.show_all_gc_responses(savefigname=None)
+
+    # PM.viz.show_stimulus_with_gcs(
+    #     example_gc=my_run_options["cell_index"],  # [int,], my_run_options["cell_index"]
+    #     frame_number=301,  # depends on fps, and video and baseline lengths
+    #     show_rf_id=True,
+    #     savefigname=None,
+    # )
 
     ##########################################
     ###       Show impulse response        ###
@@ -740,21 +754,6 @@ if __name__ == "__main__":
     # # get_uniformity_data=True must be active for unity viz
     # PM.viz.show_unity(savefigname=None)
 
-    ################################################
-    ###   Show multiple trials for single cell,  ###
-    ###   or multiple cells for single trial     ###
-    ################################################
-
-    # # Based on my_run_options above
-    PM.viz.show_all_gc_responses(savefigname=None)
-
-    # PM.viz.show_stimulus_with_gcs(
-    #     example_gc=my_run_options["cell_index"],  # [int,], my_run_options["cell_index"]
-    #     frame_number=301,  # depends on fps, and video and baseline lengths
-    #     show_rf_id=True,
-    #     savefigname=None,
-    # )
-
     #################################################################
     #################################################################
     ###   Experiment with multiple units, conditions and trials   ###
@@ -767,21 +766,23 @@ if __name__ == "__main__":
     ### Build and run Experiment ###
     ################################
 
-    # exp_variables = ["spatial_frequency"]  # from my_stimulus_options
+    exp_variables = ["spatial_frequency"]  # from my_stimulus_options
     # # exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
     # # # Define experiment parameters. List lengths must be equal.
     # # # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logaritmic = [True]
-    # experiment_dict = {
-    #     "exp_variables": exp_variables,
-    #     "min_max_values": [[0.0625, 16]],  # two vals for each exp_variable # frequency
-    #     "n_steps": [20],
-    #     "logaritmic": [True],
-    #     # "min_max_values": [[0.5, 46], [0.01, 0.64]],  # temporal frequency, contrast
-    #     # "n_steps": [14, 7],  # temporal frequency, contrast
-    #     # "logaritmic": [False, True],  # temporal frequency, contrast
-    # }
+    experiment_dict = {
+        "exp_variables": exp_variables,
+        "min_max_values": [
+            [0.0625, 0.0625]
+        ],  # two vals for each exp_variable # frequency
+        "n_steps": [1],
+        "logaritmic": [False],
+        # "min_max_values": [[0.5, 46], [0.01, 0.64]],  # temporal frequency, contrast
+        # "n_steps": [14, 7],  # temporal frequency, contrast
+        # "logaritmic": [False, True],  # temporal frequency, contrast
+    }
 
-    # # N trials or N cells must be 1, and the other > 1. This is set above in my_run_options.
+    # N trials or N cells must be 1, and the other > 1. This is set above in my_run_options.
     # PM.experiment.build_and_run(experiment_dict)
 
     #########################
