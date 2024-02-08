@@ -2123,9 +2123,9 @@ class SimulateRetina(RetinaMath):
                 "temporal_model": self.temporal_model,
                 "spatial_filter_sidelen": self.spatial_filter_sidelen,
             }
-            self.project_data.simulate_retina[
-                "spat_temp_filter_to_show"
-            ] = spat_temp_filter_to_show
+            self.project_data.simulate_retina["spat_temp_filter_to_show"] = (
+                spat_temp_filter_to_show
+            )
 
     def run_with_my_run_options(self):
         """
