@@ -130,27 +130,25 @@ class PreGCProcessing:
         self.data_io.save_cone_response_to_hdf5(filename, cone_response)
 
 
-@dataclass
 class ReceptiveFields:
     """
     Class containing information associated with receptive fields, including
-    retina parameters, the spatial and temporal filters
+    retina parameters, the spatial and temporal filters.
     """
 
-    my_retina: dict
-    apricot_metadata: dict
+    def __init__(self, my_retina, apricot_metadata, get_data, pol2cart_df):
+        # Parameters directly passed to the constructor
+        self.my_retina = my_retina
+        self.apricot_metadata = apricot_metadata
+        self.get_data = get_data
+        self.pol2cart_df = pol2cart_df
 
-    # Injected dependencies
-    get_data: Any
-    pol2cart_df: Any
+        # Default values for computed variables
+        self.spatial_filter_sidelen = 0
+        self.microm_per_pix = 0.0
+        self.temporal_filter_len = 0
 
-    # Computed values below
-    spatial_filter_sidelen: int = 0
-    microm_per_pix: float = 0
-    temporal_filter_len: int = 0
-
-    def __post_init__(self):
-
+        # Extracted and computed values from provided parameters
         self.gc_type = self.my_retina["gc_type"]
         self.response_type = self.my_retina["response_type"]
         self.deg_per_mm = self.my_retina["deg_per_mm"]
@@ -164,14 +162,11 @@ class ReceptiveFields:
         self.data_filter_timesteps = self.apricot_metadata[
             "data_temporalfilter_samples"
         ]
-        # in milliseconds
         self.data_filter_duration = self.data_filter_timesteps * (
             1000 / self.data_filter_fps
         )
-        # Read fitted parameters from file
-        gc_dataframe = self.get_data(filename=self.my_retina["mosaic_file"])
 
-        # Convert retinal positions (ecc, pol angle) to visual space positions in deg (x, y)
+        gc_dataframe = self.get_data(filename=self.my_retina["mosaic_file"])
         rspace_pos_mm = self.pol2cart_df(gc_dataframe)
         vspace_pos = rspace_pos_mm * self.deg_per_mm
         vspace_coords_deg = pd.DataFrame(
@@ -332,7 +327,6 @@ class ReceptiveFields:
         self.temporal_filter_len = int(self.data_filter_duration / (1000 / vs.fps))
 
 
-@dataclass
 class VisualSignal:
     """
     Class containing information associated with visual signal
@@ -340,16 +334,22 @@ class VisualSignal:
     its transformations, the generator potential and spikes.
     """
 
-    my_stimulus_options: dict
-    stimulus_center: complex
+    def __init__(
+        self,
+        my_stimulus_options,
+        stimulus_center,
+        load_stimulus_from_videofile,
+        stimulus_video=None,
+    ):
+        # Parameters directly passed to the constructor
+        self.my_stimulus_options = my_stimulus_options
+        self.stimulus_center = stimulus_center
+        self.load_stimulus_from_videofile = load_stimulus_from_videofile
 
-    # Injected dependency
-    load_stimulus_from_videofile: Any
+        # Default value for computed variable
+        self.stimulus_video = stimulus_video
 
-    # Computed values below
-    stimulus_video: Any = None
-
-    def __post_init__(self):
+        # Extracting and computing values from provided parameters
         self.video_file_name = self.my_stimulus_options["stimulus_video_name"]
         self.stimulus_width_pix = self.my_stimulus_options["image_width"]
         self.stimulus_height_pix = self.my_stimulus_options["image_height"]
@@ -359,14 +359,16 @@ class VisualSignal:
         self.stimulus_width_deg = self.stimulus_width_pix / self.pix_per_deg
         self.stimulus_height_deg = self.stimulus_height_pix / self.pix_per_deg
 
-        # Load stimulus video
-        if self.stimulus_video == None:
+        # Load stimulus video if not already loaded
+        if self.stimulus_video is None:
             self.stimulus_video = self.load_stimulus_from_videofile(
                 self.video_file_name
             )
 
-        assert (self.stimulus_video.video_width == self.stimulus_width_pix) & (
-            self.stimulus_video.video_height == self.stimulus_height_pix
+        # Assertions to ensure stimulus video properties match expected parameters
+        assert (
+            self.stimulus_video.video_width == self.stimulus_width_pix
+            and self.stimulus_video.video_height == self.stimulus_height_pix
         ), "Check that stimulus dimensions match those of the mosaic"
         assert (
             self.stimulus_video.fps == self.fps
@@ -1705,7 +1707,6 @@ class SimulateRetina(RetinaMath):
 
         rf._link_rf_to_vs(vs)
 
-        # pdb.set_trace()
         # Save spike generation model
         self.spike_generator_model = spike_generator_model
 
