@@ -559,6 +559,8 @@ class Analysis(AnalysisBase):
         t_start = my_analysis_options["t_start_ana"]
         t_end = my_analysis_options["t_end_ana"]
         n_trials_vec = pd.to_numeric(experiment_df.loc["n_trials", :].values)
+        gc_type = self.context.my_retina["gc_type"]
+        response_type = self.context.my_retina["response_type"]
 
         # Assert for equal number of trials
         assert np.all(
@@ -576,7 +578,9 @@ class Analysis(AnalysisBase):
 
         # Loop conditions
         for idx, cond_name in enumerate(cond_names):
-            filename = Path(data_folder) / ("Response_" + cond_name + ".gz")
+            filename = Path(data_folder) / (
+                f"Response_{gc_type}_{response_type}_{cond_name}.gz"
+            )
             data_dict = self.data_io.get_data(filename)
             temp_freq = pd.to_numeric(
                 experiment_df.loc["temporal_frequency", cond_name]
