@@ -368,23 +368,6 @@ class ConstructRetina(RetinaMath):
 
         # Make or read fits
         my_retina = self.context.my_retina
-        gc_type = my_retina["gc_type"]
-        response_type = my_retina["response_type"]
-        spatial_model = my_retina["spatial_model"]
-
-        if spatial_model == "VAE":
-            DoG_model = "ellipse_fixed"
-        elif spatial_model == "FIT":
-            DoG_model = my_retina["DoG_model"]
-
-        self.fit.initialize(
-            gc_type, response_type, fit_type="experimental", DoG_model=DoG_model
-        )
-        (
-            self.exp_stat_df,
-            self.exp_cen_radius_mm,
-            self.exp_sur_radius_mm,
-        ) = self.fit.get_experimental_fits(DoG_model)
 
         if "spatial_model" in my_retina and my_retina["spatial_model"] in ["VAE"]:
             self.training_mode = my_retina["training_mode"]
@@ -851,9 +834,9 @@ class ConstructRetina(RetinaMath):
                 area_rfs_cen_mm2[gc.df["ecc_group_idx"] == index]
             )
 
-            area_scaling_factors_coverage1[
-                gc.df["ecc_group_idx"] == index
-            ] = area_scaling_factor
+            area_scaling_factors_coverage1[gc.df["ecc_group_idx"] == index] = (
+                area_scaling_factor
+            )
 
         radius_scaling_factors_coverage_1 = np.sqrt(area_scaling_factors_coverage1)
 
@@ -3126,12 +3109,8 @@ class ConstructRetina(RetinaMath):
 
         return gc
 
-    def build(self):
-        """
-        Builds the receptive field mosaic. This is the main method to call.
+    def _initialize_build(self):
 
-        When ret or gc are updated, they are returned from the method.
-        """
         my_retina = self.context.my_retina
         ret = Retina(my_retina)
         gc = GanglionCellData(
@@ -3142,6 +3121,34 @@ class ConstructRetina(RetinaMath):
             my_retina["DoG_model"],
             my_retina["center_mask_threshold"],
         )
+
+        spatial_model = my_retina["spatial_model"]
+
+        if spatial_model == "VAE":
+            DoG_model = "ellipse_fixed"
+        elif spatial_model == "FIT":
+            DoG_model = my_retina["DoG_model"]
+
+        gc_type = my_retina["gc_type"]
+        response_type = my_retina["response_type"]
+        self.fit.initialize(
+            gc_type, response_type, fit_type="experimental", DoG_model=DoG_model
+        )
+        (
+            self.exp_stat_df,
+            self.exp_cen_radius_mm,
+            self.exp_sur_radius_mm,
+        ) = self.fit.get_experimental_fits(DoG_model)
+
+        return ret, gc
+
+    def build(self):
+        """
+        Builds the receptive field mosaic. This is the main method to call.
+
+        When ret or gc are updated, they are returned from the method.
+        """
+        ret, gc = self._initialize_build()
 
         # -- First, place the ganglion cell midpoints (units mm)
         # Run GC and cone density fit to data, get func_params.
