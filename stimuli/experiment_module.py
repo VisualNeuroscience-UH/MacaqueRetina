@@ -182,7 +182,6 @@ class Experiment(VideoBaseClass):
     def build_and_run(
         self,
         experiment_dict,
-        n_trials=1,
         build_without_run=False,
     ):
         conditions_dict = self._build(experiment_dict)
@@ -208,10 +207,11 @@ class Experiment(VideoBaseClass):
         # Replace filename with None. If don't want to save the stimulus, None is valid,
         # but if want to save, then filename will be generated in the loop below
         self.options["stimulus_video_name"] = None
+        my_run_options = self.context.my_run_options
 
         # Update simulation options
-        spike_generator_model = self.context.my_run_options["spike_generator_model"]
-        simulation_dt = self.context.my_run_options["simulation_dt"]
+        spike_generator_model = my_run_options["spike_generator_model"]
+        simulation_dt = my_run_options["simulation_dt"]
 
         data_folder = self.context.output_folder
 
@@ -236,7 +236,8 @@ class Experiment(VideoBaseClass):
                     self.options["raw_intensity"] = stim.options["raw_intensity"]
 
                 self.simulate_retina.load_stimulus(stim)
-                example_gc = None  # int or 'None'
+                example_gc = my_run_options["cell_index"]
+                n_trials = my_run_options["n_trials"]
                 filename_prefix = f"Response_{self.simulate_retina.gc_type}_{self.simulate_retina.response_type}_"
 
                 filename = Path(data_folder) / (filename_prefix + cond_names[idx])
