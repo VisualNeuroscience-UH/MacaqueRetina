@@ -155,7 +155,7 @@ stimulus_folder = "stim"  # stim_sine_grating_sf2p0_crf_14_7"  # "stim_luminance
 Data context for output. 
 """
 
-output_folder = "testi_stim"  # "parasol_on_stim_sine_grating_sf2p0_crf_14_7"  # "parasol_on_luminance_onset"
+output_folder = "parasol_on_sf_stim"  # "parasol_on_stim_sine_grating_sf2p0_crf_14_7"  # "parasol_on_luminance_onset"
 
 
 """
@@ -182,8 +182,6 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 
 # For "load_model" training_mode, the model is loaded from model_file_name at output_folder (primary)
 # or input_folder. The correct model name (including time stamp) must be given in the model_file_name.
-gc_type = "parasol"  # "parasol" or "midget"
-response_type = "on"  # "on" or "off"
 
 # VAE RF is generated in experimental data space originating from macaque peripheral retina.
 # VAE RF sizes need to be scaled according to eccentricity.
@@ -198,6 +196,9 @@ response_type = "on"  # "on" or "off"
 
 # Note: FIT model ellipse independent does not correlate the center and surround parameters. Thus they are independent, which
 # is not the case in the VAE model, and not very physiological.
+
+gc_type = "parasol"  # "parasol" or "midget"
+response_type = "on"  # "on" or "off"
 
 # These values are used for building a new retina
 my_retina = {
@@ -282,7 +283,7 @@ my_stimulus_options = {
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
     "fps": 300,  # 300 for good cg integration
-    "duration_seconds": 1,  # actual frames = floor(duration_seconds * fps)
+    "duration_seconds": 6,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
     "pattern": "sine_grating",  # One of the StimulusPatterns square_grating sine_grating
@@ -294,7 +295,7 @@ my_stimulus_options = {
     "background": 128,
     "contrast": 0.95,  # Weber constrast
     "mean": 128,
-    "temporal_frequency": 4.0,  # 0.01,  # 4.0,  # 40,  # Hz
+    "temporal_frequency": 6.0,  # 0.01,  # 4.0,  # 40,  # Hz
     "spatial_frequency": 5.0,  # cpd
     "orientation": 0,  # degrees
     "phase_shift": 0,  # math.pi,  # radians
@@ -315,8 +316,8 @@ n_files = 1
 # Either n_trials or n_cells must be 1, and the other > 1
 # Running multiple trials on multiple cells is not supported
 my_run_options = {
-    "cell_index": 10,  # list of ints or None for all cells
-    "n_trials": 30,  # For each of the response files
+    "cell_index": None,  # list of ints or None for all cells
+    "n_trials": 1,  # For each of the response files
     # "cell_index": 2,  # list of ints or None for all cells
     # "n_trials": 10,  # For each of the response files
     "spike_generator_model": "refractory",  # poisson or refractory
@@ -381,7 +382,7 @@ cone_general_params = {
     "cone2gc_midget": 9,  # um, 1 SD of Gaussian
     "cone2gc_parasol": 27,  # um 27
     "cone2gc_cutoff_SD": 1,  # 3 SD is 99.7% of Gaussian
-    "cone_noise_magnitude": 1,  # Relative amplitude, 0 for no noise
+    "cone_noise_magnitude": 0.0,  # Relative amplitude, 0 for no noise
 }
 
 # Recovery function from Berry_1998_JNeurosci, Uzzell_2004_JNeurophysiol
@@ -413,14 +414,14 @@ gc_placement_params = {
     "diffusion_speed": 0.0001,  # f only, adjusted with ecc
     "border_repulsion_stength": 10,  # f only
     "border_distance_threshold": 0.01,  # f only
-    "show_placing_progress": True,  # True False
+    "show_placing_progress": False,  # True False
     "show_skip_steps": 100,  # v 1, f 100
 }
 
 cone_placement_params = {
     "algorithm": "force",  # "voronoi" or "force" or None
-    "n_iterations": 200,  # v 20, f 300
-    "change_rate": 0.0005,  # f 0.0005, v 0.5
+    "n_iterations": 300,  # v 20, f 300
+    "change_rate": 0.0004,  # f 0.0005, v 0.5
     "unit_repulsion_stregth": 2,  # 10 f only
     "unit_distance_threshold": 0.1,  # f only, adjusted with ecc
     "diffusion_speed": 0.001,  # f only, adjusted with ecc
@@ -436,7 +437,7 @@ rf_repulsion_params = {
     "change_rate": 0.01,
     "cooling_rate": 0.999,  # each iteration change_rate = change_rate * cooling_rate
     "border_repulsion_stength": 5,
-    "show_repulsion_progress": True,  # True False
+    "show_repulsion_progress": False,  # True False
     "show_only_unit": None,  # None or int for unit idx
     "show_skip_steps": 5,
     "savefigname": None,
@@ -638,21 +639,21 @@ if __name__ == "__main__":
     # in the retina mosaic building process.
 
     # For FIT and VAE
-    PM.viz.show_cones_linked_to_gc(gc_list=[10, 17], savefigname=None)
-    PM.viz.show_DoG_img_grid(gc_list=[10, 17, 11], savefigname=None)
+    # PM.viz.show_cones_linked_to_gc(gc_list=[10, 17], savefigname=None)
+    # PM.viz.show_DoG_img_grid(gc_list=[10, 17, 46], savefigname=None)
     # PM.viz.show_DoG_img_grid(
     #     gc_list=[68, 73, 80, 88, 98, 123, 129, 145], savefigname=None
     # )
     # PM.viz.show_DoG_img_grid(gc_list=[141, 157], savefigname=None)
     # PM.viz.show_DoG_img_grid(n_samples=8)
     # PM.viz.show_cones_linked_to_gc(gc_list=[32, 58, 63, 67, 6], savefigname=None)
-    PM.viz.show_unit_density_vs_ecc(unit_type="cone", savefigname=None)  # gc or cone
+    # PM.viz.show_unit_density_vs_ecc(unit_type="cone", savefigname=None)  # gc or cone
 
     # PM.viz.show_DoG_model_fit(sample_list=[10], savefigname=None)
     # PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)
-    PM.viz.show_dendrite_diam_vs_ecc(log_x=False, log_y=False, savefigname=None)
-    PM.viz.show_cone_noise_vs_freq(savefigname="cone_noise_vs_freq.svg")
-    PM.viz.show_retina_img(savefigname=None)
+    # PM.viz.show_dendrite_diam_vs_ecc(log_x=False, log_y=False, savefigname=None)
+    # PM.viz.show_cone_noise_vs_freq(savefigname="cone_noise_vs_freq.svg")
+    # PM.viz.show_retina_img(savefigname=None)
 
     # For FIT (DoG fits, temporal kernels and tonic drives)
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
@@ -690,7 +691,7 @@ if __name__ == "__main__":
     ########################
 
     # Based on my_stimulus_options above
-    # PM.stimulate.make_stimulus_video()
+    PM.stimulate.make_stimulus_video()
 
     ####################################
     ### Run multiple trials or cells ###
@@ -744,15 +745,15 @@ if __name__ == "__main__":
     ###   or multiple cells for single trial     ###
     ################################################
 
-    # Based on my_run_options above
+    # # Based on my_run_options above
     PM.viz.show_all_gc_responses(savefigname=None)
 
-    PM.viz.show_stimulus_with_gcs(
-        example_gc=my_run_options["cell_index"],  # [int,], my_run_options["cell_index"]
-        frame_number=301,  # depends on fps, and video and baseline lengths
-        show_rf_id=True,
-        savefigname=None,
-    )
+    # PM.viz.show_stimulus_with_gcs(
+    #     example_gc=my_run_options["cell_index"],  # [int,], my_run_options["cell_index"]
+    #     frame_number=301,  # depends on fps, and video and baseline lengths
+    #     show_rf_id=True,
+    #     savefigname=None,
+    # )
 
     #################################################################
     #################################################################
@@ -766,40 +767,41 @@ if __name__ == "__main__":
     ### Build and run Experiment ###
     ################################
 
-    exp_variables = ["temporal_frequency"]  # from my_stimulus_options
-    # exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
-    # # Define experiment parameters. List lengths must be equal.
-    # # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logaritmic = [True]
+    # exp_variables = ["spatial_frequency"]  # from my_stimulus_options
+    # # exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
+    # # # Define experiment parameters. List lengths must be equal.
+    # # # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logaritmic = [True]
     # experiment_dict = {
     #     "exp_variables": exp_variables,
-    #     "min_max_values": [[0.01, 0.01]],  # two vals for each exp_variable # frequency
-    #     "n_steps": [1],
-    #     "logaritmic": [False],
+    #     "min_max_values": [[0.0625, 16]],  # two vals for each exp_variable # frequency
+    #     "n_steps": [20],
+    #     "logaritmic": [True],
     #     # "min_max_values": [[0.5, 46], [0.01, 0.64]],  # temporal frequency, contrast
     #     # "n_steps": [14, 7],  # temporal frequency, contrast
     #     # "logaritmic": [False, True],  # temporal frequency, contrast
     # }
 
-    # PM.experiment.build_and_run(experiment_dict, n_trials=10)
+    # # N trials or N cells must be 1, and the other > 1. This is set above in my_run_options.
+    # PM.experiment.build_and_run(experiment_dict)
 
-    # # # #########################
-    # # # ## Analyze Experiment ###
-    # # # #########################
+    #########################
+    ## Analyze Experiment ###
+    #########################
 
     # my_analysis_options = {
     #     "exp_variables": exp_variables,
-    #     "t_start_ana": 1.0,
-    #     "t_end_ana": 31.0,
-    #     # "t_start_ana": 1,
-    #     # "t_end_ana": 7,
+    #     # "t_start_ana": 1.0,
+    #     # "t_end_ana": 31.0,
+    #     "t_start_ana": 1,
+    #     "t_end_ana": 7,
     # }
 
-    # # PM.ana.analyze_experiment(my_analysis_options)
+    # PM.ana.analyze_experiment(my_analysis_options)
     # PM.ana.unit_correlation(my_analysis_options, gc_type, response_type, gc_units=None)
 
-    # ############################
-    # ### Visualize Experiment ###
-    # ############################
+    ############################
+    ### Visualize Experiment ###
+    ############################
 
     # PM.viz.spike_raster_response(exp_variables, trial=0, savefigname=None)
 
@@ -808,11 +810,9 @@ if __name__ == "__main__":
     # )
 
     # PM.viz.F1F2_popul_response(exp_variables, xlog=False, savefigname=None)
-    # PM.viz.F1F2_unit_response(
-    #     exp_variables, xlog=False, savefigname=output_folder + ".eps"
-    # )
+    # PM.viz.F1F2_unit_response(exp_variables, xlog=True, savefigname=None)
     # PM.viz.ptp_response(exp_variables, x_of_interest=None, savefigname=None)
-    # PM.viz.fr_response(exp_variables, xlog=False, savefigname=None)
+    # PM.viz.fr_response(exp_variables, xlog=True, savefigname=None)
     # PM.viz.tf_vs_fr_cg(
     #     exp_variables,
     #     n_contrasts=3,
