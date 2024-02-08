@@ -235,11 +235,12 @@ class Experiment(VideoBaseClass):
                     # Raw intensity is stimulus specific
                     self.options["raw_intensity"] = stim.options["raw_intensity"]
 
-                self.simulate_retina.load_stimulus(stim)
                 example_gc = my_run_options["cell_index"]
                 n_trials = my_run_options["n_trials"]
-                filename_prefix = f"Response_{self.simulate_retina.gc_type}_{self.simulate_retina.response_type}_"
+                gc_type = self.context.my_retina["gc_type"]
+                response_type = self.context.my_retina["response_type"]
 
+                filename_prefix = f"Response_{gc_type}_{response_type}_"
                 filename = Path(data_folder) / (filename_prefix + cond_names[idx])
 
                 self.simulate_retina.run_cells(
@@ -249,6 +250,7 @@ class Experiment(VideoBaseClass):
                     spike_generator_model=spike_generator_model,
                     filename=filename,
                     simulation_dt=simulation_dt,
+                    stimulus=stim,
                 )  # Run simulation
 
         # Write metadata to csv to log current experiment to its output folder
