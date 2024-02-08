@@ -177,37 +177,36 @@ class ReceptiveFields:
         vspace_coords_deg = pd.DataFrame(
             {"x_deg": vspace_pos[:, 0], "y_deg": vspace_pos[:, 1]}
         )
-        gc_df = pd.concat([gc_dataframe, vspace_coords_deg], axis=1)
+        df = pd.concat([gc_dataframe, vspace_coords_deg], axis=1)
 
         if self.DoG_model in ["ellipse_fixed"]:
             # Convert RF center radii to degrees as well
-            gc_df["semi_xc_deg"] = gc_df.semi_xc_mm * self.deg_per_mm
-            gc_df["semi_yc_deg"] = gc_df.semi_yc_mm * self.deg_per_mm
+            df["semi_xc_deg"] = df.semi_xc_mm * self.deg_per_mm
+            df["semi_yc_deg"] = df.semi_yc_mm * self.deg_per_mm
             # Drop rows (units) where semi_xc_deg and semi_yc_deg is zero.
             # These have bad (>3SD deviation in any ellipse parameter) fits
-            gc_df = gc_df[
-                (gc_df.semi_xc_deg != 0) & (gc_df.semi_yc_deg != 0)
-            ].reset_index(drop=True)
-        if self.DoG_model in ["ellipse_independent"]:
-            # Convert RF center radii to degrees as well
-            gc_df["semi_xc_deg"] = gc_df.semi_xc_mm * self.deg_per_mm
-            gc_df["semi_yc_deg"] = gc_df.semi_yc_mm * self.deg_per_mm
-            gc_df["semi_xs_deg"] = gc_df.semi_xs_mm * self.deg_per_mm
-            gc_df["semi_ys_deg"] = gc_df.semi_ys_mm * self.deg_per_mm
-            gc_df = gc_df[
-                (gc_df.semi_xc_deg != 0) & (gc_df.semi_yc_deg != 0)
-            ].reset_index(drop=True)
-        elif self.DoG_model == "circular":
-            gc_df["rad_c_deg"] = gc_df.rad_c_mm * self.deg_per_mm
-            gc_df["rad_s_deg"] = gc_df.rad_s_mm * self.deg_per_mm
-            gc_df = gc_df[(gc_df.rad_c_deg != 0) & (gc_df.rad_s_deg != 0)].reset_index(
+            df = df[(df.semi_xc_deg != 0) & (df.semi_yc_deg != 0)].reset_index(
                 drop=True
             )
+        if self.DoG_model in ["ellipse_independent"]:
+            # Convert RF center radii to degrees as well
+            df["semi_xc_deg"] = df.semi_xc_mm * self.deg_per_mm
+            df["semi_yc_deg"] = df.semi_yc_mm * self.deg_per_mm
+            df["semi_xs_deg"] = df.semi_xs_mm * self.deg_per_mm
+            df["semi_ys_deg"] = df.semi_ys_mm * self.deg_per_mm
+            df = df[(df.semi_xc_deg != 0) & (df.semi_yc_deg != 0)].reset_index(
+                drop=True
+            )
+        elif self.DoG_model == "circular":
+            df["rad_c_deg"] = df.rad_c_mm * self.deg_per_mm
+            df["rad_s_deg"] = df.rad_s_mm * self.deg_per_mm
+            df = df[(df.rad_c_deg != 0) & (df.rad_s_deg != 0)].reset_index(drop=True)
 
         # Drop retinal positions from the df (so that they are not used by accident)
-        gc_df = gc_df.drop(["pos_ecc_mm", "pos_polar_deg"], axis=1)
+        df = df.drop(["pos_ecc_mm", "pos_polar_deg"], axis=1)
 
-        self.gc_df = gc_df
+        self.df = df
+        self.n_units = len(df)
 
         rfs_npz = self.get_data(filename=self.my_retina["spatial_rfs_file"])
         self.spat_rf = rfs_npz["gc_img"]
@@ -217,21 +216,21 @@ class ReceptiveFields:
         self.cones_to_gcs_weights = ret_npz["cones_to_gcs_weights"]
         self.cone_noise_parameters = ret_npz["cone_noise_parameters"]
 
+    def __str__(self):
+        return f"{self.gc_type}_{self.response_type} with {self.n_units} units."
+
     def _link_rf_to_vs(self, vs):
         """
         Endows RGCs with stimulus/pixel space coordinates.
 
-        Here we make a new dataframe gc_df_stimpix where everything is in pixels
+        Here we make a new dataframe df_stimpix where everything is in pixels
         """
 
-        gc_df_stimpix = pd.DataFrame()
-        gc_df = self.gc_df
+        df_stimpix = pd.DataFrame()
+        df = self.df
         # Endow RGCs with pixel coordinates.
         pixspace_pos = np.array(
-            [
-                vs._vspace_to_pixspace(gc.x_deg, gc.y_deg)
-                for index, gc in gc_df.iterrows()
-            ]
+            [vs._vspace_to_pixspace(gc.x_deg, gc.y_deg) for index, gc in df.iterrows()]
         )
         if self.DoG_model in ["ellipse_fixed", "circular"]:
             pixspace_coords = pd.DataFrame(
@@ -242,11 +241,11 @@ class ReceptiveFields:
             # It would be an overkill to make pos_ecc_mm, pos_polar_deg forthe surround as well,
             # so we'll just compute the surround's pixel coordinates relative to the center's pixel coordinates.
             # 1) Get the experimental pixel coordinates of the center
-            xoc = gc_df.xoc_pix.values
-            yoc = gc_df.yoc_pix.values
+            xoc = df.xoc_pix.values
+            yoc = df.yoc_pix.values
             # 2) Get the experimental pixel coordinates of the surround
-            xos = gc_df.xos_pix.values
-            yos = gc_df.yos_pix.values
+            xos = df.xos_pix.values
+            yos = df.yos_pix.values
             # 3) Compute the experimental pixel coordinates of the surround relative to the center
             x_diff = xos - xoc
             y_diff = yos - yoc
@@ -259,8 +258,8 @@ class ReceptiveFields:
             y_diff_deg = y_diff_mm * self.deg_per_mm
             # 6) Scale the degrees difference with eccentricity scaling factor and
             # add to the center's degrees coordinates
-            x_deg_s = x_diff_deg * gc_df.gc_scaling_factors + gc_df.x_deg
-            y_deg_s = y_diff_deg * gc_df.gc_scaling_factors + gc_df.y_deg
+            x_deg_s = x_diff_deg * df.gc_scaling_factors + df.x_deg
+            y_deg_s = y_diff_deg * df.gc_scaling_factors + df.y_deg
             # 7) Transform the degrees coordinates to pixel coordinates in stimulus space
             pixspace_pos_s = np.array(
                 [vs._vspace_to_pixspace(x, y) for x, y in zip(x_deg_s, y_deg_s)]
@@ -277,24 +276,24 @@ class ReceptiveFields:
 
         # Scale RF to stimulus pixel space.
         if self.DoG_model == "ellipse_fixed":
-            gc_df_stimpix["semi_xc"] = gc_df.semi_xc_deg * vs.pix_per_deg
-            gc_df_stimpix["semi_yc"] = gc_df.semi_yc_deg * vs.pix_per_deg
-            gc_df_stimpix["orient_cen_rad"] = gc_df.orient_cen_rad
-            gc_df_stimpix["relat_sur_diam"] = gc_df.relat_sur_diam
+            df_stimpix["semi_xc"] = df.semi_xc_deg * vs.pix_per_deg
+            df_stimpix["semi_yc"] = df.semi_yc_deg * vs.pix_per_deg
+            df_stimpix["orient_cen_rad"] = df.orient_cen_rad
+            df_stimpix["relat_sur_diam"] = df.relat_sur_diam
         elif self.DoG_model == "ellipse_independent":
-            gc_df_stimpix["semi_xc"] = gc_df.semi_xc_deg * vs.pix_per_deg
-            gc_df_stimpix["semi_yc"] = gc_df.semi_yc_deg * vs.pix_per_deg
-            gc_df_stimpix["semi_xs"] = gc_df.semi_xs_deg * vs.pix_per_deg
-            gc_df_stimpix["semi_ys"] = gc_df.semi_ys_deg * vs.pix_per_deg
-            gc_df_stimpix["orient_cen_rad"] = gc_df.orient_cen_rad
-            gc_df_stimpix["orient_sur_rad"] = gc_df.orient_sur_rad
+            df_stimpix["semi_xc"] = df.semi_xc_deg * vs.pix_per_deg
+            df_stimpix["semi_yc"] = df.semi_yc_deg * vs.pix_per_deg
+            df_stimpix["semi_xs"] = df.semi_xs_deg * vs.pix_per_deg
+            df_stimpix["semi_ys"] = df.semi_ys_deg * vs.pix_per_deg
+            df_stimpix["orient_cen_rad"] = df.orient_cen_rad
+            df_stimpix["orient_sur_rad"] = df.orient_sur_rad
         elif self.DoG_model == "circular":
-            gc_df_stimpix["rad_c"] = gc_df.rad_c_deg * vs.pix_per_deg
-            gc_df_stimpix["rad_s"] = gc_df.rad_s_deg * vs.pix_per_deg
-            gc_df_stimpix["orient_cen_rad"] = 0.0
+            df_stimpix["rad_c"] = df.rad_c_deg * vs.pix_per_deg
+            df_stimpix["rad_s"] = df.rad_s_deg * vs.pix_per_deg
+            df_stimpix["orient_cen_rad"] = 0.0
 
-        gc_df_stimpix = pd.concat([gc_df_stimpix, pixspace_coords], axis=1)
-        pix_df = deepcopy(gc_df_stimpix)
+        df_stimpix = pd.concat([df_stimpix, pixspace_coords], axis=1)
+        pix_df = deepcopy(df_stimpix)
 
         # Get spatial filter sidelength in pixels in stimulus space
         if self.spatial_model == "FIT":
@@ -311,7 +310,7 @@ class ReceptiveFields:
                 rf_max_pix = max(max(pix_df.semi_xs), max(pix_df.semi_ys))
 
             elif self.DoG_model == "circular":
-                rf_max_pix = max(gc_df_stimpix.rad_s)
+                rf_max_pix = max(df_stimpix.rad_s)
 
             self.spatial_filter_sidelen = 2 * 3 * int(rf_max_pix) + 1
 
@@ -324,10 +323,10 @@ class ReceptiveFields:
                 (self.um_per_pix / stim_um_per_pix) * self.sidelen_pix
             )
 
-        gc_df_stimpix["ampl_c"] = gc_df.ampl_c_norm
-        gc_df_stimpix["ampl_s"] = gc_df.ampl_s_norm
+        df_stimpix["ampl_c"] = df.ampl_c_norm
+        df_stimpix["ampl_s"] = df.ampl_s_norm
 
-        self.gc_df_stimpix = gc_df_stimpix
+        self.df_stimpix = df_stimpix
 
         self.microm_per_pix = (1 / self.deg_per_mm) / vs.pix_per_deg * 1000
         self.temporal_filter_len = int(self.data_filter_duration / (1000 / vs.fps))
@@ -421,8 +420,6 @@ class SimulateRetina(RetinaMath):
         self._viz = viz
         self._project_data = project_data
 
-        # self.initialized = False
-
     @property
     def context(self):
         return self._context
@@ -442,128 +439,6 @@ class SimulateRetina(RetinaMath):
     @property
     def project_data(self):
         return self._project_data
-
-    def _initialize(self, vs):
-        """
-        Initialize the retina object.
-        The variable gc_dataframe contains the ganglion cell parameters;
-            positions are retinal coordinates
-            pos_ecc_mm in mm
-            pos_polar_deg in degrees
-
-        Attributes:
-            gc_type (str): Ganglion cell type
-            response_type (str): Response type
-            deg_per_mm (float): Degrees per mm
-            stimulus_center (list): Center of stimulus in visual space
-            stimulus_width_pix (int): Width of stimulus in pixels
-            stimulus_height_pix (int): Height of stimulus in pixels
-            pix_per_deg (float): Pixels per degree
-            fps (float): Frames per second
-            spatial_model (str): Model type
-            data_microm_per_pixel (float): Micrometers per pixel
-            data_filter_fps (float): Timesteps per second in data
-            data_filter_timesteps (int): Timesteps in data
-            data_filter_duration (float): Filter duration
-            gc_df (DataFrame): Ganglion cell parameters
-            gc_df_stimpix (DataFrame): Ganglion cell parameters in pixel space
-            spatial_filter_sidelen (int): Spatial filter side length
-            microm_per_pix (float): Micrometers per pixel
-
-        """
-
-        my_retina = self.context.my_retina
-
-        # Read fitted parameters from file
-        gc_dataframe = self.data_io.get_data(filename=my_retina["mosaic_file"])
-
-        # General retina params
-        self.gc_type = my_retina["gc_type"]
-        self.response_type = my_retina["response_type"]
-        self.deg_per_mm = my_retina["deg_per_mm"]
-        # self.stimulus_center = my_retina["stimulus_center"]
-        self.DoG_model = my_retina["DoG_model"]
-        self.cone_general_params = my_retina["cone_general_params"]
-
-        # pix_per_deg = self.context.my_stimulus_options["pix_per_deg"]
-
-        self.spatial_model = my_retina["spatial_model"]
-        self.temporal_model = my_retina["temporal_model"]
-
-        # Metadata for Apricot dataset.
-        self.data_microm_per_pixel = self.context.apricot_metadata[
-            "data_microm_per_pix"
-        ]
-        self.data_filter_fps = self.context.apricot_metadata["data_fps"]
-        self.data_filter_timesteps = self.context.apricot_metadata[
-            "data_temporalfilter_samples"
-        ]
-        self.data_filter_duration = self.data_filter_timesteps * (
-            1000 / self.data_filter_fps
-        )  # in milliseconds
-
-        # Convert retinal positions (ecc, pol angle) to visual space positions in deg (x, y)
-        rspace_pos_mm = self.pol2cart_df(gc_dataframe)
-        vspace_pos = rspace_pos_mm * self.deg_per_mm
-        vspace_coords_deg = pd.DataFrame(
-            {"x_deg": vspace_pos[:, 0], "y_deg": vspace_pos[:, 1]}
-        )
-        gc_df = pd.concat([gc_dataframe, vspace_coords_deg], axis=1)
-
-        if self.DoG_model in ["ellipse_fixed"]:
-            # Convert RF center radii to degrees as well
-            gc_df["semi_xc_deg"] = gc_df.semi_xc_mm * self.deg_per_mm
-            gc_df["semi_yc_deg"] = gc_df.semi_yc_mm * self.deg_per_mm
-            # Drop rows (units) where semi_xc_deg and semi_yc_deg is zero.
-            # These have bad (>3SD deviation in any ellipse parameter) fits
-            gc_df = gc_df[
-                (gc_df.semi_xc_deg != 0) & (gc_df.semi_yc_deg != 0)
-            ].reset_index(drop=True)
-        if self.DoG_model in ["ellipse_independent"]:
-            # Convert RF center radii to degrees as well
-            gc_df["semi_xc_deg"] = gc_df.semi_xc_mm * self.deg_per_mm
-            gc_df["semi_yc_deg"] = gc_df.semi_yc_mm * self.deg_per_mm
-            gc_df["semi_xs_deg"] = gc_df.semi_xs_mm * self.deg_per_mm
-            gc_df["semi_ys_deg"] = gc_df.semi_ys_mm * self.deg_per_mm
-            gc_df = gc_df[
-                (gc_df.semi_xc_deg != 0) & (gc_df.semi_yc_deg != 0)
-            ].reset_index(drop=True)
-        elif self.DoG_model == "circular":
-            gc_df["rad_c_deg"] = gc_df.rad_c_mm * self.deg_per_mm
-            gc_df["rad_s_deg"] = gc_df.rad_s_mm * self.deg_per_mm
-            gc_df = gc_df[(gc_df.rad_c_deg != 0) & (gc_df.rad_s_deg != 0)].reset_index(
-                drop=True
-            )
-
-        # Drop retinal positions from the df (so that they are not used by accident)
-        gc_df = gc_df.drop(["pos_ecc_mm", "pos_polar_deg"], axis=1)
-
-        self.gc_df = gc_df
-
-        # Initialize stuff related to digital sampling
-        self.spatial_filter_sidelen = 0
-        self.microm_per_pix = 0
-        self.temporal_filter_len = 0
-
-        # if self.spatial_model == "VAE":
-        rfs_npz = self.data_io.get_data(filename=my_retina["spatial_rfs_file"])
-        self.spat_rf = rfs_npz["gc_img"]
-        self.um_per_pix = rfs_npz["um_per_pix"]
-        self.sidelen_pix = rfs_npz["pix_per_side"]
-        ret_npz = self.data_io.get_data(filename=my_retina["ret_file"])
-        self.cones_to_gcs_weights = ret_npz["cones_to_gcs_weights"]
-        self.cone_noise_parameters = ret_npz["cone_noise_parameters"]
-
-        self._link_rf_to_vs(vs)
-
-        self.microm_per_pix = (1 / self.deg_per_mm) / vs.pix_per_deg * 1000
-
-        # Get temporal parameters from stimulus video
-        self.temporal_filter_len = int(self.data_filter_duration / (1000 / vs.fps))
-
-        # self.spatial_model = my_retina["spatial_model"]
-
-        # self.initialized = True
 
     def _get_crop_pixels(self, rf, cell_index):
         """
@@ -589,9 +464,9 @@ class SimulateRetina(RetinaMath):
 
         if isinstance(cell_index, (int, np.int32, np.int64)):
             cell_index = np.array([cell_index])
-        gc = rf.gc_df_stimpix.iloc[cell_index]
-        q_center = np.round(gc.q_pix).astype(int).values
-        r_center = np.round(gc.r_pix).astype(int).values
+        df_stimpix = rf.df_stimpix.iloc[cell_index]
+        q_center = np.round(df_stimpix.q_pix).astype(int).values
+        r_center = np.round(df_stimpix.r_pix).astype(int).values
 
         # crops have width = height
         side_halflen = (rf.spatial_filter_sidelen - 1) // 2
@@ -610,7 +485,7 @@ class SimulateRetina(RetinaMath):
         Parameters
         ----------
         cell_index : int
-            Index of the cell in the gc_df
+            Index of the cell in the df
 
         Returns
         -------
@@ -621,7 +496,7 @@ class SimulateRetina(RetinaMath):
         offset = 0.0
         s = rf.spatial_filter_sidelen
 
-        gc = rf.gc_df_stimpix.iloc[cell_index]
+        gc = rf.df_stimpix.iloc[cell_index]
         qmin, qmax, rmin, rmax = self._get_crop_pixels(rf, cell_index)
 
         x_grid, y_grid = np.meshgrid(
@@ -681,7 +556,7 @@ class SimulateRetina(RetinaMath):
         Parameters
         ----------
         cell_index : int
-            Index of the cell in the gc_df
+            Index of the cell in the df
 
         Returns
         -------
@@ -703,7 +578,7 @@ class SimulateRetina(RetinaMath):
         Parameters
         ----------
         cell_index : int
-            Index of the cell in the gc_df
+            Index of the cell in the df
 
         Returns
         -------
@@ -711,7 +586,7 @@ class SimulateRetina(RetinaMath):
             Temporal filter for the given cell
         """
 
-        filter_params = self.gc_df.iloc[cell_index][["n", "p1", "p2", "tau1", "tau2"]]
+        filter_params = rf.df.iloc[cell_index][["n", "p1", "p2", "tau1", "tau2"]]
 
         tvec = np.linspace(0, rf.data_filter_duration, rf.temporal_filter_len)
         temporal_filter = self.diff_of_lowpass_filters(tvec, *filter_params)
@@ -722,223 +597,6 @@ class SimulateRetina(RetinaMath):
         temporal_filter = temporal_filter / np.sum(np.abs(norm_filter))
 
         return temporal_filter
-
-    def _generator_to_firing_rate_fixed(self, cell_indices, generator_potential):
-        """
-        Turn generator potential to action potential firing rate.
-
-        This function uses a logistic function to map the generator potential to firing rate.
-        The function parameters are fitted to the tonic drive and the maximum firing rate (A) of the cell.
-
-        Parameters
-        ----------
-        cell_indices : array-like
-            Indices of the cells to compute firing rates for.
-        generator_potential : ndarray
-            Array containing generator potential values. Dimension: (number of cells, time).
-
-        Returns
-        -------
-        firing_rates : ndarray
-            Array containing firing rates corresponding to the generator potential values. Dimension: (number of cells, time).
-
-        Notes
-        -----
-        The logistic function used for the transformation is defined as:
-        f(x) = max_fr / (1 + exp(-k * (x - x0)))
-
-        where:
-        - x : input value (generator potential)
-        - max_fr : maximum firing rate
-        - k : steepness of the curve
-        - x0 : midpoint of the sigmoid (defaulted to 1 in this context)
-
-        The parameter `k` is found such that the logistic function outputs `tonic_drive` at x=0.
-
-        """
-
-        def logistic_function(x, max_fr=1, k=1, x0=1):
-            """
-            Logistic Function.
-
-            Parameters
-            ----------
-            x : float
-                Input value.
-            max_fr : float, optional
-                The maximum value of the curve. Default is 1.
-            k : float, optional
-                Steepness of the curve. Default is 1.
-            x0 : float, optional
-                The sigmoid's midpoint. Default is 1.
-
-            Returns
-            -------
-            float
-                Output value.
-            """
-            return max_fr / (1 + np.exp(-k * (x - x0)))
-
-        def equation(k, fr, td):
-            return logistic_function(0, max_fr=fr, k=k, x0=1) - td
-
-        tonic_drives = self.gc_df.iloc[cell_indices].tonic_drive
-        # Check that generator potential is 2D, if not, add 0th dimension
-        if len(generator_potential.shape) == 1:
-            generator_potential = generator_potential[np.newaxis, :]
-
-        firing_rates = np.zeros((len(cell_indices), generator_potential.shape[1]))
-
-        for idx, cell_idx in enumerate(cell_indices):
-            tonic_drive = tonic_drives.iloc[idx]
-            # Find the value of k that makes the logistic function output tonic_drive at x=0
-            A = self.gc_df["A"].iloc[idx]
-            k = fsolve(equation, 1, args=(A, tonic_drive))[0]
-            firing_rates[idx] = logistic_function(
-                generator_potential[idx, :], max_fr=A, k=k, x0=1
-            )
-
-        return firing_rates
-
-    # def _get_extents_deg(self):
-    #     """
-    #     Get the stimulus/screen extents in degrees
-
-    #     Parameters
-    #     ----------
-    #     None
-
-    #     Returns
-    #     -------
-    #     video_extent_deg : list
-    #         Extents of the stimulus in degrees
-    #     """
-
-    #     video_xmin_deg = self.stimulus_center.real - self.stimulus_width_deg / 2
-    #     video_xmax_deg = self.stimulus_center.real + self.stimulus_width_deg / 2
-    #     video_ymin_deg = self.stimulus_center.imag - self.stimulus_height_deg / 2
-    #     video_ymax_deg = self.stimulus_center.imag + self.stimulus_height_deg / 2
-    #     # left, right, bottom, top
-    #     video_extent_deg = [
-    #         video_xmin_deg,
-    #         video_xmax_deg,
-    #         video_ymin_deg,
-    #         video_ymax_deg,
-    #     ]
-
-    #     return video_extent_deg
-
-    # def _link_rf_to_vs(self, vs):
-    #     """
-    #     Endows RGCs with stimulus/pixel space coordinates.
-
-    #     Here we make a new dataframe gc_df_stimpix where everything is in pixels
-    #     """
-
-    #     gc_df_stimpix = pd.DataFrame()
-    #     gc_df = self.gc_df
-    #     # Endow RGCs with pixel coordinates.
-    #     pixspace_pos = np.array(
-    #         [
-    #             vs._vspace_to_pixspace(gc.x_deg, gc.y_deg)
-    #             for index, gc in gc_df.iterrows()
-    #         ]
-    #     )
-    #     if self.DoG_model in ["ellipse_fixed", "circular"]:
-    #         pixspace_coords = pd.DataFrame(
-    #             {"q_pix": pixspace_pos[:, 0], "r_pix": pixspace_pos[:, 1]}
-    #         )
-    #     elif self.DoG_model == "ellipse_independent":
-    #         # We need to here compute the pixel coordinates of the surround as well.
-    #         # It would be an overkill to make pos_ecc_mm, pos_polar_deg forthe surround as well,
-    #         # so we'll just compute the surround's pixel coordinates relative to the center's pixel coordinates.
-    #         # 1) Get the experimental pixel coordinates of the center
-    #         xoc = gc_df.xoc_pix.values
-    #         yoc = gc_df.yoc_pix.values
-    #         # 2) Get the experimental pixel coordinates of the surround
-    #         xos = gc_df.xos_pix.values
-    #         yos = gc_df.yos_pix.values
-    #         # 3) Compute the experimental pixel coordinates of the surround relative to the center
-    #         x_diff = xos - xoc
-    #         y_diff = yos - yoc
-    #         # 4) Tranform the experimental pixel coordinate difference to mm
-    #         mm_per_exp_pix = self.context.apricot_metadata["data_microm_per_pix"] / 1000
-    #         x_diff_mm = x_diff * mm_per_exp_pix
-    #         y_diff_mm = y_diff * mm_per_exp_pix
-    #         # 5) Transform the mm difference to degrees difference
-    #         x_diff_deg = x_diff_mm * self.deg_per_mm
-    #         y_diff_deg = y_diff_mm * self.deg_per_mm
-    #         # 6) Scale the degrees difference with eccentricity scaling factor and
-    #         # add to the center's degrees coordinates
-    #         x_deg_s = x_diff_deg * gc_df.gc_scaling_factors + gc_df.x_deg
-    #         y_deg_s = y_diff_deg * gc_df.gc_scaling_factors + gc_df.y_deg
-    #         # 7) Transform the degrees coordinates to pixel coordinates in stimulus space
-    #         pixspace_pos_s = np.array(
-    #             [vs._vspace_to_pixspace(x, y) for x, y in zip(x_deg_s, y_deg_s)]
-    #         )
-
-    #         pixspace_coords = pd.DataFrame(
-    #             {
-    #                 "q_pix": pixspace_pos[:, 0],
-    #                 "r_pix": pixspace_pos[:, 1],
-    #                 "q_pix_s": pixspace_pos_s[:, 0],
-    #                 "r_pix_s": pixspace_pos_s[:, 1],
-    #             }
-    #         )
-
-    #     # Scale RF to stimulus pixel space.
-    #     if self.DoG_model == "ellipse_fixed":
-    #         gc_df_stimpix["semi_xc"] = gc_df.semi_xc_deg * vs.pix_per_deg
-    #         gc_df_stimpix["semi_yc"] = gc_df.semi_yc_deg * vs.pix_per_deg
-    #         gc_df_stimpix["orient_cen_rad"] = gc_df.orient_cen_rad
-    #         gc_df_stimpix["relat_sur_diam"] = gc_df.relat_sur_diam
-    #     elif self.DoG_model == "ellipse_independent":
-    #         gc_df_stimpix["semi_xc"] = gc_df.semi_xc_deg * vs.pix_per_deg
-    #         gc_df_stimpix["semi_yc"] = gc_df.semi_yc_deg * vs.pix_per_deg
-    #         gc_df_stimpix["semi_xs"] = gc_df.semi_xs_deg * vs.pix_per_deg
-    #         gc_df_stimpix["semi_ys"] = gc_df.semi_ys_deg * vs.pix_per_deg
-    #         gc_df_stimpix["orient_cen_rad"] = gc_df.orient_cen_rad
-    #         gc_df_stimpix["orient_sur_rad"] = gc_df.orient_sur_rad
-    #     elif self.DoG_model == "circular":
-    #         gc_df_stimpix["rad_c"] = gc_df.rad_c_deg * vs.pix_per_deg
-    #         gc_df_stimpix["rad_s"] = gc_df.rad_s_deg * vs.pix_per_deg
-    #         gc_df_stimpix["orient_cen_rad"] = 0.0
-
-    #     gc_df_stimpix = pd.concat([gc_df_stimpix, pixspace_coords], axis=1)
-    #     pix_df = deepcopy(gc_df_stimpix)
-
-    #     # Get spatial filter sidelength in pixels in stimulus space
-    #     if self.spatial_model == "FIT":
-    #         # Define spatial filter sidelength (based on angular resolution and widest semimajor axis)
-    #         # We use the general rule that the sidelength should be at least 5 times the SD
-    #         # Sidelength always odd number
-    #         if self.DoG_model == "ellipse_fixed":
-    #             rf_max_pix = max(
-    #                 max(pix_df.semi_xc * pix_df.relat_sur_diam),
-    #                 max(pix_df.semi_yc * pix_df.relat_sur_diam),
-    #             )
-
-    #         elif self.DoG_model == "ellipse_independent":
-    #             rf_max_pix = max(max(pix_df.semi_xs), max(pix_df.semi_ys))
-
-    #         elif self.DoG_model == "circular":
-    #             rf_max_pix = max(gc_df_stimpix.rad_s)
-
-    #         self.spatial_filter_sidelen = 2 * 3 * int(rf_max_pix) + 1
-
-    #     elif self.spatial_model == "VAE":
-    #         # Fixed spatial filter sidelength according to VAE RF pixel resolution
-    #         # at given eccentricity (calculated at construction)
-    #         stim_um_per_pix = 1000 / (vs.pix_per_deg * self.deg_per_mm)
-    #         # Same metadata in all units, thus index [0]
-    #         self.spatial_filter_sidelen = int(
-    #             (self.um_per_pix / stim_um_per_pix) * self.sidelen_pix
-    #         )
-
-    #     gc_df_stimpix["ampl_c"] = gc_df.ampl_c_norm
-    #     gc_df_stimpix["ampl_s"] = gc_df.ampl_s_norm
-
-    #     self.gc_df_stimpix = gc_df_stimpix
 
     def _get_spatially_cropped_video(
         self, vs, rf, cell_indices, contrast=True, reshape=False
@@ -1054,7 +712,7 @@ class SimulateRetina(RetinaMath):
 
         return stimulus_cropped
 
-    def _get_uniformity_index(self, rf, cell_indices, center_masks):
+    def _get_uniformity_index(self, rf, vs, cell_indices, center_masks):
         """
         Calculate the uniformity index for retinal ganglion cell receptive fields.
 
@@ -1084,8 +742,8 @@ class SimulateRetina(RetinaMath):
             - 'unit_region': The sum of center regions for all cells.
 
         """
-        height = self.context.my_stimulus_options["image_height"]
-        width = self.context.my_stimulus_options["image_width"]
+        height = vs.stimulus_height_pix
+        width = vs.stimulus_width_pix
 
         if isinstance(cell_indices, (int, np.int32, np.int64)):
             cell_indices = np.array([cell_indices])
@@ -1096,7 +754,7 @@ class SimulateRetina(RetinaMath):
         center_region = np.zeros((len(cell_indices), height, width), dtype=np.int32)
 
         # Create the r and q indices for each cell, ensure they're integer type
-        sidelen = self.spatial_filter_sidelen
+        sidelen = rf.spatial_filter_sidelen
         r_indices = (
             (np.arange(sidelen) + rmin[:, np.newaxis])
             .astype(int)
@@ -1135,7 +793,7 @@ class SimulateRetina(RetinaMath):
         unit_region = np.sum(center_region, axis=0)
 
         # Delaunay triangulation for the total region
-        gc = self.gc_df_stimpix.iloc[cell_indices]
+        gc = rf.df_stimpix.iloc[cell_indices]
         q_center = np.round(gc.q_pix).astype(int).values
         r_center = np.round(gc.r_pix).astype(int).values
 
@@ -1565,9 +1223,7 @@ class SimulateRetina(RetinaMath):
         """
 
         # Set filter duration the same as in Apricot data
-        total_duration = (
-            self.data_filter_timesteps * (1000 / self.data_filter_fps) * b2u.ms
-        )
+        total_duration = rf.data_filter_timesteps * (1000 / rf.data_filter_fps) * b2u.ms
         stim_len_tp = int(np.round(total_duration / video_dt))
         tvec = range(stim_len_tp) * video_dt
 
@@ -1578,7 +1234,7 @@ class SimulateRetina(RetinaMath):
         idx_100_ms = int(np.round(start_delay / dt))
         svec[idx_100_ms] = 1.0
 
-        if self.response_type == "off":
+        if rf.response_type == "off":
             # Spatial OFF filters have been inverted to max upwards for construction of RFs.
             svec = -svec
 
@@ -1591,7 +1247,7 @@ class SimulateRetina(RetinaMath):
         ), "Impulse must specify contrasts as list, aborting..."
 
         yvecs = np.empty((len(cell_index), len(contrasts_for_impulse), stim_len_tp))
-        if self.temporal_model == "dynamic":
+        if rf.temporal_model == "dynamic":
             # cpu on purpose, less issues, very fast anyway
             device = torch.device("cpu")
             svec_t = torch.tensor(svec, device=device)
@@ -1599,10 +1255,10 @@ class SimulateRetina(RetinaMath):
             video_dt_t = torch.tensor(video_dt / b2u.ms, device=device)
 
             for idx, this_cell_index in enumerate(cell_index):
-                if self.gc_type == "parasol":
+                if rf.gc_type == "parasol":
                     # Get unit params
                     columns = ["NL", "TL", "HS", "T0", "Chalf", "D", "A"]
-                    params_df = self.gc_df.loc[cell_index, columns]
+                    params_df = rf.df.loc[cell_index, columns]
                     params = params_df.values
                     params_t = torch.tensor(params, device=device)
                     unit_params = params_t[idx, :]
@@ -1619,7 +1275,7 @@ class SimulateRetina(RetinaMath):
                         )
                         yvecs[idx, contrasts_for_impulse.index(contrast), :] = yvec
 
-                elif self.gc_type == "midget":
+                elif rf.gc_type == "midget":
                     columns_cen = [
                         "NL_cen",
                         "NLTL_cen",
@@ -1628,7 +1284,7 @@ class SimulateRetina(RetinaMath):
                         "D_cen",
                         "A_cen",
                     ]
-                    cen_df = self.gc_df.loc[cell_index, columns_cen]
+                    cen_df = rf.df.loc[cell_index, columns_cen]
                     params_cen = cen_df.values
                     params_cen_t = torch.tensor(params_cen, device=device)
                     unit_params_cen = params_cen_t[idx, :]
@@ -1642,7 +1298,7 @@ class SimulateRetina(RetinaMath):
                         "D_cen",
                         "A_sur",
                     ]
-                    sur_df = self.gc_df.loc[cell_index, columns_sur]
+                    sur_df = rf.df.loc[cell_index, columns_sur]
                     params_sur = sur_df.values
                     params_sur_t = torch.tensor(params_sur, device=device)
                     unit_params_sur = params_sur_t[idx, :]
@@ -1660,14 +1316,14 @@ class SimulateRetina(RetinaMath):
                     )
                     yvecs[idx, 0, :] = yvec
 
-        elif self.temporal_model == "fixed":  # Linear model
+        elif rf.temporal_model == "fixed":  # Linear model
             # Amplitude will be scaled by first (positive) lowpass filter.
             # for idx, this_cell_index in enumerate(cell_index):
             temporal_filter = self.get_temporal_filters(rf, cell_index)
             yvecs = np.repeat(
                 temporal_filter[:, np.newaxis, :], len(contrasts_for_impulse), axis=1
             )
-            if self.response_type == "off":
+            if rf.response_type == "off":
                 # Spatial OFF filters have been inverted to max upwards for construction of RFs.
                 yvecs = -yvecs
 
@@ -1691,13 +1347,13 @@ class SimulateRetina(RetinaMath):
         impulse_to_show["contrasts"] = contrasts_for_impulse
         impulse_to_show["impulse_responses"] = yvecs
         impulse_to_show["Unit idx"] = list(cell_index)
-        impulse_to_show["gc_type"] = self.gc_type
-        impulse_to_show["response_type"] = self.response_type
-        impulse_to_show["temporal_model"] = self.temporal_model
+        impulse_to_show["gc_type"] = rf.gc_type
+        impulse_to_show["response_type"] = rf.response_type
+        impulse_to_show["temporal_model"] = rf.temporal_model
 
         return impulse_to_show
 
-    def get_w_z_coords(self):
+    def get_w_z_coords(self, rf):
         """
         Create w_coord, z_coord for cortical and visual coordinates, respectively
 
@@ -1714,7 +1370,7 @@ class SimulateRetina(RetinaMath):
         """
 
         # Create w_coord, z_coord for cortical and visual coordinates, respectively
-        z_coord = self.gc_df["x_deg"].values + 1j * self.gc_df["y_deg"].values
+        z_coord = rf.df["x_deg"].values + 1j * rf.df["y_deg"].values
 
         visual2cortical_params = self.context.my_retina["visual2cortical_params"]
         a = visual2cortical_params["a"]
@@ -2049,12 +1705,6 @@ class SimulateRetina(RetinaMath):
 
         rf._link_rf_to_vs(vs)
 
-        # # Set basic simulate_retina attributes
-        # if self.initialized is False:
-        #     self._initialize(vs)
-
-        self.gc_df = rf.gc_df
-
         # pdb.set_trace()
         # Save spike generation model
         self.spike_generator_model = spike_generator_model
@@ -2067,7 +1717,7 @@ class SimulateRetina(RetinaMath):
 
         # Run all cells
         if cell_index is None:
-            n_cells = len(self.gc_df.index)  # all cells
+            n_cells = len(rf.df.index)  # all cells
             cell_indices = np.arange(n_cells)
         # Run a subset of cells
         elif isinstance(cell_index, (list)):
@@ -2099,7 +1749,9 @@ class SimulateRetina(RetinaMath):
 
         # Get uniformity data and exit
         if get_uniformity_data is True:
-            uniformify_data = self._get_uniformity_index(rf, cell_indices, center_masks)
+            uniformify_data = self._get_uniformity_index(
+                rf, vs, cell_indices, center_masks
+            )
             uniformify_data["mask_threshold"] = mask_threshold
             self.project_data.simulate_retina["uniformify_data"] = uniformify_data
             return
@@ -2162,7 +1814,7 @@ class SimulateRetina(RetinaMath):
 
             if rf.gc_type == "parasol":
                 columns = ["NL", "TL", "HS", "T0", "Chalf", "D", "A"]
-                params = self.gc_df.loc[cell_indices, columns]
+                params = rf.df.loc[cell_indices, columns]
                 params_t = torch.tensor(params.values, device=device)
                 svecs_t = torch.tensor(svecs, device=device)
             elif rf.gc_type == "midget":
@@ -2174,7 +1826,7 @@ class SimulateRetina(RetinaMath):
                     "D_cen",
                     "A_cen",
                 ]
-                cen_df = rf.gc_df.loc[cell_indices, columns_cen]
+                cen_df = rf.df.loc[cell_indices, columns_cen]
                 params_cen = cen_df.values
                 params_cen_t = torch.tensor(params_cen, device=device)
                 svecs_cen_t = torch.tensor(svecs_cen, device=device)
@@ -2188,7 +1840,7 @@ class SimulateRetina(RetinaMath):
                     "D_cen",
                     "A_sur",
                 ]
-                sur_df = rf.gc_df.loc[cell_indices, columns_sur]
+                sur_df = rf.df.loc[cell_indices, columns_sur]
                 params_sur = sur_df.values
                 params_sur_t = torch.tensor(params_sur, device=device)
                 svecs_sur_t = torch.tensor(svecs_sur, device=device)
@@ -2280,7 +1932,7 @@ class SimulateRetina(RetinaMath):
                 vs, cell_indices, stimulus_cropped, spatiotemporal_filters
             )
 
-        params_all = rf.gc_df.loc[cell_indices]
+        params_all = rf.df.loc[cell_indices]
 
         # Here we choose between n cells and n trials. One of them must be 1
         firing_rates = self._generator_to_firing_rate_noise(
@@ -2372,7 +2024,7 @@ class SimulateRetina(RetinaMath):
         )
 
         if save_data is True:
-            self.w_coord, self.z_coord = self.get_w_z_coords()
+            self.w_coord, self.z_coord = self.get_w_z_coords(rf)
             self.data_io.save_spikes_for_cxsystem(
                 spikearrays,
                 n_cells_or_trials,
@@ -2385,12 +2037,12 @@ class SimulateRetina(RetinaMath):
             self.data_io.save_spikes_csv(
                 all_spiketrains, n_cells_or_trials, filename=filename
             )
-            rgc_coords = rf.gc_df[["x_deg", "y_deg"]].copy()
+            rgc_coords = rf.df[["x_deg", "y_deg"]].copy()
             self.data_io.save_structure_csv(rgc_coords, filename=filename)
 
         stim_to_show = {
             "stimulus_video": vs.stimulus_video,
-            "gc_df_stimpix": rf.gc_df_stimpix,
+            "df_stimpix": rf.df_stimpix,
             "stimulus_height_pix": vs.stimulus_height_pix,
             "pix_per_deg": vs.pix_per_deg,
             "deg_per_mm": rf.deg_per_mm,

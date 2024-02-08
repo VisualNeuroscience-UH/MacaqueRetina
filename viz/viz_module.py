@@ -2211,7 +2211,7 @@ class Viz:
         stim_to_show = self.project_data.simulate_retina["stim_to_show"]
 
         stimulus_video = stim_to_show["stimulus_video"]
-        gc_df_stimpix = stim_to_show["gc_df_stimpix"]
+        df_stimpix = stim_to_show["df_stimpix"]
         stimulus_height_pix = stim_to_show["stimulus_height_pix"]
         pix_per_deg = stim_to_show["pix_per_deg"]
         deg_per_mm = stim_to_show["deg_per_mm"]
@@ -2224,9 +2224,9 @@ class Viz:
         ax.imshow(stimulus_video.frames[frame_number, :, :], vmin=0, vmax=255)
         ax = plt.gca()
 
-        gc_rot_deg = gc_df_stimpix["orient_cen_rad"] * (-1) * 180 / np.pi
+        gc_rot_deg = df_stimpix["orient_cen_rad"] * (-1) * 180 / np.pi
 
-        for index, gc in gc_df_stimpix.iterrows():
+        for index, gc in df_stimpix.iterrows():
             if index == example_gc:
                 facecolor = "yellow"
             else:
@@ -2311,7 +2311,7 @@ class Viz:
 
         stim_to_show = self.project_data.simulate_retina["stim_to_show"]
         stimulus_video = stim_to_show["stimulus_video"]
-        gc_df_stimpix = stim_to_show["gc_df_stimpix"]
+        df_stimpix = stim_to_show["df_stimpix"]
         qmin_all, qmax_all, rmin_all, rmax_all = stim_to_show["qr_min_max"]
         qmin = qmin_all[cell_index]
         qmax = qmax_all[cell_index]
@@ -2321,7 +2321,7 @@ class Viz:
         if ax is None:
             fig, ax = plt.subplots()
 
-        gc = gc_df_stimpix.iloc[cell_index]
+        gc = df_stimpix.iloc[cell_index]
 
         # Show stimulus frame cropped to RGC surroundings & overlay 1SD center RF on top of that
         ax.imshow(
