@@ -51,17 +51,17 @@ class VideoBaseClass(object):
         options["intensity"] = (0, 255)  # video grey scale dynamic range.
         options["mean"] = 128  # intensity mean
         options["contrast"] = 1
-        options[
-            "raw_intensity"
-        ] = None  # Dynamic range before scaling, set by each stimulus pattern method
+        options["raw_intensity"] = (
+            None  # Dynamic range before scaling, set by each stimulus pattern method
+        )
         # Valid options sine_grating; square_grating; colored_temporal_noise; white_gaussian_noise; natural_images; natural_video
         options["pattern"] = "sine_grating"
-        options[
-            "phase_shift"
-        ] = 0  # 0 - 2pi, to have grating or temporal oscillation phase shifted
-        options[
-            "stimulus_form"
-        ] = "circular"  # Valid options circular, rectangular, annulus
+        options["phase_shift"] = (
+            0  # 0 - 2pi, to have grating or temporal oscillation phase shifted
+        )
+        options["stimulus_form"] = (
+            "circular"  # Valid options circular, rectangular, annulus
+        )
         options["stimulus_position"] = (
             0.0,
             0.0,
@@ -77,9 +77,9 @@ class VideoBaseClass(object):
         options["orientation"] = 0.0  # No rotation or vertical
         options["size_inner"] = None
         options["size_outer"] = None
-        options[
-            "on_proportion"
-        ] = 0.5  # between 0 and 1, proportion of stimulus-on time
+        options["on_proportion"] = (
+            0.5  # between 0 and 1, proportion of stimulus-on time
+        )
         options["direction"] = "increment"  # or 'decrement'
 
         # Limits, no need to go beyond these
@@ -151,9 +151,7 @@ class VideoBaseClass(object):
         image_width = self.options["image_width"]
         image_height = self.options["image_height"]
         image_width_in_degrees = image_width / self.options["pix_per_deg"]
-        diameter = np.ceil(np.sqrt(image_height**2 + image_width**2)).astype(
-            np.uint32
-        )
+        diameter = np.ceil(np.sqrt(image_height**2 + image_width**2)).astype(np.uint32)
         image_width_diameter = diameter
         image_height_diameter = diameter
         n_frames = int(fps * duration_seconds)
@@ -854,7 +852,14 @@ class AnalogInput:
         if coord_type == "dummy":
             w_coord, z_coord = self._get_dummy_coordinates(Nx=N_units)
         elif coord_type == "real":
-            w_coord, z_coord = self._get_real_coordinates(Nx=N_units)
+            rf = self.ReceptiveFields(
+                self.context.my_retina,
+                self.context.apricot_metadata,
+                self.data_io.get_data,
+                self.pol2cart_df,
+            )
+
+            w_coord, z_coord = self._get_real_coordinates(rf, Nx=N_units)
 
         assert (
             "w_coord" in locals()
@@ -1046,14 +1051,13 @@ class AnalogInput:
 
         return w_coord, z_coord
 
-    def _get_real_coordinates(self, Nx=0):
+    def _get_real_coordinates(self, rf, Nx=0):
         # For realistic coordinates, we use Macaque retina module
 
         assert Nx != 0, "N units not set, aborting..."
 
         # Initialize SimulateRetina
-        self.wr_initialize()
-        w_coord, z_coord = self.get_w_z_coords()
+        w_coord, z_coord = self.get_w_z_coords(rf)
 
         # Get random sample sized N_units, assert for too small sample
 
