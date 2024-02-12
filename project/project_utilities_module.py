@@ -531,11 +531,29 @@ class Printable:
         # Compiling attributes information
         attributes_info = "\nAttributes:\n"
         for attr in attributes:
-            attr_type = type(getattr(self, attr))
-            attr_type = str([attr.split("'")[1] for attr in str(attr_type).split(", ")])
-            attributes_info += (
-                f"{attr:<{max_attr_name_len}}\t{attr_type:<{max_attr_type_len}}\n"
+            attr_instance = getattr(self, attr)
+            module_name = attr_instance.__class__.__module__
+            class_name = attr_instance.__class__.__name__
+            full_type_name = (
+                f"{module_name}.{class_name}"
+                if module_name not in ("__builtin__", "builtins")
+                else class_name
             )
+
+            match full_type_name:
+                case "pandas.core.frame.DataFrame" | "numpy.ndarray":
+                    attr_value = f"shape: {attr_instance.shape}"
+                case "dict":
+                    attr_value = f"n keys: {len(attr_instance.keys())}"
+                case "list" | "tuple":
+                    attr_value = len(attr_instance)
+                case "str" | "int":
+                    attr_value = attr_instance
+                case "float":
+                    attr_value = f"{attr_instance:.2f}"
+
+            attr_value = str(attr_value)
+            attributes_info += f"{attr:<{max_attr_name_len}}\t{full_type_name:<{max_attr_type_len}}\t{attr_value}\n"
 
         # Compiling methods information
         methods_info = "\nMethods:\n" + ",\n".join(methods)
