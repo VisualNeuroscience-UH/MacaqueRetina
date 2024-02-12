@@ -1915,7 +1915,7 @@ class ConstructRetina(RetinaMath):
             np.round((max_um_per_pix / new_um_per_pix) * exp_pix_per_side)
         )
 
-        # TÄHÄN JÄIT: APPLIKOI NÄMÄ TRANSFOMRAATIOT FIT MM SCALE => FIT IMG GENEROINTIIN
+        # TODO / CHECK: APPLIKOI NÄMÄ TRANSFOMRAATIOT FIT MM SCALE => FIT IMG GENEROINTIIN
         # pdb.set_trace()
         # Save scaling factors to gc_df for VAE model type
         gc.df["gc_scaling_factors"] = gc_scaling_factors

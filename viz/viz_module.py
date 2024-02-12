@@ -202,9 +202,9 @@ class Viz:
                 c="grey",
             )
 
-        N_cells = len(cell_ixs_list)
-        # ax.title(f"{title} ({N_cells} cells)")
-        ax.set_title(f"{title} ({N_cells} cells)")
+        n_units = len(cell_ixs_list)
+        # ax.title(f"{title} ({n_units} cells)")
+        ax.set_title(f"{title} ({n_units} cells)")
 
         if savefigname:
             self._figsave(figurename=savefigname)
@@ -2525,7 +2525,7 @@ class Viz:
         """
         gc_responses_to_show = self.project_data.simulate_retina["gc_responses_to_show"]
         n_trials = gc_responses_to_show["n_trials"]
-        n_cells = gc_responses_to_show["n_cells"]
+        n_units = gc_responses_to_show["n_units"]
         all_spiketrains = gc_responses_to_show["all_spiketrains"]
         duration = gc_responses_to_show["duration"]
         generator_potential = gc_responses_to_show["generator_potential"]
@@ -2536,15 +2536,15 @@ class Viz:
         for_eventplot = all_spiketrains  # list of different leght arrays
         for_histogram = np.concatenate(all_spiketrains)
         for_generatorplot = np.nanmean(generator_potential, axis=0)
-        if n_trials > 1 and n_cells == 1:
+        if n_trials > 1 and n_units == 1:
             n_samples = n_trials
             sample_name = "Trials"
-        elif n_trials == 1 and n_cells > 1:
-            n_samples = n_cells
+        elif n_trials == 1 and n_units > 1:
+            n_samples = n_units
             sample_name = "Cell #"
         else:
             raise ValueError(
-                """You attempted to visualize gc activity, but either n_trials or n_cells must be 1, 
+                """You attempted to visualize gc activity, but either n_trials or n_units must be 1, 
                 and the other > 1"""
             )
 
@@ -2803,9 +2803,9 @@ class Viz:
         """
         Show the individual RFs of the VAE retina
 
-        gc_vae_img: (n_cells, n_pix, n_pix)
-        gc_vae_img_mask: (n_cells, n_pix, n_pix)
-        gc_vae_img_final: (n_cells, n_pix, n_pix)
+        gc_vae_img: (n_units, n_pix, n_pix)
+        gc_vae_img_mask: (n_units, n_pix, n_pix)
+        gc_vae_img_final: (n_units, n_pix, n_pix)
         """
 
         gen_rfs = self.project_data.construct_retina["gen_rfs"]
@@ -2853,8 +2853,8 @@ class Viz:
         """
         Show the individual RFs of the VAE retina
 
-        gc_vae_img: (n_cells, n_pix, n_pix)
-        gc_vae_img_final: (n_cells, n_pix, n_pix)
+        gc_vae_img: (n_units, n_pix, n_pix)
+        gc_vae_img_final: (n_units, n_pix, n_pix)
         """
 
         gen_rfs = self.project_data.construct_retina["gen_rfs"]

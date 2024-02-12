@@ -27,7 +27,8 @@ import brian2.units as b2u
 # Local
 from cxsystem2.core.tools import write_to_file, load_from_file
 from retina.retina_math_module import RetinaMath
-from project.project_utilities_module import ProjectUtilities as PU
+from project.project_utilities_module import Printable
+
 
 # Builtin
 from pathlib import Path
@@ -37,6 +38,7 @@ import sys
 import time
 from dataclasses import dataclass
 from typing import Any
+import inspect
 
 b2.prefs["logging.display_brian_error_message"] = False
 
@@ -130,7 +132,7 @@ class PreGCProcessing:
         self.data_io.save_cone_response_to_hdf5(filename, cone_response)
 
 
-class ReceptiveFields:
+class ReceptiveFields(Printable):
     """
     Class containing information associated with receptive fields, including
     retina parameters, the spatial and temporal filters.
@@ -166,6 +168,7 @@ class ReceptiveFields:
         self.spatial_model = self.my_retina["spatial_model"]
         self.temporal_model = self.my_retina["temporal_model"]
         self.mask_threshold = my_retina["center_mask_threshold"]
+        self.refractory_params = my_retina["refractory_params"]
 
         assert isinstance(
             self.mask_threshold, float
@@ -229,16 +232,16 @@ class ReceptiveFields:
 
         # Run all cells
         if cell_index is None:
-            self.n_cells = len(df.index)  # all cells
-            cell_indices = np.arange(self.n_cells)
+            self.n_units = len(df.index)  # all cells
+            cell_indices = np.arange(self.n_units)
         # Run a subset of cells
         elif isinstance(cell_index, (list)):
             cell_indices = np.array(cell_index)
-            self.n_cells = len(cell_indices)
+            self.n_units = len(cell_indices)
         # Run one cell
         elif isinstance(cell_index, (int)):
             cell_indices = np.array([cell_index])
-            self.n_cells = len(cell_indices)
+            self.n_units = len(cell_indices)
         else:
             raise AssertionError(
                 "cell_index must be None, an integer or list, aborting..."
@@ -246,9 +249,6 @@ class ReceptiveFields:
         if isinstance(cell_indices, (int, np.int32, np.int64)):
             cell_indices = np.array([cell_indices])
         self.cell_indices = np.atleast_1d(cell_indices)
-
-    def __str__(self):
-        return f"{self.gc_type}_{self.response_type} with {self.n_units} units."
 
     def _link_rf_to_vs(self, vs):
         """
@@ -363,7 +363,7 @@ class ReceptiveFields:
         self.temporal_filter_len = int(self.data_filter_duration / (1000 / vs.fps))
 
 
-class VisualSignal:
+class VisualSignal(Printable):
     """
     Class containing information associated with visual signal
     passing through the retina. This includes the stimulus video,
@@ -685,7 +685,7 @@ class SimulateRetina(RetinaMath):
         # Original frames are now [time points, height, width]
         video_copy = vs.stimulus_video.frames.copy()
         video_copy = np.transpose(video_copy, (1, 2, 0))
-        video_copy = np.tile(video_copy, (rf.n_cells, 1, 1, 1))
+        video_copy = np.tile(video_copy, (rf.n_units, 1, 1, 1))
 
         qmin, qmax, rmin, rmax = self._get_crop_pixels(rf, cell_indices)
 
@@ -744,7 +744,7 @@ class SimulateRetina(RetinaMath):
             n_frames = np.shape(vs.stimulus_video.frames)[0]
             # reshape the video
             stimulus_cropped = stimulus_cropped.reshape(
-                (rf.n_cells, sidelen**2, n_frames)
+                (rf.n_units, sidelen**2, n_frames)
             )
 
         vs.stimulus_cropped = stimulus_cropped
@@ -781,8 +781,8 @@ class SimulateRetina(RetinaMath):
 
         qmin, qmax, rmin, rmax = self._get_crop_pixels(rf, cell_indices)
 
-        stim_region = np.zeros((rf.n_cells, height, width), dtype=np.int32)
-        center_region = np.zeros((rf.n_cells, height, width), dtype=np.int32)
+        stim_region = np.zeros((rf.n_units, height, width), dtype=np.int32)
+        center_region = np.zeros((rf.n_units, height, width), dtype=np.int32)
 
         # Create the r and q indices for each cell, ensure they're integer type
         sidelen = rf.spatial_filter_sidelen
@@ -801,7 +801,7 @@ class SimulateRetina(RetinaMath):
         r_matrix, q_matrix = np.broadcast_arrays(r_indices, q_indices)
 
         # create a cell index array
-        unit_region_idx = np.arange(rf.n_cells).astype(np.int32).reshape(-1, 1, 1)
+        unit_region_idx = np.arange(rf.n_units).astype(np.int32).reshape(-1, 1, 1)
 
         # expand the indices arrays to the shape of r_matrix and q_matrix using broadcasting
         unit_region_idx = unit_region_idx + np.zeros_like(r_matrix, dtype=np.int32)
@@ -810,7 +810,7 @@ class SimulateRetina(RetinaMath):
         stim_region[unit_region_idx, r_matrix, q_matrix] = 1
 
         center_masks = rf.center_masks.copy()
-        center_masks = center_masks.astype(bool).reshape((rf.n_cells, sidelen, sidelen))
+        center_masks = center_masks.astype(bool).reshape((rf.n_units, sidelen, sidelen))
 
         center_region[
             unit_region_idx * center_masks,
@@ -994,33 +994,21 @@ class SimulateRetina(RetinaMath):
 
         return firing_rates
 
-    def _generator_to_firing_rate_noise(
-        self,
-        rf,
-        n_trials,
-        tvec,
-        params_all,
-        generator_potentials,
-    ):
+    def _generator_to_firing_rate_noise(self, vs, rf, n_trials):
         """
         Generates cone noise, scales it with mean firing rates. Multiplies the generator potentials with gain and
         finally adds the firing rates generated by the cone noise to the light-induced firing rates.
         Parameters
         ----------
-        tvec : ndarray
-            Time vector.
-        params_all : DataFrame
-            Dataframe containing parameters for each cell, including mean firing rates ('Mean') and gain ('A').
-        generator_potentials : ndarray
-            Array of generator potentials.
 
         Returns
         -------
         ndarray
             The firing rates after adding Gaussian noise and applying gain and mean firing rates adjustments.
         """
+        params_all = rf.df.loc[rf.cell_indices]
         assert (
-            params_all.shape[0] == generator_potentials.shape[0]
+            params_all.shape[0] == vs.generator_potentials.shape[0]
         ), "Number of cells in params_all and generator_potentials must match, aborting..."
 
         cones_to_gcs_weights = rf.cones_to_gcs_weights
@@ -1058,7 +1046,7 @@ class SimulateRetina(RetinaMath):
         if n_trials > 1:
             for trial in range(n_trials):
                 cone_noise = _create_cone_noise(
-                    tvec, n_cones, NL, TL, HS, TS, A0, M0, D
+                    vs.tvec, n_cones, NL, TL, HS, TS, A0, M0, D
                 )
                 if trial == 0:
                     gc_noise = cone_noise @ weights_norm
@@ -1066,8 +1054,8 @@ class SimulateRetina(RetinaMath):
                     gc_noise = np.concatenate(
                         (gc_noise, cone_noise @ weights_norm), axis=1
                     )
-        elif generator_potentials.shape[0] > 1:
-            cone_noise = _create_cone_noise(tvec, n_cones, NL, TL, HS, TS, A0, M0, D)
+        elif vs.generator_potentials.shape[0] > 1:
+            cone_noise = _create_cone_noise(vs.tvec, n_cones, NL, TL, HS, TS, A0, M0, D)
             gc_noise = cone_noise @ weights_norm
 
         # Normalize noise to have unit variance
@@ -1079,12 +1067,14 @@ class SimulateRetina(RetinaMath):
         firing_rates_cone_noise = gc_noise_norm.T * gc_noise_mean[:, np.newaxis] * magn
 
         gc_gain = params_all.A.values
-        firing_rates_light = generator_potentials * gc_gain[:, np.newaxis]
+        firing_rates_light = vs.generator_potentials * gc_gain[:, np.newaxis]
 
         # Truncating nonlinearity
         firing_rates = np.maximum(firing_rates_light + firing_rates_cone_noise, 0)
 
-        return firing_rates
+        vs.firing_rates = firing_rates
+
+        return vs
 
     def _create_temporal_signal(
         self, tvec, svec, dt, params, h, device, show_impulse=False
@@ -1227,13 +1217,15 @@ class SimulateRetina(RetinaMath):
         elif rf.gc_type == "midget":
             # Surround is always negative at this stage
             masks_sur = spatial_filters < 0
+            masks_sur = masks_sur[:, :, np.newaxis]
             surround_filters = (
                 spatial_filters_reshaped * vs.stimulus_cropped * masks_sur
             )
             vs.svecs_sur = np.nansum(surround_filters, axis=1)
 
+            center_masks = rf.center_masks[:, :, np.newaxis]
             center_filters = (
-                spatial_filters_reshaped * vs.stimulus_cropped * rf.center_masks
+                spatial_filters_reshaped * vs.stimulus_cropped * center_masks
             )
             vs.svecs_cen = np.nansum(center_filters, axis=1)
 
@@ -1269,7 +1261,7 @@ class SimulateRetina(RetinaMath):
             contrasts_for_impulse, list
         ), "Impulse must specify contrasts as list, aborting..."
 
-        yvecs = np.empty((rf.n_cells, len(contrasts_for_impulse), stim_len_tp))
+        yvecs = np.empty((rf.n_units, len(contrasts_for_impulse), stim_len_tp))
         if rf.temporal_model == "dynamic":
             # cpu on purpose, less issues, very fast anyway
             device = torch.device("cpu")
@@ -1470,7 +1462,7 @@ class SimulateRetina(RetinaMath):
         """
 
         s = rf.spatial_filter_sidelen
-        spatial_filters = np.zeros((rf.n_cells, s, s))
+        spatial_filters = np.zeros((rf.n_units, s, s))
         for idx, cell_index in enumerate(rf.cell_indices):
             if rf.spatial_model == "FIT":
                 spatial_filters[idx, ...] = self._create_spatial_filter_FIT(
@@ -1484,7 +1476,7 @@ class SimulateRetina(RetinaMath):
                 raise ValueError("Unknown model type, aborting...")
 
         # Reshape to N cells, s**2 pixels
-        spatial_filters = np.reshape(spatial_filters, (rf.n_cells, s**2))
+        spatial_filters = np.reshape(spatial_filters, (rf.n_units, s**2))
 
         # Get center masks
         center_masks = self.get_rf_masks(
@@ -1531,7 +1523,7 @@ class SimulateRetina(RetinaMath):
 
         """
 
-        num_cells = rf.n_cells
+        num_cells = rf.n_units
 
         # Move to GPU if possible. Both give the same result, but PyTorch@GPU is faster.
         if "torch" in sys.modules:
@@ -1606,6 +1598,232 @@ class SimulateRetina(RetinaMath):
         ), "Duration mismatch, check convolution operation, aborting..."
 
         vs.generator_potentials = generator_potential
+
+        return vs
+
+    def _firing_rates2brian_timed_arrays(self, vs):
+        # Let's interpolate the rate to vs.video_dt intervals
+        tvec_original = np.arange(1, vs.stimulus_video.video_n_frames + 1) * vs.video_dt
+        rates_func = interp1d(
+            tvec_original,
+            vs.firing_rates,
+            axis=1,
+            fill_value=0,
+            bounds_error=False,
+        )
+
+        tvec_new = np.arange(0, vs.duration, vs.simulation_dt)
+
+        # This needs to be 2D array for Brian
+        interpolated_rates_array = rates_func(tvec_new)
+
+        # Identical rates array for every trial; rows=time, columns=cell index
+        inst_rates = b2.TimedArray(
+            interpolated_rates_array.T * b2u.Hz, vs.simulation_dt
+        )
+
+        vs.interpolated_rates_array = interpolated_rates_array
+        vs.tvec_new = tvec_new
+        vs.inst_rates = inst_rates
+        return vs
+
+    def _brian_spike_generation(self, vs, rf, n_trials):
+
+        # Set inst_rates to locals() for Brian equation access
+        inst_rates = eval("vs.inst_rates")
+
+        # Cells in parallel (NG), trial iterations (repeated runs)
+        n_units_or_trials = np.max([rf.n_units, n_trials])
+
+        if rf.spike_generator_model == "refractory":
+            # Create Brian NeuronGroup
+            # calculate probability of firing for current timebin
+            # draw spike/nonspike from random distribution
+            # refractory_params = self.context.my_retina["refractory_params"]
+            abs_refractory = rf.refractory_params["abs_refractory"] * b2u.ms
+            rel_refractory = rf.refractory_params["rel_refractory"] * b2u.ms
+            p_exp = rf.refractory_params["p_exp"]
+            clip_start = rf.refractory_params["clip_start"] * b2u.ms
+            clip_end = rf.refractory_params["clip_end"] * b2u.ms
+
+            neuron_group = b2.NeuronGroup(
+                n_units_or_trials,
+                model="""
+                lambda_ttlast = inst_rates(t, i) * dt * w: 1
+                t_diff = clip(t - lastspike - abs_refractory, clip_start, clip_end) : second
+                w = t_diff**p_exp / (t_diff**p_exp + rel_refractory**p_exp) : 1
+                """,
+                threshold="rand()<lambda_ttlast",
+                refractory="(t-lastspike) < abs_refractory",
+                dt=vs.simulation_dt,
+            )
+
+            spike_monitor = b2.SpikeMonitor(neuron_group)
+            net = b2.Network(neuron_group, spike_monitor)
+
+        elif rf.spike_generator_model == "poisson":
+            # Create Brian PoissonGroup
+            poisson_group = b2.PoissonGroup(n_units_or_trials, rates="inst_rates(t, i)")
+            spike_monitor = b2.SpikeMonitor(poisson_group)
+            net = b2.Network(poisson_group, spike_monitor)
+        else:
+            raise ValueError(
+                "Missing valid spike_generator_model, check my_run_options parameters, aborting..."
+            )
+
+        # Save brian state
+        net.store()
+        all_spiketrains = []
+        spikearrays = []
+        t_start = []
+        t_end = []
+
+        # Run cells/trials in parallel, trials in loop
+        # tqdm_desc = "Simulating " + self.response_type + " " + self.gc_type + " mosaic"
+        # for trial in tqdm(range(n_trials), desc=tqdm_desc):
+        net.restore()  # Restore the initial state
+        t_start.append(net.t)
+        net.run(vs.duration)
+        t_end.append(net.t)
+
+        spiketrains = list(spike_monitor.spike_trains().values())
+        all_spiketrains.extend(spiketrains)
+
+        # Cxsystem spikemon save natively supports multiple monitors
+        spikearrays.append(
+            [
+                deepcopy(spike_monitor.it[0].__array__()),
+                deepcopy(spike_monitor.it[1].__array__()),
+            ]
+        )
+
+        vs.spikearrays = spikearrays
+        vs.n_units_or_trials = n_units_or_trials
+        vs.all_spiketrains = all_spiketrains
+
+        return vs
+
+    def _get_dynamic_generator_potentials(self, vs, rf, device):
+
+        # Dummy variables to avoid jump to cpu. Impulse response is called above.
+        get_impulse_response = torch.tensor(False, device=device)
+        contrasts_for_impulse = torch.tensor([1.0], device=device)
+
+        KeyErrorMsg = "Parameter columns mismatch. Did you forget to build? Activate PM.construct_retina.build()."
+        if rf.gc_type == "parasol":
+            columns = ["NL", "TL", "HS", "T0", "Chalf", "D", "A"]
+            try:
+                params = rf.df.loc[rf.cell_indices, columns].values
+            except KeyError:
+                raise KeyError(KeyErrorMsg)
+            params_t = torch.tensor(params, device=device)
+            svecs_t = torch.tensor(vs.svecs, device=device)
+        elif rf.gc_type == "midget":
+            columns_cen = [
+                "NL_cen",
+                "NLTL_cen",
+                "TS_cen",
+                "HS_cen",
+                "D_cen",
+                "A_cen",
+            ]
+            try:
+                params_cen = rf.df.loc[rf.cell_indices, columns_cen].values
+            except KeyError:
+                raise KeyError(KeyErrorMsg)
+
+            params_cen_t = torch.tensor(params_cen, device=device)
+            svecs_cen_t = torch.tensor(vs.svecs_cen, device=device)
+            # Note delay (D) for sur is the same as for cen, the cen-sur delay
+            # emerges from LP filter parameters
+            columns_sur = [
+                "NL_sur",
+                "NLTL_sur",
+                "TS_sur",
+                "HS_sur",
+                "D_cen",
+                "A_sur",
+            ]
+            try:
+                params_sur = rf.df.loc[rf.cell_indices, columns_sur].values
+            except KeyError:
+                raise KeyError(KeyErrorMsg)
+
+            params_sur_t = torch.tensor(params_sur, device=device)
+            svecs_sur_t = torch.tensor(vs.svecs_sur, device=device)
+
+        stim_len_tp_t = torch.tensor(vs.stim_len_tp, device=device)
+        num_units_t = torch.tensor(rf.n_units, device=device)
+        generator_potentials_t = torch.empty(
+            (num_units_t, stim_len_tp_t), device=device
+        )
+        tvec_t = torch.tensor(vs.tvec / b2u.ms, device=device)
+        video_dt_t = torch.tensor(vs.video_dt / b2u.ms, device=device)
+
+        tqdm_desc = "Preparing dynamic generator potential..."
+        for idx in tqdm(
+            torch.range(0, num_units_t - 1, dtype=torch.int), desc=tqdm_desc
+        ):
+            if rf.gc_type == "parasol":
+                unit_params = params_t[idx, :]
+                # Henri aloita tästä
+
+                generator_potential = self._create_temporal_signal_cg(
+                    tvec_t,
+                    svecs_t[idx, :],
+                    video_dt_t,
+                    unit_params,
+                    device,
+                    show_impulse=get_impulse_response,
+                    impulse_contrast=contrasts_for_impulse,
+                )
+                # generator_potentials were unitwise delayed at start of the stimulus
+                generator_potential = generator_potential[:stim_len_tp_t]
+                generator_potentials_t[idx, :] = generator_potential
+
+            elif rf.gc_type == "midget":
+                # Migdet cells' surrounds are delayed in comparison to centre.
+                # Thus, we need to run cen and the sur separately.
+
+                # Low-passing impulse response for center and surround
+                unit_params_cen = params_cen_t[idx, :]
+                lp_cen = self._create_lowpass_response(tvec_t, unit_params_cen)
+
+                unit_params_sur = params_sur_t[idx, :]
+                lp_sur = self._create_lowpass_response(tvec_t, unit_params_sur)
+
+                # Scale the show_impulse response to have unit area in both calls for high-pass.
+                # This corresponds to summation before high-pass stage, as in Schottdorf_2021_JPhysiol
+                h_cen = lp_cen / torch.sum(lp_cen + lp_sur)
+                h_sur = lp_sur / torch.sum(lp_cen + lp_sur)
+
+                # Convolve stimulus with the low-pass filter and apply high-pass stage
+                gen_pot_cen = self._create_temporal_signal(
+                    tvec_t,
+                    svecs_cen_t[idx, :],
+                    video_dt_t,
+                    unit_params_cen,
+                    h_cen,
+                    device,
+                    show_impulse=get_impulse_response,
+                )
+                gen_pot_sur = self._create_temporal_signal(
+                    tvec_t,
+                    svecs_sur_t[idx, :],
+                    video_dt_t,
+                    unit_params_sur,
+                    h_sur,
+                    device,
+                    show_impulse=get_impulse_response,
+                )
+                # generator_potentials are individually delayed from the beginning of the stimulus
+                # This results in varying vector lengths, so we need to crop
+                gen_pot_cen = gen_pot_cen[:stim_len_tp_t]
+                gen_pot_sur = gen_pot_sur[:stim_len_tp_t]
+
+                generator_potentials_t[idx, :] = gen_pot_cen + gen_pot_sur
+
+            vs.generator_potentials = generator_potentials_t.cpu().numpy()
 
         return vs
 
@@ -1752,114 +1970,7 @@ class SimulateRetina(RetinaMath):
 
             # Get generator potentials
             device = self.context.device
-
-            # Dummy variables to avoid jump to cpu. Impulse response is called above.
-            get_impulse_response = torch.tensor(False, device=device)
-            contrasts_for_impulse = torch.tensor([1.0], device=device)
-
-            if rf.gc_type == "parasol":
-                columns = ["NL", "TL", "HS", "T0", "Chalf", "D", "A"]
-                params = rf.df.loc[rf.cell_indices, columns].values
-                params_t = torch.tensor(params, device=device)
-                svecs_t = torch.tensor(vs.svecs, device=device)
-            elif rf.gc_type == "midget":
-                columns_cen = [
-                    "NL_cen",
-                    "NLTL_cen",
-                    "TS_cen",
-                    "HS_cen",
-                    "D_cen",
-                    "A_cen",
-                ]
-                params_cen = rf.df.loc[rf.cell_indices, columns_cen].values
-                params_cen_t = torch.tensor(params_cen, device=device)
-                svecs_cen_t = torch.tensor(vs.svecs_cen, device=device)
-                # Note delay (D) for sur is the same as for cen, the cen-sur delay
-                # emerges from LP filter parameters
-                columns_sur = [
-                    "NL_sur",
-                    "NLTL_sur",
-                    "TS_sur",
-                    "HS_sur",
-                    "D_cen",
-                    "A_sur",
-                ]
-                params_sur = rf.df.loc[rf.cell_indices, columns_sur].values
-                params_sur_t = torch.tensor(params_sur, device=device)
-                svecs_sur_t = torch.tensor(vs.svecs_sur, device=device)
-
-            stim_len_tp_t = torch.tensor(vs.stim_len_tp, device=device)
-            num_cells_t = torch.tensor(rf.n_cells, device=device)
-            generator_potentials_t = torch.empty(
-                (num_cells_t, stim_len_tp_t), device=device
-            )
-            tvec_t = torch.tensor(vs.tvec / b2u.ms, device=device)
-            video_dt_t = torch.tensor(vs.video_dt / b2u.ms, device=device)
-
-            tqdm_desc = "Preparing dynamic generator potential..."
-            for idx in tqdm(
-                torch.range(0, num_cells_t - 1, dtype=torch.int), desc=tqdm_desc
-            ):
-                if rf.gc_type == "parasol":
-                    unit_params = params_t[idx, :]
-                    # Henri aloita tästä
-
-                    generator_potential = self._create_temporal_signal_cg(
-                        tvec_t,
-                        svecs_t[idx, :],
-                        video_dt_t,
-                        unit_params,
-                        device,
-                        show_impulse=get_impulse_response,
-                        impulse_contrast=contrasts_for_impulse,
-                    )
-                    # generator_potentials were unitwise delayed at start of the stimulus
-                    generator_potential = generator_potential[:stim_len_tp_t]
-                    generator_potentials_t[idx, :] = generator_potential
-
-                elif rf.gc_type == "midget":
-                    # Migdet cells' surrounds are delayed in comparison to centre.
-                    # Thus, we need to run cen and the sur separately.
-
-                    # Low-passing impulse response for center and surround
-                    unit_params_cen = params_cen_t[idx, :]
-                    lp_cen = self._create_lowpass_response(tvec_t, unit_params_cen)
-
-                    unit_params_sur = params_sur_t[idx, :]
-                    lp_sur = self._create_lowpass_response(tvec_t, unit_params_sur)
-
-                    # Scale the show_impulse response to have unit area in both calls for high-pass.
-                    # This corresponds to summation before high-pass stage, as in Schottdorf_2021_JPhysiol
-                    h_cen = lp_cen / torch.sum(lp_cen + lp_sur)
-                    h_sur = lp_sur / torch.sum(lp_cen + lp_sur)
-
-                    # Convolve stimulus with the low-pass filter and apply high-pass stage
-                    gen_pot_cen = self._create_temporal_signal(
-                        tvec_t,
-                        svecs_cen_t[idx, :],
-                        video_dt_t,
-                        unit_params_cen,
-                        h_cen,
-                        device,
-                        show_impulse=get_impulse_response,
-                    )
-                    gen_pot_sur = self._create_temporal_signal(
-                        tvec_t,
-                        svecs_sur_t[idx, :],
-                        video_dt_t,
-                        unit_params_sur,
-                        h_sur,
-                        device,
-                        show_impulse=get_impulse_response,
-                    )
-                    # generator_potentials are individually delayed from the beginning of the stimulus
-                    # This results in varying vector lengths, so we need to crop
-                    gen_pot_cen = gen_pot_cen[:stim_len_tp_t]
-                    gen_pot_sur = gen_pot_sur[:stim_len_tp_t]
-
-                    generator_potentials_t[idx, :] = gen_pot_cen + gen_pot_sur
-
-            vs.generator_potentials = generator_potentials_t.cpu().numpy()
+            vs = self._get_dynamic_generator_potentials(vs, rf, device)
 
         elif rf.temporal_model == "fixed":  # Linear model
             # Amplitude will be scaled by first (positive) lowpass filter.
@@ -1869,114 +1980,24 @@ class SimulateRetina(RetinaMath):
             print("Preparing fixed generator potential...")
             vs = self._convolve_stimulus_batched(vs, rf)
 
-        # TÄHÄN JÄIT: OLIT REFAKTOROIMASSA MODULIA KÄYTTÄMÄÄN VS JA RF OBJEKTEJA
-
-        params_all = rf.df.loc[rf.cell_indices]
-
         # Here we choose between n cells and n trials. One of them must be 1
-        firing_rates = self._generator_to_firing_rate_noise(
-            rf, n_trials, vs.tvec, params_all, vs.generator_potentials
-        )
-        n_cells_or_trials = np.max([rf.n_cells, n_trials])
-
-        # Let's interpolate the rate to vs.video_dt intervals
-        tvec_original = np.arange(1, vs.stimulus_video.video_n_frames + 1) * vs.video_dt
-        rates_func = interp1d(
-            tvec_original,
-            firing_rates,
-            axis=1,
-            fill_value=0,
-            bounds_error=False,
-        )
-
-        tvec_new = np.arange(0, vs.duration, vs.simulation_dt)
-
-        # This needs to be 2D array for Brian
-        interpolated_rates_array = rates_func(tvec_new)
-
-        # Identical rates array for every trial; rows=time, columns=cell index
-        inst_rates = b2.TimedArray(
-            interpolated_rates_array.T * b2u.Hz, vs.simulation_dt
-        )
-
-        # Cells in parallel (NG), trial iterations (repeated runs)
-        if rf.spike_generator_model == "refractory":
-            # Create Brian NeuronGroup
-            # calculate probability of firing for current timebin (eg .1 ms)
-            # draw spike/nonspike from random distribution
-            refractory_params = self.context.my_retina["refractory_params"]
-            abs_refractory = refractory_params["abs_refractory"] * b2u.ms
-            rel_refractory = refractory_params["rel_refractory"] * b2u.ms
-            p_exp = refractory_params["p_exp"]
-            clip_start = refractory_params["clip_start"] * b2u.ms
-            clip_end = refractory_params["clip_end"] * b2u.ms
-
-            neuron_group = b2.NeuronGroup(
-                n_cells_or_trials,
-                model="""
-                lambda_ttlast = inst_rates(t, i) * dt * w: 1
-                t_diff = clip(t - lastspike - abs_refractory, clip_start, clip_end) : second
-                w = t_diff**p_exp / (t_diff**p_exp + rel_refractory**p_exp) : 1
-                """,
-                threshold="rand()<lambda_ttlast",
-                refractory="(t-lastspike) < abs_refractory",
-                dt=vs.simulation_dt,
-            )
-
-            spike_monitor = b2.SpikeMonitor(neuron_group)
-            net = b2.Network(neuron_group, spike_monitor)
-
-        elif rf.spike_generator_model == "poisson":
-            # Create Brian PoissonGroup
-            poisson_group = b2.PoissonGroup(n_cells_or_trials, rates="inst_rates(t, i)")
-            spike_monitor = b2.SpikeMonitor(poisson_group)
-            net = b2.Network(poisson_group, spike_monitor)
-        else:
-            raise ValueError(
-                "Missing valid spike_generator_model, check my_run_options parameters, aborting..."
-            )
-
-        # Save brian state
-        net.store()
-        all_spiketrains = []
-        spikemons = []
-        spikearrays = []
-        t_start = []
-        t_end = []
-
-        # Run cells/trials in parallel, trials in loop
-        # tqdm_desc = "Simulating " + self.response_type + " " + self.gc_type + " mosaic"
-        # for trial in tqdm(range(n_trials), desc=tqdm_desc):
-        net.restore()  # Restore the initial state
-        t_start.append(net.t)
-        net.run(vs.duration)
-        t_end.append(net.t)
-
-        spiketrains = list(spike_monitor.spike_trains().values())
-        all_spiketrains.extend(spiketrains)
-
-        # Cxsystem spikemon save natively supports multiple monitors
-        spikemons.append(spike_monitor)
-        spikearrays.append(
-            [
-                deepcopy(spike_monitor.it[0].__array__()),
-                deepcopy(spike_monitor.it[1].__array__()),
-            ]
-        )
+        vs = self._generator_to_firing_rate_noise(vs, rf, n_trials)
+        vs = self._firing_rates2brian_timed_arrays(vs)
+        vs = self._brian_spike_generation(vs, rf, n_trials)
 
         if save_data is True:
             self.w_coord, self.z_coord = self.get_w_z_coords(rf)
             self.data_io.save_spikes_for_cxsystem(
-                spikearrays,
-                n_cells_or_trials,
+                vs.spikearrays,
+                vs.n_units_or_trials,
                 self.w_coord,
                 self.z_coord,
                 filename=filename,
-                analog_signal=interpolated_rates_array,
+                analog_signal=vs.interpolated_rates_array,
                 dt=vs.simulation_dt,
             )
             self.data_io.save_spikes_csv(
-                all_spiketrains, n_cells_or_trials, filename=filename
+                vs.all_spiketrains, vs.n_units_or_trials, filename=filename
             )
             rgc_coords = rf.df[["x_deg", "y_deg"]].copy()
             self.data_io.save_structure_csv(rgc_coords, filename=filename)
@@ -1995,12 +2016,12 @@ class SimulateRetina(RetinaMath):
 
         gc_responses_to_show = {
             "n_trials": n_trials,
-            "n_cells": rf.n_cells,
-            "all_spiketrains": all_spiketrains,
+            "n_units": rf.n_units,
+            "all_spiketrains": vs.all_spiketrains,
             "duration": vs.duration,
-            "generator_potential": firing_rates,
+            "generator_potential": vs.firing_rates,
             "video_dt": vs.video_dt,
-            "tvec_new": tvec_new,
+            "tvec_new": vs.tvec_new,
         }
 
         # Attach data requested by other classes to project_data
