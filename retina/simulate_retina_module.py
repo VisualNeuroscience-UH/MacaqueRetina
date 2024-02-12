@@ -1965,7 +1965,7 @@ class SimulateRetina(RetinaMath):
             # Contrast gain control depends dynamically on contrast
             # Henri aloita tästä
 
-            # Get stimulus contrast vector:
+            # Get stimulus contrast vector
             vs = self._create_dynamic_contrast(vs, rf)
 
             # Get generator potentials
@@ -1980,11 +1980,12 @@ class SimulateRetina(RetinaMath):
             print("Preparing fixed generator potential...")
             vs = self._convolve_stimulus_batched(vs, rf)
 
-        # Here we choose between n cells and n trials. One of them must be 1
+        # From generator potential to spikes
         vs = self._generator_to_firing_rate_noise(vs, rf, n_trials)
         vs = self._firing_rates2brian_timed_arrays(vs)
         vs = self._brian_spike_generation(vs, rf, n_trials)
 
+        # Save retina spikes
         if save_data is True:
             self.w_coord, self.z_coord = self.get_w_z_coords(rf)
             self.data_io.save_spikes_for_cxsystem(
@@ -2002,6 +2003,7 @@ class SimulateRetina(RetinaMath):
             rgc_coords = rf.df[["x_deg", "y_deg"]].copy()
             self.data_io.save_structure_csv(rgc_coords, filename=filename)
 
+        # For Viz
         stim_to_show = {
             "stimulus_video": vs.stimulus_video,
             "df_stimpix": rf.df_stimpix,
