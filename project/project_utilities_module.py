@@ -5,7 +5,7 @@ import copy
 import pdb
 import sys
 import time
-
+import inspect
 
 # Analysis
 import numpy as np
@@ -492,3 +492,52 @@ class DataSampler:
         plt.close(fig)
 
         self._save_data()
+
+
+class Printable:
+    def __str__(self):
+        class_info = f"Instance of {self.__class__.__name__}, ID: {id(self)}\n"
+
+        # Getting class, module, and line number information
+        class_name = self.__class__.__name__
+        module_name = inspect.getmodule(self).__name__
+        line_number = inspect.getsourcelines(self.__class__)[1]
+        class_info += f"\nClass name: {class_name}\nCreated at: {module_name} line {line_number}\n"
+
+        # Getting signature
+        signature = inspect.signature(self.__init__)
+        class_info += f"\nSignature:\n{signature}\n"
+
+        # Preparing attributes and methods for pretty printing
+        attributes = [
+            attr
+            for attr in dir(self)
+            if not callable(getattr(self, attr)) and not attr.startswith("__")
+        ]
+        methods = [
+            method
+            for method in dir(self)
+            if callable(getattr(self, method)) and not method.startswith("__")
+        ]
+
+        # Determining the max length for pretty alignment
+        max_attr_name_len = max(len(attr) for attr in attributes) if attributes else 0
+        max_attr_type_len = (
+            max(len(str(type(getattr(self, attr)))) for attr in attributes)
+            if attributes
+            else 0
+        )
+
+        # Compiling attributes information
+        attributes_info = "\nAttributes:\n"
+        for attr in attributes:
+            attr_type = type(getattr(self, attr))
+            attr_type = str([attr.split("'")[1] for attr in str(attr_type).split(", ")])
+            attributes_info += (
+                f"{attr:<{max_attr_name_len}}\t{attr_type:<{max_attr_type_len}}\n"
+            )
+
+        # Compiling methods information
+        methods_info = "\nMethods:\n" + ",\n".join(methods)
+
+        return class_info + attributes_info + methods_info
