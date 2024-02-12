@@ -527,6 +527,8 @@ class Printable:
             if attributes
             else 0
         )
+        if max_attr_type_len > 40:
+            max_attr_type_len = 40
 
         # Compiling attributes information
         attributes_info = "\nAttributes:\n"
@@ -551,6 +553,12 @@ class Printable:
                     attr_value = attr_instance
                 case "float":
                     attr_value = f"{attr_instance:.2f}"
+                case "brian2.units.fundamentalunits.Quantity":
+                    attr_value = f"shape: {attr_instance.shape}, unit: {attr_instance.get_best_unit()}"
+                case "data_io.data_io_module.DummyVideoClass":
+                    attr_value = ""
+                case _:
+                    attr_value = attr_instance
 
             attr_value = str(attr_value)
             attributes_info += f"{attr:<{max_attr_name_len}}\t{full_type_name:<{max_attr_type_len}}\t{attr_value}\n"
