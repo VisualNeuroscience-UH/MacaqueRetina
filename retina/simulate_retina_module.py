@@ -654,6 +654,11 @@ class SimulateRetina(RetinaMath):
 
         Parameters
         ----------
+        vs : VisualSignal
+            The visual signal object containing the stimulus video.
+
+        rf : ReceptiveFields
+            The receptive fields object containing the RGCs and their parameters.
 
         contrast : bool, optional
             If True, the video is rescaled to have pixel values between -1 and 1.
@@ -667,7 +672,7 @@ class SimulateRetina(RetinaMath):
 
         Returns
         -------
-        stimulus_cropped : np.ndarray
+        vs.stimulus_cropped : np.ndarray
             The cropped video. The dimensions of the array are
             (number_of_cells, number_of_pixels_w, number_of_pixels_h, number_of_time_points)
             if reshape is False, and
@@ -682,67 +687,34 @@ class SimulateRetina(RetinaMath):
 
         sidelen = rf.spatial_filter_sidelen
         cell_indices = rf.cell_indices.copy()
-        # Original frames are now [time points, height, width]
         video_copy = vs.stimulus_video.frames.copy()
-        video_copy = np.transpose(video_copy, (1, 2, 0))
-        video_copy = np.tile(video_copy, (rf.n_units, 1, 1, 1))
+        video_copy = np.transpose(
+            video_copy, (1, 2, 0)
+        )  # Original frames are now [height, width, time points]
+        video_copy = video_copy[np.newaxis, ...]  # Add new axis for broadcasting
 
         qmin, qmax, rmin, rmax = self._get_crop_pixels(rf, cell_indices)
 
-        # Create the r and q indices for each cell, ensure they're integer type
-        r_indices = (
-            (np.arange(sidelen) + rmin[:, np.newaxis])
-            .astype(int)
-            .reshape(-1, 1, sidelen, 1)
-        )
-        q_indices = (
-            (np.arange(sidelen) + qmin[:, np.newaxis])
-            .astype(int)
-            .reshape(-1, sidelen, 1, 1)
-        )
+        # Adjust the creation of r_indices and q_indices for proper broadcasting
+        r_indices = np.arange(sidelen) + rmin[:, np.newaxis]
+        q_indices = np.arange(sidelen) + qmin[:, np.newaxis]
 
-        # Assert that the indices are within the video dimensions
-        assert np.all(
-            (r_indices >= 0) & (r_indices < video_copy.shape[1])
-        ), "r_indices out of bounds, retina lands in part or in full outside stimulus video"
-        assert np.all(
-            (q_indices >= 0) & (q_indices < video_copy.shape[2])
-        ), "q_indices out of bounds, retina lands in part or in full outside stimulus video"
+        # Ensure r_indices and q_indices are repeated for each cell
+        r_indices = r_indices.reshape(-1, 1, sidelen, 1)
+        q_indices = q_indices.reshape(-1, sidelen, 1, 1)
 
-        # Create r_matrix and q_matrix by broadcasting r_indices and q_indices
+        # Broadcasting to create compatible shapes for indexing
         r_matrix, q_matrix = np.broadcast_arrays(r_indices, q_indices)
+        time_points_indices = np.arange(video_copy.shape[-1])
 
-        # create a cell index array and a time_points index array
-        # shape: (len(cell_indices), 1, 1, 1)
-        cell_indices = (
-            np.arange(len(cell_indices)).astype(np.int32).reshape(-1, 1, 1, 1)
-        )
-        # shape: (n_time_points,)
-        time_points_indices = np.arange(video_copy.shape[-1]).astype(np.int32)
+        # Use advanced indexing for selecting pixels
+        stimulus_cropped = video_copy[0, r_matrix, q_matrix, time_points_indices]
 
-        # expand the indices arrays to the shape of r_matrix and q_matrix using broadcasting
-        # shape: (len(cell_indices), sidelen, sidelen)
-        cell_indices = cell_indices + np.zeros_like(r_matrix, dtype=np.int32)
-        # shape: (1, 1, 1, n_time_points)
-        time_points_indices = time_points_indices + np.zeros(
-            (1, 1, 1, video_copy.shape[-1]), dtype=np.int32
-        )
-
-        # use the index arrays to select the elements from video_copy
-        stimulus_cropped = video_copy[
-            cell_indices, r_matrix, q_matrix, time_points_indices
-        ]
-
-        if contrast is True:
-            # Returns Weber constrast
+        if contrast:
             stimulus_cropped = stimulus_cropped / 127.5 - 1.0
 
-        # stimulus_cropped = stimulus_cropped.astype(np.uint16)
-
-        if reshape is True:
-            # Original frames are now [time points, height, width]
-            n_frames = np.shape(vs.stimulus_video.frames)[0]
-            # reshape the video
+        if reshape:
+            n_frames = vs.stimulus_video.frames.shape[0]
             stimulus_cropped = stimulus_cropped.reshape(
                 (rf.n_units, sidelen**2, n_frames)
             )
@@ -959,7 +931,7 @@ class SimulateRetina(RetinaMath):
                 + (x_t_vec[idx] - x_t_vec[idx - 1]) / dt
                 + (((1 - HS) * x_t_vec[idx]) / Ts_t)
             )
-            Ts_t = T0 / (1 + c_t / Chalf)
+            Ts_t = T0 / (1 + c_t / Chalf)  # c_t**2 / Chalf**2? Wohrer 09
             c_t = c_t + dt * ((torch.abs(y_t) - c_t) / Tc)
             yvec[idx] = y_t
 
@@ -1206,28 +1178,29 @@ class SimulateRetina(RetinaMath):
         # However, we assume that the surround suppression is early (horizontal cells) and linear,
         # so we approximate s(t) = RF * stimulus
         if rf.gc_type == "parasol":
-            masks = np.ones_like(spatial_filters_reshaped)  # mask with all ones
-            # Multiply the arrays using broadcasting.
-            # This is the stimulus contrast viewed through spatial rf filter
-            center_surround_filters = (
-                spatial_filters_reshaped * vs.stimulus_cropped * masks
+
+            # This is the stimulus contrast viewed through spatial rf filter, and summed over spatial dimension.
+            # The np.einsum provides a fast and memory-efficient way to do this.
+            vs.svecs = np.einsum(
+                "ijk,ijk->ik", spatial_filters_reshaped, vs.stimulus_cropped
             )
-            # Sum over spatial dimension. Collapses the filter into one temporal signal.
-            vs.svecs = np.nansum(center_surround_filters, axis=1)
+
         elif rf.gc_type == "midget":
             # Surround is always negative at this stage
             masks_sur = spatial_filters < 0
             masks_sur = masks_sur[:, :, np.newaxis]
-            surround_filters = (
-                spatial_filters_reshaped * vs.stimulus_cropped * masks_sur
+
+            vs.svecs_sur = np.einsum(
+                "ijk,ijk->ik", spatial_filters_reshaped * masks_sur, vs.stimulus_cropped
             )
-            vs.svecs_sur = np.nansum(surround_filters, axis=1)
 
             center_masks = rf.center_masks[:, :, np.newaxis]
-            center_filters = (
-                spatial_filters_reshaped * vs.stimulus_cropped * center_masks
+            # Similarly, for center filters
+            vs.svecs_cen = np.einsum(
+                "ijk,ijk->ik",
+                spatial_filters_reshaped * center_masks,
+                vs.stimulus_cropped,
             )
-            vs.svecs_cen = np.nansum(center_filters, axis=1)
 
         return vs
 
@@ -1967,10 +1940,12 @@ class SimulateRetina(RetinaMath):
 
             # Get stimulus contrast vector
             vs = self._create_dynamic_contrast(vs, rf)
+            # pdb.set_trace()
 
             # Get generator potentials
             device = self.context.device
             vs = self._get_dynamic_generator_potentials(vs, rf, device)
+            # pdb.set_trace()
 
         elif rf.temporal_model == "fixed":  # Linear model
             # Amplitude will be scaled by first (positive) lowpass filter.
