@@ -1510,11 +1510,12 @@ class SimulateRetina(RetinaMath):
 
         """
 
-        num_cells = rf.n_units
-
         # Move to GPU if possible. Both give the same result, but PyTorch@GPU is faster.
         if "torch" in sys.modules:
             device = self.context.device
+            # num_cells = rf.n_units
+            num_units_t = torch.tensor(rf.n_units, device=device)
+            stim_len_tp_t = torch.tensor(vs.stim_len_tp, device=device)
 
             # Dimensions are [batch_size, num_channels, time_steps]. We use pixels as channels.
             stimulus_cropped = torch.tensor(vs.stimulus_cropped).float().to(device)
@@ -1537,10 +1538,14 @@ class SimulateRetina(RetinaMath):
             )
 
             output = torch.empty(
-                (num_cells, vs.stim_len_tp),
+                (num_units_t, stim_len_tp_t),
                 device=device,
             )
-            for i in range(num_cells):
+
+            tqdm_desc = "Preparing fixed generator potential..."
+            for i in tqdm(
+                torch.range(0, num_units_t - 1, dtype=torch.int), desc=tqdm_desc
+            ):
                 output[i] = torch.nn.functional.conv1d(
                     stimulus_padded[i].unsqueeze(0),
                     spatiotemporal_filter_flipped[i].unsqueeze(0),
@@ -1560,9 +1565,9 @@ class SimulateRetina(RetinaMath):
             ), f"baseline_start_seconds must be longer than filter length ({filter_length * vs.video_dt}), aborting..."
 
             generator_potential = np.empty(
-                (num_cells, vs.stim_len_tp - filter_length + 1)
+                (rf.n_units, vs.stim_len_tp - filter_length + 1)
             )
-            for idx in range(num_cells):
+            for idx in range(rf.n_units):
                 generator_potential[idx, :] = convolve(
                     vs.stimulus_cropped[idx],
                     rf.spatiotemporal_filters[idx],
@@ -1966,7 +1971,6 @@ class SimulateRetina(RetinaMath):
             rf = self._get_linear_temporal_filters(rf)
             rf = self._get_linear_spatiotemporal_filters(rf)
 
-            print("Preparing fixed generator potential...")
             vs = self._convolve_stimulus_batched(vs, rf)
 
         # print(np.mean(vs.generator_potentials.flatten()))
