@@ -326,24 +326,38 @@ class ReceptiveFields(Printable):
         df_stimpix = pd.concat([df_stimpix, pixspace_coords], axis=1)
         pix_df = deepcopy(df_stimpix)
 
-        # Get spatial filter sidelength in pixels in stimulus space
         if self.spatial_model == "FIT":
-            # Define spatial filter sidelength (based on angular resolution and widest semimajor axis)
+            # Define spatial filter sidelength in pixels in stimulus space
+            # based on angular resolution and widest semimajor axis.
             # We use the general rule that the sidelength should be at least 5 times the SD
-            # Sidelength always odd number
+            # Remove exceptionally large values from surround before calculating sidelen.
+            # This saves a lot of memory and computation time downstream.
+            n_sd = 3  # SD
             if self.DoG_model == "ellipse_fixed":
+                cut = pix_df.relat_sur_diam.mean() + pix_df.relat_sur_diam.std() * n_sd
+                pix_df.relat_sur_diam[pix_df.relat_sur_diam > cut] = 0
                 rf_max_pix = max(
                     max(pix_df.semi_xc * pix_df.relat_sur_diam),
                     max(pix_df.semi_yc * pix_df.relat_sur_diam),
                 )
 
             elif self.DoG_model == "ellipse_independent":
+                cut = pix_df.semi_xs.mean() + pix_df.semi_xs.std() * n_sd
+                pix_df.semi_xs[pix_df.semi_xs > cut] = 0
+                cut = pix_df.semi_ys.mean() + pix_df.semi_ys.std() * n_sd
+                pix_df.semi_ys[pix_df.semi_ys > cut] = 0
                 rf_max_pix = max(max(pix_df.semi_xs), max(pix_df.semi_ys))
 
             elif self.DoG_model == "circular":
-                rf_max_pix = max(df_stimpix.rad_s)
+                cut = pix_df.rad_c.mean() + pix_df.rad_c.std() * n_sd
+                pix_df.rad_s[pix_df.rad_s > cut] = 0
+                rf_max_pix = max(pix_df.rad_s)
 
-            self.spatial_filter_sidelen = 2 * 3 * int(rf_max_pix) + 1
+            self.spatial_filter_sidelen = 5 * int(rf_max_pix)
+
+            # Sidelength always odd number
+            if self.spatial_filter_sidelen % 2 == 0:
+                self.spatial_filter_sidelen += 1
 
         elif self.spatial_model == "VAE":
             # Fixed spatial filter sidelength according to VAE RF pixel resolution
@@ -361,6 +375,7 @@ class ReceptiveFields(Printable):
 
         self.microm_per_pix = (1 / self.deg_per_mm) / vs.pix_per_deg * 1000
         self.temporal_filter_len = int(self.data_filter_duration / (1000 / vs.fps))
+        # pdb.set_trace()
 
 
 class VisualSignal(Printable):
