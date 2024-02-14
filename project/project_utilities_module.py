@@ -527,8 +527,9 @@ class Printable:
             if attributes
             else 0
         )
-        if max_attr_type_len > 40:
-            max_attr_type_len = 40
+        if max_attr_type_len > 32:
+            max_attr_type_len = 32
+        max_attr_val_len = 30
 
         # Compiling attributes information
         attributes_info = "\nAttributes:\n"
@@ -541,6 +542,13 @@ class Printable:
                 if module_name not in ("__builtin__", "builtins")
                 else class_name
             )
+
+            mem_size = ""
+            match full_type_name:
+                case "pandas.core.frame.DataFrame":
+                    mem_size = f"{attr_instance.values.nbytes / 1e6:.2f} MB"
+                case "numpy.ndarray":
+                    mem_size = f"{attr_instance.nbytes / 1e6:.2f} MB"
 
             match full_type_name:
                 case "pandas.core.frame.DataFrame" | "numpy.ndarray":
@@ -561,7 +569,8 @@ class Printable:
                     attr_value = attr_instance
 
             attr_value = str(attr_value)
-            attributes_info += f"{attr:<{max_attr_name_len}}\t{full_type_name:<{max_attr_type_len}}\t{attr_value}\n"
+
+            attributes_info += f"{attr:<{max_attr_name_len}}\t{full_type_name:<{max_attr_type_len}}\t{attr_value:<{max_attr_val_len}}\t{mem_size}\n"
 
         # Compiling methods information
         methods_info = "\nMethods:\n" + ",\n".join(methods)
