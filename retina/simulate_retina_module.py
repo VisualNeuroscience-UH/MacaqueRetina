@@ -650,11 +650,9 @@ class SimulateRetina(RetinaMath):
 
         tvec = np.linspace(0, rf.data_filter_duration, rf.temporal_filter_len)
         temporal_filter = self.diff_of_lowpass_filters(tvec, *filter_params)
-        norm_filter_params = filter_params.copy()
-        norm_filter_params["p2"] = 0
-        norm_filter = self.diff_of_lowpass_filters(tvec, *norm_filter_params)
-        # Amplitude will be scaled by first (positive) lowpass filter.
-        temporal_filter = temporal_filter / np.sum(np.abs(norm_filter))
+
+        # Amplitude will be scaled by abs(sum()) of the temporal_filter
+        temporal_filter = temporal_filter / np.sum(np.abs(temporal_filter))
 
         return temporal_filter
 
@@ -892,7 +890,6 @@ class SimulateRetina(RetinaMath):
         T0 = params[3]
         Chalf = params[4]
         D = params[5]
-        A = params[6]
 
         ### Low pass filter ###
 
@@ -908,7 +905,7 @@ class SimulateRetina(RetinaMath):
         # need to do it manually.
         h_flipped = torch.flip(h, dims=[0])
 
-        # Scale the impulse response to have unit area
+        # Scale the impulse response to have unit area. This normalizes the effect of video dt.
         h_flipped = h_flipped / torch.sum(h_flipped)
 
         c_t = torch.tensor(0.0, device=device)
@@ -940,13 +937,13 @@ class SimulateRetina(RetinaMath):
         y_t = torch.tensor(0.0, device=device)
         yvec = torch.zeros(len(tvec), device=device)
         Ts_t = T0 / (1 + c_t / Chalf)
-        for idx, this_time in enumerate(tvec[1:]):
+        for idx in torch.range(1, len(tvec) - 1, dtype=torch.int):
             y_t = y_t + dt * (
-                (-y_t / Ts_t)
+                (-y_t / Ts_t)  # Ts**2 ?
                 + (x_t_vec[idx] - x_t_vec[idx - 1]) / dt
                 + (((1 - HS) * x_t_vec[idx]) / Ts_t)
             )
-            Ts_t = T0 / (1 + c_t / Chalf)  # c_t**2 / Chalf**2? Wohrer 09
+            Ts_t = T0 / (1 + c_t / Chalf)
             c_t = c_t + dt * ((torch.abs(y_t) - c_t) / Tc)
             yvec[idx] = y_t
 
@@ -1074,7 +1071,6 @@ class SimulateRetina(RetinaMath):
         HS = params[3]
         TS = params[2]
         D = params[4]
-        A = params[5]
 
         # Calculate padding size
         padding_size = len(tvec) - 1
@@ -1141,6 +1137,9 @@ class SimulateRetina(RetinaMath):
         # across the other signal. PyTorch, however, does not flip the kernel, so we
         # need to do it manually.
         h_flipped = torch.flip(h, dims=[0])
+
+        # Scale the impulse response to have unit area. This normalizes the effect of video dt.
+        h_flipped = h_flipped / torch.sum(h_flipped)
 
         return h_flipped
 
@@ -1565,7 +1564,7 @@ class SimulateRetina(RetinaMath):
             )
             for idx in range(num_cells):
                 generator_potential[idx, :] = convolve(
-                    rf.stimulus_cropped[idx],
+                    vs.stimulus_cropped[idx],
                     rf.spatiotemporal_filters[idx],
                     mode="valid",
                 )
@@ -1782,8 +1781,9 @@ class SimulateRetina(RetinaMath):
 
                 # Scale the show_impulse response to have unit area in both calls for high-pass.
                 # This corresponds to summation before high-pass stage, as in Schottdorf_2021_JPhysiol
-                h_cen = lp_cen / torch.sum(lp_cen + lp_sur)
-                h_sur = lp_sur / torch.sum(lp_cen + lp_sur)
+                lp_total = torch.sum(lp_cen) + torch.sum(lp_sur)
+                h_cen = lp_cen / lp_total
+                h_sur = lp_sur / lp_total
 
                 # Convolve stimulus with the low-pass filter and apply high-pass stage
                 gen_pot_cen = self._create_temporal_signal(
@@ -1960,7 +1960,6 @@ class SimulateRetina(RetinaMath):
             # Get generator potentials
             device = self.context.device
             vs = self._get_dynamic_generator_potentials(vs, rf, device)
-            # pdb.set_trace()
 
         elif rf.temporal_model == "fixed":  # Linear model
             # Amplitude will be scaled by first (positive) lowpass filter.
@@ -1970,6 +1969,11 @@ class SimulateRetina(RetinaMath):
             print("Preparing fixed generator potential...")
             vs = self._convolve_stimulus_batched(vs, rf)
 
+        # print(np.mean(vs.generator_potentials.flatten()))
+        # print(np.std(vs.generator_potentials.flatten()))
+        # plt.hist(vs.generator_potentials.flatten(), 20)
+        # plt.show()
+        # pdb.set_trace()
         # From generator potential to spikes
         vs = self._generator_to_firing_rate_noise(vs, rf, n_trials)
         vs = self._firing_rates2brian_timed_arrays(vs)
