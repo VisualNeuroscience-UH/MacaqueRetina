@@ -155,7 +155,7 @@ stimulus_folder = "stim"  # stim_sine_grating_sf2p0_crf_14_7"  # "stim_luminance
 Data context for output. 
 """
 
-output_folder = "parasol_on_sf_stim"  # "parasol_on_stim_sine_grating_sf2p0_crf_14_7"  # "parasol_on_luminance_onset"
+output_folder = "testi_stim"  # "parasol_on_stim_sine_grating_sf2p0_crf_14_7"  # "parasol_on_luminance_onset"
 
 
 """
@@ -197,7 +197,7 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 # Note: FIT model ellipse independent does not correlate the center and surround parameters. Thus they are independent, which
 # is not the case in the VAE model, and not very physiological.
 
-gc_type = "parasol"  # "parasol" or "midget"
+gc_type = "midget"  # "parasol" or "midget"
 response_type = "on"  # "on" or "off"
 
 # These values are used for building a new retina
@@ -214,7 +214,8 @@ my_retina = {
     "dd_regr_model": "quadratic",  # linear, quadratic, cubic, loglog. For midget < 20 deg, use quadratic; for parasol use loglog
     "ecc_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
-    "temporal_model": "dynamic",  # fixed, dynamic
+    "temporal_model": "fixed",  # fixed, dynamic
+    # "temporal_model": "dynamic",  # fixed, dynamic
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
     "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
@@ -282,11 +283,11 @@ my_stimulus_options = {
     "image_width": 240,  # 752 for nature1.avi
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
-    "fps": 300,  # 300 for good cg integration
+    "fps": 350,  # 300 for good cg integration
     "duration_seconds": 1,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
-    "pattern": "sine_grating",  # One of the StimulusPatterns square_grating sine_grating
+    "pattern": "temporal_sine_pattern",  # One of the StimulusPatterns square_grating sine_grating
     "stimulus_form": "rectangular",
     "size_inner": 0.1,  # deg, Applies to annulus only
     "size_outer": 1,  # deg, Applies to annulus only
@@ -320,7 +321,7 @@ my_run_options = {
     "n_trials": 1,  # For each of the response files
     # "cell_index": 2,  # list of ints or None for all cells
     # "n_trials": 10,  # For each of the response files
-    "spike_generator_model": "refractory",  # poisson or refractory
+    "spike_generator_model": "poisson",  # poisson or refractory
     "save_data": True,
     "gc_response_filenames": [f"gc_response_{x:02}" for x in range(n_files)],
     "simulation_dt": 0.0001,  # in sec 0.001 = 1 ms
@@ -598,10 +599,24 @@ if __name__ == "__main__":
     # )
 
     # TÄHÄN JÄIT: ETSI KIRJALLISUUDESTA TAUSTA AKTIIVISUUKSIA JA DYNAAMISIA MODULAATIOITA
-    # SELVITÄ MIKSI FIXED JA VAE EROAVAT, JA MISTÄ TILEE FIXED SUSTAINED FIRING JOIHINKIN YKSIKÖIHIN
+    # SELVITÄ MISTÄ TULEVAT KORKEAT FIRING RATET
     # MIETI TAPPIKOHINAN LINKITYS UUDELLEEN:
     #  - PERIFERIASSA GRIDI LIIAN HARVA
     #  - KESKELLÄ GRIDI LIIAN TIHEÄ
+
+    ###########################################
+    ##   Luminance and Photoisomerizations   ##
+    ###########################################
+
+    # I_cone = 400000  # photoisomerizations per second per cone
+    # a_c_end_on = 3.21e-5  # mm2, 1/ cone density at 5 deg ecc, providing the upper bound of the cone outer segment area
+    # A_pupil = 9.3  # mm2, derived from Selezneva_2021_FrontPsychol, tonic pupil
+    # A_retina = 800  # mm2, from Packer_1989_JCompNeurol, assumes stimulus covers RFs of all cones
+
+    # luminance = PM.simulate_retina.get_luminance_from_photoisomerizations(
+    #     I_cone, A_retina=A_retina, A_pupil=A_pupil, a_c_end_on=a_c_end_on
+    # )
+    # print(f"{luminance:.2f} cd/m2")
 
     ###########################################
     ##   Sample figure data from literature  ##
