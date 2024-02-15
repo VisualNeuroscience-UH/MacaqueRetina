@@ -728,11 +728,11 @@ class ConstructRetina(RetinaMath):
         ret.cone_noise_parameters = np.exp(popt_log)
         ret.frequency_data = frequency_data
         ret.power_data = power_data
-        print("Cone noise parameters")
-        p = ret.cone_noise_parameters
-        print(
-            f"NL: {p[0]:.2e}\nTL: {p[1]:.2e}\nHS: {p[2]:.2e}\nTS: {p[3]:.2e}\nA0: {p[4]:.2e}\nM0: {p[5]:.2e}\nD: {p[6]:.2e}"
-        )
+        # print("Cone noise parameters")
+        # p = ret.cone_noise_parameters
+        # print(
+        #     f"NL: {p[0]:.2e}\nTL: {p[1]:.2e}\nHS: {p[2]:.2e}\nTS: {p[3]:.2e}\nA0: {p[4]:.2e}\nM0: {p[5]:.2e}\nD: {p[6]:.2e}"
+        # )
         return ret
 
     def _get_ecc_from_dd(self, dendr_diam_parameters, dd_regr_model, dd):

@@ -197,7 +197,7 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 # Note: FIT model ellipse independent does not correlate the center and surround parameters. Thus they are independent, which
 # is not the case in the VAE model, and not very physiological.
 
-gc_type = "midget"  # "parasol" or "midget"
+gc_type = "parasol"  # "parasol" or "midget"
 response_type = "on"  # "on" or "off"
 
 # These values are used for building a new retina
@@ -294,7 +294,7 @@ my_stimulus_options = {
     "stimulus_position": (0.0, 0.0),
     "stimulus_size": 1,  # 0.04,  # 2,  # deg, radius for circle, sidelen/2 for rectangle.
     "background": 128,
-    "contrast": 0.95,  # Weber constrast
+    "contrast": 0.0,  # Weber constrast
     "mean": 128,
     "temporal_frequency": 6.0,  # 0.01,  # 4.0,  # 40,  # Hz
     "spatial_frequency": 5.0,  # cpd
@@ -383,7 +383,7 @@ cone_general_params = {
     "cone2gc_midget": 9,  # um, 1 SD of Gaussian
     "cone2gc_parasol": 27,  # um 27
     "cone2gc_cutoff_SD": 1,  # 3 SD is 99.7% of Gaussian
-    "cone_noise_magnitude": 0.0,  # Relative amplitude, 0 for no noise
+    "cone_noise_magnitude": 1.0,  # Relative amplitude, 0 for no noise
 }
 
 # Recovery function from Berry_1998_JNeurosci, Uzzell_2004_JNeurophysiol
@@ -656,18 +656,13 @@ if __name__ == "__main__":
     # For FIT and VAE
     # PM.viz.show_cones_linked_to_gc(gc_list=[10, 17], savefigname=None)
     # PM.viz.show_DoG_img_grid(gc_list=[10, 17, 46], savefigname=None)
-    # PM.viz.show_DoG_img_grid(
-    #     gc_list=[68, 73, 80, 88, 98, 123, 129, 145], savefigname=None
-    # )
-    # PM.viz.show_DoG_img_grid(gc_list=[141, 157], savefigname=None)
     # PM.viz.show_DoG_img_grid(n_samples=8)
-    # PM.viz.show_cones_linked_to_gc(gc_list=[32, 58, 63, 67, 6], savefigname=None)
     # PM.viz.show_unit_density_vs_ecc(unit_type="cone", savefigname=None)  # gc or cone
 
     # PM.viz.show_DoG_model_fit(sample_list=[10], savefigname=None)
     # PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)
     # PM.viz.show_dendrite_diam_vs_ecc(log_x=False, log_y=False, savefigname=None)
-    # PM.viz.show_cone_noise_vs_freq(savefigname="cone_noise_vs_freq.svg")
+    # PM.viz.show_cone_noise_vs_freq(savefigname=None)
     # PM.viz.show_retina_img(savefigname=None)
 
     # For FIT (DoG fits, temporal kernels and tonic drives)
@@ -706,7 +701,7 @@ if __name__ == "__main__":
     ########################
 
     # Based on my_stimulus_options above
-    # PM.stimulate.make_stimulus_video()
+    PM.stimulate.make_stimulus_video()
 
     ####################################
     ### Run multiple trials or cells ###
