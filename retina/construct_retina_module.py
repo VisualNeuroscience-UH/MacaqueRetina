@@ -692,17 +692,23 @@ class ConstructRetina(RetinaMath):
         power_data = data_set_y[data_set_x_index]
 
         # # In linear scale their values are
-        initial_guesses = [3, 0.002, 1.0, 0.04, 500, 30, 0.002]
-        # Parameters are log_NL, log_TL, log_HS, log_TS, log_A0, log_M0, log_D.
+        # Parameters are NL, TL, HS, TS, A0, M0, D
+        initial_guesses = [1.1, 0.7, 0.9, 0.01, 4, 0.02, 1e-32]
         log_initial_guesses = [np.log(p) for p in initial_guesses]  # needs to be list
 
         # Log-transform the frequency and power data
         log_frequency_data = np.log(frequency_data)
         log_power_data = np.log(power_data)
 
-        # Tighter bounds
-        lower_bounds = [1, 1e-3, 0.1, 1e-6, 1e-6, 1e-6, 1e-3]
-        upper_bounds = [5, 0.05, 10, 0.05, 800, 50, 0.05]
+        # # Loose bounds, works too
+        # # NL, TL, HS, TS, A0, M0, D
+        # lower_bounds = [0, 0, 0, 0, 0, 0, 0]
+        # upper_bounds = [np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf]
+
+        # Tight bounds, for dev to avoid occasional overfit
+        # NL, TL, HS, TS, A0, M0, D
+        lower_bounds = [0, 1e-4, 0, 1e-32, 0, 0, 0]
+        upper_bounds = [6, 2, 3, 1, 10, 50, 1]
 
         # Take the log of bounds, except where the upper bound is np.inf
         log_lower_bounds = [np.log(low) for low in lower_bounds]
@@ -716,13 +722,17 @@ class ConstructRetina(RetinaMath):
             log_frequency_data,
             log_power_data,
             p0=log_initial_guesses,
-            bounds=bounds,
+            # bounds=bounds,
         )
 
         ret.cone_noise_parameters = np.exp(popt_log)
         ret.frequency_data = frequency_data
         ret.power_data = power_data
-
+        print("Cone noise parameters")
+        p = ret.cone_noise_parameters
+        print(
+            f"NL: {p[0]:.2e}\nTL: {p[1]:.2e}\nHS: {p[2]:.2e}\nTS: {p[3]:.2e}\nA0: {p[4]:.2e}\nM0: {p[5]:.2e}\nD: {p[6]:.2e}"
+        )
         return ret
 
     def _get_ecc_from_dd(self, dendr_diam_parameters, dd_regr_model, dd):
