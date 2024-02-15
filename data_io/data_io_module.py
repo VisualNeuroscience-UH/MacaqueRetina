@@ -784,7 +784,7 @@ class DataIO(DataIOBase):
         # np.savez(npz_filename, **data_dict)
         np.savez_compressed(npz_filename, allow_pickle=True, **data_dict)
 
-    def save_spikes_for_cxsystem(
+    def _save_spikes_for_cxsystem(
         self,
         spikearrays,
         n_units,
@@ -824,7 +824,7 @@ class DataIO(DataIOBase):
 
         write_to_file(filename_full, data_to_save)
 
-    def save_spikes_csv(self, simulated_spiketrains, n_cells, filename=None):
+    def _save_spikes_csv(self, simulated_spiketrains, n_cells, filename=None):
         """
         Saves spikes as a csv file with rows of the form cell_index and spike_time.
         This file can be used in ViSimpl:
@@ -867,7 +867,7 @@ class DataIO(DataIOBase):
 
         spikes_df.to_csv(filename_full, index=False, header=False)
 
-    def save_structure_csv(self, rgc_coords, filename=None):
+    def _save_structure_csv(self, rgc_coords, filename=None):
         """
         Saves x,y coordinates of model cells to a csv file (for use in ViSimpl).
 
@@ -888,3 +888,20 @@ class DataIO(DataIOBase):
         rgc_coords["z_deg"] = 0.0
 
         rgc_coords.to_csv(filename_full, header=False, index=False)
+
+    def save_retina_output(self, vs, rf, filename):
+
+        self._save_spikes_for_cxsystem(
+            vs.spikearrays,
+            vs.n_units_or_trials,
+            vs.w_coord,
+            vs.z_coord,
+            filename=filename,
+            analog_signal=vs.interpolated_rates_array,
+            dt=vs.simulation_dt,
+        )
+        self._save_spikes_csv(
+            vs.all_spiketrains, vs.n_units_or_trials, filename=filename
+        )
+        rgc_coords = rf.df[["x_deg", "y_deg"]].copy()
+        self._save_structure_csv(rgc_coords, filename=filename)

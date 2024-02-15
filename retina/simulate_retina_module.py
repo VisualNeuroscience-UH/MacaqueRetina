@@ -1695,7 +1695,9 @@ class SimulateRetina(RetinaMath):
 
         return vs
 
-    def _get_dynamic_generator_potentials(self, vs, rf, device):
+    def _get_dynamic_generator_potentials(self, vs, rf):
+
+        device = self.context.device
 
         # Dummy variables to avoid jump to cpu. Impulse response is called above.
         get_impulse_response = torch.tensor(False, device=device)
@@ -1819,6 +1821,49 @@ class SimulateRetina(RetinaMath):
             vs.generator_potentials = generator_potentials_t.cpu().numpy()
 
         return vs
+
+    def _bind_for_visualization(self, vs, rf, n_trials):
+
+        stim_to_show = {
+            "stimulus_video": vs.stimulus_video,
+            "df_stimpix": rf.df_stimpix,
+            "stimulus_height_pix": vs.stimulus_height_pix,
+            "pix_per_deg": vs.pix_per_deg,
+            "deg_per_mm": rf.deg_per_mm,
+            "stimulus_center": vs.stimulus_center,
+            "qr_min_max": self._get_crop_pixels(rf, rf.cell_indices),
+            "spatial_filter_sidelen": rf.spatial_filter_sidelen,
+            "stimulus_cropped": vs.stimulus_cropped,
+        }
+
+        gc_responses_to_show = {
+            "n_trials": n_trials,
+            "n_units": rf.n_units,
+            "all_spiketrains": vs.all_spiketrains,
+            "duration": vs.duration,
+            "generator_potential": vs.firing_rates,
+            "video_dt": vs.video_dt,
+            "tvec_new": vs.tvec_new,
+        }
+
+        # Attach data requested by other classes to project_data
+        self.project_data.simulate_retina["stim_to_show"] = stim_to_show
+        self.project_data.simulate_retina["gc_responses_to_show"] = gc_responses_to_show
+
+        if rf.temporal_model == "fixed":
+            spat_temp_filter_to_show = {
+                "spatial_filters": rf.spatial_filters,
+                "temporal_filters": rf.temporal_filters,
+                "data_filter_duration": rf.data_filter_duration,
+                "temporal_filter_len": rf.temporal_filter_len,
+                "gc_type": rf.gc_type,
+                "response_type": rf.response_type,
+                "temporal_model": rf.temporal_model,
+                "spatial_filter_sidelen": rf.spatial_filter_sidelen,
+            }
+            self.project_data.simulate_retina["spat_temp_filter_to_show"] = (
+                spat_temp_filter_to_show
+            )
 
     def run_cells(
         self,
@@ -1960,11 +2005,9 @@ class SimulateRetina(RetinaMath):
 
             # Get stimulus contrast vector
             vs = self._create_dynamic_contrast(vs, rf)
-            # pdb.set_trace()
 
             # Get generator potentials
-            device = self.context.device
-            vs = self._get_dynamic_generator_potentials(vs, rf, device)
+            vs = self._get_dynamic_generator_potentials(vs, rf)
 
         elif rf.temporal_model == "fixed":  # Linear model
             # Amplitude will be scaled by first (positive) lowpass filter.
@@ -1985,63 +2028,10 @@ class SimulateRetina(RetinaMath):
 
         # Save retina spikes
         if save_data is True:
-            self.w_coord, self.z_coord = self.get_w_z_coords(rf)
-            self.data_io.save_spikes_for_cxsystem(
-                vs.spikearrays,
-                vs.n_units_or_trials,
-                self.w_coord,
-                self.z_coord,
-                filename=filename,
-                analog_signal=vs.interpolated_rates_array,
-                dt=vs.simulation_dt,
-            )
-            self.data_io.save_spikes_csv(
-                vs.all_spiketrains, vs.n_units_or_trials, filename=filename
-            )
-            rgc_coords = rf.df[["x_deg", "y_deg"]].copy()
-            self.data_io.save_structure_csv(rgc_coords, filename=filename)
+            vs.w_coord, vs.z_coord = self.get_w_z_coords(rf)
+            self.data_io.save_retina_output(vs, rf, filename)
 
-        # For Viz
-        stim_to_show = {
-            "stimulus_video": vs.stimulus_video,
-            "df_stimpix": rf.df_stimpix,
-            "stimulus_height_pix": vs.stimulus_height_pix,
-            "pix_per_deg": vs.pix_per_deg,
-            "deg_per_mm": rf.deg_per_mm,
-            "stimulus_center": vs.stimulus_center,
-            "qr_min_max": self._get_crop_pixels(rf, rf.cell_indices),
-            "spatial_filter_sidelen": rf.spatial_filter_sidelen,
-            "stimulus_cropped": vs.stimulus_cropped,
-        }
-
-        gc_responses_to_show = {
-            "n_trials": n_trials,
-            "n_units": rf.n_units,
-            "all_spiketrains": vs.all_spiketrains,
-            "duration": vs.duration,
-            "generator_potential": vs.firing_rates,
-            "video_dt": vs.video_dt,
-            "tvec_new": vs.tvec_new,
-        }
-
-        # Attach data requested by other classes to project_data
-        self.project_data.simulate_retina["stim_to_show"] = stim_to_show
-        self.project_data.simulate_retina["gc_responses_to_show"] = gc_responses_to_show
-
-        if rf.temporal_model == "fixed":
-            spat_temp_filter_to_show = {
-                "spatial_filters": rf.spatial_filters,
-                "temporal_filters": rf.temporal_filters,
-                "data_filter_duration": rf.data_filter_duration,
-                "temporal_filter_len": rf.temporal_filter_len,
-                "gc_type": rf.gc_type,
-                "response_type": rf.response_type,
-                "temporal_model": rf.temporal_model,
-                "spatial_filter_sidelen": rf.spatial_filter_sidelen,
-            }
-            self.project_data.simulate_retina["spat_temp_filter_to_show"] = (
-                spat_temp_filter_to_show
-            )
+        self._bind_for_visualization(vs, rf, n_trials)
 
     def run_with_my_run_options(self):
         """
