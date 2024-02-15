@@ -1485,7 +1485,7 @@ class SimulateRetina(RetinaMath):
 
         return rf
 
-    def _convolve_stimulus_batched(self, vs, rf):
+    def _convolve_stimulus(self, vs, rf):
         """
         Convolves the stimulus with the spatiotemporal filter for a given set of cells.
 
@@ -1879,92 +1879,27 @@ class SimulateRetina(RetinaMath):
         stimulus=None,
     ):
         """
-         Executes the visual signal processing for designated ganglion cells, simulating their spiking output.
+        Executes the visual signal processing for designated ganglion cells, simulating their spiking output.
 
-         This method is capable of running the linear-nonlinear (LN) pipeline for a single or multiple ganglion cells,
-         converting visual stimuli into spike trains using the Brian2 simulator. When `get_impulse_response` is enabled,
-         it bypasses the pipeline to compute impulse responses for specified cell types and contrasts.
-         The method also supports the computation of spatial uniformity indices when `get_uniformity_data` is set.
+        This method is capable of running the linear-nonlinear (LN) pipeline for a single or multiple ganglion cells,
+        converting visual stimuli into spike trains using the Brian2 simulator. When `get_impulse_response` is enabled,
+        it bypasses the pipeline to compute impulse responses for specified cell types and contrasts.
+        The method also supports the computation of spatial uniformity indices when `get_uniformity_data` is set.
 
-         Parameters
-         ----------
-         cell_index : int, list of int, or None, optional
-             The index(es) of the cell(s) to simulate. If None, all cells are processed. Defaults to None.
-         n_trials : int, optional
-             The number of independent trials to simulate for the stochastic elements of the model.
-             Defaults to 1.
-         save_data : bool, optional
-             Flag to save the output data to a file. Defaults to False.
-         spike_generator_model : str, optional
-             The model for spike generation: 'refractory' for a refractory model,
-             'poisson' for a Poisson process.
-             Defaults to 'refractory'.
-         filename : str or None, optional
-             The filename for saving output data. If None, no data is saved. Defaults to None.
-         simulation_dt : float, optional
-             The time step for the simulation in seconds. Defaults to 0.001 (1 ms).
-         get_impulse_response : bool, optional
-             If True, computes and returns the impulse response for the cell types specified in
-             `contrasts_for_impulse`, and skips the standard LN pipeline. Defaults to False.
-         contrasts_for_impulse : list of floats or None, optional
-             A list of contrast values to compute impulse responses for, applicable when
-             `get_impulse_response` is True. Defaults to None.
-         get_uniformity_data : bool, optional
-             If True, computes and returns a spatial uniformity index and data for visualization,
-             and skips the standard LN pipeline. Defaults to False.
 
-         Returns
-         -------
-        impulse_responses : dict or None
-             A dictionary containing impulse responses if `get_impulse_response` is True, otherwise None.
-         uniformity_indices : dict or None
-             A dictionary containing uniformity indices if `get_uniformity_data` is True, otherwise None.
-
-         Saves to file
-         -------------
-        spike_trains : dict
-            A dictionary containing spike trains for each cell.
-            This is saved both for CxSystem2 as gz(ipped) pickle, and
-            as csv.
-        unit positions (structure): csv
-            A csv file containing the coordinates of each cell.
-
-         Saves to internal dictionary for visualization
-         ----------------------------------------------
-        stim_to_show : dict
-            A dictionary containing the stimulus and some metadata used for simulation.
-        spat_temp_filter_to_show : dict
-            A dictionary containing the spatial and temporal filters for each cell and some metadata.
-        gc_responses_to_show : dict
-            A dictionary containing the generator potentials and spike trains for each cell and some metadata.
-
-         Raises
-         ------
-         AssertionError
-             If `cell_index` is not None, an integer, or a list;
-             if `get_impulse_response` is True but the required
-             conditions (e.g., `cell_index`, cell type, or contrasts) are not met.
-         ValueError
-             If `spike_generator_model` is neither 'refractory' nor 'poisson'.
-
-         Notes
-         -----
-         - The method can be utilized in various modes depending on the combination of boolean flags provided.
-         - Saving data and obtaining impulse responses or uniformity indices are mutually exclusive operations.
-         - This method handles the inversion of off-responses to a maximum negative value internally.
-
-         References
-         ----------
-         For the theoretical background and models used in this simulation refer to:
-         [1] Victor 1987 Journal of Physiology
-         [2] Benardete & Kaplan 1997 Visual Neuroscience
-         [3] Kaplan & Benardete 1999 Journal of Physiology
-         [4] Chichilnisky 2001 Network
-         [5] Chichilnisky 2002 Journal of Neuroscience
-         [6] Field 2010 Nature
-         [7] Gauthier 2009 PLoS Biology
+        References
+        ----------
+        For the theoretical background and models used in this simulation refer to:
+        [1] Victor 1987 Journal of Physiology
+        [2] Benardete & Kaplan 1997 Visual Neuroscience
+        [3] Kaplan & Benardete 1999 Journal of Physiology
+        [4] Chichilnisky 2001 Network
+        [5] Chichilnisky 2002 Journal of Neuroscience
+        [6] Field 2010 Nature
+        [7] Gauthier 2009 PLoS Biology
         """
 
+        # Abstraction for clarity
         vs = VisualSignal(
             self.context.my_stimulus_options,
             self.context.my_retina["stimulus_center"],
@@ -1998,29 +1933,24 @@ class SimulateRetina(RetinaMath):
         # Get cropped stimulus, vectorized. One cropped sequence for each unit
         vs = self._get_spatially_cropped_video(vs, rf, reshape=True)
 
-        # Get instantaneous firing rates
+        # Get generator potentials
         if rf.temporal_model == "dynamic":
-            # Contrast gain control depends dynamically on contrast
-            # Henri aloita tästä
 
-            # Get stimulus contrast vector
             vs = self._create_dynamic_contrast(vs, rf)
-
-            # Get generator potentials
             vs = self._get_dynamic_generator_potentials(vs, rf)
 
         elif rf.temporal_model == "fixed":  # Linear model
-            # Amplitude will be scaled by first (positive) lowpass filter.
+
             rf = self._get_linear_temporal_filters(rf)
             rf = self._get_linear_spatiotemporal_filters(rf)
-
-            vs = self._convolve_stimulus_batched(vs, rf)
+            vs = self._convolve_stimulus(vs, rf)
 
         # print(np.mean(vs.generator_potentials.flatten()))
         # print(np.std(vs.generator_potentials.flatten()))
         # plt.hist(vs.generator_potentials.flatten(), 20)
         # plt.show()
         # pdb.set_trace()
+
         # From generator potential to spikes
         vs = self._generator_to_firing_rate_noise(vs, rf, n_trials)
         vs = self._firing_rates2brian_timed_arrays(vs)
@@ -2055,3 +1985,31 @@ class SimulateRetina(RetinaMath):
                 filename=filename,
                 simulation_dt=simulation_dt,
             )
+
+    def get_luminance_from_photoisomerizations(
+        self, I_cone, a_c_end_on=3.21e-5, A_pupil=9.3, A_retina=670
+    ):
+        """
+        Calculate luminance from photoisomerizations.
+
+        Parameters
+
+        I_cone : float
+            The number of photoisomerizations per second per cone.
+        a_c_end_on : float
+            Upper limit for the effective cross-sectional area of the total
+            pigment content of a photoreceptor for axially propagating light.
+        A_pupil : float
+            The area of the pupil in mm^2.
+            Mean tonic pupil radiusis 3.44/2 mm in macaques, from Selezneva_2021_FrontPsychol
+        A_retina : float
+            The area of the retina in mm^2.
+            This value is from Perry_1984_Neurosci, where the mean retinal area is 670 mm^2 in macaques.
+        """
+
+        # Calculate photon flux at cornea
+        F_cornea = self.calculate_F_cornea(I_cone, a_c_end_on, A_pupil, A_retina)
+        # Get the luminance from the photon flux density
+        luminance = self.photon_flux_density_to_luminance(F_cornea, lambda_nm=555)
+
+        return luminance

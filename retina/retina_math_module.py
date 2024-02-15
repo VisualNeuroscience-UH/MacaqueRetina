@@ -579,28 +579,79 @@ class RetinaMath:
         y = self.lowpass(t, n, p1, tau1) - self.lowpass(t, n, p2, tau2)
         return y
 
-    # Not in use
-    def generator2firing(self, generator=0, show_generator_vs_fr=True):
+    def photon_flux_density_to_luminance(self, F, lambda_nm=555):
         """
-        Generator potential to firing rate by cumulative normal distribution
-        From Chichilnisky_2002_JNeurosci:
-        The response nonlinearity N was well approximated using the lower
-        portion of a sigmoidal function: n(x) = aG(bx + c), where
-        x is the generator signal, n(x) is the firing rate, G(x) is the
-        cumulative normal (indefinite integral of standard normal distribution),
-        and a, b, and c are free parameters.
+        Convert photon flux density to luminance using human photopic vision V(lambda).
+
+        Parameters
+        ----------
+        F : float
+            Photon flux density at the cornea in photons/mm²/s.
+        lambda_nm : float, optional
+            Wavelength of the monochromatic light in nanometers, default is 555 nm (peak of human photopic sensitivity).
+
+        Returns
+        -------
+        L : float
+            Luminance in cd/m².
+
+        Notes
+        -----
+        The conversion uses the formula:
+
+        L = F * (hc/lambda) * kappa * V(lambda)
+
+        where:
+        - h is Planck's constant (6.626 x 10^-34 J·s),
+        - c is the speed of light (3.00 x 10^8 m/s),
+        - lambda is the wavelength of light in meters,
+        - kappa is the luminous efficacy of monochromatic radiation (683 lm/W at 555 nm),
+        - V(lambda) is the photopic luminous efficiency function value at lambda,
+        assumed to be 1 at 555 nm for peak human photopic sensitivity.
         """
-        max_firing_rate = 160  # max firing rate, plateau, demo 1
-        slope = 1  # slope, demo 1
-        half_height = 1  # at what generator signal is half-height, demo 0
-        firing_freq = max_firing_rate * norm.cdf(
-            generator, loc=half_height, scale=slope
-        )
-        if show_generator_vs_fr == True:
-            generator = np.linspace(-3, 3, num=200)
-            firing_freq = max_firing_rate * norm.cdf(
-                generator, loc=half_height, scale=slope
-            )
-            plt.plot(generator, firing_freq)
-            plt.show()
-        # return firing_freq
+        # Constants
+        h = 6.626e-34  # Planck's constant in J·s
+        c = 3.00e8  # Speed of light in m/s
+        lambda_m = lambda_nm * 1e-9  # Convert wavelength from nm to m
+        kappa = 683  # Luminous efficacy of monochromatic radiation in lm/W at 555 nm
+
+        # Energy of a photon at wavelength lambda in joules
+        E_photon = (h * c) / lambda_m
+
+        # Convert photon flux density F to luminance L in cd/m²
+        F_m2 = F * 1e6  # Convert photon flux density from mm² to m²
+        L = F_m2 * E_photon * kappa
+
+        return L
+
+    def calculate_F_cornea(self, I_cone, a_c_end_on, A_pupil, A_retina, tau_media=1.0):
+        """
+        Calculate the photon flux density at the cornea (F_cornea) for a given rate of photoisomerization in cones.
+
+        Parameters
+        ----------
+        I_cone : float
+            The rate of photoisomerizations per cone per second (R* cone^-1 s^-1).
+        a_c_end_on : float
+            The end-on collecting area for the cones (in mm^2).
+        A_pupil : float
+            The area of the pupil (in mm^2).
+        A_retina : float
+            The area of the retina (in mm^2).
+        tau_media : float, optional
+            The transmittance of the ocular media at wavelength λ, default is 1.0 (unitless).
+
+        Returns
+        -------
+        F_cornea : float
+            The photon flux density at the cornea (in photons/mm²/s).
+
+        Notes
+        -----
+        The function assumes that the transmittance of the ocular media (tau_media) is 1.0, indicating no loss of light due to absorption or scattering within the eye's media.
+        """
+
+        # Calculate the photon flux density at the cornea (F_cornea)
+        F_cornea = I_cone / (a_c_end_on * (A_pupil / A_retina) * tau_media)
+
+        return F_cornea
