@@ -2162,9 +2162,12 @@ class Viz:
         )
         ax.set_xlabel("Eccentricity (mm)")
         ax.set_ylabel(f"{unit_type} density")
-        ax.set_title(
-            f"{unit_type} density vs eccentricity: {mean_density:.2f} at {mean_ecc:.2f} mm"
-        )
+        title_text = f"{unit_type} density vs eccentricity"
+        title_text += f": {mean_density:.0f}/mm^2 at {mean_ecc:.2f} mm"
+        # Make new line with average cone surface are
+        mean_surface_area = 1 / mean_density
+        title_text += f"\nAverage cone surface area: {mean_surface_area:.2e} mm^2"
+        ax.set_title(title_text)
         ax.legend()
 
         # Format fit_parameters to two decimal places in exponential notation
