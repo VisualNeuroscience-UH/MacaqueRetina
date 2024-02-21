@@ -1263,39 +1263,30 @@ class Viz:
 
         ax.plot(noise_frequency_data, cone_noise_power_fit, "k--", label="Model Fit")
 
+        # subscript = "<sub>corner</sub>"
+        subscript = "$_{corner}$"
         # Plot L1 model
-        ax.plot(noise_frequency_data, L1_model, "r--", label="L1 Model")
+        ax.plot(
+            noise_frequency_data,
+            L1_model,
+            "r--",
+            label=f"lorenzian with freq{subscript}={self.cone_noise_wc[0]}",
+        )
 
         # Plot L2 model
-        ax.plot(noise_frequency_data, L2_model, "g--", label="L2 Model")
+        ax.plot(
+            noise_frequency_data,
+            L2_model,
+            "g--",
+            label=f"lorenzian with freq{subscript}={self.cone_noise_wc[1]}",
+        )
 
+        # Plot scaled cone response
         ax.plot(
             noise_frequency_data,
             scaled_cone_response,
             "m--",
             label="Scaled cone response",
-        )
-
-        # TÄHÄN JÄIT. Y AKSELI SKAALAUS, PARAMETRIHAKU, ANNOTAATIO
-
-        # # Annotation with the equations
-        # equation_annotation = (
-        #     "Victor Model Equations:\n"
-        #     "Low-pass filter: x̂ = (1 + 1j * f * TL)^(-NL)\n"
-        #     "High-pass filter: ŷ = (1 - HS / (1 + 1j * f * TS)) * x̂\n"
-        #     "Impulse generation: r̂ = A0 * exp(-1j * f * D) * ŷ + M0\n"
-        #     f"Parameters:\n"
-        #     f"  NL={NL:.2f}, TL={TL:.2e} s, HS={HS:.2f}\n"
-        #     f"  TS={TS:.2e} s, A0={A0:.2f}, M0={M0:.2f}, D={D:.2e} s"
-        # )
-
-        ax.annotate(
-            "",
-            xycoords="axes fraction",
-            xy=(0.1, 0.1),
-            ha="left",
-            color="k",
-            fontsize=8,
         )
 
         ax.set_ylim([0.001, 0.3])
@@ -1308,60 +1299,6 @@ class Viz:
 
         if savefigname:
             self._figsave(figurename=savefigname)
-
-    # def show_cone_noise_vs_freq(self, savefigname=None):
-    #     """
-    #     Plot cone noise as a function of temporal frequency using the model by Victor 1987 JPhysiol.
-    #     """
-
-    #     ret_file_npz = self.data_io.get_data(self.context.my_retina["ret_file"])
-    #     data_all_x = ret_file_npz["frequency_data"]
-    #     data_all_y = ret_file_npz["power_data"]
-    #     cone_noise_parameters = ret_file_npz["cone_noise_parameters"]
-    #     title = "cone_noise_vs_freq"
-
-    #     fig, ax = plt.subplots()
-    #     ax.plot(data_all_x, data_all_y, "b.", label="Data")
-
-    #     ax.set_xlabel("Frequency (Hz)")
-    #     ax.set_ylabel("Cone noise power (pA^2/Hz)")
-
-    #     # Calculate the fitted values using Victor's model
-    #     fitted_y = self.triple_lorenzian_function(data_all_x, *cone_noise_parameters)
-
-    #     ax.plot(data_all_x, fitted_y, "k--", label="Victor Model Fit")
-
-    #     # Victor's model parameters are NL, TL, HS, TS, A0, M0, D
-    #     NL, TL, HS, TS, A0, M0, D = cone_noise_parameters
-
-    #     # Annotation with the equations
-    #     equation_annotation = (
-    #         "Victor Model Equations:\n"
-    #         "Low-pass filter: x̂ = (1 + 1j * f * TL)^(-NL)\n"
-    #         "High-pass filter: ŷ = (1 - HS / (1 + 1j * f * TS)) * x̂\n"
-    #         "Impulse generation: r̂ = A0 * exp(-1j * f * D) * ŷ + M0\n"
-    #         f"Parameters:\n"
-    #         f"  NL={NL:.2f}, TL={TL:.2e} s, HS={HS:.2f}\n"
-    #         f"  TS={TS:.2e} s, A0={A0:.2f}, M0={M0:.2f}, D={D:.2e} s"
-    #     )
-
-    #     ax.annotate(
-    #         equation_annotation,
-    #         xycoords="axes fraction",
-    #         xy=(0.1, 0.1),
-    #         ha="left",
-    #         color="k",
-    #         fontsize=8,
-    #     )
-
-    #     ax.set_xscale("log")
-    #     ax.set_yscale("log")
-
-    #     plt.title(title)
-    #     ax.legend()
-
-    #     if savefigname:
-    #         self._figsave(figurename=savefigname)
 
     def show_temp_stat(self):
         """

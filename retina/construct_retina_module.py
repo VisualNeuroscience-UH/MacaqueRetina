@@ -678,7 +678,34 @@ class ConstructRetina(RetinaMath):
         return dendr_diam_parameters
 
     def _fit_cone_noise_vs_freq(self, ret):
-        """ """
+        """
+        Fit the cone noise data as a function of frequency using cone response interpolated function and two Lorenzian functions.
+
+        This method extracts cone response and noise data, performs interpolation, and fits the data using
+        a double Lorenzian function. It handles data transformation to logarithmic scale for fitting
+        and converts fitted parameters back to linear scale for output.
+
+        Parameters
+        ----------
+        ret : Retina instance
+            An object to store the fitted parameters, frequency data, power data, and fitted noise power.
+            This object must have attributes to store these values (e.g., `cone_frequency_data`, `cone_power_data`,
+            `cone_noise_parameters`, `frequency_data`, `power_data`, `cone_noise_power_fit`).
+
+        Returns
+        -------
+        ret : Retina instance
+            The same input object `ret`, now populated with the fitting results, including cone noise parameters
+            in linear scale, raw frequency and power data, and the fitted cone noise power spectrum.
+
+        Notes
+        -----
+        The method relies on several helper functions in RetinaMath class, including:
+        - `lorenzian_function` for defining the Lorenzian function used in the fit.
+        - `interpolation_function` to interpolate empirical data.
+        - `lin_interp_and_double_lorenzian` to calculate the power spectrum in linear space.
+        - `fit_log_interp_and_double_lorenzian` for fitting in log space to equalize errors across the power range.
+        """
 
         def data_extractor(data):
 
@@ -730,7 +757,7 @@ class ConstructRetina(RetinaMath):
         log_bounds = (log_lower_bounds, log_upper_bounds)
 
         # Fit in log space to equalize errors across the power range
-        popt_log, pcov_log = opt.curve_fit(
+        log_popt, _ = opt.curve_fit(
             self.fit_log_interp_and_double_lorenzian,
             log_frequency_data,
             log_power_data,
@@ -738,11 +765,11 @@ class ConstructRetina(RetinaMath):
             bounds=log_bounds,
         )
 
-        ret.cone_noise_parameters = np.exp(popt_log)  # Convert params to linear space
+        ret.cone_noise_parameters = np.exp(log_popt)  # Convert params to linear space
         ret.frequency_data = frequency_data
         ret.power_data = power_data
         ret.cone_noise_power_fit = np.exp(
-            self.fit_log_interp_and_double_lorenzian(log_frequency_data, *popt_log)
+            self.fit_log_interp_and_double_lorenzian(log_frequency_data, *log_popt)
         )
 
         return ret

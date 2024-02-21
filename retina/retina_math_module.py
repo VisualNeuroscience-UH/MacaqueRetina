@@ -242,6 +242,23 @@ class RetinaMath:
         # Define the hyperbolic function in log space
         return log_y_max - np.log(1 + np.exp(x_log - x_half_log))
 
+    def victor_model_frequency_domain(self, f, NL, TL, HS, TS, A0, M0, D):
+        """
+        The model by Victor 1987 JPhysiol
+        """
+        # Linearized low-pass filter in frequency domain
+        x_hat = (1 + 1j * f * TL) ** (-NL)
+
+        # Adaptive high-pass filter (linearized representation)
+        y_hat = (1 - HS / (1 + 1j * f * TS)) * x_hat
+
+        # Impulse generation stage
+        r_hat = A0 * np.exp(-1j * f * D) * y_hat + M0
+        # Power spectrum is the square of the magnitude of the impulse generation stage output
+        power_spectrum = np.abs(r_hat) ** 2
+
+        return power_spectrum
+
     def lorenzian_function(self, f, a, wc):
         """
         Define a Lorentzian function for curve fitting.
@@ -263,7 +280,7 @@ class RetinaMath:
         return a / (1 + ((f / wc) ** 2))
 
     def interpolation_function(self, x, y):
-        # Interpolate empirical data
+        """Interpolate empirical data to get a continuous function for the cone response."""
 
         # Finite fill values for extrapolation are necessary for the model
         # when the frequency is outside the range of the empirical data.
@@ -281,26 +298,10 @@ class RetinaMath:
 
         return interp1d_function
 
-    def victor_model_frequency_domain(self, f, NL, TL, HS, TS, A0, M0, D):
-        """
-        The model by Victor 1987 JPhysiol
-        """
-        # Linearized low-pass filter in frequency domain
-        x_hat = (1 + 1j * f * TL) ** (-NL)
-
-        # Adaptive high-pass filter (linearized representation)
-        y_hat = (1 - HS / (1 + 1j * f * TS)) * x_hat
-
-        # Impulse generation stage
-        r_hat = A0 * np.exp(-1j * f * D) * y_hat + M0
-        # Power spectrum is the square of the magnitude of the impulse generation stage output
-        power_spectrum = np.abs(r_hat) ** 2
-
-        return power_spectrum
-
     def lin_interp_and_double_lorenzian(self, f, a0, L1_params, L2_params):
         """
-        Calculate the power spectrum in linear space
+        Calculate the power spectrum in linear space as a combination of
+        interpolated cone response and two lorenzian functions.
         """
         L1 = self.lorenzian_function(f, *L1_params)
         L2 = self.lorenzian_function(f, *L2_params)

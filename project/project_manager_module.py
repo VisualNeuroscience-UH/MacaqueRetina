@@ -118,7 +118,6 @@ class ProjectManager(ProjectBase, ProjectUtilities):
             sector2area_mm2=retina_math.sector2area_mm2,
             interpolation_function=retina_math.interpolation_function,
             lorenzian_function=retina_math.lorenzian_function,
-            # lin_interp_and_double_lorenzian=retina_math.lin_interp_and_double_lorenzian,
         )
 
         self.viz = viz
