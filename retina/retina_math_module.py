@@ -3,6 +3,9 @@ import numpy as np
 from scipy.stats import norm
 from scipy import ndimage
 from scipy.special import gamma
+from scipy.optimize import curve_fit
+from scipy.interpolate import interp1d
+
 
 # Viz
 import matplotlib.pyplot as plt
@@ -239,6 +242,45 @@ class RetinaMath:
         # Define the hyperbolic function in log space
         return log_y_max - np.log(1 + np.exp(x_log - x_half_log))
 
+    def lorenzian_function(self, f, a, wc):
+        """
+        Define a Lorentzian function for curve fitting.
+
+        Parameters
+        ----------
+        f : numpy.ndarray
+            Frequency axis.
+        a : float
+            Amplitude of the Lorentzian function.
+        wc : float
+            Cutoff frequency of the Lorentzian function.
+
+        Returns
+        -------
+        numpy.ndarray
+            The Lorentzian function evaluated at each frequency in `f`.
+        """
+        return a / (1 + ((f / wc) ** 2))
+
+    def interpolation_function(self, x, y):
+        # Interpolate empirical data
+
+        # Finite fill values for extrapolation are necessary for the model
+        # when the frequency is outside the range of the empirical data.
+        # In linear space the option "extrapolate" will push high-fr response negative
+        # causing nan values in the log power spectrum.
+        fill_value = (y[0], 0)
+
+        interp1d_function = interp1d(
+            x,
+            y,
+            kind="linear",
+            fill_value=fill_value,
+            bounds_error=False,
+        )
+
+        return interp1d_function
+
     def victor_model_frequency_domain(self, f, NL, TL, HS, TS, A0, M0, D):
         """
         The model by Victor 1987 JPhysiol
@@ -256,25 +298,52 @@ class RetinaMath:
 
         return power_spectrum
 
-    # Define a wrapper function for curve_fit that works on log-transformed data
-    def wrapper_log_space(
-        self, log_f, log_NL, log_TL, log_HS, log_TS, log_A0, log_M0, log_D
-    ):
-        # Convert log_f back to linear frequency for the model
+    def lin_interp_and_double_lorenzian(self, f, a0, L1_params, L2_params):
+        """
+        Calculate the power spectrum in linear space
+        """
+        L1 = self.lorenzian_function(f, *L1_params)
+        L2 = self.lorenzian_function(f, *L2_params)
+        fitted_interpolated_data = a0 * self.cone_interp_response(f)
+
+        return L1 + L2 + fitted_interpolated_data
+
+    def fit_log_interp_and_double_lorenzian(self, log_f, *log_params):
+        """
+        Wrapper function for fitting interpolated cone response and
+        two lorenzian functions.
+
+        Incoming and returned data are in log space to equalize fitting
+        errors across the power scale.
+
+        Parameters
+        ----------
+        log_f : numpy.ndarray
+            Logarithm of frequency axis.
+        log_params : list
+            List of parameters to be fitted in log space.
+
+        Returns
+        -------
+        log of power_spectrum : numpy.ndarray
+        """
+
+        # Parameters are scalars and frequency (x_axis) is an array.
         f = np.exp(log_f)
-        # Calculate power spectrum using the model
-        power_spectrum = self.victor_model_frequency_domain(
-            f,
-            np.exp(log_NL),
-            np.exp(log_TL),
-            np.exp(log_HS),
-            np.exp(log_TS),
-            np.exp(log_A0),
-            np.exp(log_M0),
-            np.exp(log_D),
+
+        # Combine the fitted amplitudes with fixed corner frequencies
+        L1_params = np.array([np.exp(log_params[1]), self.cone_noise_wc[0]])
+        L2_params = np.array([np.exp(log_params[2]), self.cone_noise_wc[1]])
+        a0 = np.exp(log_params[0])
+
+        # Calculate the power spectrum in linear space
+        power_spectrum = self.lin_interp_and_double_lorenzian(
+            f, a0, L1_params, L2_params
         )
-        # Return the log of the power spectrum for fitting
-        return np.log(power_spectrum)
+
+        log_power_spectrum = np.log(power_spectrum)
+
+        return log_power_spectrum
 
     # Fit method
     def lowpass(self, t, n, p, tau):

@@ -996,15 +996,23 @@ class SimulateRetina(RetinaMath):
         ), "Number of cells in params_all and generator_potentials must match, aborting..."
 
         cones_to_gcs_weights = rf.cones_to_gcs_weights
-        NL, TL, HS, TS, A0, M0, D = rf.cone_noise_parameters
+        params = rf.cone_noise_parameters
 
         cones_to_gcs_weights = cones_to_gcs_weights[:, rf.cell_indices]
         n_cones = cones_to_gcs_weights.shape[0]
 
+        ret_file_npz = self.data_io.get_data(self.context.my_retina["ret_file"])
+        cone_frequency_data = ret_file_npz["cone_frequency_data"]
+        cone_power_data = ret_file_npz["cone_power_data"]
+        self.cone_interp_response = self.interpolation_function(
+            cone_frequency_data, cone_power_data
+        )
+        self.cone_noise_wc = rf.cone_general_params["cone_noise_wc"]
+
         # Normalize weights by columns (ganglion cells)
         weights_norm = cones_to_gcs_weights / np.sum(cones_to_gcs_weights, axis=0)
 
-        def _create_cone_noise(tvec, n_cones, NL, TL, HS, TS, A0, M0, D):
+        def _create_cone_noise(tvec, n_cones, *params):
             tvec = tvec / b2u.second
             freqs = fftpack.fftfreq(len(tvec), d=(tvec[1] - tvec[0]))
 
@@ -1015,8 +1023,15 @@ class SimulateRetina(RetinaMath):
             f_scaled = np.abs(freqs)
             # Prevent division by zero for zero frequency
             f_scaled[f_scaled == 0] = 1e-10
-            asymmetric_scale = self.victor_model_frequency_domain(
-                f_scaled, NL, TL, HS, TS, A0, M0, D
+
+            # Transfer to log scale and
+            # combine the fitted amplitudes with fixed corner frequencies
+            a0 = params[0]
+            L1_params = np.array([params[1], self.cone_noise_wc[0]])
+            L2_params = np.array([params[2], self.cone_noise_wc[1]])
+
+            asymmetric_scale = self.lin_interp_and_double_lorenzian(
+                f_scaled, a0, L1_params, L2_params
             )
 
             noise_fft = noise_fft * asymmetric_scale[:, np.newaxis]
@@ -1029,9 +1044,7 @@ class SimulateRetina(RetinaMath):
         # Make independent cone noise for multiple trials
         if n_trials > 1:
             for trial in range(n_trials):
-                cone_noise = _create_cone_noise(
-                    vs.tvec, n_cones, NL, TL, HS, TS, A0, M0, D
-                )
+                cone_noise = _create_cone_noise(vs.tvec, n_cones, *params)
                 if trial == 0:
                     gc_noise = cone_noise @ weights_norm
                 else:
@@ -1039,7 +1052,7 @@ class SimulateRetina(RetinaMath):
                         (gc_noise, cone_noise @ weights_norm), axis=1
                     )
         elif vs.generator_potentials.shape[0] > 1:
-            cone_noise = _create_cone_noise(vs.tvec, n_cones, NL, TL, HS, TS, A0, M0, D)
+            cone_noise = _create_cone_noise(vs.tvec, n_cones, *params)
             gc_noise = cone_noise @ weights_norm
 
         # Normalize noise to have unit variance
@@ -1822,7 +1835,10 @@ class SimulateRetina(RetinaMath):
 
         return vs
 
-    def _bind_for_visualization(self, vs, rf, n_trials):
+    def _bind_data_for_viz(self, vs, rf, n_trials):
+        """
+        Bind data to project_data container for visualization.
+        """
 
         stim_to_show = {
             "stimulus_video": vs.stimulus_video,
@@ -1961,7 +1977,7 @@ class SimulateRetina(RetinaMath):
             vs.w_coord, vs.z_coord = self.get_w_z_coords(rf)
             self.data_io.save_retina_output(vs, rf, filename)
 
-        self._bind_for_visualization(vs, rf, n_trials)
+        self._bind_data_for_viz(vs, rf, n_trials)
 
     def run_with_my_run_options(self):
         """

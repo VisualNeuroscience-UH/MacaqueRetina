@@ -90,18 +90,13 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         stimulate = VisualStimulus(context, data_io, cones)
         self.stimulate = stimulate
 
-        # natural_image = NaturalImage(context, data_io, cones)
-        # self.natural_image = natural_image
         retina_math = RetinaMath()
 
         ana = Analysis(
             # Interfaces
             context,
             data_io,
-            # Dictionaries
-            # Methods, which are needed also elsewhere
-            # round_to_n_significant=self.round_to_n_significant,
-            # pp_df_full=self.pp_df_full,
+            # Methods which are needed also elsewhere
             pol2cart=retina_math.pol2cart,
         )
 
@@ -113,8 +108,7 @@ class ProjectManager(ProjectBase, ProjectUtilities):
             data_io,
             project_data,
             ana,
-            # Dictionaries
-            # Methods, which are needed also elsewhere
+            # Methods which are needed also elsewhere
             round_to_n_significant=self.round_to_n_significant,
             DoG2D_fixed_surround=retina_math.DoG2D_fixed_surround,
             DoG2D_independent_surround=retina_math.DoG2D_independent_surround,
@@ -122,7 +116,9 @@ class ProjectManager(ProjectBase, ProjectUtilities):
             pol2cart=retina_math.pol2cart,
             gauss_plus_baseline_func=retina_math.gauss_plus_baseline_func,
             sector2area_mm2=retina_math.sector2area_mm2,
-            victor_model_frequency_domain=retina_math.victor_model_frequency_domain,
+            interpolation_function=retina_math.interpolation_function,
+            lorenzian_function=retina_math.lorenzian_function,
+            # lin_interp_and_double_lorenzian=retina_math.lin_interp_and_double_lorenzian,
         )
 
         self.viz = viz

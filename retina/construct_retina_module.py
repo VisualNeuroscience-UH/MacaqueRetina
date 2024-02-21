@@ -19,7 +19,7 @@ import torch.nn.functional as F
 # from torch.utils.data import DataLoader
 
 # from scipy.signal import convolve
-# from scipy.interpolate import interp1d
+from scipy.interpolate import interp1d
 
 # Image analysis
 # from skimage import measure
@@ -680,59 +680,71 @@ class ConstructRetina(RetinaMath):
     def _fit_cone_noise_vs_freq(self, ret):
         """ """
 
+        def data_extractor(data):
+
+            data_set_x = np.squeeze(data["Xdata"])
+            data_set_y = np.squeeze(data["Ydata"])
+
+            data_set_x_index = np.argsort(data_set_x)
+            frequency_data = data_set_x[data_set_x_index]
+            power_data = data_set_y[data_set_x_index]
+
+            return frequency_data, power_data
+
+        # Interpolate cone response at 400 k photoisomerization background
+        cone_response = self.data_io.get_data(
+            self.context.literature_data_files["cone_response_fullpath"]
+        )
+        cone_frequency_data, cone_power_data = data_extractor(cone_response)
+
+        ret.cone_frequency_data = cone_frequency_data
+        ret.cone_power_data = cone_power_data
+
+        # Set interpolation function and parameters for double lorenzian fit
+        self.cone_interp_response = self.interpolation_function(
+            cone_frequency_data, cone_power_data
+        )
+        self.cone_noise_wc = self.context.my_retina["cone_general_params"][
+            "cone_noise_wc"
+        ]
+
         cone_noise = self.data_io.get_data(
             self.context.literature_data_files["cone_noise_fullpath"]
         )
 
-        data_set_x = np.squeeze(cone_noise["Xdata"])
-        data_set_y = np.squeeze(cone_noise["Ydata"])
+        frequency_data, power_data = data_extractor(cone_noise)
+        log_frequency_data, log_power_data = np.log(frequency_data), np.log(power_data)
 
-        data_set_x_index = np.argsort(data_set_x)
-        frequency_data = data_set_x[data_set_x_index]
-        power_data = data_set_y[data_set_x_index]
+        # Linear scale initial parameters a0, a1, a2
+        initial_guesses = [4e5, 1e-2, 1e-3]
+        log_initial_guesses = [np.log(p) for p in initial_guesses]
 
-        # # In linear scale their values are
-        # Parameters are NL, TL, HS, TS, A0, M0, D
-        initial_guesses = [1.1, 0.7, 0.9, 0.01, 4, 0.02, 1e-32]
-        log_initial_guesses = [np.log(p) for p in initial_guesses]  # needs to be list
+        # Loose bounds for a0, a1, a2
+        lower_bounds = [0, 0, 0]
+        upper_bounds = [np.inf, np.inf, np.inf]
 
-        # Log-transform the frequency and power data
-        log_frequency_data = np.log(frequency_data)
-        log_power_data = np.log(power_data)
-
-        # # Loose bounds, works too
-        # # NL, TL, HS, TS, A0, M0, D
-        # lower_bounds = [0, 0, 0, 0, 0, 0, 0]
-        # upper_bounds = [np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf]
-
-        # Tight bounds, for dev to avoid occasional overfit
-        # NL, TL, HS, TS, A0, M0, D
-        lower_bounds = [0, 1e-4, 0, 1e-32, 0, 0, 0]
-        upper_bounds = [6, 2, 3, 1, 10, 50, 1]
-
-        # Take the log of bounds, except where the upper bound is np.inf
+        # Take the log of bounds
         log_lower_bounds = [np.log(low) for low in lower_bounds]
         log_upper_bounds = [np.log(up) for up in upper_bounds]
 
-        bounds = (log_lower_bounds, log_upper_bounds)
+        log_bounds = (log_lower_bounds, log_upper_bounds)
 
+        # Fit in log space to equalize errors across the power range
         popt_log, pcov_log = opt.curve_fit(
-            # RetinaMath.wrapper_log_space,
-            self.wrapper_log_space,
+            self.fit_log_interp_and_double_lorenzian,
             log_frequency_data,
             log_power_data,
             p0=log_initial_guesses,
-            # bounds=bounds,
+            bounds=log_bounds,
         )
 
-        ret.cone_noise_parameters = np.exp(popt_log)
+        ret.cone_noise_parameters = np.exp(popt_log)  # Convert params to linear space
         ret.frequency_data = frequency_data
         ret.power_data = power_data
-        # print("Cone noise parameters")
-        # p = ret.cone_noise_parameters
-        # print(
-        #     f"NL: {p[0]:.2e}\nTL: {p[1]:.2e}\nHS: {p[2]:.2e}\nTS: {p[3]:.2e}\nA0: {p[4]:.2e}\nM0: {p[5]:.2e}\nD: {p[6]:.2e}"
-        # )
+        ret.cone_noise_power_fit = np.exp(
+            self.fit_log_interp_and_double_lorenzian(log_frequency_data, *popt_log)
+        )
+
         return ret
 
     def _get_ecc_from_dd(self, dendr_diam_parameters, dd_regr_model, dd):
@@ -3226,6 +3238,9 @@ class ConstructRetina(RetinaMath):
             "cone_noise_parameters": ret.cone_noise_parameters,
             "frequency_data": ret.frequency_data,
             "power_data": ret.power_data,
+            "cone_frequency_data": ret.cone_frequency_data,
+            "cone_power_data": ret.cone_power_data,
+            "cone_noise_power_fit": ret.cone_noise_power_fit,
         }
 
         self.data_io.save_np_dict_to_npz(

@@ -294,7 +294,7 @@ my_stimulus_options = {
     "stimulus_position": (0.0, 0.0),
     "stimulus_size": 1,  # 0.04,  # 2,  # deg, radius for circle, sidelen/2 for rectangle.
     "background": 128,
-    "contrast": 0.0,  # Weber constrast
+    "contrast": 0.96,  # Weber constrast
     "mean": 128,
     "temporal_frequency": 6.0,  # 0.01,  # 4.0,  # 40,  # Hz
     "spatial_frequency": 5.0,  # cpd
@@ -384,6 +384,7 @@ cone_general_params = {
     "cone2gc_parasol": 27,  # um 27
     "cone2gc_cutoff_SD": 1,  # 3 SD is 99.7% of Gaussian
     "cone_noise_magnitude": 1.0,  # Relative amplitude, 0 for no noise
+    "cone_noise_wc": [14, 160],  # lorenzian freqs, Angueyra_2013_NatNeurosci Fig1
 }
 
 # Recovery function from Berry_1998_JNeurosci, Uzzell_2004_JNeurophysiol
@@ -527,6 +528,9 @@ cone_density2_fullpath = (
     literature_data_folder / "Packer_1989_JCompNeurol_ConeDensity_Fig6A_insert_c.npz"
 )
 cone_noise_fullpath = literature_data_folder / "Angueyra_2013_NatNeurosci_Fig6E_c.npz"
+cone_response_fullpath = (
+    literature_data_folder / "Angueyra_2013_NatNeurosci_Fig6B_c.npz"
+)
 
 literature_data_files = {
     "gc_density_fullpath": gc_density_fullpath,
@@ -539,6 +543,7 @@ literature_data_files = {
     "cone_density1_fullpath": cone_density1_fullpath,
     "cone_density2_fullpath": cone_density2_fullpath,
     "cone_noise_fullpath": cone_noise_fullpath,
+    "cone_response_fullpath": cone_response_fullpath,
 }
 
 
@@ -618,17 +623,17 @@ if __name__ == "__main__":
     # )
     # print(f"{luminance:.2f} cd/m2")
 
-    ###########################################
-    ##   Sample figure data from literature  ##
-    ###########################################
+    # ##########################################
+    # #   Sample figure data from literature  ##
+    # ##########################################
 
     # # If possible, sample only temporal hemiretina
     # from project.project_utilities_module import DataSampler
 
-    # filename = "Angueyra_2013_NatNeurosci_Fig6E.jpg"
+    # filename = "Angueyra_2013_NatNeurosci_Fig6B.jpg"
     # filename_full = git_repo_root.joinpath(r"retina/literature_data", filename)
     # # Fig lowest and highest tick values in the image, use these as calibration points
-    # min_X, max_X, min_Y, max_Y = (1, 600, 0.001, 1)
+    # min_X, max_X, min_Y, max_Y = (1, 600, 1e-11, 1e-3)
     # ds = DataSampler(filename_full, min_X, max_X, min_Y, max_Y, logX=True, logY=True)
     # ds.collect_and_save_points()
     # ds.quality_control(restore=True)
@@ -662,8 +667,8 @@ if __name__ == "__main__":
     # PM.viz.show_DoG_model_fit(sample_list=[10], savefigname=None)
     # PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)
     # PM.viz.show_dendrite_diam_vs_ecc(log_x=False, log_y=False, savefigname=None)
-    # PM.viz.show_cone_noise_vs_freq(savefigname=None)
     # PM.viz.show_retina_img(savefigname=None)
+    PM.viz.show_cone_noise_vs_freq(savefigname=None)
 
     # For FIT (DoG fits, temporal kernels and tonic drives)
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
@@ -708,6 +713,8 @@ if __name__ == "__main__":
     ####################################
 
     # Load stimulus to get working retina, necessary for running cells
+
+    # TÄHÄN JÄIT: KORJAA SIMULATE RETINA KUN UUSI CONE NOISE FUNCTION. ALMOST THERE.
     PM.simulate_retina.run_with_my_run_options()
 
     ##########################################
