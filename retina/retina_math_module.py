@@ -123,7 +123,52 @@ class RetinaMath:
 
         return rspace_pos_mm
 
-    def get_rf_masks(self, img_stack, mask_threshold=0.1):
+    def create_ellipse_mask(self, xo, yo, semi_x, semi_y, ori, s):
+        """
+        Create an ellipse mask.
+
+        This function creates an ellipse mask with the specified parameters.
+
+        Parameters
+        ----------
+        xo : float
+            The x-coordinate of the ellipse center.
+        yo : float
+            The y-coordinate of the ellipse center.
+        semi_x : float
+            The semi-major axis of the ellipse.
+        semi_y : float
+            The semi-minor axis of the ellipse.
+        ori : float
+            The orientation of the ellipse in radians.
+        s : int
+            The side length of the mask.
+
+        Returns
+        -------
+        mask : ndarray
+            The ellipse mask.
+        """
+
+        # Create a grid of x and y coordinates
+        x = np.arange(0, s)
+        y = np.arange(0, s)
+        # x, y = np.meshgrid(x, y)
+        Y, X = np.meshgrid(
+            np.arange(0, s),
+            np.arange(0, s),
+            indexing="ij",
+        )  # y, x
+        # Rotate the coordinates
+        x_rot = (X - xo) * np.cos(ori) + (Y - yo) * np.sin(ori)
+        y_rot = -(X - xo) * np.sin(ori) + (Y - yo) * np.cos(ori)
+
+        # Create the mask
+        mask = ((x_rot / semi_x) ** 2 + (y_rot / semi_y) ** 2 <= 1).astype(np.uint8)
+
+        return mask
+
+    def get_center_masks(self, img_stack, mask_threshold):
         """
         Extracts the contours around the maximum of each receptive field in an image stack. The contour for a field is
         defined as the set of pixels with a value of at least 10% of the maximum pixel value in the field. Only the
@@ -142,6 +187,7 @@ class RetinaMath:
             3D numpy array of boolean masks (N, H, W). In each mask, True indicates
             a pixel is part of the contour, and False indicates it is not.
         """
+
         assert (
             mask_threshold >= 0 and mask_threshold <= 1
         ), "mask_threshold must be between 0 and 1, aborting..."

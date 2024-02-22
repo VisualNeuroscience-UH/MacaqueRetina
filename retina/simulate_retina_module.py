@@ -10,6 +10,7 @@ from scipy.optimize import fsolve, curve_fit, least_squares
 from scipy.ndimage import gaussian_filter
 from scipy.special import erf
 import scipy.fftpack as fftpack
+from scipy import ndimage
 from skimage.transform import resize
 import torch
 
@@ -330,7 +331,7 @@ class ReceptiveFields(Printable):
             # Define spatial filter sidelength in pixels in stimulus space
             # based on angular resolution and widest semimajor axis.
             # We use the general rule that the sidelength should be at least 5 times the SD
-            # Remove exceptionally large values from surround before calculating sidelen.
+            # Remove exceptionally large values (n_sd) from surround before calculating sidelen.
             # This saves a lot of memory and computation time downstream.
             n_sd = 3  # SD
             if self.DoG_model == "ellipse_fixed":
@@ -368,6 +369,22 @@ class ReceptiveFields(Printable):
                 (self.um_per_pix / stim_um_per_pix) * self.sidelen_pix
             )
 
+        # # Set center and surround midpoints in new pixel space
+        pix_scale = self.spatial_filter_sidelen / self.sidelen_pix
+        if self.DoG_model in ["ellipse_fixed", "circular"]:
+            xoc = xos = df.xoc_pix.values * pix_scale
+            yoc = yos = df.yoc_pix.values * pix_scale
+        elif self.DoG_model == "ellipse_independent":
+            xoc = df.xoc_pix.values * pix_scale
+            yoc = df.yoc_pix.values * pix_scale
+            xos = df.xos_pix.values * pix_scale
+            yos = df.yos_pix.values * pix_scale
+        df_stimpix["xoc_pix"] = xoc
+        df_stimpix["yoc_pix"] = yoc
+        df_stimpix["xos_pix"] = xos
+        df_stimpix["yos_pix"] = yos
+
+        # breakpoint()
         df_stimpix["ampl_c"] = df.ampl_c_norm
         df_stimpix["ampl_s"] = df.ampl_s_norm
 
@@ -375,7 +392,6 @@ class ReceptiveFields(Printable):
 
         self.microm_per_pix = (1 / self.deg_per_mm) / vs.pix_per_deg * 1000
         self.temporal_filter_len = int(self.data_filter_duration / (1000 / vs.fps))
-        # pdb.set_trace()
 
 
 class VisualSignal(Printable):
@@ -794,7 +810,7 @@ class SimulateRetina(RetinaMath):
         # use the index arrays to select the elements from video_copy
         stim_region[unit_region_idx, r_matrix, q_matrix] = 1
 
-        center_masks = rf.center_masks.copy()
+        center_masks = rf.center_masks_flat.copy()
         center_masks = center_masks.astype(bool).reshape((rf.n_units, sidelen, sidelen))
 
         center_region[
@@ -1195,16 +1211,19 @@ class SimulateRetina(RetinaMath):
 
         Parameters
         ----------
-
+        vs : VisualSignal
+            The visual signal object containing the stimulus video.
+        rf : ReceptiveFields
+            The receptive fields object containing the RGCs and their parameters.
 
         Returns
         -------
-        center_surround_filters_sum : array
-            Dynamic contrast signal
+        vs : VisualSignal
+            The visual signal object containing the dynamic contrast signal.
         """
 
         # Reshape masks and spatial_filters to match the dimensions of stimulus_cropped
-        spatial_filters = rf.spatial_filters.copy()
+        spatial_filters = rf.spatial_filters_flat.copy()
         spatial_filters_reshaped = np.expand_dims(spatial_filters, axis=2)
 
         # victor_1987_JPhysiol: input to model is s(t)), the signed Weber contrast at the centre.
@@ -1214,24 +1233,23 @@ class SimulateRetina(RetinaMath):
 
             # This is the stimulus contrast viewed through spatial rf filter, and summed over spatial dimension.
             # The np.einsum provides a fast and memory-efficient way to do this.
+            # i is the unit, j is the spatial dimension, k is the time dimension
             vs.svecs = np.einsum(
                 "ijk,ijk->ik", spatial_filters_reshaped, vs.stimulus_cropped
             )
 
         elif rf.gc_type == "midget":
-            # Surround is always negative at this stage
-            masks_sur = spatial_filters < 0
-            masks_sur = masks_sur[:, :, np.newaxis]
-
+            masks_sur = rf.surround_masks_flat[:, :, np.newaxis]
             vs.svecs_sur = np.einsum(
-                "ijk,ijk->ik", spatial_filters_reshaped * masks_sur, vs.stimulus_cropped
+                "ijk,ijk->ik",
+                spatial_filters_reshaped * masks_sur,
+                vs.stimulus_cropped,
             )
 
-            center_masks = rf.center_masks[:, :, np.newaxis]
-            # Similarly, for center filters
+            masks_cen = rf.center_masks_flat[:, :, np.newaxis]
             vs.svecs_cen = np.einsum(
                 "ijk,ijk->ik",
-                spatial_filters_reshaped * center_masks,
+                spatial_filters_reshaped * masks_cen,
                 vs.stimulus_cropped,
             )
 
@@ -1431,11 +1449,64 @@ class SimulateRetina(RetinaMath):
 
         # Assuming spatial_filters.shape = (U, N) and temporal_filters.shape = (U, T)
         spatiotemporal_filters = (
-            rf.spatial_filters[:, :, None] * rf.temporal_filters[:, None, :]
+            rf.spatial_filters_flat[:, :, None] * rf.temporal_filters[:, None, :]
         )
         rf.spatiotemporal_filters = spatiotemporal_filters
 
         return rf
+
+    def _get_surround_masks(self, rf, img_stack):
+        """
+        Generate surround masks.
+
+        Parameters
+        ----------
+        rf : ReceptiveFields
+            The receptive fields object containing the RGCs and their parameters.
+        img_stack : numpy.ndarray
+            3D numpy array representing a stack of images. The shape of the array should be (N, H, W).
+
+        Returns
+        -------
+        numpy.ndarray
+            3D numpy array of boolean masks (N, H, W). In each mask, True indicates
+            a pixel is part of the contour, and False indicates it is not.
+        """
+        df = rf.df_stimpix
+        xo = df["xos_pix"].values
+        yo = df["yos_pix"].values
+        if rf.DoG_model == "ellipse_fixed":
+            semi_x = df["semi_xc"].values * df["relat_sur_diam"].values
+            semi_y = df["semi_yc"].values * df["relat_sur_diam"].values
+            ori = df["orient_cen_rad"].values
+        elif rf.DoG_model == "ellipse_independent":
+            semi_x = df["semi_xs"].values
+            semi_y = df["semi_ys"].values
+            ori = df["orient_sur_rad"].values
+        elif rf.DoG_model == "circular":
+            semi_x = df["rad_s"].values
+            semi_y = df["rad_s"].values
+            ori = df["orient_cen_rad"].values
+
+        s = rf.spatial_filter_sidelen
+        n_sd = 2
+        masks = []
+        for idx, img in enumerate(img_stack):
+            ellipse_mask = self.create_ellipse_mask(
+                xo[idx],
+                yo[idx],
+                semi_x[idx] * n_sd,
+                semi_y[idx] * n_sd,
+                -ori[idx],
+                s,
+            )
+
+            min_val = np.min(img)
+            mask = img < min_val * rf.mask_threshold
+            final_mask = np.logical_and(mask, ellipse_mask)
+            masks.append(final_mask)
+
+        return np.array(masks)
 
     def get_spatial_filters(self, rf):
         """
@@ -1461,10 +1532,10 @@ class SimulateRetina(RetinaMath):
 
         Returns
         -------
-        rf.spatial_filters : ndarray
+        rf.spatial_filters_flat : ndarray
             2-D array where each row corresponds to a 1-D spatial filter or mask of a unit.
             The shape is (len(unit_indices), s**2), where s is the side length of a spatial filter.
-        rf.center_masks : ndarray
+        rf.center_masks_flat : ndarray
             2-D array where each row corresponds to a 1-D center mask of a unit.
 
         Raises
@@ -1493,26 +1564,28 @@ class SimulateRetina(RetinaMath):
             else:
                 raise ValueError("Unknown model type, aborting...")
 
-        # Reshape to N units, s**2 pixels
-        spatial_filters = np.reshape(spatial_filters, (rf.n_units, s**2))
+        # Get center masks. This must be done in 2D.
+        center_masks = self.get_center_masks(spatial_filters, rf.mask_threshold)
+        surround_masks = self._get_surround_masks(rf, spatial_filters)
 
-        # Get center masks
-        center_masks = self.get_rf_masks(
-            spatial_filters, mask_threshold=rf.mask_threshold
-        )
+        # Reshape to N units, s**2 pixels
+        center_masks_flat = center_masks.reshape((rf.n_units, s**2))
+        spatial_filters_flat = spatial_filters.reshape((rf.n_units, s**2))
 
         # Scale spatial filters to sum one of centers for each unit to get veridical max contrast
-        spatial_filters = (
-            spatial_filters / np.sum(spatial_filters * center_masks, axis=1)[:, None]
+        spatial_filters_flat_norm = (
+            spatial_filters_flat
+            / np.sum(spatial_filters_flat * center_masks_flat, axis=1)[:, None]
         )
 
         # Spatial OFF filters have been inverted to max upwards for construction of RFs.
         # We need to invert them back to max downwards for simulation.
         if rf.response_type == "off":
-            spatial_filters = -spatial_filters
+            spatial_filters_flat_norm = -spatial_filters_flat_norm
 
-        rf.spatial_filters = spatial_filters
-        rf.center_masks = center_masks
+        rf.spatial_filters_flat = spatial_filters_flat_norm
+        rf.center_masks_flat = center_masks_flat
+        rf.surround_masks_flat = surround_masks.reshape((rf.n_units, s**2))
 
         return rf
 
@@ -1886,7 +1959,7 @@ class SimulateRetina(RetinaMath):
 
         if rf.temporal_model == "fixed":
             spat_temp_filter_to_show = {
-                "spatial_filters": rf.spatial_filters,
+                "spatial_filters": rf.spatial_filters_flat,
                 "temporal_filters": rf.temporal_filters,
                 "data_filter_duration": rf.data_filter_duration,
                 "temporal_filter_len": rf.temporal_filter_len,
@@ -1979,13 +2052,13 @@ class SimulateRetina(RetinaMath):
             rf = self._get_linear_spatiotemporal_filters(rf)
             vs = self._convolve_stimulus(vs, rf)
 
-        # # print(np.mean(vs.generator_potentials.flatten()))
-        # print(np.std(vs.generator_potentials.flatten()))
-        # # plt.hist(vs.generator_potentials.flatten(), 20)
-        # # plt.show()
-        # # import sys
+        # print(np.mean(vs.generator_potentials.flatten()))
+        print(np.std(vs.generator_potentials.flatten()))
+        # plt.hist(vs.generator_potentials.flatten(), 20)
+        # plt.show()
+        # import sys
 
-        # # sys.exit()
+        # sys.exit()
         # pdb.set_trace()
 
         # From generator potential to spikes

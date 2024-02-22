@@ -3003,7 +3003,9 @@ class ConstructRetina(RetinaMath):
             # Create gc_img from DoG model
             print("\nGenerating RF images for FIT model...")
             gc = self._get_gc_fit_img(gc)
-            gc.img_mask = self.get_rf_masks(gc.img, mask_threshold=gc.mask_threshold)
+            gc.img_mask = self.get_center_masks(
+                gc.img, mask_threshold=gc.mask_threshold
+            )
 
             ret, gc, ret.whole_ret_img = self._get_full_retina_with_rf_images(
                 ret, gc, gc.img
@@ -3040,7 +3042,9 @@ class ConstructRetina(RetinaMath):
             gc = self._get_vae_imgs_with_good_fits(gc, retina_vae)
 
             # 3) Get center masks
-            gc.img_mask = self.get_rf_masks(gc.img, mask_threshold=gc.mask_threshold)
+            gc.img_mask = self.get_center_masks(
+                gc.img, mask_threshold=gc.mask_threshold
+            )
 
             viz_gc_vae_img = gc.img
             viz_gc_vae_img_mask = gc.img_mask
@@ -3092,7 +3096,9 @@ class ConstructRetina(RetinaMath):
 
             # 8) Get final center masks for the generated spatial rfs
             print("\nGetting final masked rfs and retina...")
-            gc.img_mask = self.get_rf_masks(gc.img, mask_threshold=gc.mask_threshold)
+            gc.img_mask = self.get_center_masks(
+                gc.img, mask_threshold=gc.mask_threshold
+            )
             # Add center mask area (mm^2) to gc_vae_df for visualization
             gc = self._add_center_mask_area_to_df(gc)
 
