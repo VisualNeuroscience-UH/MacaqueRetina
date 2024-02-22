@@ -182,7 +182,7 @@ class Retina:
 @dataclass
 class GanglionCellData:
     """
-    A class to store and process data related to ganglion cell receptive fields.
+    A class to store and process data related to ganglion cell receptive field models.
 
     Attributes
     ----------
@@ -460,7 +460,7 @@ class ConstructRetina(RetinaMath):
 
         return distribution_parameters
 
-    def read_and_fit_unit_density_data(self, ret):
+    def read_and_fit_cell_density_data(self, ret):
         """
         Read literature data from file and fit ganglion cell and cone density with respect to eccentricity.
         """
@@ -476,29 +476,29 @@ class ConstructRetina(RetinaMath):
             """
             Process density data from given filepaths.
             """
-            unit_eccentricity = np.array([])
-            unit_density = np.array([])
+            cell_eccentricity = np.array([])
+            cell_density = np.array([])
             for filepath in filepaths:
                 density = self.data_io.get_data(filepath)
                 _eccentricity = np.squeeze(density["Xdata"])
                 _density = np.squeeze(density["Ydata"])
-                unit_eccentricity = np.concatenate((unit_eccentricity, _eccentricity))
-                unit_density = np.concatenate((unit_density, _density))
+                cell_eccentricity = np.concatenate((cell_eccentricity, _eccentricity))
+                cell_density = np.concatenate((cell_density, _density))
 
             # Sort and scale data
-            unit_eccentricity, unit_density = _sort_and_scale_density_data(
-                unit_eccentricity, unit_density
+            cell_eccentricity, cell_density = _sort_and_scale_density_data(
+                cell_eccentricity, cell_density
             )
-            return unit_eccentricity, unit_density
+            return cell_eccentricity, cell_density
 
-        def _fit_density_data(eccentricity, density, unit_type):
+        def _fit_density_data(eccentricity, density, cell_type):
             """
-            Fit density data based on unit type.
+            Fit density data based on cell type.
             """
-            if unit_type == "gc":
+            if cell_type == "gc":
                 this_function = self.gauss_plus_baseline_func
                 p0 = [1000, 0, 2, np.min(density)]
-            elif unit_type == "cone":
+            elif cell_type == "cone":
                 this_function = self.double_exponential_func
                 p0 = [0, -1, 0, 0]
 
@@ -507,11 +507,11 @@ class ConstructRetina(RetinaMath):
             )
 
             # Save fit function and data for visualization
-            setattr(self, f"{unit_type}_fit_function", this_function)
-            self.project_data.construct_retina[f"{unit_type}_n_vs_ecc"] = {
+            setattr(self, f"{cell_type}_fit_function", this_function)
+            self.project_data.construct_retina[f"{cell_type}_n_vs_ecc"] = {
                 "fit_parameters": fit_parameters,
-                "unit_eccentricity": eccentricity,
-                "unit_density": density,
+                "cell_eccentricity": eccentricity,
+                "cell_density": density,
                 "function": this_function,
             }
 
@@ -1254,7 +1254,7 @@ class ConstructRetina(RetinaMath):
         return torch.stack([delta_x, delta_y], dim=1)
 
     def _apply_force_based_layout(
-        self, ret, all_positions, unit_density, unit_placement_params
+        self, ret, all_positions, cell_density, unit_placement_params
     ):
         """
         Apply a force-based layout on the given positions.
@@ -1263,7 +1263,7 @@ class ConstructRetina(RetinaMath):
         ----------
         all_positions : list or ndarray
             Initial positions of nodes.
-        unit_density : float
+        cell_density : float
             One local density according to eccentricity group.
         Returns
         -------
@@ -1299,7 +1299,7 @@ class ConstructRetina(RetinaMath):
         unit_repulsion_stregth = torch.tensor(unit_repulsion_stregth).to(self.device)
         diffusion_speed = torch.tensor(diffusion_speed).to(self.device)
         n_iterations = torch.tensor(n_iterations).to(self.device)
-        unit_density = torch.tensor(unit_density).to(self.device)
+        cell_density = torch.tensor(cell_density).to(self.device)
 
         rep = torch.tensor(border_repulsion_stength).to(self.device)
         dist_th = torch.tensor(border_distance_threshold).to(self.device)
@@ -1320,8 +1320,8 @@ class ConstructRetina(RetinaMath):
         # Adjust unit_distance_threshold and diffusion speed with density of the units
         # This is a technical trick to get good spread for different densities
         # The 1 mm ecc for parasol provides 952 units/mm2 density. This is the reference density.
-        adjusted_distance_threshold = unit_distance_threshold * (952 / unit_density)
-        adjusted_diffusion_speed = diffusion_speed * (952 / unit_density)
+        adjusted_distance_threshold = unit_distance_threshold * (952 / cell_density)
+        adjusted_diffusion_speed = diffusion_speed * (952 / cell_density)
 
         for iteration in torch.range(0, n_iterations):
             optimizer.zero_grad()
@@ -1521,7 +1521,6 @@ class ConstructRetina(RetinaMath):
         x1, y1 = self.pol2cart(mean_ecc, polar_lim_deg[1])
         delta_pol = np.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2)
 
-        # n_pol = np.sqrt(n_units * delta_pol / (np.sqrt(3) * delta_ecc))
         n_pol = int(np.ceil(np.sqrt(n_units * (delta_pol / delta_ecc))))
         n_ecc = int(np.ceil(n_units / n_pol))
 
@@ -1542,7 +1541,7 @@ class ConstructRetina(RetinaMath):
         return positions[:n_units]
 
     def _optimize_positions(
-        self, ret, initial_positions, unit_density, unit_placement_params
+        self, ret, initial_positions, cell_density, unit_placement_params
     ):
         # Merge the Groups
         all_positions = np.vstack(initial_positions).astype(float)
@@ -1560,7 +1559,7 @@ class ConstructRetina(RetinaMath):
             if optim_algorithm == "force":
                 # Apply Force Based Layout Algorithm with Boundary Repulsion
                 optimized_positions_mm = self._apply_force_based_layout(
-                    ret, all_positions_mm, unit_density, unit_placement_params
+                    ret, all_positions_mm, cell_density, unit_placement_params
                 )
             elif optim_algorithm == "voronoi":
                 # Apply Voronoi-based Layout with Loyd's Relaxation
@@ -1665,8 +1664,8 @@ class ConstructRetina(RetinaMath):
     def _read_temporal_statistics_benardete_kaplan(self, gc):
         """
         Fit temporal statistics of the temporal parameters using the triangular distribution.
-        Data from Benardete & Kaplan Visual Neuroscience 16 (1999) 355-368 (parasol units), and
-        Benardete & Kaplan Visual Neuroscience 14 (1997) 169-185 (midget units).
+        Data from Benardete & Kaplan Visual Neuroscience 16 (1999) 355-368 (parasol cells), and
+        Benardete & Kaplan Visual Neuroscience 14 (1997) 169-185 (midget cells).
 
         Returns
         -------
@@ -3202,7 +3201,7 @@ class ConstructRetina(RetinaMath):
         # -- First, place the ganglion cell midpoints (units mm)
         # Run GC and cone density fit to data, get func_params.
         # GC data from Perry_1984_Neurosci, cone data from Packer_1989_JCompNeurol
-        ret = self.read_and_fit_unit_density_data(ret)
+        ret = self.read_and_fit_cell_density_data(ret)
 
         # Place ganglion cells and cones to desired retina.
         ret, gc = self._place_units(ret, gc)

@@ -22,7 +22,8 @@ warnings.simplefilter("ignore")
 
 """
 This is code for building macaque retinal filters corresponding to midget and parasol unit responses
-for temporal hemiretina. We keep modular code structure, to be able to add new features at later phase.
+for temporal hemiretina. We keep modular code structure, to be able to add new features at later phase. Name
+'unit' is used as distinction from biological cell.
 
 Visual angle (A) in degrees from previous studies (Croner and Kaplan, 1995) was approximated with relation 5 deg/mm. 
 This works fine up to 20 deg ecc, but underestimates the distance thereafter. If more peripheral representations are 
@@ -31,21 +32,21 @@ Dacey and Petersen, 1992). Current implementation uses one deg = 220um (Perry et
 
 We have extracted statistics of macaque ganglion cell receptive fields from literature and build continuous functions.
 
-The density of many unit types is inversely proportional to dendritic field coverage, suggesting constant coverage factor 
+The density of many cell types is inversely proportional to dendritic field coverage, suggesting constant coverage factor 
 (Perry_1984_Neurosci, Wassle_1991_PhysRev). Midget coverage factor is 1  (Dacey_1993_JNeurosci for humans; Wassle_1991_PhysRev, 
 Lee_2010_ProgRetEyeRes). Parasol coverage factor is 3-4 close to fovea (Grunert_1993_VisRes); 2-7 according to Perry_1984_Neurosci. 
-These include ON- and OFF-center units, and perhaps other unit types. It is likely that coverage factor is 1 for midget and parasol 
-ON- and OFF-center units each, which is also in line with Doi_2012 JNeurosci, Field_2010_Nature
+These include ON- and OFF-center cells, and perhaps other cell types. It is likely that coverage factor is 1 for midget and parasol 
+ON- and OFF-center cells each, which is also in line with Doi_2012 JNeurosci, Field_2010_Nature
 
 The spatiotemporal receptive fields for the four unit types (parasol & midget, ON & OFF) were modelled with double ellipsoid 
 difference-of-Gaussians model. The original spike triggered averaging RGC data in courtesy of Chichilnisky lab. The method is 
 described in Chichilnisky_2001_Network, Chichilnisky_2002_JNeurosci Field_2010_Nature.
 
-Chichilnisky_2002_JNeurosci states that L-ON (parasol) units have on average 21% larger RFs than L-OFF units. He also shows that 
-OFF units have more nonlinear response to input, which is not implemented currently (a no-brainer to implement if necessary).
+Chichilnisky_2002_JNeurosci states that L-ON (parasol) cells have on average 21% larger RFs than L-OFF cells. He also shows that 
+OFF cells have more nonlinear response to input, which is not implemented currently (a no-brainer to implement if necessary).
 
-NOTE: bad unit indices and metadata hard coded from Chichilnisky apricot data at fit_module ApricotData class. 
-For another data set change metadata, visualize fits and change the bad units.
+NOTE: bad cell indices and metadata hard coded from Chichilnisky apricot data at fit_module ApricotData class. 
+For another data set change metadata, visualize fits and change the bad cells.
 NOTE: Visual stimulus video default options are hard coded at visual_stimulus_module.VideoBaseClass class.
 NOTE: If eccentricity stays under 20 deg, dendritic diameter data fitted up to 25 deg only (better fit close to fovea)
 
@@ -663,7 +664,7 @@ if __name__ == "__main__":
     # PM.viz.show_cones_linked_to_gc(gc_list=[10, 17], savefigname=None)
     # PM.viz.show_DoG_img_grid(gc_list=[10, 17, 46], savefigname=None)
     # PM.viz.show_DoG_img_grid(n_samples=8)
-    # PM.viz.show_unit_density_vs_ecc(unit_type="cone", savefigname=None)  # gc or cone
+    # PM.viz.show_cell_density_vs_ecc(unit_type="cone", savefigname=None)  # gc or cone
 
     # PM.viz.show_DoG_model_fit(sample_list=[10], savefigname=None)
     # PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)

@@ -131,7 +131,7 @@ class Fit(RetinaMath):
         Parameters
         ----------
         good_idx_experimental : array-like of int
-            Indices of the units to fit the temporal filters for.
+            Indices of the cells to fit the temporal filters for.
         normalize_before_fit : bool, default False
             If True, normalize each temporal filter before fitting.
             If False, fit the raw temporal filters.
@@ -141,7 +141,7 @@ class Fit(RetinaMath):
         tuple
             A tuple containing:
             - fitted_parameters (pandas.DataFrame):
-                DataFrame of shape (n_cells, 5) containing the fitted parameters for each unit. The columns are:
+                DataFrame of shape (n_cells, 5) containing the fitted parameters for each cell. The columns are:
                 - 'n': Order of the filters.
                 - 'p1': Normalization factor for the first filter.
                 - 'p2': Normalization factor for the second filter.
@@ -149,9 +149,9 @@ class Fit(RetinaMath):
                 - 'tau2': Time constant of the second filter in milliseconds.
             - exp_temp_filt (dict):
                 Dictionary of temporal filters to show with viz. The keys are strings of the format 'cell_ix_{cell_idx}',
-                where cell_idx is the index of the unit. Each value is a dictionary with the following keys:
-                - 'ydata': The temporal filter data for the unit.
-                - 'y_fit': The fitted temporal filter data for the unit.
+                where cell_idx is the index of the cell. Each value is a dictionary with the following keys:
+                - 'ydata': The temporal filter data for the cell.
+                - 'y_fit': The fitted temporal filter data for the cell.
         """
 
         # shape (n_cells, 15); 15 time points @ 30 Hz (500 ms)
@@ -206,7 +206,7 @@ class Fit(RetinaMath):
                     (ydata - self.diff_of_lowpass_filters(xdata, *popt)) ** 2
                 )  # MSE error
             except:
-                print("Fitting for unit index %d failed" % cell_ix)
+                print("Fitting for cell index %d failed" % cell_ix)
                 fitted_parameters[cell_ix, :] = np.nan
                 error_array[cell_ix] = max_error
                 continue
@@ -256,11 +256,11 @@ class Fit(RetinaMath):
         Parameters
         ----------
         spat_data_array : numpy.ndarray
-            Array of shape `(n_cells, num_pix_y, num_pix_x)` containing the spatial data for each unit to fit.
+            Array of shape `(n_cells, num_pix_y, num_pix_x)` containing the spatial data for each cell to fit.
         cen_rot_rad_all : numpy.ndarray or None, optional
-            Array of shape `(n_cells,)` containing the rotation angle for each unit. If None, rotation is set to 0, by default None
+            Array of shape `(n_cells,)` containing the rotation angle for each cell. If None, rotation is set to 0, by default None
         bad_spatial_idx : numpy.ndarray or None, optional
-            Indices of units to exclude from fitting, by default None
+            Indices of cells to exclude from fitting, by default None
         DoG_model : str, optional
            ellipse_independent : fit center and surround anisotropic elliptical Gaussians independently,
            ellipse_fixed : fix anisotropic elliptical Gaussian surround midpoint and orientation to center (default),
@@ -268,12 +268,12 @@ class Fit(RetinaMath):
         semi_x_always_major : bool, optional
             Whether to rotate Gaussians so that semi_x is always the semimajor/longer axis, by default True
         mark_outliers_bad : bool, optional
-            Whether to mark units with large fit error (> 3SD from mean) as bad, by default False
+            Whether to mark cells with large fit error (> 3SD from mean) as bad, by default False
 
         Returns
         -------
         tuple
-            A dataframe with spatial parameters and errors for each unit, and a dictionary of spatial filters to show with visualization.
+            A dataframe with spatial parameters and errors for each cell, and a dictionary of spatial filters to show with visualization.
             The dataframe has shape `(n_cells, 13)` and columns:
             ['ampl_c', 'xoc_pix', 'yoc_pix', 'semi_xc_pix', 'semi_yc_pix', 'orient_cen_rad', 'ampl_s', 'xos_pix', 'yos_pix', 'semi_xs_pix',
             'semi_ys_pix', 'orient_sur_rad', 'offset'] if DoG_model=ellipse_independent,
@@ -286,8 +286,8 @@ class Fit(RetinaMath):
                 'DoG_model': str, the type of DoG model used ('ellipse_independent', 'ellipse_fixed' or 'circular')
                 'num_pix_x': int, the number of pixels in the x-dimension
                 'num_pix_y': int, the number of pixels in the y-dimension
-                'filters': numpy.ndarray of shape `(n_cells, num_pix_y, num_pix_x)`, containing the fitted spatial filters for each unit
-            good_mask: numpy.ndarray of shape `(n_cells,)`, containing a boolean mask of units that were successfully fitted
+                'filters': numpy.ndarray of shape `(n_cells, num_pix_y, num_pix_x)`, containing the fitted spatial filters for each cell
+            good_mask: numpy.ndarray of shape `(n_cells,)`, containing a boolean mask of cells that were successfully fitted
 
         Raises
         ------
@@ -299,7 +299,7 @@ class Fit(RetinaMath):
         num_pix_y = spat_data_array.shape[1]  # Check indices: x horizontal, y vertical
         num_pix_x = spat_data_array.shape[2]
 
-        # Make fit to all units
+        # Make fit to all cells
         # Note: this index used to start from 1, creating a bug downstream.
         # The reason for exceptional 1-index was data coming from matlab with 1-index.
         x_position_indices = np.linspace(0, num_pix_x - 1, num_pix_x)
@@ -466,7 +466,7 @@ class Fit(RetinaMath):
         # Invert data arrays with negative sign for fitting and display.
         spat_data_array = self.flip_negative_spatial_rf(spat_data_array)
 
-        # Go through all units
+        # Go through all cells
         print(("Fitting DoG model, surround is {0}".format(surround_status)))
         for cell_idx in tqdm(all_viable_cells, desc="Fitting spatial filters"):
             this_rf = spat_data_array[cell_idx, :, :]
@@ -505,7 +505,7 @@ class Fit(RetinaMath):
                     )
                     data_all_viable_cells[cell_idx, :] = popt
             except:
-                print(("Fitting failed for unit {0}".format(str(cell_idx))))
+                print(("Fitting failed for cell {0}".format(str(cell_idx))))
                 data_all_viable_cells[cell_idx, :] = np.nan
                 bad_spatial_idx.append(cell_idx)
                 continue
@@ -634,7 +634,7 @@ class Fit(RetinaMath):
 
             diff_idx = np.setdiff1d(bad_spatial_idx, old_bad_spatial_idx)
             print(
-                f"Removing {len(diff_idx)} unit(s) with error > 3SD from mean: {', '.join(map(str, diff_idx))}"
+                f"Removing {len(diff_idx)} cell(s) with error > 3SD from mean: {', '.join(map(str, diff_idx))}"
             )
 
             for i in diff_idx:
@@ -647,7 +647,7 @@ class Fit(RetinaMath):
             if len(self.nan_idx) > 0:
                 good_mask = np.where(good_mask)[0] != self.nan_idx
                 good_mask = good_mask.astype(int)
-                print(f"Removed units {self.nan_idx} with failed fits")
+                print(f"Removed cells {self.nan_idx} with failed fits")
 
         good_mask_df = pd.DataFrame(good_mask, columns=["good_filter_data"])
 
@@ -802,7 +802,7 @@ class Fit(RetinaMath):
         Parameters:
         -----------
         good_data_fit_idx : array_like
-            A list of indices indicating the selected good units.
+            A list of indices indicating the selected good cells.
 
         Returns:
         --------

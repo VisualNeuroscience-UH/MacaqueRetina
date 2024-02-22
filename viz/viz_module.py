@@ -1302,7 +1302,7 @@ class Viz:
 
     def show_temp_stat(self):
         """
-        Show the temporal statistics of the retina units.
+        Show the temporal statistics of the retina cells.
         """
 
         exp_temp_stat = self.project_data.fit["exp_temp_stat"]
@@ -1312,9 +1312,9 @@ class Viz:
         suptitle = exp_temp_stat["suptitle"]
         all_data_fits_df = self.project_data.fit["all_data_fits_df"]
         good_idx_experimental = self.project_data.fit["good_idx_experimental"]
-        # pdb.set_trace()
+
         fig, ax_all = plt.subplots(2, 3)
-        # plt.suptitle(suptitle)
+
         fig.suptitle(suptitle)
         for i, param_name in enumerate(temporal_filter_parameters):
             row = i // 3
@@ -2161,12 +2161,12 @@ class Viz:
         if savefigname:
             self._figsave(figurename=savefigname)
 
-    def show_unit_density_vs_ecc(self, unit_type, savefigname=None):
-        unit_density_dict = self.project_data.construct_retina[f"{unit_type}_n_vs_ecc"]
-        fit_parameters = unit_density_dict["fit_parameters"]
-        unit_eccentricity = unit_density_dict["unit_eccentricity"]
-        unit_density = unit_density_dict["unit_density"]
-        this_function = unit_density_dict["function"]
+    def show_cell_density_vs_ecc(self, cell_type, savefigname=None):
+        cell_density_dict = self.project_data.construct_retina[f"{cell_type}_n_vs_ecc"]
+        fit_parameters = cell_density_dict["fit_parameters"]
+        cell_eccentricity = cell_density_dict["cell_eccentricity"]
+        cell_density = cell_density_dict["cell_density"]
+        this_function = cell_density_dict["function"]
 
         ecc_limits_deg = self.context.my_retina["ecc_limits_deg"]
         deg_per_mm = self.context.my_retina["deg_per_mm"]
@@ -2177,15 +2177,15 @@ class Viz:
         mean_density = this_function(mean_ecc, *fit_parameters)
 
         fig, ax = plt.subplots()
-        ax.plot(unit_eccentricity, unit_density, "o", label="data")
+        ax.plot(cell_eccentricity, cell_density, "o", label="data")
         ax.plot(
-            unit_eccentricity,
-            this_function(unit_eccentricity, *fit_parameters),
+            cell_eccentricity,
+            this_function(cell_eccentricity, *fit_parameters),
             label="fit",
         )
         ax.set_xlabel("Eccentricity (mm)")
-        ax.set_ylabel(f"{unit_type} density")
-        title_text = f"{unit_type} density vs eccentricity"
+        ax.set_ylabel(f"{cell_type} density")
+        title_text = f"{cell_type} density vs eccentricity"
         title_text += f": {mean_density:.0f}/mm^2 at {mean_ecc:.2f} mm"
         # Make new line with average cone surface are
         mean_surface_area = 1 / mean_density
@@ -2323,7 +2323,7 @@ class Viz:
     ):
         """
         Overlays the receptive field center of the specified retinal ganglion cell (RGC) on top of
-        a given stimulus frame. whoch is cropped around the RGC.
+        a given stimulus frame which is cropped around the RGC.
 
         Parameters
         ----------
