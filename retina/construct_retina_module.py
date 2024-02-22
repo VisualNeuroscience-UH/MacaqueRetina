@@ -410,7 +410,7 @@ class ConstructRetina(RetinaMath):
         scale : float or array_like of floats
             The scale parameters of the distribution.
         n_cells : int
-            The number of cells to generate samples for.
+            The number of units to generate samples for.
         distribution : str
             The distribution to sample from. Supported distributions: "gamma", "vonmises", "skewnorm", "triang".
 
@@ -517,7 +517,7 @@ class ConstructRetina(RetinaMath):
 
             return fit_parameters
 
-        # Ganglion cell density data
+        # ganglion cell density data
         gc_filepaths = [self.context.literature_data_files["gc_density_fullpath"]]
         gc_eccentricity, gc_density = _process_density_data(gc_filepaths)
         gc_fit_parameters = _fit_density_data(gc_eccentricity, gc_density, "gc")
@@ -985,22 +985,22 @@ class ConstructRetina(RetinaMath):
     # GC placement functions
     def _initialize_positions_by_group(self, ret):
         """
-        Initialize cell positions based on grouped eccentricities.
+        Initialize unit positions based on grouped eccentricities.
 
         Parameters
         ----------
         gc_density_params : tuple
-            Parameters for the density function used to calculate cell density
+            Parameters for the density function used to calculate unit density
             at a given eccentricity.
 
         Returns
         -------
         eccentricity_groups : list of ndarray
             A list of arrays where each array contains group indices representing
-            eccentricity steps for cells.
+            eccentricity steps for units.
 
         gc_initial_pos : list of ndarray
-            A list of arrays where each array contains cell positions for each
+            A list of arrays where each array contains unit positions for each
             eccentricity group.
 
         sector_surface_areas_mm2 : list of float
@@ -1009,13 +1009,13 @@ class ConstructRetina(RetinaMath):
         Notes
         -----
         The method divides the total eccentricity range into smaller steps,
-        calculates cell densities and positions for each step, and returns
-        group-wise cell positions and the corresponding sector surface areas.
+        calculates unit densities and positions for each step, and returns
+        group-wise unit positions and the corresponding sector surface areas.
         """
         gc_density_params = ret.gc_density_params
         cone_density_params = ret.cone_density_params
 
-        # Loop for reasonable delta ecc to get correct density in one hand and good cell distribution from the algo on the other
+        # Loop for reasonable delta ecc to get correct density in one hand and good unit distribution from the algo on the other
         # Lets fit close to 0.1 mm intervals, which makes sense up to some 15 deg. Thereafter longer jumps would do fine.
         assert (
             ret.ecc_lim_mm[0] < ret.ecc_lim_mm[1]
@@ -1448,7 +1448,7 @@ class ConstructRetina(RetinaMath):
                     polygon = np.array([vor.vertices[i] for i in region])
                     voronoi_cell_shape = ShapelyPolygon(polygon)
 
-                    # Find the intersection between the Voronoi cell and the boundary polygon
+                    # Find the intersection between the Voronoi unit and the boundary polygon
                     intersection_shape = voronoi_cell_shape.intersection(
                         boundary_polygon_shape
                     )
@@ -1665,8 +1665,8 @@ class ConstructRetina(RetinaMath):
     def _read_temporal_statistics_benardete_kaplan(self, gc):
         """
         Fit temporal statistics of the temporal parameters using the triangular distribution.
-        Data from Benardete & Kaplan Visual Neuroscience 16 (1999) 355-368 (parasol cells), and
-        Benardete & Kaplan Visual Neuroscience 14 (1997) 169-185 (midget cells).
+        Data from Benardete & Kaplan Visual Neuroscience 16 (1999) 355-368 (parasol units), and
+        Benardete & Kaplan Visual Neuroscience 14 (1997) 169-185 (midget units).
 
         Returns
         -------
@@ -1820,7 +1820,7 @@ class ConstructRetina(RetinaMath):
 
     def _create_tonic_drive(self, gc):
         """
-        Create tonic drive for each cell.
+        Create tonic drive for each unit.
         """
         tonic_df = self.exp_stat_df[self.exp_stat_df["domain"] == "tonic"]
         for param_name, row in tonic_df.iterrows():
@@ -2828,7 +2828,7 @@ class ConstructRetina(RetinaMath):
         pix_scaler = pix_per_side / exp_pix_per_side
         mm_per_pix = gc.um_per_pix / 1000
 
-        # Make fit to all cells
+        # Make fit to all units
         grid_indices = np.linspace(0, pix_per_side - 1, pix_per_side)
         # the grid is (H, W) = (num_pix_y, num_pix_x)
         y_grid, x_grid = np.meshgrid(grid_indices, grid_indices, indexing="ij")
@@ -2982,7 +2982,7 @@ class ConstructRetina(RetinaMath):
         # data_ecc_mm = self._get_ecc_from_dd(dd_ecc_params_full, dd_regr_model, exp_rad)
         # data_ecc_deg = data_ecc_mm * self.deg_per_mm  # 37.7 deg
 
-        # Endow cells with spatial elliptical receptive fields.
+        # Endow units with spatial elliptical receptive fields.
         # Units become mm unless specified in column names.
         # self.gc_df and self.gc_vae_df may be updated silently below
 
@@ -3024,7 +3024,7 @@ class ConstructRetina(RetinaMath):
             gc = self._add_center_mask_area_to_df(gc)
 
         elif gc.spatial_model == "VAE":
-            # Endow cells with spatial receptive fields using the generative variational autoencoder model
+            # Endow units with spatial receptive fields using the generative variational autoencoder model
 
             # 1) Get variational autoencoder to generate receptive fields
             print("\nGetting VAE model...")
@@ -3208,20 +3208,20 @@ class ConstructRetina(RetinaMath):
         ret, gc = self._place_units(ret, gc)
         gc.n_units = len(gc.df)
 
-        # -- Second, endow cells with spatial receptive fields
+        # -- Second, endow units with spatial receptive fields
         ret, gc = self._create_spatial_rfs(ret, gc)
         # self.viz.show_cones_linked_to_gc(gc_list=[100])
         ret = self._link_cone_noise_units_to_gcs(ret, gc)
 
         ret = self._fit_cone_noise_vs_freq(ret)
 
-        # -- Third, endow cells with temporal receptive fields
+        # -- Third, endow units with temporal receptive fields
         gc = self._create_temporal_rfs(gc)
 
-        # -- Fourth, endow cells with tonic drive
+        # -- Fourth, endow units with tonic drive
         gc = self._create_tonic_drive(gc)
 
-        print(f"Built RGC mosaic with {gc.n_units} cells")
+        print(f"Built RGC mosaic with {gc.n_units} units")
 
         # Save the receptive field images, associated metadata and cone noise data
         self.save_gc_data(gc)

@@ -826,7 +826,7 @@ class DataIO(DataIOBase):
 
     def _save_spikes_csv(self, simulated_spiketrains, n_cells, filename=None):
         """
-        Saves spikes as a csv file with rows of the form cell_index and spike_time.
+        Saves spikes as a csv file with rows of the form unit_index and spike_time.
         This file can be used in ViSimpl:
         visimpl.AppImage -csv parasol_structure.csv parasol_spikes.csv
 
@@ -838,25 +838,25 @@ class DataIO(DataIOBase):
 
         Notes
         -----
-        With multiple trials and one cell, the cell_index is the trial_index.
-        This is due to uncertainty whether "cell_index" is necessary string for ViSimpl.
+        With multiple trials and one unit, the unit_index is the trial_index.
+        This is due to uncertainty whether "unit_index" is necessary string for ViSimpl.
         I promise to correct this when I am reborn as a better programmer.
         """
         if len(simulated_spiketrains) == 0:
             print("There are no simulated spiketrains to save")
             return
 
-        spikes_df = pd.DataFrame(columns=["cell_index", "spike_time"])
-        for cell_index in range(n_cells):
-            spiketrain = simulated_spiketrains[cell_index]
-            index_array = cell_index * np.ones(len(spiketrain))
+        spikes_df = pd.DataFrame(columns=["unit_index", "spike_time"])
+        for unit_index in range(n_cells):
+            spiketrain = simulated_spiketrains[unit_index]
+            index_array = unit_index * np.ones(len(spiketrain))
             temp_df = pd.DataFrame(
                 np.column_stack((index_array, spiketrain)),
-                columns=["cell_index", "spike_time"],
+                columns=["unit_index", "spike_time"],
             )
             spikes_df = pd.concat([spikes_df, temp_df], axis=0)
 
-        spikes_df["cell_index"] = spikes_df["cell_index"].astype(int)
+        spikes_df["unit_index"] = spikes_df["unit_index"].astype(int)
         spikes_df = spikes_df.sort_values(by="spike_time")
 
         if filename is None:
@@ -869,7 +869,7 @@ class DataIO(DataIOBase):
 
     def _save_structure_csv(self, rgc_coords, filename=None):
         """
-        Saves x,y coordinates of model cells to a csv file (for use in ViSimpl).
+        Saves x,y coordinates of model units to a csv file (for use in ViSimpl).
 
         Parameters
         ----------

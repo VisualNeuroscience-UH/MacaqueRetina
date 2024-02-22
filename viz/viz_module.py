@@ -178,7 +178,7 @@ class Viz:
     # Fit visualization
     def show_temporal_filter_response(self, n_curves=None, savefigname=None):
         """
-        Show temporal filter response for each cell.
+        Show temporal filter response for each unit.
         """
         exp_temp_filt = self.project_data.fit["exp_temp_filt"]
         xdata = exp_temp_filt["xdata"]
@@ -204,8 +204,8 @@ class Viz:
             )
 
         n_units = len(cell_ixs_list)
-        # ax.title(f"{title} ({n_units} cells)")
-        ax.set_title(f"{title} ({n_units} cells)")
+        # ax.title(f"{title} ({n_units} units)")
+        ax.set_title(f"{title} ({n_units} units)")
 
         if savefigname:
             self._figsave(figurename=savefigname)
@@ -220,7 +220,7 @@ class Viz:
         savefigname=None,
     ):
         """
-        Display the spatial filter response of the selected cells, along with the corresponding DoG models.
+        Display the spatial filter response of the selected units, along with the corresponding DoG models.
 
         Parameters
         ----------
@@ -230,11 +230,11 @@ class Viz:
             - 'x_grid', 'y_grid': numpy.ndarray
             - 'DoG_model': str
             - 'num_pix_x', 'num_pix_y': int
-            - Other keys starting with "cell_ix_" for individual cell data.
+            - Other keys starting with "cell_ix_" for individual unit data.
         n_samples : int, optional
-            Number of cells to sample. The default is 1. np.inf will display all cells.
+            Number of units to sample. The default is 1. np.inf will display all units.
         sample_list : list of int, optional
-            Indices of specific cells to display. Overrides n_samples if provided.
+            Indices of specific units to display. Overrides n_samples if provided.
         title : str, optional
             Title for the plot. Default is an empty string.
         savefigname : str, optional
@@ -261,7 +261,7 @@ class Viz:
             ]
             n_samples = len(cell_ixs_list)
             if n_samples < len(sample_list):
-                # Find missing cell indices
+                # Find missing unit indices
                 cell_ix_selected = [int(ci.split("_")[-1]) for ci in cell_ixs_list]
                 missing_cell_ixs = np.setdiff1d(sample_list, cell_ix_selected)
                 print(f"Rejected unit indices: {missing_cell_ixs}")
@@ -288,11 +288,11 @@ class Viz:
         for idx, this_cell_ix in enumerate(cell_ixs_list):
             this_cell_ix_numerical = int(this_cell_ix.split("_")[-1])
 
-            # Add cell index text to the left side of each row
+            # Add unit index text to the left side of each row
             axes[idx, 0].text(
                 x_grid.min() - 5,  # Adjust the x-coordinate as needed
                 (y_grid.min() + y_grid.max()) / 2,  # Vertical centering
-                f"Cell Index: {this_cell_ix_numerical}",
+                f"unit Index: {this_cell_ix_numerical}",
                 verticalalignment="center",
                 horizontalalignment="right",
             )
@@ -778,7 +778,7 @@ class Viz:
 
     def show_gc_positions(self):
         """
-        Show retina cell positions and receptive fields
+        Show retina unit positions and receptive fields
 
         ConstructRetina call.
         """
@@ -1530,7 +1530,7 @@ class Viz:
         img_shape = self.project_data.fit["exp_spat_filt"]["cell_ix_0"][
             "spatial_data_array"
         ].shape
-        # The shape of the array is N cells, y_pixels, x_pixels
+        # The shape of the array is N units, y_pixels, x_pixels
         img_exp = np.zeros([len(cell_key_list), img_shape[0], img_shape[1]])
         for i, cell_key in enumerate(cell_key_list):
             img_exp[i, :, :] = self.project_data.fit["exp_spat_filt"][cell_key][
@@ -2042,7 +2042,7 @@ class Viz:
                     edgecolor="g",
                     facecolor="none",
                 )
-            ax[idx].scatter(*gc_position, color="red", label="Ganglion Cell")
+            ax[idx].scatter(*gc_position, color="red", label="ganglion cell")
 
             # Plot each cone with alpha based on connection probability
             connection_probs = weights[:, this_sample]
@@ -2064,7 +2064,7 @@ class Viz:
             ax[idx].set_xlabel("X Position (mm)")
             ax[idx].set_ylabel("Y Position (mm)")
             ax[idx].set_title(
-                f"Ganglion Cell {this_sample} and Connected {n_connected} cones"
+                f"ganglion cell {this_sample} and Connected {n_connected} cones"
             )
             ax[idx].legend()
             # Set equal aspect ratio
@@ -2153,7 +2153,7 @@ class Viz:
 
             ax[idx].set_xlabel("X Position (mm)")
             ax[idx].set_ylabel("Y Position (mm)")
-            ax[idx].set_title(f"Ganglion Cell {this_sample}")
+            ax[idx].set_title(f"ganglion cell {this_sample}")
             ax[idx].legend()
             # Set equal aspect ratio
             ax[idx].set_aspect("equal", adjustable="box")
@@ -2319,7 +2319,7 @@ class Viz:
             self._figsave(figurename=savefigname)
 
     def show_single_gc_view(
-        self, cell_index, frame_number=0, ax=None, savefigname=None
+        self, unit_index, frame_number=0, ax=None, savefigname=None
     ):
         """
         Overlays the receptive field center of the specified retinal ganglion cell (RGC) on top of
@@ -2327,7 +2327,7 @@ class Viz:
 
         Parameters
         ----------
-        cell_index : int
+        unit_index : int
             Index of the RGC for which the view is to be shown.
         frame_number : int, optional
             Frame number of the stimulus to display. Default is 0.
@@ -2339,15 +2339,15 @@ class Viz:
         stimulus_video = stim_to_show["stimulus_video"]
         df_stimpix = stim_to_show["df_stimpix"]
         qmin_all, qmax_all, rmin_all, rmax_all = stim_to_show["qr_min_max"]
-        qmin = qmin_all[cell_index]
-        qmax = qmax_all[cell_index]
-        rmin = rmin_all[cell_index]
-        rmax = rmax_all[cell_index]
+        qmin = qmin_all[unit_index]
+        qmax = qmax_all[unit_index]
+        rmin = rmin_all[unit_index]
+        rmax = rmax_all[unit_index]
 
         if ax is None:
             fig, ax = plt.subplots()
 
-        gc = df_stimpix.iloc[cell_index]
+        gc = df_stimpix.iloc[unit_index]
 
         # Show stimulus frame cropped to RGC surroundings & overlay 1SD center RF on top of that
         ax.imshow(
@@ -2378,14 +2378,14 @@ class Viz:
             self._figsave(figurename=savefigname)
 
     def show_temporal_kernel_frequency_response(
-        self, cell_index=0, ax=None, savefigname=None
+        self, unit_index=0, ax=None, savefigname=None
     ):
         """
         Plot the frequency response of the temporal kernel for a specified or all retinal ganglion cells (RGCs).
 
         Parameters
         ----------
-        cell_index : int, optional
+        unit_index : int, optional
             Index of the RGC for which the frequency response is to be shown.
         ax : matplotlib.axes.Axes, optional
             Matplotlib Axes object to plot on. If not provided, uses the current axis.
@@ -2401,7 +2401,7 @@ class Viz:
         temporal_filters = spat_temp_filter_to_show["temporal_filters"]
         data_filter_duration = spat_temp_filter_to_show["data_filter_duration"]
 
-        tf = temporal_filters[cell_index, :]
+        tf = temporal_filters[unit_index, :]
 
         if ax is None:
             fig, ax = plt.subplots()
@@ -2420,13 +2420,13 @@ class Viz:
         if savefigname is not None:
             self._figsave(figurename=savefigname)
 
-    def plot_midpoint_contrast(self, cell_index=0, ax=None, savefigname=None):
+    def plot_midpoint_contrast(self, unit_index=0, ax=None, savefigname=None):
         """
         Plot the contrast at the midpoint pixel of the stimulus cropped to a specified RGC's surroundings.
 
         Parameters
         ----------
-        cell_index : int, optional
+        unit_index : int, optional
             Index of the RGC for which to plot the contrast. Default is 0.
         ax : matplotlib.axes.Axes, optional
             Matplotlib Axes object to plot on. If not provided, uses the current axis.
@@ -2436,7 +2436,7 @@ class Viz:
         spatial_filter_sidelen = stim_to_show["spatial_filter_sidelen"]
         stimulus_video = stim_to_show["stimulus_video"]
         stimulus_cropped_all = stim_to_show["stimulus_cropped"]
-        stimulus_cropped = stimulus_cropped_all[cell_index]
+        stimulus_cropped = stimulus_cropped_all[unit_index]
 
         midpoint_ix = (spatial_filter_sidelen - 1) // 2
         signal = stimulus_cropped[midpoint_ix, midpoint_ix, :]
@@ -2453,20 +2453,20 @@ class Viz:
         if savefigname is not None:
             self._figsave(figurename=savefigname)
 
-    def plot_local_rms_contrast(self, cell_index=0, ax=None, savefigname=None):
+    def plot_local_rms_contrast(self, unit_index=0, ax=None, savefigname=None):
         """
         Plot the local RMS contrast for the stimulus cropped to a specified RGC's surroundings.
 
         Parameters
         ----------
-        cell_index : int, optional
+        unit_index : int, optional
             Index of the RGC for which to plot the local RMS contrast. Default is 0.
         ax : matplotlib.axes.Axes, optional
             Matplotlib Axes object to plot on. If not provided, uses the current axis.
         """
         stim_to_show = self.project_data.simulate_retina["stim_to_show"]
         stimulus_cropped_all = stim_to_show["stimulus_cropped"]
-        stimulus_cropped = stimulus_cropped_all[cell_index]
+        stimulus_cropped = stimulus_cropped_all[unit_index]
         stimulus_video = stim_to_show["stimulus_video"]
         spatial_filter_sidelen = stim_to_show["spatial_filter_sidelen"]
         # Invert from Weber contrast
@@ -2493,20 +2493,20 @@ class Viz:
         if savefigname is not None:
             self._figsave(figurename=savefigname)
 
-    def plot_local_michelson_contrast(self, cell_index=0, ax=None, savefigname=None):
+    def plot_local_michelson_contrast(self, unit_index=0, ax=None, savefigname=None):
         """
         Plot the local Michelson contrast for the stimulus cropped to a specified RGC's surroundings.
 
         Parameters
         ----------
-        cell_index : int, optional
+        unit_index : int, optional
             Index of the RGC for which to plot the local Michelson contrast. Default is 0.
         ax : matplotlib.axes.Axes, optional
             Matplotlib Axes object to plot on. If not provided, uses the current axis.
         """
         stim_to_show = self.project_data.simulate_retina["stim_to_show"]
         stimulus_cropped_all = stim_to_show["stimulus_cropped"]
-        stimulus_cropped = stimulus_cropped_all[cell_index]
+        stimulus_cropped = stimulus_cropped_all[unit_index]
         stimulus_video = stim_to_show["stimulus_video"]
 
         # Invert from Weber contrast
@@ -2559,7 +2559,7 @@ class Viz:
         tvec_new = gc_responses_to_show["tvec_new"]
 
         # Prepare data for manual visualization
-        for_eventplot = all_spiketrains  # list of different leght arrays
+        for_eventplot = all_spiketrains.copy()  # list of different leght arrays
         for_histogram = np.concatenate(all_spiketrains)
         for_generatorplot = np.nanmean(generator_potential, axis=0)
         if n_trials > 1 and n_units == 1:
@@ -2567,7 +2567,7 @@ class Viz:
             sample_name = "Trials"
         elif n_trials == 1 and n_units > 1:
             n_samples = n_units
-            sample_name = "Cell #"
+            sample_name = "unit #"
         else:
             raise ValueError(
                 """You attempted to visualize gc activity, but either n_trials or n_units must be 1, 
@@ -2602,8 +2602,8 @@ class Viz:
         hist, _ = np.histogram(for_histogram, bins=bin_edges)
 
         # Update average firing rate calculation based on the new hist_dt
-        avg_fr = hist / n_samples / (hist_dt / b2u.second)
-
+        avg_fr = hist / (n_samples * (hist_dt / b2u.second))
+        # breakpoint()
         ax[1].plot(bin_edges[:-1], avg_fr, label="Measured")
 
         ax[1].set_ylabel("Firing rate (Hz)")
@@ -2613,17 +2613,17 @@ class Viz:
         if savefigname is not None:
             self._figsave(figurename=savefigname)
 
-    def show_spatiotemporal_filter(self, cell_index=0, savefigname=None):
+    def show_spatiotemporal_filter(self, unit_index=0, savefigname=None):
         """
-        Display the spatiotemporal filter for a given cell in the retina.
+        Display the spatiotemporal filter for a given unit in the retina.
 
-        This method retrieves the specified cell's spatial and temporal filters
+        This method retrieves the specified unit's spatial and temporal filters
         from the 'simulate_retina' attribute of the 'project_data' object.
 
         Parameters
         ----------
-        cell_index : int, optional
-            Index of the cell for which the spatiotemporal filter is to be shown.
+        unit_index : int, optional
+            Index of the unit for which the spatiotemporal filter is to be shown.
         savefigname : str or None, optional
             If a string is provided, the figure will be saved with this filename.
         """
@@ -2642,8 +2642,8 @@ class Viz:
         temporal_filter_len = spat_temp_filter_to_show["temporal_filter_len"]
         spatial_filter_sidelen = spat_temp_filter_to_show["spatial_filter_sidelen"]
 
-        temporal_filter = temporal_filters[cell_index, :]
-        spatial_filter = spatial_filters[cell_index, :]
+        temporal_filter = temporal_filters[unit_index, :]
+        spatial_filter = spatial_filters[unit_index, :]
         spatial_filter = spatial_filter.reshape(
             (spatial_filter_sidelen, spatial_filter_sidelen)
         )
@@ -2653,7 +2653,7 @@ class Viz:
 
         fig, ax = plt.subplots(1, 2, figsize=(10, 4))
 
-        plt.suptitle(gc_type + " " + response_type + " / cell ix " + str(cell_index))
+        plt.suptitle(gc_type + " " + response_type + " / unit ix " + str(unit_index))
         plt.subplot(121)
         im = ax[0].imshow(
             spatial_filter, cmap=self.cmap_spatial_filter, vmin=vmin, vmax=vmax
@@ -2694,12 +2694,12 @@ class Viz:
         tvec = tvec * 1000  # convert to milliseconds
         tvec = tvec - start_delay  # shift to start at 0
 
-        cell_index = viz_dict["Unit idx"]
+        unit_index = viz_dict["Unit idx"]
         ylims = np.array([np.min(yvecs), np.max(yvecs)])
 
         plt.figure()
 
-        for u_idx, this_unit in enumerate(cell_index):
+        for u_idx, this_unit in enumerate(unit_index):
             for c_idx, this_contrast in enumerate(contrasts):
                 if len(contrasts) > 1:
                     label = f"Unit {this_unit}, contrast {this_contrast}"
@@ -2845,7 +2845,7 @@ class Viz:
         for i, sample in enumerate(samples):
             axs[0, i].imshow(gc_vae_img[sample], cmap="gray")
             axs[0, i].axis("off")
-            axs[0, i].set_title("Cell " + str(sample))
+            axs[0, i].set_title("unit " + str(sample))
 
             axs[1, i].imshow(gc_vae_img_mask[sample], cmap="gray")
             axs[1, i].axis("off")
@@ -2892,13 +2892,13 @@ class Viz:
             2, 1, figsize=(10, 10)
         )  # I assume you want a bigger figure size.
 
-        # reshape and transpose arrays so that we have one row per cell
+        # reshape and transpose arrays so that we have one row per unit
         df_rf = pd.DataFrame(gc_vae_img.reshape(gc_vae_img.shape[0], -1).T)
         df_pruned = pd.DataFrame(
             gc_vae_img_final.reshape(gc_vae_img_final.shape[0], -1).T
         )
 
-        # Show seaborn boxplot with RF values, one box for each cell
+        # Show seaborn boxplot with RF values, one box for each unit
         sns.violinplot(data=df_rf, ax=axs[0])
         axs[0].set_title("RF values")
         # Put grid on

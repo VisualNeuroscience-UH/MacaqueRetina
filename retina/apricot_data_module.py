@@ -61,7 +61,7 @@ class ApricotData:
             self.filename_nonspatial = "mosaicGLM_apricot_OFFMidget-1-mat.mat"
 
         else:
-            raise NotImplementedError("Unknown cell type or response type, aborting")
+            raise NotImplementedError("Unknown unit type or response type, aborting")
 
         # Make a key-value dictionary for labeling the data
         self.data_names2labels_dict = {
@@ -86,7 +86,7 @@ class ApricotData:
         """
         The rank-1 space and time matrices in the dataset have bumps in an inconsistent way, but the
         outer product always produces a positive deflection first irrespective of on/off polarity.
-        This method tells which cell indices you need to flip to get a spatial filter with positive central component.
+        This method tells which unit indices you need to flip to get a spatial filter with positive central component.
 
         Returns
         -------
@@ -142,7 +142,7 @@ class ApricotData:
         n_bad = len(self.manually_picked_bad_data_idx)
         print("\n[%s %s]" % (self.gc_type, self.response_type))
         print(
-            "Read %d cells from datafile and then removed %d bad cells (handpicked)"
+            "Read %d units from datafile and then removed %d bad units (handpicked)"
             % (n_spatial_cells, n_bad)
         )
 
@@ -198,7 +198,7 @@ class ApricotData:
         -------
         filter_sums : pandas Dataframe from np.ndarray
             Array of shape (n_cells, 3) where each row is the sum of the positive, negative, and
-            total values of the spatial filter for that cell.
+            total values of the spatial filter for that unit.
         """
         space_rk1 = self._read_space_rk1()
 

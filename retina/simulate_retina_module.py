@@ -144,7 +144,7 @@ class ReceptiveFields(Printable):
         apricot_metadata,
         get_data,
         pol2cart_df,
-        cell_index,
+        unit_index,
         spike_generator_model,
     ):
         # Parameters directly passed to the constructor
@@ -230,25 +230,25 @@ class ReceptiveFields(Printable):
         self.cones_to_gcs_weights = ret_npz["cones_to_gcs_weights"]
         self.cone_noise_parameters = ret_npz["cone_noise_parameters"]
 
-        # Run all cells
-        if cell_index is None:
-            self.n_units = len(df.index)  # all cells
-            cell_indices = np.arange(self.n_units)
-        # Run a subset of cells
-        elif isinstance(cell_index, (list)):
-            cell_indices = np.array(cell_index)
-            self.n_units = len(cell_indices)
-        # Run one cell
-        elif isinstance(cell_index, (int)):
-            cell_indices = np.array([cell_index])
-            self.n_units = len(cell_indices)
+        # Run all units
+        if unit_index is None:
+            self.n_units = len(df.index)  # all units
+            unit_indices = np.arange(self.n_units)
+        # Run a subset of units
+        elif isinstance(unit_index, (list)):
+            unit_indices = np.array(unit_index)
+            self.n_units = len(unit_indices)
+        # Run one unit
+        elif isinstance(unit_index, (int)):
+            unit_indices = np.array([unit_index])
+            self.n_units = len(unit_indices)
         else:
             raise AssertionError(
-                "cell_index must be None, an integer or list, aborting..."
+                "unit_index must be None, an integer or list, aborting..."
             )
-        if isinstance(cell_indices, (int, np.int32, np.int64)):
-            cell_indices = np.array([cell_indices])
-        self.cell_indices = np.atleast_1d(cell_indices)
+        if isinstance(unit_indices, (int, np.int32, np.int64)):
+            unit_indices = np.array([unit_indices])
+        self.unit_indices = np.atleast_1d(unit_indices)
 
     def _link_rf_to_vs(self, vs):
         """
@@ -500,14 +500,14 @@ class SimulateRetina(RetinaMath):
     def project_data(self):
         return self._project_data
 
-    def _get_crop_pixels(self, rf, cell_index):
+    def _get_crop_pixels(self, rf, unit_index):
         """
         Get pixel coordinates for a stimulus crop matching the spatial filter size.
 
         Parameters
         ----------
-        cell_index : int or array-like of int
-            Index or indices of the cell(s) for which to retrieve crop coordinates.
+        unit_index : int or array-like of int
+            Index or indices of the unit(s) for which to retrieve crop coordinates.
 
         Returns
         -------
@@ -522,9 +522,9 @@ class SimulateRetina(RetinaMath):
 
         """
 
-        if isinstance(cell_index, (int, np.int32, np.int64)):
-            cell_index = np.array([cell_index])
-        df_stimpix = rf.df_stimpix.iloc[cell_index]
+        if isinstance(unit_index, (int, np.int32, np.int64)):
+            unit_index = np.array([unit_index])
+        df_stimpix = rf.df_stimpix.iloc[unit_index]
         q_center = np.round(df_stimpix.q_pix).astype(int).values
         r_center = np.round(df_stimpix.r_pix).astype(int).values
 
@@ -538,26 +538,26 @@ class SimulateRetina(RetinaMath):
 
         return qmin, qmax, rmin, rmax
 
-    def _create_spatial_filter_FIT(self, rf, cell_index):
+    def _create_spatial_filter_FIT(self, rf, unit_index):
         """
         Creates the spatial component of the spatiotemporal filter
 
         Parameters
         ----------
-        cell_index : int
-            Index of the cell in the df
+        unit_index : int
+            Index of the unit in the df
 
         Returns
         -------
         spatial_filter : np.ndarray
-            Spatial filter for the given cell
+            Spatial filter for the given unit
         """
 
         offset = 0.0
         s = rf.spatial_filter_sidelen
 
-        gc = rf.df_stimpix.iloc[cell_index]
-        qmin, qmax, rmin, rmax = self._get_crop_pixels(rf, cell_index)
+        gc = rf.df_stimpix.iloc[unit_index]
+        qmin, qmax, rmin, rmax = self._get_crop_pixels(rf, unit_index)
 
         x_grid, y_grid = np.meshgrid(
             np.arange(qmin, qmax + 1, 1), np.arange(rmin, rmax + 1, 1)
@@ -609,44 +609,44 @@ class SimulateRetina(RetinaMath):
 
         return spatial_kernel
 
-    def _create_spatial_filter_VAE(self, rf, cell_index):
+    def _create_spatial_filter_VAE(self, rf, unit_index):
         """
         Creates the spatial component of the spatiotemporal filter
 
         Parameters
         ----------
-        cell_index : int
-            Index of the cell in the df
+        unit_index : int
+            Index of the unit in the df
 
         Returns
         -------
         spatial_filter : np.ndarray
-            Spatial filter for the given cell
+            Spatial filter for the given unit
         """
         s = rf.spatial_filter_sidelen
 
         spatial_kernel = resize(
-            rf.spat_rf[cell_index, :, :], (s, s), anti_aliasing=True
+            rf.spat_rf[unit_index, :, :], (s, s), anti_aliasing=True
         )
 
         return spatial_kernel
 
-    def _create_temporal_filter(self, rf, cell_index):
+    def _create_temporal_filter(self, rf, unit_index):
         """
         Creates the temporal component of the spatiotemporal filter. Linear fixed-sum of two lowpass filters.
 
         Parameters
         ----------
-        cell_index : int
-            Index of the cell in the df
+        unit_index : int
+            Index of the unit in the df
 
         Returns
         -------
         temporal_filter : np.ndarray
-            Temporal filter for the given cell
+            Temporal filter for the given unit
         """
 
-        filter_params = rf.df.iloc[cell_index][["n", "p1", "p2", "tau1", "tau2"]]
+        filter_params = rf.df.iloc[unit_index][["n", "p1", "p2", "tau1", "tau2"]]
 
         tvec = np.linspace(0, rf.data_filter_duration, rf.temporal_filter_len)
         temporal_filter = self.diff_of_lowpass_filters(tvec, *filter_params)
@@ -658,10 +658,10 @@ class SimulateRetina(RetinaMath):
 
     def _get_spatially_cropped_video(self, vs, rf, contrast=True, reshape=False):
         """
-        Crops the video to the surroundings of the specified Retinal Ganglion Cells (RGCs).
+        Crops the video to the surroundings of the specified Retinal ganglion cells (RGCs).
 
-        The function works by first determining the pixel range to be cropped for each cell
-        in cell_indices, and then selecting those pixels from the original video. The cropping
+        The function works by first determining the pixel range to be cropped for each unit
+        in unit_indices, and then selecting those pixels from the original video. The cropping
         is done for each frame of the video. If the contrast option is set to True, the video
         is also rescaled to have pixel values between -1 and 1.
 
@@ -699,20 +699,20 @@ class SimulateRetina(RetinaMath):
         """
 
         sidelen = rf.spatial_filter_sidelen
-        cell_indices = rf.cell_indices.copy()
+        unit_indices = rf.unit_indices.copy()
         video_copy = vs.stimulus_video.frames.copy()
         video_copy = np.transpose(
             video_copy, (1, 2, 0)
         )  # Original frames are now [height, width, time points]
         video_copy = video_copy[np.newaxis, ...]  # Add new axis for broadcasting
 
-        qmin, qmax, rmin, rmax = self._get_crop_pixels(rf, cell_indices)
+        qmin, qmax, rmin, rmax = self._get_crop_pixels(rf, unit_indices)
 
         # Adjust the creation of r_indices and q_indices for proper broadcasting
         r_indices = np.arange(sidelen) + rmin[:, np.newaxis]
         q_indices = np.arange(sidelen) + qmin[:, np.newaxis]
 
-        # Ensure r_indices and q_indices are repeated for each cell
+        # Ensure r_indices and q_indices are repeated for each unit
         r_indices = r_indices.reshape(-1, 1, sidelen, 1)
         q_indices = q_indices.reshape(-1, sidelen, 1, 1)
 
@@ -757,19 +757,19 @@ class SimulateRetina(RetinaMath):
             the receptive fields after Delaunay triangulation.
             - 'unity_region': Binary mask indicating regions where exactly one
             receptive field is present.
-            - 'unit_region': The sum of center regions for all cells.
+            - 'unit_region': The sum of center regions for all units.
 
         """
         height = vs.stimulus_height_pix
         width = vs.stimulus_width_pix
-        cell_indices = rf.cell_indices.copy()
+        unit_indices = rf.unit_indices.copy()
 
-        qmin, qmax, rmin, rmax = self._get_crop_pixels(rf, cell_indices)
+        qmin, qmax, rmin, rmax = self._get_crop_pixels(rf, unit_indices)
 
         stim_region = np.zeros((rf.n_units, height, width), dtype=np.int32)
         center_region = np.zeros((rf.n_units, height, width), dtype=np.int32)
 
-        # Create the r and q indices for each cell, ensure they're integer type
+        # Create the r and q indices for each unit, ensure they're integer type
         sidelen = rf.spatial_filter_sidelen
         r_indices = (
             (np.arange(sidelen) + rmin[:, np.newaxis])
@@ -785,7 +785,7 @@ class SimulateRetina(RetinaMath):
         # Create r_matrix and q_matrix by broadcasting r_indices and q_indices
         r_matrix, q_matrix = np.broadcast_arrays(r_indices, q_indices)
 
-        # create a cell index array
+        # create a unit index array
         unit_region_idx = np.arange(rf.n_units).astype(np.int32).reshape(-1, 1, 1)
 
         # expand the indices arrays to the shape of r_matrix and q_matrix using broadcasting
@@ -806,7 +806,7 @@ class SimulateRetina(RetinaMath):
         unit_region = np.sum(center_region, axis=0)
 
         # Delaunay triangulation for the total region
-        gc = rf.df_stimpix.iloc[cell_indices]
+        gc = rf.df_stimpix.iloc[unit_indices]
         q_center = np.round(gc.q_pix).astype(int).values
         r_center = np.round(gc.r_pix).astype(int).values
 
@@ -967,7 +967,7 @@ class SimulateRetina(RetinaMath):
     ):
         assert (
             params_all.shape[0] == generator_potentials.shape[0]
-        ), "Number of cells in params_all and generator_potentials must match, aborting..."
+        ), "Number of units in params_all and generator_potentials must match, aborting..."
 
         tonic_drive = params_all["tonic_drive"]
         # Expanding tonic_drive to match the shape of generator_potentials
@@ -996,15 +996,15 @@ class SimulateRetina(RetinaMath):
         ndarray
             The firing rates after adding noise and applying gain and mean firing rates adjustments.
         """
-        params_all = rf.df.loc[rf.cell_indices]
+        params_all = rf.df.loc[rf.unit_indices]
         assert (
             params_all.shape[0] == vs.generator_potentials.shape[0]
-        ), "Number of cells in params_all and generator_potentials must match, aborting..."
+        ), "Number of units in params_all and generator_potentials must match, aborting..."
 
         cones_to_gcs_weights = rf.cones_to_gcs_weights
         params = rf.cone_noise_parameters
 
-        cones_to_gcs_weights = cones_to_gcs_weights[:, rf.cell_indices]
+        cones_to_gcs_weights = cones_to_gcs_weights[:, rf.unit_indices]
         n_cones = cones_to_gcs_weights.shape[0]
 
         ret_file_npz = self.data_io.get_data(self.context.my_retina["ret_file"])
@@ -1083,7 +1083,7 @@ class SimulateRetina(RetinaMath):
         self, tvec, svec, dt, params, h, device, show_impulse=False
     ):
         """
-        Dynamic temporal signal for midget cells
+        Dynamic temporal signal for midget units
         """
 
         # parameter name order for midget ["NL", "NLTL", "TS", "HS", "D", "A"]
@@ -1131,7 +1131,7 @@ class SimulateRetina(RetinaMath):
 
     def _create_lowpass_response(self, tvec, params):
         """
-        Lowpass filter kernel for convolution for midget cells
+        Lowpass filter kernel for convolution for midget units
         """
         # parameter name order for midget ["NL", "NLTL", "TS", "HS", "D", "A"]
         NL = params[0]
@@ -1191,7 +1191,7 @@ class SimulateRetina(RetinaMath):
     def _create_dynamic_contrast(self, vs, rf):
         """
         Create dynamic contrast signal by multiplying the stimulus with the spatial filter
-        masks are used for midget cells, where center and surround have distinct dynamics.
+        masks are used for midget units, where center and surround have distinct dynamics.
 
         Parameters
         ----------
@@ -1208,7 +1208,7 @@ class SimulateRetina(RetinaMath):
         spatial_filters_reshaped = np.expand_dims(spatial_filters, axis=2)
 
         # victor_1987_JPhysiol: input to model is s(t)), the signed Weber contrast at the centre.
-        # However, we assume that the surround suppression is early (horizontal cells) and linear,
+        # However, we assume that the surround suppression is early (horizontal units) and linear,
         # so we approximate s(t) = RF * stimulus
         if rf.gc_type == "parasol":
 
@@ -1275,7 +1275,7 @@ class SimulateRetina(RetinaMath):
             tvec_t = torch.tensor(tvec / b2u.ms, device=device)
             video_dt_t = torch.tensor(video_dt / b2u.ms, device=device)
 
-            for idx, this_cell_index in enumerate(rf.cell_indices):
+            for idx, this_cell_index in enumerate(rf.unit_indices):
                 if rf.gc_type == "parasol":
                     # Get unit params
                     columns = ["NL", "TL", "HS", "T0", "Chalf", "D", "A"]
@@ -1360,7 +1360,7 @@ class SimulateRetina(RetinaMath):
         impulse_to_show["start_delay"] = start_delay
         impulse_to_show["contrasts"] = contrasts_for_impulse
         impulse_to_show["impulse_responses"] = yvecs
-        impulse_to_show["Unit idx"] = list(rf.cell_indices)
+        impulse_to_show["Unit idx"] = list(rf.unit_indices)
         impulse_to_show["gc_type"] = rf.gc_type
         impulse_to_show["response_type"] = rf.response_type
         impulse_to_show["temporal_model"] = rf.temporal_model
@@ -1395,10 +1395,10 @@ class SimulateRetina(RetinaMath):
 
     def _get_linear_temporal_filters(self, rf):
         """
-        Retrieve temporal filters for an array of cells.
+        Retrieve temporal filters for an array of units.
 
-        This function generates temporal filters for each cell specified by the
-        cell indices. The temporal filter for a specific cell is obtained by calling
+        This function generates temporal filters for each unit specified by the
+        unit indices. The temporal filter for a specific unit is obtained by calling
         the `_create_temporal_filter` method.
 
         Parameters
@@ -1407,8 +1407,8 @@ class SimulateRetina(RetinaMath):
         Returns
         -------
         temporal_filters : ndarray
-            2-D array where each row corresponds to a temporal filter of a cell. The shape is
-            (len(cell_indices), self.temporal_filter_len).
+            2-D array where each row corresponds to a temporal filter of a unit. The shape is
+            (len(unit_indices), self.temporal_filter_len).
 
         Notes
         -----
@@ -1416,10 +1416,10 @@ class SimulateRetina(RetinaMath):
           - self.temporal_filter_len: an integer specifying the length of a temporal filter.
         """
 
-        temporal_filters = np.zeros((len(rf.cell_indices), rf.temporal_filter_len))
+        temporal_filters = np.zeros((len(rf.unit_indices), rf.temporal_filter_len))
 
-        for idx, cell_index in enumerate(rf.cell_indices):
-            temporal_filters[idx, :] = self._create_temporal_filter(rf, cell_index)
+        for idx, unit_index in enumerate(rf.unit_indices):
+            temporal_filters[idx, :] = self._create_temporal_filter(rf, unit_index)
 
         rf.temporal_filters = temporal_filters
 
@@ -1427,7 +1427,7 @@ class SimulateRetina(RetinaMath):
 
     def _get_linear_spatiotemporal_filters(self, rf):
         """
-        Generate spatiotemporal filters for given cell indices."""
+        Generate spatiotemporal filters for given unit indices."""
 
         # Assuming spatial_filters.shape = (U, N) and temporal_filters.shape = (U, T)
         spatiotemporal_filters = (
@@ -1439,21 +1439,33 @@ class SimulateRetina(RetinaMath):
 
     def get_spatial_filters(self, rf):
         """
-        Generate spatial filters for given cell indices.
+        Generate spatial filters for given unit indices.
 
-        This function takes a list of cell indices, determines the model type,
-        creates a corresponding spatial filter for each cell index based on the model,
+        This function takes a list of unit indices, determines the model type,
+        creates a corresponding spatial filter for each unit index based on the model,
         and then reshapes the filter to 1-D. It returns a 2-D array where each row is a
-        1-D spatial filter for a corresponding cell index.
+        1-D spatial filter for a corresponding unit index.
 
         Parameters
         ----------
+        rf.spatial_filter_sidelen : int
+            The side length of a spatial filter.
+        rf.spatial_model : str
+            The type of model used to generate the spatial filters. Expected values are 'FIT' or 'VAE'.
+        rf.unit_indices : list
+            A list of unit indices for which to generate spatial filters.
+        rf.mask_threshold : float
+            The threshold for the mask.
+        rf.response_type : str
+            The type of response. Expected values are 'on' or 'off'.
 
         Returns
         -------
-        spatial_filters : ndarray
-            2-D array where each row corresponds to a 1-D spatial filter or mask of a cell.
-            The shape is (len(cell_indices), s**2), where s is the side length of a spatial filter.
+        rf.spatial_filters : ndarray
+            2-D array where each row corresponds to a 1-D spatial filter or mask of a unit.
+            The shape is (len(unit_indices), s**2), where s is the side length of a spatial filter.
+        rf.center_masks : ndarray
+            2-D array where each row corresponds to a 1-D center mask of a unit.
 
         Raises
         ------
@@ -1469,19 +1481,19 @@ class SimulateRetina(RetinaMath):
 
         s = rf.spatial_filter_sidelen
         spatial_filters = np.zeros((rf.n_units, s, s))
-        for idx, cell_index in enumerate(rf.cell_indices):
+        for idx, unit_index in enumerate(rf.unit_indices):
             if rf.spatial_model == "FIT":
                 spatial_filters[idx, ...] = self._create_spatial_filter_FIT(
-                    rf, cell_index
+                    rf, unit_index
                 )
             elif rf.spatial_model == "VAE":
                 spatial_filters[idx, ...] = self._create_spatial_filter_VAE(
-                    rf, cell_index
+                    rf, unit_index
                 )
             else:
                 raise ValueError("Unknown model type, aborting...")
 
-        # Reshape to N cells, s**2 pixels
+        # Reshape to N units, s**2 pixels
         spatial_filters = np.reshape(spatial_filters, (rf.n_units, s**2))
 
         # Get center masks
@@ -1506,12 +1518,12 @@ class SimulateRetina(RetinaMath):
 
     def _convolve_stimulus(self, vs, rf):
         """
-        Convolves the stimulus with the spatiotemporal filter for a given set of cells.
+        Convolves the stimulus with the spatiotemporal filter for a given set of units.
 
         This function performs a convolution operation between the cropped stimulus and
-        a spatiotemporal filter for each specified cell. It uses either PyTorch (if available)
+        a spatiotemporal filter for each specified unit. It uses either PyTorch (if available)
         or numpy and scipy to perform the convolution. After the convolution, it adds a tonic drive to the
-        generator potential of each cell.
+        generator potential of each unit.
 
         Parameters
         ----------
@@ -1519,7 +1531,7 @@ class SimulateRetina(RetinaMath):
         Returns
         -------
         ndarray
-            Generator potential of each cell, array of shape (num_cells, stimulus timesteps),
+            Generator potential of each unit, array of shape (num_cells, stimulus timesteps),
             after the convolution and the addition of the tonic drive.
 
         Raises
@@ -1628,7 +1640,7 @@ class SimulateRetina(RetinaMath):
         # This needs to be 2D array for Brian
         interpolated_rates_array = rates_func(tvec_new)
 
-        # Identical rates array for every trial; rows=time, columns=cell index
+        # Identical rates array for every trial; rows=time, columns=unit index
         inst_rates = b2.TimedArray(
             interpolated_rates_array.T * b2u.Hz, vs.simulation_dt
         )
@@ -1643,7 +1655,7 @@ class SimulateRetina(RetinaMath):
         # Set inst_rates to locals() for Brian equation access
         inst_rates = eval("vs.inst_rates")
 
-        # Cells in parallel (NG), trial iterations (repeated runs)
+        # units in parallel (NG), trial iterations (repeated runs)
         n_units_or_trials = np.max([rf.n_units, n_trials])
 
         if rf.spike_generator_model == "refractory":
@@ -1689,7 +1701,7 @@ class SimulateRetina(RetinaMath):
         t_start = []
         t_end = []
 
-        # Run cells/trials in parallel, trials in loop
+        # Run units/trials in parallel, trials in loop
         # tqdm_desc = "Simulating " + self.response_type + " " + self.gc_type + " mosaic"
         # for trial in tqdm(range(n_trials), desc=tqdm_desc):
         net.restore()  # Restore the initial state
@@ -1726,7 +1738,7 @@ class SimulateRetina(RetinaMath):
         if rf.gc_type == "parasol":
             columns = ["NL", "TL", "HS", "T0", "Chalf", "D", "A"]
             try:
-                params = rf.df.loc[rf.cell_indices, columns].values
+                params = rf.df.loc[rf.unit_indices, columns].values
             except KeyError:
                 raise KeyError(KeyErrorMsg)
             params_t = torch.tensor(params, device=device)
@@ -1741,7 +1753,7 @@ class SimulateRetina(RetinaMath):
                 "A_cen",
             ]
             try:
-                params_cen = rf.df.loc[rf.cell_indices, columns_cen].values
+                params_cen = rf.df.loc[rf.unit_indices, columns_cen].values
             except KeyError:
                 raise KeyError(KeyErrorMsg)
 
@@ -1758,7 +1770,7 @@ class SimulateRetina(RetinaMath):
                 "A_sur",
             ]
             try:
-                params_sur = rf.df.loc[rf.cell_indices, columns_sur].values
+                params_sur = rf.df.loc[rf.unit_indices, columns_sur].values
             except KeyError:
                 raise KeyError(KeyErrorMsg)
 
@@ -1795,7 +1807,7 @@ class SimulateRetina(RetinaMath):
                 generator_potentials_t[idx, :] = generator_potential
 
             elif rf.gc_type == "midget":
-                # Migdet cells' surrounds are delayed in comparison to centre.
+                # Migdet units' surrounds are delayed in comparison to centre.
                 # Thus, we need to run cen and the sur separately.
 
                 # Low-passing impulse response for center and surround
@@ -1853,7 +1865,7 @@ class SimulateRetina(RetinaMath):
             "pix_per_deg": vs.pix_per_deg,
             "deg_per_mm": rf.deg_per_mm,
             "stimulus_center": vs.stimulus_center,
-            "qr_min_max": self._get_crop_pixels(rf, rf.cell_indices),
+            "qr_min_max": self._get_crop_pixels(rf, rf.unit_indices),
             "spatial_filter_sidelen": rf.spatial_filter_sidelen,
             "stimulus_cropped": vs.stimulus_cropped,
         }
@@ -1889,7 +1901,7 @@ class SimulateRetina(RetinaMath):
 
     def run_cells(
         self,
-        cell_index=None,
+        unit_index=None,
         n_trials=1,
         save_data=False,
         spike_generator_model="refractory",
@@ -1905,7 +1917,7 @@ class SimulateRetina(RetinaMath):
 
         This method is capable of running the linear-nonlinear (LN) pipeline for a single or multiple ganglion cells,
         converting visual stimuli into spike trains using the Brian2 simulator. When `get_impulse_response` is enabled,
-        it bypasses the pipeline to compute impulse responses for specified cell types and contrasts.
+        it bypasses the pipeline to compute impulse responses for specified unit types and contrasts.
         The method also supports the computation of spatial uniformity indices when `get_uniformity_data` is set.
 
 
@@ -1935,7 +1947,7 @@ class SimulateRetina(RetinaMath):
             self.context.apricot_metadata,
             self.data_io.get_data,
             self.pol2cart_df,
-            cell_index,
+            unit_index,
             spike_generator_model,
         )
 
@@ -1954,7 +1966,7 @@ class SimulateRetina(RetinaMath):
 
         # Get cropped stimulus, vectorized. One cropped sequence for each unit
         vs = self._get_spatially_cropped_video(vs, rf, reshape=True)
-
+        # breakpoint()
         # Get generator potentials
         if rf.temporal_model == "dynamic":
 
@@ -1967,10 +1979,13 @@ class SimulateRetina(RetinaMath):
             rf = self._get_linear_spatiotemporal_filters(rf)
             vs = self._convolve_stimulus(vs, rf)
 
-        # print(np.mean(vs.generator_potentials.flatten()))
+        # # print(np.mean(vs.generator_potentials.flatten()))
         # print(np.std(vs.generator_potentials.flatten()))
-        # plt.hist(vs.generator_potentials.flatten(), 20)
-        # plt.show()
+        # # plt.hist(vs.generator_potentials.flatten(), 20)
+        # # plt.show()
+        # # import sys
+
+        # # sys.exit()
         # pdb.set_trace()
 
         # From generator potential to spikes
@@ -1987,12 +2002,12 @@ class SimulateRetina(RetinaMath):
 
     def run_with_my_run_options(self):
         """
-        Filter method between my_run_options and run cells.
+        Filter method between my_run_options and run units.
         See run_cells for parameter description.
         """
 
         filenames = self.context.my_run_options["gc_response_filenames"]
-        cell_index = self.context.my_run_options["cell_index"]
+        unit_index = self.context.my_run_options["unit_index"]
         n_trials = self.context.my_run_options["n_trials"]
         save_data = self.context.my_run_options["save_data"]
         spike_generator_model = self.context.my_run_options["spike_generator_model"]
@@ -2000,7 +2015,7 @@ class SimulateRetina(RetinaMath):
 
         for filename in filenames:
             self.run_cells(
-                cell_index=cell_index,
+                unit_index=unit_index,
                 n_trials=n_trials,
                 save_data=save_data,
                 spike_generator_model=spike_generator_model,

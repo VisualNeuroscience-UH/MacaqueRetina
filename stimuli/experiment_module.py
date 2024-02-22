@@ -235,7 +235,7 @@ class Experiment(VideoBaseClass):
                     # Raw intensity is stimulus specific
                     self.options["raw_intensity"] = stim.options["raw_intensity"]
 
-                example_gc = my_run_options["cell_index"]
+                example_gc = my_run_options["unit_index"]
                 n_trials = my_run_options["n_trials"]
                 gc_type = self.context.my_retina["gc_type"]
                 response_type = self.context.my_retina["response_type"]
@@ -244,7 +244,7 @@ class Experiment(VideoBaseClass):
                 filename = Path(data_folder) / (filename_prefix + cond_names[idx])
 
                 self.simulate_retina.run_cells(
-                    cell_index=example_gc,
+                    unit_index=example_gc,
                     n_trials=n_trials,
                     save_data=True,
                     spike_generator_model=spike_generator_model,

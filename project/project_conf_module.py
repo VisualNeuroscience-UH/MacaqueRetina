@@ -21,7 +21,7 @@ warnings.simplefilter("ignore")
 
 
 """
-This is code for building macaque retinal filters corresponding to midget and parasol cell responses
+This is code for building macaque retinal filters corresponding to midget and parasol unit responses
 for temporal hemiretina. We keep modular code structure, to be able to add new features at later phase.
 
 Visual angle (A) in degrees from previous studies (Croner and Kaplan, 1995) was approximated with relation 5 deg/mm. 
@@ -31,21 +31,21 @@ Dacey and Petersen, 1992). Current implementation uses one deg = 220um (Perry et
 
 We have extracted statistics of macaque ganglion cell receptive fields from literature and build continuous functions.
 
-The density of many cell types is inversely proportional to dendritic field coverage, suggesting constant coverage factor 
+The density of many unit types is inversely proportional to dendritic field coverage, suggesting constant coverage factor 
 (Perry_1984_Neurosci, Wassle_1991_PhysRev). Midget coverage factor is 1  (Dacey_1993_JNeurosci for humans; Wassle_1991_PhysRev, 
 Lee_2010_ProgRetEyeRes). Parasol coverage factor is 3-4 close to fovea (Grunert_1993_VisRes); 2-7 according to Perry_1984_Neurosci. 
-These include ON- and OFF-center cells, and perhaps other cell types. It is likely that coverage factor is 1 for midget and parasol 
-ON- and OFF-center cells each, which is also in line with Doi_2012 JNeurosci, Field_2010_Nature
+These include ON- and OFF-center units, and perhaps other unit types. It is likely that coverage factor is 1 for midget and parasol 
+ON- and OFF-center units each, which is also in line with Doi_2012 JNeurosci, Field_2010_Nature
 
-The spatiotemporal receptive fields for the four cell types (parasol & midget, ON & OFF) were modelled with double ellipsoid 
+The spatiotemporal receptive fields for the four unit types (parasol & midget, ON & OFF) were modelled with double ellipsoid 
 difference-of-Gaussians model. The original spike triggered averaging RGC data in courtesy of Chichilnisky lab. The method is 
 described in Chichilnisky_2001_Network, Chichilnisky_2002_JNeurosci Field_2010_Nature.
 
-Chichilnisky_2002_JNeurosci states that L-ON (parasol) cells have on average 21% larger RFs than L-OFF cells. He also shows that 
-OFF cells have more nonlinear response to input, which is not implemented currently (a no-brainer to implement if necessary).
+Chichilnisky_2002_JNeurosci states that L-ON (parasol) units have on average 21% larger RFs than L-OFF units. He also shows that 
+OFF units have more nonlinear response to input, which is not implemented currently (a no-brainer to implement if necessary).
 
-NOTE: bad cell indices and metadata hard coded from Chichilnisky apricot data at fit_module ApricotData class. 
-For another data set change metadata, visualize fits and change the bad cells.
+NOTE: bad unit indices and metadata hard coded from Chichilnisky apricot data at fit_module ApricotData class. 
+For another data set change metadata, visualize fits and change the bad units.
 NOTE: Visual stimulus video default options are hard coded at visual_stimulus_module.VideoBaseClass class.
 NOTE: If eccentricity stays under 20 deg, dendritic diameter data fitted up to 25 deg only (better fit close to fovea)
 
@@ -63,11 +63,11 @@ spatial_model FIT : Fit ellipse to center and surround
 spatial_model : VAE : Variational autoencoder. The model reconstructs the full receptive field and generates new samples from the latent space.
     
 Contrast gain control (CGC) is implemented according to Victor_1987_JPhysiol using numerical integration in discretized temporal domain.
-The unit parameters are drawn from Benardete_1999_VisNeurosci for parasol cells and Benardete_1997_VisNeurosci_a for midget cells.
+The unit parameters are drawn from Benardete_1999_VisNeurosci for parasol units and Benardete_1997_VisNeurosci_a for midget units.
 We are sampling from Benardete Kaplan data assuming triangular distribution of the reported tables of statistics (original data points not shown).
 For a review of physiological mechanisms, see Demb_2008_JPhysiol and Beaudoin_2007_JNeurosci.
 
-The max firing rate, parameter "A" in the Victor model, comes from Benardete_1999_VisNeurosci for parasol cells and Benardete_1997_VisNeurosci_a for midget cells.
+The max firing rate, parameter "A" in the Victor model, comes from Benardete_1999_VisNeurosci for parasol units and Benardete_1997_VisNeurosci_a for midget units.
 To get firing rate from generator potential, we fit a logistic function. The firing_rate = A / (1 + exp(-k*(x-x0))) - tonic_drive, where k is 
 the steepness of the curve and x0 is the sigmoid's midpoint. 
 
@@ -217,7 +217,7 @@ my_retina = {
     "temporal_model": "fixed",  # fixed, dynamic
     # "temporal_model": "dynamic",  # fixed, dynamic
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
-    "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder
+    "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies to FIT only, scales sum(unit center areas) = retina area
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
@@ -315,11 +315,11 @@ my_stimulus_metadata = {
 n_files = 1
 
 # Either n_trials or n_cells must be 1, and the other > 1
-# Running multiple trials on multiple cells is not supported
+# Running multiple trials on multiple units is not supported
 my_run_options = {
-    "cell_index": None,  # list of ints or None for all cells
+    "unit_index": None,  # list of ints or None for all units
     "n_trials": 1,  # For each of the response files
-    # "cell_index": 2,  # list of ints or None for all cells
+    # "unit_index": 2,  # list of ints or None for all units
     # "n_trials": 10,  # For each of the response files
     "spike_generator_model": "poisson",  # poisson or refractory
     "save_data": True,
@@ -345,7 +345,7 @@ apricot_metadata = {
 proportion_of_parasol_gc_type = 0.08
 proportion_of_midget_gc_type = 0.64
 
-# Proportion of ON and OFF response type cells, assuming ON rf diameter = 1.2 x OFF rf diameter, and
+# Proportion of ON and OFF response type units, assuming ON rf diameter = 1.2 x OFF rf diameter, and
 # coverage factor =1; Chichilnisky_2002_JNeurosci
 proportion_of_ON_response_type = 0.40
 proportion_of_OFF_response_type = 0.60
@@ -389,7 +389,7 @@ cone_general_params = {
 
 # Recovery function from Berry_1998_JNeurosci, Uzzell_2004_JNeurophysiol
 # abs and rel refractory estimated from Uzzell_2004_JNeurophysiol,
-# Fig 7B, bottom row, inset. Parasol ON cell
+# Fig 7B, bottom row, inset. Parasol ON unit
 refractory_params = {
     "abs_refractory": 1,
     "rel_refractory": 3,
@@ -605,6 +605,7 @@ if __name__ == "__main__":
 
     # TÄHÄN JÄIT: ETSI KIRJALLISUUDESTA TAUSTA AKTIIVISUUKSIA JA DYNAAMISIA MODULAATIOITA
     # SELVITÄ MISTÄ TULEVAT KORKEAT FIRING RATET
+
     # MIETI TAPPIKOHINAN LINKITYS UUDELLEEN:
     #  - PERIFERIASSA GRIDI LIIAN HARVA
     #  - KESKELLÄ GRIDI LIIAN TIHEÄ
@@ -668,7 +669,7 @@ if __name__ == "__main__":
     # PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)
     # PM.viz.show_dendrite_diam_vs_ecc(log_x=False, log_y=False, savefigname=None)
     # PM.viz.show_retina_img(savefigname=None)
-    PM.viz.show_cone_noise_vs_freq(savefigname=None)
+    # PM.viz.show_cone_noise_vs_freq(savefigname=None)
 
     # For FIT (DoG fits, temporal kernels and tonic drives)
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
@@ -706,13 +707,13 @@ if __name__ == "__main__":
     ########################
 
     # Based on my_stimulus_options above
-    PM.stimulate.make_stimulus_video()
+    # PM.stimulate.make_stimulus_video()
 
     ####################################
-    ### Run multiple trials or cells ###
+    ### Run multiple trials or units ###
     ####################################
 
-    # Load stimulus to get working retina, necessary for running cells
+    # Load stimulus to get working retina, necessary for running units
 
     # TÄHÄN JÄIT: KORJAA SIMULATE RETINA KUN UUSI CONE NOISE FUNCTION. ALMOST THERE.
     PM.simulate_retina.run_with_my_run_options()
@@ -721,23 +722,23 @@ if __name__ == "__main__":
     ### Show single ganglion cell features ###
     ##########################################
 
-    # PM.viz.show_spatiotemporal_filter(cell_index=39, savefigname=None)
-    # PM.viz.show_temporal_kernel_frequency_response(cell_index=2, savefigname=None)
-    # PM.viz.plot_midpoint_contrast(cell_index=2, savefigname=None)
-    # PM.viz.plot_local_rms_contrast(cell_index=2, savefigname=None)
-    # PM.viz.plot_local_michelson_contrast(cell_index=2, savefigname=None)
-    # PM.viz.show_single_gc_view(cell_index=2, frame_number=300, savefigname=None)
+    # PM.viz.show_spatiotemporal_filter(unit_index=39, savefigname=None)
+    # PM.viz.show_temporal_kernel_frequency_response(unit_index=2, savefigname=None)
+    # PM.viz.plot_midpoint_contrast(unit_index=2, savefigname=None)
+    # PM.viz.plot_local_rms_contrast(unit_index=2, savefigname=None)
+    # PM.viz.plot_local_michelson_contrast(unit_index=2, savefigname=None)
+    # PM.viz.show_single_gc_view(unit_index=2, frame_number=300, savefigname=None)
 
     ################################################
-    ###   Show multiple trials for single cell,  ###
-    ###   or multiple cells for single trial     ###
+    ###   Show multiple trials for single unit,  ###
+    ###   or multiple units for single trial     ###
     ################################################
 
     # # Based on my_run_options above
     PM.viz.show_all_gc_responses(savefigname=None)
 
     # PM.viz.show_stimulus_with_gcs(
-    #     example_gc=my_run_options["cell_index"],  # [int,], my_run_options["cell_index"]
+    #     example_gc=my_run_options["unit_index"],  # [int,], my_run_options["unit_index"]
     #     frame_number=301,  # depends on fps, and video and baseline lengths
     #     show_rf_id=True,
     #     savefigname=None,
@@ -747,10 +748,10 @@ if __name__ == "__main__":
     ###       Show impulse response        ###
     ##########################################
 
-    # # Contrast applies only for parasol cells with dynamic model, use [1.0] for others
+    # # Contrast applies only for parasol units with dynamic model, use [1.0] for others
     # contrasts_for_impulse = [0.01, 1.0]
     # PM.simulate_retina.run_cells(
-    #     cell_index=[16],  # list of ints
+    #     unit_index=[16],  # list of ints
     #     get_impulse_response=True,  # Return with impulse response
     #     contrasts_for_impulse=contrasts_for_impulse,  # List of contrasts
     # )
@@ -799,7 +800,7 @@ if __name__ == "__main__":
         # "logaritmic": [False, True],  # temporal frequency, contrast
     }
 
-    # N trials or N cells must be 1, and the other > 1. This is set above in my_run_options.
+    # N trials or N units must be 1, and the other > 1. This is set above in my_run_options.
     # PM.experiment.build_and_run(experiment_dict)
 
     #########################
