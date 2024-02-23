@@ -68,9 +68,12 @@ The unit parameters are drawn from Benardete_1999_VisNeurosci for parasol units 
 We are sampling from Benardete Kaplan data assuming triangular distribution of the reported tables of statistics (original data points not shown).
 For a review of physiological mechanisms, see Demb_2008_JPhysiol and Beaudoin_2007_JNeurosci.
 
-The max firing rate, parameter "A" in the Victor model, comes from Benardete_1999_VisNeurosci for parasol units and Benardete_1997_VisNeurosci_a for midget units.
-To get firing rate from generator potential, we fit a logistic function. The firing_rate = A / (1 + exp(-k*(x-x0))) - tonic_drive, where k is 
-the steepness of the curve and x0 is the sigmoid's midpoint. 
+Parasol ON firing rate for spatially uniform monochromatic light of wavelength 561 (530, 430) nm and intensity 4300
+(4200, 2400) photons/microm2/s, incident on the photoreceptors: Across all preparations examined firing rates varied from about 5
+to 20 Hz. From Shlens_2009_JNeurosci/Methods.
+
+The firing rate gain (spikes/(second * unit contrast)), parameter "A" in the Victor model, comes from Benardete_1999_VisNeurosci for parasol units and Benardete_1997_VisNeurosci_a for midget units.
+The max amplitude the the center spatial DoG model in Victor_1987_JPhysiol is 1.0. 
 
 The cone photoreceptor sampling is approximated as achromatic (single) compressive cone response(Baylor_1987_JPhysiol).
 """
@@ -198,7 +201,7 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 # Note: FIT model ellipse independent does not correlate the center and surround parameters. Thus they are independent, which
 # is not the case in the VAE model, and not very physiological.
 
-gc_type = "parasol"  # "parasol" or "midget"
+gc_type = "midget"  # "parasol" or "midget"
 response_type = "on"  # "on" or "off"
 
 # These values are used for building a new retina
@@ -215,8 +218,8 @@ my_retina = {
     "dd_regr_model": "quadratic",  # linear, quadratic, cubic, loglog. For midget < 20 deg, use quadratic; for parasol use loglog
     "ecc_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
-    "temporal_model": "fixed",  # fixed, dynamic
-    # "temporal_model": "dynamic",  # fixed, dynamic
+    # "temporal_model": "fixed",  # fixed, dynamic
+    "temporal_model": "dynamic",  # fixed, dynamic
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
     "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
@@ -604,12 +607,14 @@ if __name__ == "__main__":
     #     PM.cones.image, PM.cones.image_after_optics, PM.cones.cone_response
     # )
 
-    # TÄHÄN JÄIT: ETSI KIRJALLISUUDESTA TAUSTA AKTIIVISUUKSIA JA DYNAAMISIA MODULAATIOITA
-    # SELVITÄ MISTÄ TULEVAT KORKEAT FIRING RATET
-
+    # TÄHÄN JÄIT
+    # RF MÄÄRITTELY KIRJALLISUUDESTA ON YLLÄTTÄVÄN HANKALAA. VOISIKO
+    # RF MÄÄRITELLÄ SIMULAATTORIPAPERISSA? NÄIN SIITÄ TULISI NEUROINFORMATIIKKA
+    # PAPERI EIKÄ PELKÄSTÄÄN SIMULAATTORIPAPERI. SITTEN VOISI TEHDÄ TOISEN PAPERIN
+    # AJATUKSELLA MITEN TÄLLAINEN KANNATTAA KOODATA AJATUKSELLA "DESING PATTERN FOR RESEARCH"
+    #
     # MIETI TAPPIKOHINAN LINKITYS UUDELLEEN:
-    #  - PERIFERIASSA GRIDI LIIAN HARVA
-    #  - KESKELLÄ GRIDI LIIAN TIHEÄ
+    #  - HEXAGONAALINEN ARRAY?
 
     ###########################################
     ##   Luminance and Photoisomerizations   ##
@@ -715,8 +720,6 @@ if __name__ == "__main__":
     ####################################
 
     # Load stimulus to get working retina, necessary for running units
-
-    # TÄHÄN JÄIT: KORJAA SIMULATE RETINA KUN UUSI CONE NOISE FUNCTION. ALMOST THERE.
     PM.simulate_retina.run_with_my_run_options()
 
     ##########################################
