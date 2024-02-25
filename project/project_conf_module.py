@@ -201,7 +201,7 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 # Note: FIT model ellipse independent does not correlate the center and surround parameters. Thus they are independent, which
 # is not the case in the VAE model, and not very physiological.
 
-gc_type = "midget"  # "parasol" or "midget"
+gc_type = "parasol"  # "parasol" or "midget"
 response_type = "on"  # "on" or "off"
 
 # These values are used for building a new retina
@@ -620,15 +620,10 @@ if __name__ == "__main__":
     ##   Luminance and Photoisomerizations   ##
     ###########################################
 
-    # I_cone = 400000  # photoisomerizations per second per cone
-    # a_c_end_on = 3.21e-5  # mm2, 1/ cone density at 5 deg ecc, providing the upper bound of the cone outer segment area
-    # A_pupil = 9.3  # mm2, derived from Selezneva_2021_FrontPsychol, tonic pupil
-    # A_retina = 800  # mm2, from Packer_1989_JCompNeurol, assumes stimulus covers RFs of all cones
+    I_cone = 400000  # photoisomerizations per second per cone
 
-    # luminance = PM.simulate_retina.get_luminance_from_photoisomerizations(
-    #     I_cone, A_retina=A_retina, A_pupil=A_pupil, a_c_end_on=a_c_end_on
-    # )
-    # print(f"{luminance:.2f} cd/m2")
+    luminance = PM.simulate_retina.get_luminance_from_photoisomerizations(I_cone)
+    print(f"{luminance:.2f} cd/m2")
 
     # ##########################################
     # #   Sample figure data from literature  ##
@@ -655,7 +650,7 @@ if __name__ == "__main__":
     Build and test your retina here, one gc type at a time. 
     """
 
-    PM.construct_retina.build()  # Main method for building the retina
+    # PM.construct_retina.build()  # Main method for building the retina
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # Thus, they are called after the retina is built.
@@ -720,7 +715,7 @@ if __name__ == "__main__":
     ####################################
 
     # Load stimulus to get working retina, necessary for running units
-    PM.simulate_retina.run_with_my_run_options()
+    # PM.simulate_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
@@ -739,7 +734,7 @@ if __name__ == "__main__":
     ################################################
 
     # # Based on my_run_options above
-    PM.viz.show_all_gc_responses(savefigname=None)
+    # PM.viz.show_all_gc_responses(savefigname=None)
 
     # PM.viz.show_stimulus_with_gcs(
     #     example_gc=my_run_options["unit_index"],  # [int,], my_run_options["unit_index"]

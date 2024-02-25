@@ -2042,7 +2042,7 @@ class SimulateRetina(RetinaMath):
 
         # Get cropped stimulus, vectorized. One cropped sequence for each unit
         vs = self._get_spatially_cropped_video(vs, rf, reshape=True)
-        # breakpoint()
+
         # Get generator potentials
         if rf.temporal_model == "dynamic":
 
@@ -2091,24 +2091,25 @@ class SimulateRetina(RetinaMath):
             )
 
     def get_luminance_from_photoisomerizations(
-        self, I_cone, a_c_end_on=3.21e-5, A_pupil=9.3, A_retina=670
+        self, I_cone, A_pupil=9.3, A_retina=670, a_c_end_on=3.21e-5
     ):
         """
         Calculate luminance from photoisomerizations.
 
         Parameters
-
+        ----------
         I_cone : float
             The number of photoisomerizations per second per cone.
-        a_c_end_on : float
-            Upper limit for the effective cross-sectional area of the total
-            pigment content of a photoreceptor for axially propagating light.
         A_pupil : float
             The area of the pupil in mm^2.
             Mean tonic pupil radiusis 3.44/2 mm in macaques, from Selezneva_2021_FrontPsychol
         A_retina : float
             The area of the retina in mm^2.
-            This value is from Perry_1984_Neurosci, where the mean retinal area is 670 mm^2 in macaques.
+            Default value is 800 mm^2, from Packer_1989_JCompNeurol, assumes stimulus covers RFs of all cones
+        a_c_end_on : float
+            Upper limit for the effective cross-sectional area of the total
+            pigment content of a photoreceptor for axially propagating light.
+            Default value is 3.21e-5 mm^2, derived from cone density at 5 deg ecc.
         """
 
         # Calculate photon flux at cornea
