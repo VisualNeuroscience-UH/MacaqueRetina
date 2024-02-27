@@ -1999,14 +1999,15 @@ class SimulateRetina(RetinaMath):
 
         References
         ----------
-        For the theoretical background and models used in this simulation refer to:
+        The theoretical background and models used in this simulation refer to:
         [1] Victor 1987 Journal of Physiology
         [2] Benardete & Kaplan 1997 Visual Neuroscience
         [3] Kaplan & Benardete 1999 Journal of Physiology
         [4] Chichilnisky 2001 Network
-        [5] Chichilnisky 2002 Journal of Neuroscience
-        [6] Field 2010 Nature
-        [7] Gauthier 2009 PLoS Biology
+        [5] Chichilnisky & Kalmar 2002 Journal of Neuroscience
+        [6] Field et al. 2010 Nature
+        [8] Ala-Laurila et al. 2011 NatNeurosci
+        [9] Angueyra & Rieke 2013 NatNeurosci
         """
 
         # Abstraction for clarity
