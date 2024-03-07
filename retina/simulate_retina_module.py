@@ -11,6 +11,7 @@ from scipy.ndimage import gaussian_filter
 from scipy.special import erf
 import scipy.fftpack as fftpack
 from scipy import ndimage
+from scipy.stats import norm
 from skimage.transform import resize
 import torch
 
@@ -131,6 +132,36 @@ class PreGCProcessing:
         # Save the cone response to output folder
         filename = self.context.my_stimulus_metadata["stimulus_file"]
         self.data_io.save_cone_response_to_hdf5(filename, cone_response)
+
+    def linear_model(self, t, alpha, T_rise, T_decay, T_osc, omega):
+        """
+        Linear model from equation 3 in Angueyra_2022_JNeurosci.
+        """
+        # Compute the rise term
+        rise_term = (t / T_rise) ** 4 / (1 + (t / T_rise) ** 4)
+        # Compute the decay term
+        decay_term = np.exp(-t / T_decay)
+        # Compute the oscillation term
+        oscillation_term = np.cos((2 * np.pi * t / T_osc) + omega)
+
+        # Combine all terms to get f(t)
+        f_t = alpha * rise_term * decay_term * oscillation_term
+
+        return f_t
+
+    def LN_model(self, x, a=305.4, b=0.039, d=1.00, e=-262.9):
+        """
+        The nonlinear part of the LN model based on the cumulative density of a normal function. Equation 4 in Angueyra_2022_JNeurosci
+        Compressive nonlinearity.
+        Defaults from example fit in Angueyra_2022_JNeurosci.
+        """
+        x = np.linspace(x[0], x[1], 100)
+        # Transforming x using parameters a and b
+        z = (x - b) / a
+        # Using the cumulative distribution function of the standard normal distribution
+        cdf = norm.cdf(z)
+        # Scaling and shifting the output using parameters d and e
+        return x, d * cdf + e
 
 
 class ReceptiveFields(Printable):

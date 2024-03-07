@@ -600,6 +600,20 @@ if __name__ == "__main__":
     # PM.viz.show_cone_filter_response(
     #     PM.cones.image, PM.cones.image_after_optics, PM.cones.cone_response
     # )
+    x = [0, 50]
+    x, y = PM.cones.LN_model(x)
+    plt.plot(x, y)
+    plt.show()
+    # TÄHÄN JÄIT
+    # tappiadaptaatiomalli, lue Clark_2013_PLoSComputBiol. vrt Angueyra_2022_JNeurosci jossa biophys malli
+    # Tarvitsetko primaattidataa jälkimmäisestä?
+    # RF MÄÄRITTELY KIRJALLISUUDESTA ON YLLÄTTÄVÄN HANKALAA. VOISIKO
+    # RF MÄÄRITELLÄ SIMULAATTORIPAPERISSA? NÄIN SIITÄ TULISI NEUROINFORMATIIKKA
+    # PAPERI EIKÄ PELKÄSTÄÄN SIMULAATTORIPAPERI. SITTEN VOISI TEHDÄ TOISEN PAPERIN
+    # AJATUKSELLA MITEN TÄLLAINEN KANNATTAA KOODATA AJATUKSELLA "DESING PATTERN FOR RESEARCH"
+    #
+    # MIETI TAPPIKOHINAN LINKITYS UUDELLEEN:
+    #  - HEXAGONAALINEN ARRAY?
 
     ###########################################
     ##   Luminance and Photoisomerizations   ##
