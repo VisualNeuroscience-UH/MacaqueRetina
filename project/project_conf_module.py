@@ -119,15 +119,9 @@ and execution requirements.
 """
 Main paths in different operating systems
 """
-if sys.platform == "linux":
-    model_root_path = "/opt3/Laskenta/Models"
-    git_repo_root = Path(r"/opt2/Git_Repos/MacaqueRetina")
-    ray_root_path = None  # if None, ray_results are saved to model_root_path/project/experiment/output_folder/ray_results
-elif sys.platform == "win32":
-    model_root_path = r"C:\Users\simov\Laskenta\Models"
-    git_repo_root = Path(r"C:\Users\simov\Laskenta\GitRepos\MacaqueRetina")
-    ray_root_path = r"C:\Data"
-
+model_root_path = "/opt3/Laskenta/Models"
+git_repo_root = Path(r"/opt2/Git_Repos/MacaqueRetina")
+ray_root_path = None  # if None, ray_results are saved to model_root_path/project/experiment/output_folder/ray_results
 
 """
 Project name
@@ -138,7 +132,7 @@ project = "Retina"
 """
 Current experiment. Use distinct folders fo distinct stimuli.
 """
-experiment = "dynamic_QA"
+experiment = "test_experiment"
 
 
 """
@@ -224,7 +218,7 @@ my_retina = {
     "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies to FIT only, scales sum(unit center areas) = retina area
-    "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
+    "training_mode": "train_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
     "model_file_name": None,  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[DEVICE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only
     "ray_tune_trial_id": None,  # Trial_id for tune, None for loading single run after "train_model". Applies to VAE "load_model" only
 }
@@ -607,23 +601,14 @@ if __name__ == "__main__":
     #     PM.cones.image, PM.cones.image_after_optics, PM.cones.cone_response
     # )
 
-    # TÄHÄN JÄIT
-    # RF MÄÄRITTELY KIRJALLISUUDESTA ON YLLÄTTÄVÄN HANKALAA. VOISIKO
-    # RF MÄÄRITELLÄ SIMULAATTORIPAPERISSA? NÄIN SIITÄ TULISI NEUROINFORMATIIKKA
-    # PAPERI EIKÄ PELKÄSTÄÄN SIMULAATTORIPAPERI. SITTEN VOISI TEHDÄ TOISEN PAPERIN
-    # AJATUKSELLA MITEN TÄLLAINEN KANNATTAA KOODATA AJATUKSELLA "DESING PATTERN FOR RESEARCH"
-    #
-    # MIETI TAPPIKOHINAN LINKITYS UUDELLEEN:
-    #  - HEXAGONAALINEN ARRAY?
-
     ###########################################
     ##   Luminance and Photoisomerizations   ##
     ###########################################
 
-    I_cone = 400000  # photoisomerizations per second per cone
+    # I_cone = 400000  # photoisomerizations per second per cone
 
-    luminance = PM.simulate_retina.get_luminance_from_photoisomerizations(I_cone)
-    print(f"{luminance:.2f} cd/m2")
+    # luminance = PM.simulate_retina.get_luminance_from_photoisomerizations(I_cone)
+    # print(f"{luminance:.2f} cd/m2")
 
     # ##########################################
     # #   Sample figure data from literature  ##
@@ -650,7 +635,7 @@ if __name__ == "__main__":
     Build and test your retina here, one gc type at a time. 
     """
 
-    # PM.construct_retina.build()  # Main method for building the retina
+    PM.construct_retina.build()  # Main method for building the retina
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # Thus, they are called after the retina is built.
@@ -708,14 +693,14 @@ if __name__ == "__main__":
     ########################
 
     # Based on my_stimulus_options above
-    # PM.stimulate.make_stimulus_video()
+    PM.stimulate.make_stimulus_video()
 
     ####################################
     ### Run multiple trials or units ###
     ####################################
 
     # Load stimulus to get working retina, necessary for running units
-    # PM.simulate_retina.run_with_my_run_options()
+    PM.simulate_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
@@ -733,8 +718,8 @@ if __name__ == "__main__":
     ###   or multiple units for single trial     ###
     ################################################
 
-    # # Based on my_run_options above
-    # PM.viz.show_all_gc_responses(savefigname=None)
+    # Based on my_run_options above
+    PM.viz.show_all_gc_responses(savefigname=None)
 
     # PM.viz.show_stimulus_with_gcs(
     #     example_gc=my_run_options["unit_index"],  # [int,], my_run_options["unit_index"]
