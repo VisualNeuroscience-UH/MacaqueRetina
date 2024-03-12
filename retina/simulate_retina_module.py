@@ -135,6 +135,7 @@ class PreGCProcessing:
 
     def linear_model(self, t, alpha, T_rise, T_decay, T_osc, omega):
         """
+        NOT TESTED
         Linear model from equation 3 in Angueyra_2022_JNeurosci.
         """
         # Compute the rise term
@@ -151,6 +152,7 @@ class PreGCProcessing:
 
     def LN_model(self, x, a=305.4, b=0.039, d=1.00, e=-262.9):
         """
+        NOT TESTED
         The nonlinear part of the LN model based on the cumulative density of a normal function. Equation 4 in Angueyra_2022_JNeurosci
         Compressive nonlinearity.
         Defaults from example fit in Angueyra_2022_JNeurosci.
@@ -1111,8 +1113,8 @@ class SimulateRetina(RetinaMath):
             cone_noise = _create_cone_noise(vs.tvec, n_cones, *params)
             gc_noise = cone_noise @ weights_norm
 
-        # Normalize noise to have unit variance
-        gc_noise_norm = gc_noise / np.std(gc_noise, axis=0)
+        # Normalize noise to have one mean and unit sd at the noise data frequencies
+        gc_noise_norm = 1 + (gc_noise - gc_noise.mean()) / np.std(gc_noise, axis=0)
 
         # Manual multiplier from conf file
         magn = rf.cone_general_params["cone_noise_magnitude"]

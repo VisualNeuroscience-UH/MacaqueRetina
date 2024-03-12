@@ -195,7 +195,7 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 # Note: FIT model ellipse independent does not correlate the center and surround parameters. Thus they are independent, which
 # is not the case in the VAE model, and not very physiological.
 
-gc_type = "parasol"  # "parasol" or "midget"
+gc_type = "midget"  # "parasol" or "midget"
 response_type = "on"  # "on" or "off"
 
 # These values are used for building a new retina
@@ -218,7 +218,7 @@ my_retina = {
     "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies to FIT only, scales sum(unit center areas) = retina area
-    "training_mode": "train_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
+    "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
     "model_file_name": None,  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[DEVICE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only
     "ray_tune_trial_id": None,  # Trial_id for tune, None for loading single run after "train_model". Applies to VAE "load_model" only
 }
@@ -282,7 +282,7 @@ my_stimulus_options = {
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
     "fps": 350,  # 300 for good cg integration
-    "duration_seconds": 1,  # actual frames = floor(duration_seconds * fps)
+    "duration_seconds": 9,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
     "pattern": "temporal_sine_pattern",  # One of the StimulusPatterns square_grating sine_grating
@@ -292,7 +292,7 @@ my_stimulus_options = {
     "stimulus_position": (0.0, 0.0),
     "stimulus_size": 1,  # 0.04,  # 2,  # deg, radius for circle, sidelen/2 for rectangle.
     "background": 128,
-    "contrast": 0.96,  # Weber constrast
+    "contrast": 0.0,  # Weber constrast
     "mean": 128,
     "temporal_frequency": 6.0,  # 0.01,  # 4.0,  # 40,  # Hz
     "spatial_frequency": 5.0,  # cpd
@@ -381,13 +381,14 @@ cone_general_params = {
     "cone2gc_midget": 9,  # um, 1 SD of Gaussian
     "cone2gc_parasol": 27,  # um 27
     "cone2gc_cutoff_SD": 1,  # 3 SD is 99.7% of Gaussian
-    "cone_noise_magnitude": 1.0,  # Relative amplitude, 0 for no noise
+    "cone_noise_magnitude": 0.2,  # firing rate relative to Benardete mean values, 0 for no noise
     "cone_noise_wc": [14, 160],  # lorenzian freqs, Angueyra_2013_NatNeurosci Fig1
 }
 
 # Recovery function from Berry_1998_JNeurosci, Uzzell_2004_JNeurophysiol
 # abs and rel refractory estimated from Uzzell_2004_JNeurophysiol,
-# Fig 7B, bottom row, inset. Parasol ON unit
+# Fig 7B, bottom row, inset. Parasol ON unit.
+# Uzzell_2004_JNeurophysiol instataneous firing rates for binary noise go up to 320 Hz
 refractory_params = {
     "abs_refractory": 1,
     "rel_refractory": 3,
@@ -600,10 +601,7 @@ if __name__ == "__main__":
     # PM.viz.show_cone_filter_response(
     #     PM.cones.image, PM.cones.image_after_optics, PM.cones.cone_response
     # )
-    x = [0, 50]
-    x, y = PM.cones.LN_model(x)
-    plt.plot(x, y)
-    plt.show()
+
     # TÄHÄN JÄIT
     # tappiadaptaatiomalli, lue Clark_2013_PLoSComputBiol. vrt Angueyra_2022_JNeurosci jossa biophys malli
     # Tarvitsetko primaattidataa jälkimmäisestä?
@@ -707,7 +705,7 @@ if __name__ == "__main__":
     ########################
 
     # Based on my_stimulus_options above
-    PM.stimulate.make_stimulus_video()
+    # PM.stimulate.make_stimulus_video()
 
     ####################################
     ### Run multiple trials or units ###
@@ -734,6 +732,7 @@ if __name__ == "__main__":
 
     # Based on my_run_options above
     PM.viz.show_all_gc_responses(savefigname=None)
+    PM.viz.show_all_gc_histogram(savefigname=None)
 
     # PM.viz.show_stimulus_with_gcs(
     #     example_gc=my_run_options["unit_index"],  # [int,], my_run_options["unit_index"]
