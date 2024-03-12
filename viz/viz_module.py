@@ -2613,6 +2613,73 @@ class Viz:
         if savefigname is not None:
             self._figsave(figurename=savefigname)
 
+    def show_all_gc_histogram(self, start_time=None, end_time=None, savefigname=None):
+        """
+        Display histograms for the mean and SD of spike rates of ganglion cell (gc) responses.
+
+        Parameters
+        ----------
+        start_time : float, optional
+            The start time in seconds for limiting the analysis period. Defaults to None, indicating the start of the dataset.
+        end_time : float, optional
+            The end time in seconds for limiting the analysis period. Defaults to None, indicating the end of the dataset.
+        savefigname : str, optional
+            The name of the file where the figure will be saved. If None, the figure is not saved.
+
+        Attributes Accessed
+        --------------------
+        project_data.simulate_retina : dict
+            Dictionary attached to ProjectData class instance containing the gc responses
+            and other information to analyze.
+        """
+        gc_responses = self.project_data.simulate_retina["gc_responses_to_show"]
+        all_spiketrains = gc_responses["all_spiketrains"]
+
+        # Optional time limiting
+        if start_time is None:
+            start_time = 0
+        if end_time is None:
+            end_time = gc_responses["duration"]
+
+        # Adjusting spiketrains according to the specified time period
+        adjusted_spiketrains = [
+            spiketrain[(spiketrain >= start_time) & (spiketrain <= end_time)]
+            for spiketrain in all_spiketrains
+        ]
+
+        # Calculating mean spike rates
+        spike_rates = [
+            len(spiketrain) / (end_time - start_time)
+            for spiketrain in adjusted_spiketrains
+        ]
+
+        # Change to arrays
+        # breakpoint()
+        mean_spike_rates = np.array(spike_rates)
+        # sd_spike_rates = np.std(spike_rates)
+
+        # Plotting
+        fig, ax = plt.subplots(1, 1, figsize=(12, 6))
+        ax.hist(
+            mean_spike_rates,
+            bins="auto",
+            color="skyblue",
+            alpha=0.7,
+            label="Mean Spike Rates",
+        )
+
+        ax.set_title("Mean Spike Rates")
+        ax.set_xlabel("Spike Rate (Hz)")
+        ax.set_ylabel("Frequency")
+
+        # for a in ax:
+        ax.legend()
+
+        plt.tight_layout()
+
+        if savefigname is not None:
+            plt.savefig(savefigname)
+
     def show_spatiotemporal_filter(self, unit_index=0, savefigname=None):
         """
         Display the spatiotemporal filter for a given unit in the retina.
