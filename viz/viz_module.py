@@ -2023,7 +2023,6 @@ class Viz:
         else:
             raise ValueError("Either gc_list or n_samples must be provided.")
 
-
         fig, ax = plt.subplots(1, len(gc_list), figsize=(12, 10))
         if len(gc_list) == 1:
             ax = [ax]
@@ -2169,8 +2168,8 @@ class Viz:
         if savefigname:
             self._figsave(figurename=savefigname)
 
-    def show_cell_density_vs_ecc(self, cell_type, savefigname=None):
-        cell_density_dict = self.project_data.construct_retina[f"{cell_type}_n_vs_ecc"]
+    def show_cell_density_vs_ecc(self, unit_type="gc", savefigname=None):
+        cell_density_dict = self.project_data.construct_retina[f"{unit_type}_n_vs_ecc"]
         fit_parameters = cell_density_dict["fit_parameters"]
         cell_eccentricity = cell_density_dict["cell_eccentricity"]
         cell_density = cell_density_dict["cell_density"]
@@ -2192,8 +2191,8 @@ class Viz:
             label="fit",
         )
         ax.set_xlabel("Eccentricity (mm)")
-        ax.set_ylabel(f"{cell_type} density")
-        title_text = f"{cell_type} density vs eccentricity"
+        ax.set_ylabel(f"{unit_type} density")
+        title_text = f"{unit_type} density vs eccentricity"
         title_text += f": {mean_density:.0f}/mm^2 at {mean_ecc:.2f} mm"
         # Make new line with average cone surface are
         mean_surface_area = 1 / mean_density
