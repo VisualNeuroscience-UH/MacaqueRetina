@@ -1996,7 +1996,7 @@ class Viz:
                 if savefigname:
                     self._figsave(figurename=savefigname)
 
-    def show_cones_linked_to_gc(self, gc_list=None, savefigname=None):
+    def show_cones_linked_to_gc(self, gc_list=None, n_samples=None, savefigname=None):
         """
         Visualize a ganglion cell and its connected cones.
         """
@@ -2015,6 +2015,14 @@ class Viz:
         ret_npz = self.data_io.get_data(self.context.my_retina["ret_file"])
         weights = ret_npz["cones_to_gcs_weights"]
         cone_positions = ret_npz["cone_optimized_positions_mm"]
+
+        if isinstance(gc_list, list):
+            pass  # gc_list supercedes n_samples
+        elif isinstance(n_samples, int):
+            gc_list = np.random.choice(range(len(gc_df)), n_samples, replace=False)
+        else:
+            raise ValueError("Either gc_list or n_samples must be provided.")
+
 
         fig, ax = plt.subplots(1, len(gc_list), figsize=(12, 10))
         if len(gc_list) == 1:
