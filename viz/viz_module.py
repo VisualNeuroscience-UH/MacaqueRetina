@@ -2196,7 +2196,7 @@ class Viz:
         title_text += f": {mean_density:.0f}/mm^2 at {mean_ecc:.2f} mm"
         # Make new line with average cone surface are
         mean_surface_area = 1 / mean_density
-        title_text += f"\nAverage cone surface area: {mean_surface_area:.2e} mm^2"
+        title_text += f"\nAverage unit surface area: {mean_surface_area:.2e} mm^2"
         ax.set_title(title_text)
         ax.legend()
 
