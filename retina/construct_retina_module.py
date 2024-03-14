@@ -561,6 +561,7 @@ class ConstructRetina(RetinaMath):
         ret.gc_density_params = gc_fit_parameters
         ret.cone_density_params = cone_fit_parameters
         ret.bipolar_density_params = bipolar_fit_parameters
+        ret.selected_bipolars_df = bipolar_df[bipolar_types]
 
         return ret
 
@@ -1669,6 +1670,46 @@ class ConstructRetina(RetinaMath):
             weights[i, :] = weights_mtx.sum(axis=(1, 2))
 
         ret.cones_to_gcs_weights = weights
+
+        return ret
+
+    def _link_cones_to_bipolars(self, ret, gc):
+        """
+        Connect cones to bipolar cells.
+        """
+
+        print("Connecting cones to bipolar cells...")
+
+        cone_pos_mm = ret.cone_optimized_positions_mm
+        n_cones = cone_pos_mm.shape[0]
+        bipo_pos_mm = ret.bipolar_optimized_positions_mm
+        n_bipos = bipo_pos_mm.shape[0]
+        selected_bipolars_df = ret.selected_bipolars_df
+
+        # count distances
+        cone_reshaped = cone_pos_mm[np.newaxis, :, :]  # Shape becomes (1, n_cones, 2)
+        bipo_reshaped = bipo_pos_mm[:, np.newaxis, :]  # Shape becomes (n_bipos, 1, 2)
+
+        # This may cause memory issues with large retinas
+        squared_diffs = (cone_reshaped - bipo_reshaped) ** 2
+        squared_distances = squared_diffs.sum(axis=2)
+        distances = np.sqrt(squared_distances)
+
+        # sort distances
+        sorted_indices = np.argsort(distances, axis=1)
+
+        # take N-M neighbours
+        string_arrays = selected_bipolars_df.loc["Cone_contacts_Range"].values.tolist()
+        numbers = [int(num) for s in string_arrays for num in s.split("-")]
+        smallest = min(numbers)
+        largest = max(numbers)
+        n_connections = np.random.randint(smallest, largest + 1, n_bipos)
+
+        connection_matrix = np.zeros_like(distances, dtype=int)
+        for i in range(n_bipos):
+            connection_matrix[i, sorted_indices[i, : n_connections[i]]] = 1
+
+        ret.cones_to_bipolars_mtx = connection_matrix
 
         return ret
 
@@ -3280,6 +3321,8 @@ class ConstructRetina(RetinaMath):
         # -- Second, endow units with spatial receptive fields
         ret, gc = self._create_spatial_rfs(ret, gc)
         # self.viz.show_cones_linked_to_gc(gc_list=[100])
+        ret = self._link_cones_to_bipolars(ret, gc)
+
         ret = self._link_cone_noise_units_to_gcs(ret, gc)
 
         ret = self._fit_cone_noise_vs_freq(ret)
@@ -3333,6 +3376,7 @@ class ConstructRetina(RetinaMath):
             "cone_frequency_data": ret.cone_frequency_data,
             "cone_power_data": ret.cone_power_data,
             "cone_noise_power_fit": ret.cone_noise_power_fit,
+            "cones_to_bipolars_mtx": ret.cones_to_bipolars_mtx,
         }
 
         self.data_io.save_np_dict_to_npz(
