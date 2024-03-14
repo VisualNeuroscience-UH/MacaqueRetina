@@ -34,8 +34,7 @@ We have extracted statistics of macaque ganglion cell receptive fields from lite
 
 The density of many cell types is inversely proportional to dendritic field coverage, suggesting constant coverage factor 
 (Perry_1984_Neurosci, Wassle_1991_PhysRev). Midget coverage factor is 1  (Dacey_1993_JNeurosci for humans; Wassle_1991_PhysRev, 
-Lee_2010_ProgRetEyeRes). Parasol coverage factor is 3-4 close to fovea (Grunert_1993_VisRes); 2-7 according to Perry_1984_Neurosci. 
-These include ON- and OFF-center cells, and perhaps other cell types. It is likely that coverage factor is 1 for midget and parasol 
+Lee_2010_ProgRetEyeRes). It is likely that coverage factor is 1 for midget and parasol 
 ON- and OFF-center cells each, which is also in line with Doi_2012 JNeurosci, Field_2010_Nature
 
 The spatiotemporal receptive fields for the four unit types (parasol & midget, ON & OFF) were modelled with double ellipsoid 
@@ -195,7 +194,7 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 # Note: FIT model ellipse independent does not correlate the center and surround parameters. Thus they are independent, which
 # is not the case in the VAE model, and not very physiological.
 
-gc_type = "midget"  # "parasol" or "midget"
+gc_type = "parasol"  # "parasol" or "midget"
 response_type = "on"  # "on" or "off"
 
 # These values are used for building a new retina
@@ -206,8 +205,8 @@ my_retina = {
     # "pol_limits_deg": [-4, 4],  # polar angle in degrees
     "ecc_limits_deg": [4.5, 5.5],  # eccentricity in degrees
     "pol_limits_deg": [-3, 3],  # polar angle in degrees
-    # "ecc_limits_deg": [4.8, 5.2],  # eccentricity in degrees
-    # "pol_limits_deg": [-1.0, 1.0],  # polar angle in degrees
+    # "ecc_limits_deg": [4.0, 6.0],  # eccentricity in degrees
+    # "pol_limits_deg": [-15.0, 15.0],  # polar angle in degrees
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
     "dd_regr_model": "quadratic",  # linear, quadratic, cubic, loglog. For midget < 20 deg, use quadratic; for parasol use loglog
     "ecc_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
@@ -215,7 +214,7 @@ my_retina = {
     # "temporal_model": "fixed",  # fixed, dynamic
     "temporal_model": "dynamic",  # fixed, dynamic
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
-    "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
+    "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies to FIT only, scales sum(unit center areas) = retina area
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
@@ -408,15 +407,15 @@ refractory_params = {
 # None : initial random placement. Nonvarying with fixed seed above. Good for testing and speed.
 gc_placement_params = {
     "algorithm": None,  # "voronoi" or "force" or None
-    "n_iterations": 3000,  # v 20, f 5000
-    "change_rate": 0.001,  # f 0.001, v 0.5
+    "n_iterations": 20,  # v 20, f 5000
+    "change_rate": 0.5,  # f 0.001, v 0.5
     "unit_repulsion_stregth": 5,  # 10 f only
     "unit_distance_threshold": 0.02,  # f only, adjusted with ecc
     "diffusion_speed": 0.0001,  # f only, adjusted with ecc
     "border_repulsion_stength": 10,  # f only
     "border_distance_threshold": 0.01,  # f only
-    "show_placing_progress": False,  # True False
-    "show_skip_steps": 100,  # v 1, f 100
+    "show_placing_progress": True,  # True False
+    "show_skip_steps": 1,  # v 1, f 100
 }
 
 cone_placement_params = {
@@ -432,6 +431,19 @@ cone_placement_params = {
     "show_skip_steps": 10,  # v 1, f 100
 }
 
+bipolar_placement_params = {
+    "algorithm": "force",  # "voronoi" or "force" or None
+    "n_iterations": 3,  # v 20, f 300
+    "change_rate": 0.0001,  # f 0.0005, v 0.5
+    "unit_repulsion_stregth": 2,  # 10 f only
+    "unit_distance_threshold": 0.1,  # f only, adjusted with ecc
+    "diffusion_speed": 0.005,  # f only, adjusted with ecc
+    "border_repulsion_stength": 5,  # f only
+    "border_distance_threshold": 0.0001,  # f only
+    "show_placing_progress": True,  # True False
+    "show_skip_steps": 1,  # v 1, f 100
+}
+
 # For VAE, this is enough to have good distribution between units.
 rf_repulsion_params = {
     "n_iterations": 1,  # 200
@@ -442,6 +454,19 @@ rf_repulsion_params = {
     "show_only_unit": None,  # None or int for unit idx
     "show_skip_steps": 5,
     "savefigname": None,
+}
+
+# For subunit model we assume constant bipolar to cone ratio as function of ecc.
+# Boycott_1991_EurJNeurosci Table 1 has bipolar densities at 6.5 mm ecc.
+# Inputs to ganglion cells:
+# -OFF parasol: Diffuse Bipolars, DB2 and DB3 (Jacoby_2000_JCompNeurol, )
+# -ON parasol:  Diffuse Bipolars, DB4 and DB5 (Marshak_2002_VisNeurosci, Boycott_1991_EurJNeurosci)
+# -OFF midget: Flat Midget Bipolars, FMB (Wässle_1994_VisRes, Freeman_2015_eLife)
+# -ON midget: Invaginating Midget Bipolars, IMB (Wässle_1994_VisRes)
+
+bipolar2gc_dict = {
+    "midget": {"on": ["IMB"], "off": ["FMB"]},
+    "parasol": {"on": ["DB4", "DB5"], "off": ["DB2", "DB3"]},
 }
 
 my_retina_append = {
@@ -458,8 +483,10 @@ my_retina_append = {
     "refractory_params": refractory_params,
     "gc_placement_params": gc_placement_params,
     "cone_placement_params": cone_placement_params,
+    "bipolar_placement_params": bipolar_placement_params,
     "rf_repulsion_params": rf_repulsion_params,
     "visual2cortical_params": visual2cortical_params,
+    "bipolar2gc_dict": bipolar2gc_dict,
 }
 
 my_retina.update(my_retina_append)
@@ -531,6 +558,8 @@ cone_response_fullpath = (
     literature_data_folder / "Angueyra_2013_NatNeurosci_Fig6B_c.npz"
 )
 
+bipolar_table_fullpath = literature_data_folder / "Boycott_1991_EurJNeurosci_Table1.csv"
+
 literature_data_files = {
     "gc_density_fullpath": gc_density_fullpath,
     "dendr_diam1_fullpath": dendr_diam1_fullpath,
@@ -543,6 +572,7 @@ literature_data_files = {
     "cone_density2_fullpath": cone_density2_fullpath,
     "cone_noise_fullpath": cone_noise_fullpath,
     "cone_response_fullpath": cone_response_fullpath,
+    "bipolar_table_fullpath": bipolar_table_fullpath,
 }
 
 
@@ -610,8 +640,8 @@ if __name__ == "__main__":
     # PAPERI EIKÄ PELKÄSTÄÄN SIMULAATTORIPAPERI. SITTEN VOISI TEHDÄ TOISEN PAPERIN
     # AJATUKSELLA MITEN TÄLLAINEN KANNATTAA KOODATA AJATUKSELLA "DESING PATTERN FOR RESEARCH"
     #
-    # MIETI TAPPIKOHINAN LINKITYS UUDELLEEN:
-    #  - HEXAGONAALINEN ARRAY?
+    # TAPPIKOHINAN LINKITYS:
+    # - BIPO ARRAY: MIDGET KS WÄSSLE -94 (KS MYÖS FREEMAN 2015), PARASOL = ?, HEXAGONAALINEN ARRAY, VORONOI TESSELAATIO
 
     ###########################################
     ##   Luminance and Photoisomerizations   ##
@@ -659,9 +689,12 @@ if __name__ == "__main__":
 
     # For FIT and VAE
     # PM.viz.show_cones_linked_to_gc(gc_list=[10, 17], savefigname=None)
+    # PM.viz.show_cones_linked_to_gc(n_samples=4, savefigname=None)
     # PM.viz.show_DoG_img_grid(gc_list=[10, 17, 46], savefigname=None)
     # PM.viz.show_DoG_img_grid(n_samples=8)
-    # PM.viz.show_cell_density_vs_ecc(unit_type="cone", savefigname=None)  # gc or cone
+    PM.viz.show_cell_density_vs_ecc(unit_type="cone", savefigname=None)  # gc or cone
+    # PM.viz.show_cell_density_vs_ecc(unit_type="gc", savefigname=None)  # gc or cone
+    PM.viz.show_cell_density_vs_ecc(unit_type="bipolar", savefigname=None)  # gc or cone
 
     # PM.viz.show_DoG_model_fit(sample_list=[10], savefigname=None)
     # PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)
@@ -712,7 +745,7 @@ if __name__ == "__main__":
     ####################################
 
     # Load stimulus to get working retina, necessary for running units
-    PM.simulate_retina.run_with_my_run_options()
+    # PM.simulate_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
@@ -731,8 +764,8 @@ if __name__ == "__main__":
     ################################################
 
     # Based on my_run_options above
-    PM.viz.show_all_gc_responses(savefigname=None)
-    PM.viz.show_all_gc_histogram(savefigname=None)
+    # PM.viz.show_all_gc_responses(savefigname=None)
+    # PM.viz.show_all_gc_histogram(savefigname=None)
 
     # PM.viz.show_stimulus_with_gcs(
     #     example_gc=my_run_options["unit_index"],  # [int,], my_run_options["unit_index"]

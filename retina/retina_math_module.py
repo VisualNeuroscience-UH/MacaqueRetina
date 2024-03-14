@@ -28,7 +28,7 @@ class RetinaMath:
         return a * np.exp(b * x) + c * np.exp(d * x)
 
     def triple_exponential_func(self, x, a, b, c, d, e, f):
-        return a * np.exp(b * x) + c * np.exp(d * x) + e * np.exp(f * x)
+        return np.maximum(a * np.exp(b * x) + c * np.exp(d * x) + e * np.exp(f * x), 0)
 
     def gauss_plus_baseline_func(self, x, a, x0, sigma, baseline):  # To fit GC density
         """
@@ -325,7 +325,7 @@ class RetinaMath:
         """
         return a / (1 + ((f / wc) ** 2))
 
-    def interpolation_function(self, x, y):
+    def interpolation_function(self, x, y, kind="linear"):
         """Interpolate empirical data to get a continuous function for the cone response."""
 
         # Finite fill values for extrapolation are necessary for the model
@@ -337,7 +337,7 @@ class RetinaMath:
         interp1d_function = interp1d(
             x,
             y,
-            kind="linear",
+            kind=kind,
             fill_value=fill_value,
             bounds_error=False,
         )

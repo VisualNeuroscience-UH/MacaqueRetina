@@ -73,6 +73,8 @@ class Retina:
         Parameters for placing ganglion cells.
     cone_placement_params : dict
         Parameters for placing cones.
+    bipolar_placement_params : dict
+        Parameters for placing bipolar cells.
     cone_general_params : dict
         Natural stimulus filtering parameters and cone to gcs connetcion parameters.
     rf_coverage_adjusted_to_1 : bool
@@ -118,10 +120,12 @@ class Retina:
         self.gc_placement_params = my_retina["gc_placement_params"]
         self.cone_placement_params = my_retina["cone_placement_params"]
         self.cone_general_params = my_retina["cone_general_params"]
+        self.bipolar_placement_params = my_retina["bipolar_placement_params"]
 
         self.rf_coverage_adjusted_to_1 = my_retina["rf_coverage_adjusted_to_1"]
         self.dd_regr_model = my_retina["dd_regr_model"]
         self.deg_per_mm = my_retina["deg_per_mm"]
+        self.bipolar2gc_dict = my_retina["bipolar2gc_dict"]
 
         ecc_limits_deg = my_retina["ecc_limits_deg"]
         ecc_limit_for_dd_fit = my_retina["ecc_limit_for_dd_fit"]
@@ -460,7 +464,7 @@ class ConstructRetina(RetinaMath):
 
         return distribution_parameters
 
-    def read_and_fit_cell_density_data(self, ret):
+    def read_and_fit_cell_density_data(self, ret, gc):
         """
         Read literature data from file and fit ganglion cell and cone density with respect to eccentricity.
         """
@@ -495,12 +499,16 @@ class ConstructRetina(RetinaMath):
             """
             Fit density data based on cell type.
             """
+
             if cell_type == "gc":
                 this_function = self.gauss_plus_baseline_func
                 p0 = [1000, 0, 2, np.min(density)]
             elif cell_type == "cone":
-                this_function = self.double_exponential_func
-                p0 = [0, -1, 0, 0]
+                this_function = self.triple_exponential_func
+                p0 = [0, -1, 0, 0, 0, 0]
+            elif cell_type == "bipolar":  # Follows cones
+                this_function = self.cone_fit_function
+                p0 = [0, -1, 0, 0, 0, 0]
 
             fit_parameters, _ = opt.curve_fit(
                 this_function, eccentricity, density, p0=p0
@@ -530,8 +538,29 @@ class ConstructRetina(RetinaMath):
         cone_eccentricity, cone_density = _process_density_data(cone_filepaths)
         cone_fit_parameters = _fit_density_data(cone_eccentricity, cone_density, "cone")
 
+        # Bipolar to cone ratio data at 6.5 mm eccentricity, from Boycott_1991_EurJNeurosci
+        # We assume constant bipolar-to-cone ration across eccentricity
+        bipolar_filepaths = self.context.literature_data_files["bipolar_table_fullpath"]
+        bipolar_df = self.data_io.get_data(bipolar_filepaths)
+        bipolar_df = bipolar_df.set_index(bipolar_df.columns[0])
+        b2c_ratio_s = bipolar_df.loc["Bipolar_cone_ratio"]
+
+        # Pick correct bipolar types, then values at 6.5 mm.
+        bipolar_types = ret.bipolar2gc_dict[gc.gc_type][gc.response_type]
+        b2c_ratio_str = b2c_ratio_s[bipolar_types].values
+        b2c_ratios = np.array([float(x) for x in b2c_ratio_str])
+
+        # Take only one bipolar value despite parasols getting input from two types.
+        # If we later learn that the two types are not equal, we need to change this.
+        b2c_ratio = np.mean(b2c_ratios)
+        bipolar_mock_density = cone_density * b2c_ratio
+        bipolar_fit_parameters = _fit_density_data(
+            cone_eccentricity, bipolar_mock_density, "bipolar"
+        )
+
         ret.gc_density_params = gc_fit_parameters
         ret.cone_density_params = cone_fit_parameters
+        ret.bipolar_density_params = bipolar_fit_parameters
 
         return ret
 
@@ -1014,6 +1043,7 @@ class ConstructRetina(RetinaMath):
         """
         gc_density_params = ret.gc_density_params
         cone_density_params = ret.cone_density_params
+        bipolar_density_params = ret.bipolar_density_params
 
         # Loop for reasonable delta ecc to get correct density in one hand and good unit distribution from the algo on the other
         # Lets fit close to 0.1 mm intervals, which makes sense up to some 15 deg. Thereafter longer jumps would do fine.
@@ -1035,6 +1065,8 @@ class ConstructRetina(RetinaMath):
         gc_density_all = []
         cone_initial_pos = []
         cone_density_all = []
+        bipolar_initial_pos = []
+        bipolar_density_all = []
         for group_idx in range(len(eccentricity_steps) - 1):
             min_ecc = eccentricity_steps[group_idx]
             max_ecc = eccentricity_steps[group_idx + 1]
@@ -1043,6 +1075,10 @@ class ConstructRetina(RetinaMath):
             gc_density_group = self.gc_fit_function(avg_ecc, *gc_density_params)
 
             cone_density_group = self.cone_fit_function(avg_ecc, *cone_density_params)
+
+            bipolar_density_group = self.bipolar_fit_function(
+                avg_ecc, *bipolar_density_params
+            )
 
             # Calculate area for this eccentricity group
             sector_area_remove = self.sector2area_mm2(min_ecc, angle_deg)
@@ -1055,7 +1091,7 @@ class ConstructRetina(RetinaMath):
             gc_units = math.ceil(
                 sector_surface_area * gc_density_group * ret.gc_proportion
             )
-            gc_positions = self._random_positions_within_group(
+            gc_positions = self._random_positions_group(
                 min_ecc, max_ecc, gc_units, ret.polar_lim_deg
             )
             eccentricity_groups.append(np.full(gc_units, group_idx))
@@ -1065,18 +1101,26 @@ class ConstructRetina(RetinaMath):
             gc_initial_pos.append(gc_positions)
 
             cone_units = math.ceil(sector_surface_area * cone_density_group)
-            # cone_positions = self._random_positions_within_group(
-            #     min_ecc, max_ecc, cone_units
-            # )
-            cone_positions = self._hexagonal_positions_within_group(
+            cone_positions = self._hexagonal_positions_group(
                 min_ecc, max_ecc, cone_units, ret.polar_lim_deg
             )
 
+            cone_units = cone_positions.shape[0]
             cone_density_all.append(np.full(cone_units, cone_density_group))
             cone_initial_pos.append(cone_positions)
 
+            bipolar_units = math.ceil(sector_surface_area * bipolar_density_group)
+            bipolar_positions = self._hexagonal_positions_group(
+                min_ecc, max_ecc, bipolar_units, ret.polar_lim_deg
+            )
+            bipolar_units = bipolar_positions.shape[0]
+
+            bipolar_density_all.append(np.full(bipolar_units, bipolar_density_group))
+            bipolar_initial_pos.append(bipolar_positions)
+
         gc_density = np.concatenate(gc_density_all)
         cone_density = np.concatenate(cone_density_all)
+        bipolar_density = np.concatenate(bipolar_density_all)
 
         return (
             eccentricity_groups,
@@ -1085,6 +1129,8 @@ class ConstructRetina(RetinaMath):
             gc_density,
             cone_initial_pos,
             cone_density,
+            bipolar_initial_pos,
+            bipolar_density,
         )
 
     def _boundary_force(self, positions, rep, dist_th, ecc_lim_mm, polar_lim_deg):
@@ -1505,14 +1551,13 @@ class ConstructRetina(RetinaMath):
 
         return positions
 
-    def _random_positions_within_group(self, min_ecc, max_ecc, n_units, polar_lim_deg):
+    def _random_positions_group(self, min_ecc, max_ecc, n_units, polar_lim_deg):
         eccs = np.random.uniform(min_ecc, max_ecc, n_units)
         angles = np.random.uniform(polar_lim_deg[0], polar_lim_deg[1], n_units)
         return np.column_stack((eccs, angles))
 
-    def _hexagonal_positions_within_group(
-        self, min_ecc, max_ecc, n_units, polar_lim_deg
-    ):
+    def _hexagonal_positions_group(self, min_ecc, max_ecc, n_units, polar_lim_deg):
+
         delta_ecc = max_ecc - min_ecc
         mean_ecc = (max_ecc + min_ecc) / 2
 
@@ -1521,15 +1566,20 @@ class ConstructRetina(RetinaMath):
         x1, y1 = self.pol2cart(mean_ecc, polar_lim_deg[1])
         delta_pol = np.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2)
 
-        n_pol = int(np.ceil(np.sqrt(n_units * (delta_pol / delta_ecc))))
-        n_ecc = int(np.ceil(n_units / n_pol))
+        mean_dist = np.sqrt((delta_ecc * delta_pol) / n_units)
+        _delta_ecc = delta_ecc - mean_dist
+        n_ecc = int(np.round(_delta_ecc / mean_dist))
+        n_pol = int(np.round(n_units / n_ecc))
 
         # Generate evenly spaced values for eccentricity and angle
-        eccs = np.linspace(min_ecc, max_ecc, n_ecc, endpoint=True)
+        eccs = np.linspace(
+            min_ecc + mean_dist / 2, max_ecc - mean_dist / 2, n_ecc, endpoint=True
+        )
         angles = np.linspace(polar_lim_deg[0], polar_lim_deg[1], n_pol, endpoint=False)
 
         # Create a meshgrid of all combinations of eccs and angles
         eccs_grid, angles_grid = np.meshgrid(eccs, angles, indexing="ij")
+
         # Offset every other row by half the distance between columns
         for i in range(n_ecc):
             if i % 2 == 1:  # Check if the row is odd
@@ -1538,7 +1588,11 @@ class ConstructRetina(RetinaMath):
         # Reshape the grids and combine them into a single array
         positions = np.column_stack((eccs_grid.ravel(), angles_grid.ravel()))
 
-        return positions[:n_units]
+        # print(
+        #     f"Error in n units due to hexagonal grid {((len(positions) - n_units) / n_units) * 100:.2f}%"
+        # )
+
+        return positions
 
     def _optimize_positions(
         self, ret, initial_positions, cell_density, unit_placement_params
@@ -1626,6 +1680,8 @@ class ConstructRetina(RetinaMath):
             gc_density,
             cone_initial_pos,
             cone_density,
+            bipolar_initial_pos,
+            bipolar_density,
         ) = self._initialize_positions_by_group(ret)
 
         # Optimize positions
@@ -1634,6 +1690,11 @@ class ConstructRetina(RetinaMath):
         )
         cone_optimized_pos, cone_optimized_positions_mm = self._optimize_positions(
             ret, cone_initial_pos, cone_density, ret.cone_placement_params
+        )
+        bipolar_optimized_pos, bipolar_optimized_positions_mm = (
+            self._optimize_positions(
+                ret, bipolar_initial_pos, bipolar_density, ret.bipolar_placement_params
+            )
         )
 
         # Assign ganglion cell positions to gc_df
@@ -1646,6 +1707,7 @@ class ConstructRetina(RetinaMath):
         # Cones will be attached to gcs after the final position of gcs is known after
         # repulsion.
         ret.cone_optimized_positions_mm = cone_optimized_positions_mm
+        ret.bipolar_optimized_positions_mm = bipolar_optimized_positions_mm
 
         return ret, gc
 
@@ -3207,7 +3269,7 @@ class ConstructRetina(RetinaMath):
         # -- First, place the ganglion cell midpoints (units mm)
         # Run GC and cone density fit to data, get func_params.
         # GC data from Perry_1984_Neurosci, cone data from Packer_1989_JCompNeurol
-        ret = self.read_and_fit_cell_density_data(ret)
+        ret = self.read_and_fit_cell_density_data(ret, gc)
 
         # Place ganglion cells and cones to desired retina.
         ret, gc = self._place_units(ret, gc)
@@ -3234,10 +3296,6 @@ class ConstructRetina(RetinaMath):
 
         # Save the receptive field mosaic
         self.save_gc_df2csv(gc)
-
-        # Save the project data
-        # Attach data requested by other classes to project_data
-        # self.project_data.construct_retina["gc"] = gc
 
     def save_gc_data(self, gc):
         # Save the generated receptive field pix images, pix masks, and pixel locations in mm
