@@ -1228,8 +1228,8 @@ class Viz:
         """
 
         ret_file_npz = self.data_io.get_data(self.context.my_retina["ret_file"])
-        noise_frequency_data = ret_file_npz["frequency_data"]
-        noise_power_data = ret_file_npz["power_data"]
+        noise_frequency_data = ret_file_npz["noise_frequency_data"]
+        noise_power_data = ret_file_npz["noise_power_data"]
         cone_noise_parameters = ret_file_npz["cone_noise_parameters"]
         title = "cone_noise_vs_freq"
 

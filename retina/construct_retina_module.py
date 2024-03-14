@@ -719,7 +719,7 @@ class ConstructRetina(RetinaMath):
         ret : Retina instance
             An object to store the fitted parameters, frequency data, power data, and fitted noise power.
             This object must have attributes to store these values (e.g., `cone_frequency_data`, `cone_power_data`,
-            `cone_noise_parameters`, `frequency_data`, `power_data`, `cone_noise_power_fit`).
+            `cone_noise_parameters`, `noise_frequency_data`, `noise_power_data`, `cone_noise_power_fit`).
 
         Returns
         -------
@@ -768,8 +768,10 @@ class ConstructRetina(RetinaMath):
             self.context.literature_data_files["cone_noise_fullpath"]
         )
 
-        frequency_data, power_data = data_extractor(cone_noise)
-        log_frequency_data, log_power_data = np.log(frequency_data), np.log(power_data)
+        noise_frequency_data, noise_power_data = data_extractor(cone_noise)
+        log_frequency_data, log_power_data = np.log(noise_frequency_data), np.log(
+            noise_power_data
+        )
 
         # Linear scale initial parameters a0, a1, a2
         initial_guesses = [4e5, 1e-2, 1e-3]
@@ -795,8 +797,8 @@ class ConstructRetina(RetinaMath):
         )
 
         ret.cone_noise_parameters = np.exp(log_popt)  # Convert params to linear space
-        ret.frequency_data = frequency_data
-        ret.power_data = power_data
+        ret.noise_frequency_data = noise_frequency_data
+        ret.noise_power_data = noise_power_data
         ret.cone_noise_power_fit = np.exp(
             self.fit_log_interp_and_double_lorenzian(log_frequency_data, *log_popt)
         )
@@ -3326,8 +3328,8 @@ class ConstructRetina(RetinaMath):
             "cone_optimized_positions_mm": ret.cone_optimized_positions_mm,
             "cones_to_gcs_weights": ret.cones_to_gcs_weights,
             "cone_noise_parameters": ret.cone_noise_parameters,
-            "frequency_data": ret.frequency_data,
-            "power_data": ret.power_data,
+            "noise_frequency_data": ret.noise_frequency_data,  # cone noise
+            "noise_power_data": ret.noise_power_data,  # cone noise
             "cone_frequency_data": ret.cone_frequency_data,
             "cone_power_data": ret.cone_power_data,
             "cone_noise_power_fit": ret.cone_noise_power_fit,
