@@ -432,7 +432,7 @@ cone_placement_params = {
 }
 
 bipolar_placement_params = {
-    "algorithm": "force",  # "voronoi" or "force" or None
+    "algorithm": None,  # "voronoi" or "force" or None
     "n_iterations": 3,  # v 20, f 300
     "change_rate": 0.0001,  # f 0.0005, v 0.5
     "unit_repulsion_stregth": 2,  # 10 f only
@@ -640,8 +640,12 @@ if __name__ == "__main__":
     # PAPERI EIKÄ PELKÄSTÄÄN SIMULAATTORIPAPERI. SITTEN VOISI TEHDÄ TOISEN PAPERIN
     # AJATUKSELLA MITEN TÄLLAINEN KANNATTAA KOODATA AJATUKSELLA "DESING PATTERN FOR RESEARCH"
     #
-    # TAPPIKOHINAN LINKITYS:
-    # - BIPO ARRAY: MIDGET KS WÄSSLE -94 (KS MYÖS FREEMAN 2015), PARASOL = ?, HEXAGONAALINEN ARRAY, VORONOI TESSELAATIO
+    # SUBUNIT MODEL:
+    # - CONSTRUCT RETINA: LINKITÄ BIPOLAARIT GC:HIN
+    # - SIMULATE RETINA: VIE PIKSELIT TAPPIEN KAUTTA BIPOLAAREIHIN JA EDELLEEN GC:HIN
+    # - SIMULATE RETINA: BIPOLAAREIHIN ReLu EPÄLINEAARISUUS
+    # - VIZ: TARKISTA LINKITYKSET
+    # - VIZ: TARKISTA SUBUNIT MALLIN TOIMIVUUS
 
     ###########################################
     ##   Luminance and Photoisomerizations   ##
