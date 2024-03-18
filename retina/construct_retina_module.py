@@ -464,7 +464,7 @@ class ConstructRetina(RetinaMath):
 
         return distribution_parameters
 
-    def read_and_fit_cell_density_data(self, ret, gc):
+    def _read_and_fit_cell_density_data(self, ret, gc):
         """
         Read literature data from file and fit ganglion cell and cone density with respect to eccentricity.
         """
@@ -545,7 +545,7 @@ class ConstructRetina(RetinaMath):
         bipolar_df = bipolar_df.set_index(bipolar_df.columns[0])
         b2c_ratio_s = bipolar_df.loc["Bipolar_cone_ratio"]
 
-        # Pick correct bipolar types, then values at 6.5 mm.
+        # Pick correct bipolar types, then bipolar to cone ratio at 6.5 mm.
         bipolar_types = ret.bipolar2gc_dict[gc.gc_type][gc.response_type]
         b2c_ratio_str = b2c_ratio_s[bipolar_types].values
         b2c_ratios = np.array([float(x) for x in b2c_ratio_str])
@@ -553,6 +553,7 @@ class ConstructRetina(RetinaMath):
         # Take only one bipolar value despite parasols getting input from two types.
         # If we later learn that the two types are not equal, we need to change this.
         b2c_ratio = np.mean(b2c_ratios)
+        # The bipolar mock density follows cone density, assuming constant ratio
         bipolar_mock_density = cone_density * b2c_ratio
         bipolar_fit_parameters = _fit_density_data(
             cone_eccentricity, bipolar_mock_density, "bipolar"
@@ -3312,7 +3313,7 @@ class ConstructRetina(RetinaMath):
         # -- First, place the ganglion cell midpoints (units mm)
         # Run GC and cone density fit to data, get func_params.
         # GC data from Perry_1984_Neurosci, cone data from Packer_1989_JCompNeurol
-        ret = self.read_and_fit_cell_density_data(ret, gc)
+        ret = self._read_and_fit_cell_density_data(ret, gc)
 
         # Place ganglion cells and cones to desired retina.
         ret, gc = self._place_units(ret, gc)
