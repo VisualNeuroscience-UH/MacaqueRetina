@@ -121,6 +121,7 @@ class Retina:
         self.cone_placement_params = my_retina["cone_placement_params"]
         self.cone_general_params = my_retina["cone_general_params"]
         self.bipolar_placement_params = my_retina["bipolar_placement_params"]
+        self.bipolar_general_params = my_retina["bipolar_general_params"]
 
         self.rf_coverage_adjusted_to_1 = my_retina["rf_coverage_adjusted_to_1"]
         self.dd_regr_model = my_retina["dd_regr_model"]
@@ -1671,6 +1672,50 @@ class ConstructRetina(RetinaMath):
             weights[i, :] = weights_mtx.sum(axis=(1, 2))
 
         ret.cones_to_gcs_weights = weights
+
+        return ret
+
+    def _link_bipolar_units_to_gcs(self, ret, gc):
+        """
+        Connect bipolar units to ganglion cell units for shared subunit model.
+        """
+
+        print("Connecting bipolar units to ganglion cells...")
+
+        bipo_pos_mm = ret.bipolar_optimized_positions_mm
+        n_bipos = bipo_pos_mm.shape[0]
+        n_gcs = len(gc.df)
+
+        if gc.gc_type == "parasol":
+            sd_bipo = ret.bipolar_general_params["bipo2gc_parasol"] / 1000
+        elif gc.gc_type == "midget":
+            sd_bipo = ret.bipolar_general_params["bipo2gc_midget"] / 1000
+        cutoff_distance = ret.bipolar_general_params["bipo2gc_cutoff_SD"] * sd_bipo
+
+        weights = np.zeros((n_bipos, n_gcs))
+
+        # Normalize center activation to probability distribution
+        img_cen = gc.img * gc.img_mask  # N, H, W
+        img_prob = img_cen / np.sum(img_cen, axis=(1, 2))[:, None, None]
+        for i in tqdm(
+            range(n_bipos),
+            desc=f"Calculating {n_bipos} x {n_gcs} connections",
+        ):
+            this_bipo_pos = bipo_pos_mm[i]
+            dist_x_mtx = gc.X_grid_mm - this_bipo_pos[0]
+            dist_y_mtx = gc.Y_grid_mm - this_bipo_pos[1]
+            dist_mtx = np.sqrt(dist_x_mtx**2 + dist_y_mtx**2)
+
+            # Drop weight as a Gaussian function of distance with sd = sd_bipo
+            probability = np.exp(-((dist_mtx / sd_bipo) ** 2))
+            probability[dist_mtx > cutoff_distance] = 0
+
+            weights_mtx = probability * img_prob
+            weights[i, :] = weights_mtx.sum(axis=(1, 2))
+
+        # Normalize axis 0 weights to 1.0
+        weights = weights / weights.sum(axis=0)
+        ret.bipolar_to_gcs_weights = weights
 
         return ret
 
@@ -3323,6 +3368,7 @@ class ConstructRetina(RetinaMath):
         ret, gc = self._create_spatial_rfs(ret, gc)
         # self.viz.show_cones_linked_to_gc(gc_list=[100])
         ret = self._link_cones_to_bipolars(ret, gc)
+        ret = self._link_bipolar_units_to_gcs(ret, gc)
 
         ret = self._link_cone_noise_units_to_gcs(ret, gc)
 
@@ -3378,6 +3424,7 @@ class ConstructRetina(RetinaMath):
             "cone_power_data": ret.cone_power_data,
             "cone_noise_power_fit": ret.cone_noise_power_fit,
             "cones_to_bipolars_mtx": ret.cones_to_bipolars_mtx,
+            "bipolar_to_gcs_weights": ret.bipolar_to_gcs_weights,
         }
 
         self.data_io.save_np_dict_to_npz(
