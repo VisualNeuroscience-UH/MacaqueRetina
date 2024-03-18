@@ -383,6 +383,11 @@ cone_general_params = {
     "cone_noise_magnitude": 0.2,  # firing rate relative to Benardete mean values, 0 for no noise
     "cone_noise_wc": [14, 160],  # lorenzian freqs, Angueyra_2013_NatNeurosci Fig1
 }
+bipolar_general_params = {
+    "bipo2gc_midget": 42,  # um, from pix center to pix corner
+    "bipo2gc_parasol": 42,
+    "bipo2gc_cutoff_SD": 1,  # Multiplier for above value
+}
 
 # Recovery function from Berry_1998_JNeurosci, Uzzell_2004_JNeurophysiol
 # abs and rel refractory estimated from Uzzell_2004_JNeurophysiol,
@@ -480,6 +485,7 @@ my_retina_append = {
     "deg_per_mm": deg_per_mm,
     "optical_aberration": optical_aberration,
     "cone_general_params": cone_general_params,
+    "bipolar_general_params": bipolar_general_params,
     "refractory_params": refractory_params,
     "gc_placement_params": gc_placement_params,
     "cone_placement_params": cone_placement_params,
