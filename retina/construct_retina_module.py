@@ -1638,7 +1638,7 @@ class ConstructRetina(RetinaMath):
 
         print("Connecting cones to ganglion cells for shared cone noise...")
 
-        cone_pos_mm = ret.cone_optimized_positions_mm
+        cone_pos_mm = ret.cone_optimized_pos_mm
         n_cones = cone_pos_mm.shape[0]
         n_gcs = len(gc.df)
 
@@ -1681,7 +1681,7 @@ class ConstructRetina(RetinaMath):
 
         print("Connecting bipolar units to ganglion cells...")
 
-        bipo_pos_mm = ret.bipolar_optimized_positions_mm
+        bipo_pos_mm = ret.bipolar_optimized_pos_mm
         n_bipos = bipo_pos_mm.shape[0]
         n_gcs = len(gc.df)
 
@@ -1725,9 +1725,9 @@ class ConstructRetina(RetinaMath):
 
         print("Connecting cones to bipolar cells...")
 
-        cone_pos_mm = ret.cone_optimized_positions_mm
+        cone_pos_mm = ret.cone_optimized_pos_mm
         n_cones = cone_pos_mm.shape[0]
-        bipo_pos_mm = ret.bipolar_optimized_positions_mm
+        bipo_pos_mm = ret.bipolar_optimized_pos_mm
         n_bipos = bipo_pos_mm.shape[0]
         selected_bipolars_df = ret.selected_bipolars_df
 
@@ -1773,29 +1773,28 @@ class ConstructRetina(RetinaMath):
         ) = self._initialize_positions_by_group(ret)
 
         # Optimize positions
-        gc_optimized_pos, gc_optimized_positions_mm = self._optimize_positions(
+        gc_optimized_pos_pol, gc_optimized_pos_mm = self._optimize_positions(
             ret, gc_initial_pos, gc_density, ret.gc_placement_params
         )
-        cone_optimized_pos, cone_optimized_positions_mm = self._optimize_positions(
+        cone_optimized_pos_pol, cone_optimized_pos_mm = self._optimize_positions(
             ret, cone_initial_pos, cone_density, ret.cone_placement_params
         )
-        bipolar_optimized_pos, bipolar_optimized_positions_mm = (
-            self._optimize_positions(
-                ret, bipolar_initial_pos, bipolar_density, ret.bipolar_placement_params
-            )
+        bipolar_optimized_pos_pol, bipolar_optimized_pos_mm = self._optimize_positions(
+            ret, bipolar_initial_pos, bipolar_density, ret.bipolar_placement_params
         )
 
         # Assign ganglion cell positions to gc_df
-        gc.df["pos_ecc_mm"] = gc_optimized_pos[:, 0]
-        gc.df["pos_polar_deg"] = gc_optimized_pos[:, 1]
+        gc.df["pos_ecc_mm"] = gc_optimized_pos_pol[:, 0]
+        gc.df["pos_polar_deg"] = gc_optimized_pos_pol[:, 1]
         gc.df["ecc_group_idx"] = np.concatenate(eccentricity_groups)
 
         ret.sector_surface_areas_mm2 = sector_surface_areas_mm2
 
         # Cones will be attached to gcs after the final position of gcs is known after
         # repulsion.
-        ret.cone_optimized_positions_mm = cone_optimized_positions_mm
-        ret.bipolar_optimized_positions_mm = bipolar_optimized_positions_mm
+        ret.cone_optimized_pos_mm = cone_optimized_pos_mm
+        ret.cone_optimized_pos_pol = cone_optimized_pos_pol
+        ret.bipolar_optimized_pos_mm = bipolar_optimized_pos_mm
 
         return ret, gc
 
@@ -3417,7 +3416,8 @@ class ConstructRetina(RetinaMath):
 
         # Collate data for saving
         ret_dict = {
-            "cone_optimized_positions_mm": ret.cone_optimized_positions_mm,
+            "cone_optimized_pos_mm": ret.cone_optimized_pos_mm,
+            "cone_optimized_pos_pol": ret.cone_optimized_pos_pol,
             "cones_to_gcs_weights": ret.cones_to_gcs_weights,
             "cone_noise_parameters": ret.cone_noise_parameters,
             "noise_frequency_data": ret.noise_frequency_data,  # cone noise
