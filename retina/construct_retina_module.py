@@ -3314,6 +3314,9 @@ class ConstructRetina(RetinaMath):
         return gc
 
     def _initialize_build(self):
+        """
+        Inject dependencies to helper classes here
+        """
 
         my_retina = self.context.my_retina
         ret = Retina(my_retina)
