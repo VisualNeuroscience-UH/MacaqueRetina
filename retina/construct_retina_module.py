@@ -735,7 +735,6 @@ class ConstructRetina(RetinaMath):
         The method relies on several helper functions in RetinaMath class, including:
         - `lorenzian_function` for defining the Lorenzian function used in the fit.
         - `interpolation_function` to interpolate empirical data.
-        - `lin_interp_and_double_lorenzian` to calculate the power spectrum in linear space.
         - `fit_log_interp_and_double_lorenzian` for fitting in log space to equalize errors across the power range.
         """
 

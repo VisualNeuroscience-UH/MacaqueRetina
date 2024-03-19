@@ -281,7 +281,7 @@ my_stimulus_options = {
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
     "fps": 350,  # 300 for good cg integration
-    "duration_seconds": 9,  # actual frames = floor(duration_seconds * fps)
+    "duration_seconds": 1,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
     "pattern": "temporal_sine_pattern",  # One of the StimulusPatterns square_grating sine_grating
@@ -291,7 +291,7 @@ my_stimulus_options = {
     "stimulus_position": (0.0, 0.0),
     "stimulus_size": 1,  # 0.04,  # 2,  # deg, radius for circle, sidelen/2 for rectangle.
     "background": 128,
-    "contrast": 0.0,  # Weber constrast
+    "contrast": 0.95,  # Weber constrast
     "mean": 128,
     "temporal_frequency": 6.0,  # 0.01,  # 4.0,  # 40,  # Hz
     "spatial_frequency": 5.0,  # cpd
@@ -647,7 +647,6 @@ if __name__ == "__main__":
     # AJATUKSELLA MITEN TÄLLAINEN KANNATTAA KOODATA AJATUKSELLA "DESING PATTERN FOR RESEARCH"
     #
     # SUBUNIT MODEL:
-    # - CONSTRUCT RETINA: LINKITÄ BIPOLAARIT GC:HIN
     # - SIMULATE RETINA: VIE PIKSELIT TAPPIEN KAUTTA BIPOLAAREIHIN JA EDELLEEN GC:HIN
     # - SIMULATE RETINA: BIPOLAAREIHIN ReLu EPÄLINEAARISUUS
     # - VIZ: TARKISTA LINKITYKSET
@@ -702,9 +701,9 @@ if __name__ == "__main__":
     # PM.viz.show_cones_linked_to_gc(n_samples=4, savefigname=None)
     # PM.viz.show_DoG_img_grid(gc_list=[10, 17, 46], savefigname=None)
     # PM.viz.show_DoG_img_grid(n_samples=8)
-    PM.viz.show_cell_density_vs_ecc(unit_type="cone", savefigname=None)  # gc or cone
+    # PM.viz.show_cell_density_vs_ecc(unit_type="cone", savefigname=None)  # gc or cone
     # PM.viz.show_cell_density_vs_ecc(unit_type="gc", savefigname=None)  # gc or cone
-    PM.viz.show_cell_density_vs_ecc(unit_type="bipolar", savefigname=None)  # gc or cone
+    # PM.viz.show_cell_density_vs_ecc(unit_type="bipolar", savefigname=None)  # gc or cone
 
     # PM.viz.show_DoG_model_fit(sample_list=[10], savefigname=None)
     # PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)
@@ -755,7 +754,7 @@ if __name__ == "__main__":
     ####################################
 
     # Load stimulus to get working retina, necessary for running units
-    # PM.simulate_retina.run_with_my_run_options()
+    PM.simulate_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
@@ -774,7 +773,7 @@ if __name__ == "__main__":
     ################################################
 
     # Based on my_run_options above
-    # PM.viz.show_all_gc_responses(savefigname=None)
+    PM.viz.show_all_gc_responses(savefigname=None)
     # PM.viz.show_all_gc_histogram(savefigname=None)
 
     # PM.viz.show_stimulus_with_gcs(
