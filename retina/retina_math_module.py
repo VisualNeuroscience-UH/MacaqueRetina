@@ -344,14 +344,16 @@ class RetinaMath:
 
         return interp1d_function
 
-    def lin_interp_and_double_lorenzian(self, f, a0, L1_params, L2_params):
+    def lin_interp_and_double_lorenzian(
+        self, f, a0, L1_params, L2_params, cone_interp_response
+    ):
         """
         Calculate the power spectrum in linear space as a combination of
         interpolated cone response and two lorenzian functions.
         """
         L1 = self.lorenzian_function(f, *L1_params)
         L2 = self.lorenzian_function(f, *L2_params)
-        fitted_interpolated_data = a0 * self.cone_interp_response(f)
+        fitted_interpolated_data = a0 * cone_interp_response(f)
 
         return L1 + L2 + fitted_interpolated_data
 
@@ -385,7 +387,7 @@ class RetinaMath:
 
         # Calculate the power spectrum in linear space
         power_spectrum = self.lin_interp_and_double_lorenzian(
-            f, a0, L1_params, L2_params
+            f, a0, L1_params, L2_params, self.cone_interp_response
         )
 
         log_power_spectrum = np.log(power_spectrum)
