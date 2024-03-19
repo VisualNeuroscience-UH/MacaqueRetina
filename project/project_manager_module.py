@@ -9,7 +9,7 @@ from retina.construct_retina_module import ConstructRetina
 from retina.simulate_retina_module import (
     SimulateRetina,
     PreGCProcessing,
-    ReceptiveFields,
+    ReceptiveFieldsBase,
 )
 from retina.retina_math_module import RetinaMath
 from retina.fit_module import Fit
@@ -142,7 +142,7 @@ class ProjectManager(ProjectBase, ProjectUtilities):
             context,
             data_io,
             viz,
-            ReceptiveFields=ReceptiveFields,
+            ReceptiveFields=ReceptiveFieldsBase,
             pol2cart_df=self.simulate_retina.pol2cart_df,
             get_w_z_coords=self.simulate_retina.get_w_z_coords,
         )
