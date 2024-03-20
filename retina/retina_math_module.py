@@ -742,34 +742,33 @@ class RetinaMath:
 
         return L
 
-    def calculate_F_cornea(self, I_cone, a_c_end_on, A_pupil, A_retina, tau_media=1.0):
+    def luminance_to_photon_flux_density(self, L, lambda_nm=555):
         """
-        Calculate the photon flux density at the cornea (F_cornea) for a given rate of photoisomerization in cones.
+        Convert luminance to photon flux density using human photopic vision V(lambda).
 
         Parameters
         ----------
-        I_cone : float
-            The rate of photoisomerizations per cone per second (R* cone^-1 s^-1).
-        a_c_end_on : float
-            The end-on collecting area for the cones (in mm^2).
-        A_pupil : float
-            The area of the pupil (in mm^2).
-        A_retina : float
-            The area of the retina (in mm^2).
-        tau_media : float, optional
-            The transmittance of the ocular media at wavelength λ, default is 1.0 (unitless).
+        L : float
+            Luminance in cd/m².
+        lambda_nm : float, optional
+            Wavelength of the monochromatic light in nanometers, default is 555 nm (peak of human photopic sensitivity).
 
         Returns
         -------
-        F_cornea : float
-            The photon flux density at the cornea (in photons/mm²/s).
-
-        Notes
-        -----
-        The function assumes that the transmittance of the ocular media (tau_media) is 1.0, indicating no loss of light due to absorption or scattering within the eye's media.
+        F : float
+            Photon flux density at the cornea in photons/mm²/s.
         """
+        # Constants
+        h = 6.626e-34  # Planck's constant in J·s
+        c = 3.00e8  # Speed of light in m/s
+        lambda_m = lambda_nm * 1e-9  # Convert wavelength from nm to m
+        kappa = 683  # Luminous efficacy of monochromatic radiation in lm/W at 555 nm
 
-        # Calculate the photon flux density at the cornea (F_cornea)
-        F_cornea = I_cone / (a_c_end_on * (A_pupil / A_retina) * tau_media)
+        # Energy of a photon at wavelength lambda in joules
+        E_photon = (h * c) / lambda_m
 
-        return F_cornea
+        # Convert luminance L to photon flux density F in photons/mm²/s
+        F_m2 = L / (E_photon * kappa)
+        F = F_m2 / 1e6  # Convert from m² to mm²
+
+        return F
