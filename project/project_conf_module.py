@@ -383,6 +383,22 @@ cone_general_params = {
     "cone_noise_magnitude": 0.2,  # firing rate relative to Benardete mean values, 0 for no noise
     "cone_noise_wc": [14, 160],  # lorenzian freqs, Angueyra_2013_NatNeurosci Fig1
 }
+
+# Parameters from Angueyra_2022_JNeurosci, model according to Clark_2013_PLoSComputBiol
+# Light intensity photons/microm^2/second
+cone_signal_parameters = {
+    "input_gain": 3.0,  # unitless
+    "alpha": 19.4,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
+    "beta": 0.36,  # unitless
+    "gamma": 0.448,  # unitless
+    "tau_y": 4.49,  # milliseconds
+    "n_y": 4.33,  # unitless
+    "tau_z": 166,  # milliseconds
+    "n_z": 1.0,  # unitless
+    "tau_r": 4.78,  # milliseconds
+    "output_scaling": 1.0,  # unitless
+}
+
 bipolar_general_params = {
     "bipo2gc_midget": 42,  # um, from pix center to pix corner
     "bipo2gc_parasol": 42,
@@ -485,6 +501,7 @@ my_retina_append = {
     "deg_per_mm": deg_per_mm,
     "optical_aberration": optical_aberration,
     "cone_general_params": cone_general_params,
+    "cone_signal_parameters": cone_signal_parameters,
     "bipolar_general_params": bipolar_general_params,
     "refractory_params": refractory_params,
     "gc_placement_params": gc_placement_params,
@@ -658,8 +675,13 @@ if __name__ == "__main__":
 
     # I_cone = 400000  # photoisomerizations per second per cone
 
-    # luminance = PM.simulate_retina.get_luminance_from_photoisomerizations(I_cone)
+    # luminance = PM.cones.get_luminance_from_photoisomerizations(I_cone)
     # print(f"{luminance:.2f} cd/m2")
+
+    luminance = 128  # Luminance in cd/m2
+
+    I_cone = PM.cones.get_photoisomerizations_from_luminance(luminance)
+    print(f"{I_cone:.2f} photoisomerizations per second per cone")
 
     # ##########################################
     # #   Sample figure data from literature  ##

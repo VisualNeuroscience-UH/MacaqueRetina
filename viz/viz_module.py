@@ -2014,7 +2014,7 @@ class Viz:
 
         ret_npz = self.data_io.get_data(self.context.my_retina["ret_file"])
         weights = ret_npz["cones_to_gcs_weights"]
-        cone_positions = ret_npz["cone_optimized_positions_mm"]
+        cone_positions = ret_npz["cone_optimized_pos_mm"]
 
         if isinstance(gc_list, list):
             pass  # gc_list supercedes n_samples

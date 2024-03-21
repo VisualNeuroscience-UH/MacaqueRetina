@@ -82,13 +82,10 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         data_io = DataIO(context)
         self.data_io = data_io
 
-        cones = PreGCProcessing(context, data_io)
-        self.cones = cones
+        # cones = PreGCProcessing(context, data_io)
+        # self.cones = cones
 
         project_data = ProjectData()
-
-        stimulate = VisualStimulus(context, data_io, cones)
-        self.stimulate = stimulate
 
         retina_math = RetinaMath()
 
@@ -129,9 +126,12 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         )
         self.viz.construct_retina = self.construct_retina
 
-        self.simulate_retina = SimulateRetina(
-            context, data_io, cones, viz, project_data
-        )
+        self.simulate_retina = SimulateRetina(context, data_io, viz, project_data)
+        cones = self.simulate_retina.initialize_cones()
+        self.cones = cones
+
+        stimulate = VisualStimulus(context, data_io, cones)
+        self.stimulate = stimulate
 
         experiment = Experiment(context, data_io)
         self.experiment = experiment

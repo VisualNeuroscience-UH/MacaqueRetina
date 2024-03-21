@@ -8,10 +8,11 @@ from scipy.interpolate import interp1d
 from scipy.spatial import Delaunay
 from scipy.optimize import fsolve, curve_fit, least_squares
 from scipy.ndimage import gaussian_filter
-from scipy.special import erf
+from scipy.special import erf, gamma
 import scipy.fftpack as fftpack
 from scipy import ndimage
 from scipy.stats import norm
+from scipy.integrate import odeint
 from skimage.transform import resize
 import torch
 
@@ -45,6 +46,128 @@ import inspect
 b2.prefs["logging.display_brian_error_message"] = False
 
 
+class PreGCProcessing:
+    """
+    PreGCProcessing is with SimulateRetina, because the latter needs the cone filtering for natural stimuli
+    (optical aberration and nonlinear luminance response).
+    """
+
+    def __init__(self, context, data_io) -> None:
+        self._context = context.set_context(self)
+        self._data_io = data_io
+
+        self.optical_aberration = self.context.my_retina["optical_aberration"]
+        self.rm = self.context.my_retina["cone_general_params"]["rm"]
+        self.k = self.context.my_retina["cone_general_params"]["k"]
+        self.cone_sensitivity_min = self.context.my_retina["cone_general_params"][
+            "sensitivity_min"
+        ]
+        self.cone_sensitivity_max = self.context.my_retina["cone_general_params"][
+            "sensitivity_max"
+        ]
+
+    @property
+    def context(self):
+        return self._context
+
+    @property
+    def data_io(self):
+        return self._data_io
+
+    def natural_stimuli_cone_filter(self):
+        image_file_name = self.context.my_stimulus_metadata["stimulus_file"]
+        self.pix_per_deg = self.context.my_stimulus_metadata["pix_per_deg"]
+        self.fps = self.context.my_stimulus_metadata["fps"]
+
+        # Process stimulus.
+        self.image = self.data_io.get_data(image_file_name)
+
+        # For videofiles, average over color channels
+        filename_extension = Path(image_file_name).suffix
+        if filename_extension in [".avi", ".mp4"]:
+            if self.image.shape[-1] == 3:
+                self.image = np.mean(self.image, axis=-1).squeeze()
+            options = self.context.my_stimulus_options
+
+        self._optical_aberration()
+        self._luminance2cone_response()
+
+    def _optical_aberration(self):
+        """
+        Gaussian smoothing from Navarro 1993 JOSAA: 2 arcmin FWHM under 20deg eccentricity.
+        """
+
+        # Turn the optical aberration of 2 arcmin FWHM to Gaussian function sigma
+        sigma_deg = self.optical_aberration / (2 * np.sqrt(2 * np.log(2)))
+        sigma_pix = self.pix_per_deg * sigma_deg
+        image = self.image
+
+        # Apply Gaussian blur to each frame in the image array
+        if len(image.shape) == 3:
+            self.image_after_optics = gaussian_filter(
+                image, sigma=[0, sigma_pix, sigma_pix]
+            )
+        elif len(image.shape) == 2:
+            self.image_after_optics = gaussian_filter(
+                image, sigma=[sigma_pix, sigma_pix]
+            )
+        else:
+            raise ValueError("Image must be 2D or 3D, aborting...")
+
+    def _luminance2cone_response(self):
+        """
+        Cone nonlinearity. Equation from Baylor_1987_JPhysiol.
+        """
+
+        # Range
+        response_range = np.ptp([self.cone_sensitivity_min, self.cone_sensitivity_max])
+
+        # Scale. Image should be between 0 and 1
+        image_at_response_scale = self.image * response_range
+        cone_input = image_at_response_scale + self.cone_sensitivity_min
+
+        # Cone nonlinearity
+        cone_response = self.rm * (1 - np.exp(-self.k * cone_input))
+
+        self.cone_response = cone_response
+
+        # Save the cone response to output folder
+        filename = self.context.my_stimulus_metadata["stimulus_file"]
+        self.data_io.save_cone_response_to_hdf5(filename, cone_response)
+
+    def linear_model(self, t, alpha, T_rise, T_decay, T_osc, omega):
+        """
+        NOT TESTED
+        Linear model from equation 3 in Angueyra_2022_JNeurosci.
+        """
+        # Compute the rise term
+        rise_term = (t / T_rise) ** 4 / (1 + (t / T_rise) ** 4)
+        # Compute the decay term
+        decay_term = np.exp(-t / T_decay)
+        # Compute the oscillation term
+        oscillation_term = np.cos((2 * np.pi * t / T_osc) + omega)
+
+        # Combine all terms to get f(t)
+        f_t = alpha * rise_term * decay_term * oscillation_term
+
+        return f_t
+
+    def LN_model(self, x, a=305.4, b=0.039, d=1.00, e=-262.9):
+        """
+        NOT TESTED
+        The nonlinear part of the LN model based on the cumulative density of a normal function. Equation 4 in Angueyra_2022_JNeurosci
+        Compressive nonlinearity.
+        Defaults from example fit in Angueyra_2022_JNeurosci.
+        """
+        x = np.linspace(x[0], x[1], 100)
+        # Transforming x using parameters a and b
+        z = (x - b) / a
+        # Using the cumulative distribution function of the standard normal distribution
+        cdf = norm.cdf(z)
+        # Scaling and shifting the output using parameters d and e
+        return x, d * cdf + e
+
+
 class ReceptiveFieldsBase(Printable):
     """
     Class containing information associated with receptive fields, including
@@ -68,9 +191,535 @@ class ReceptiveFieldsBase(Printable):
         self.spatial_model = self.my_retina["spatial_model"]
         self.temporal_model = self.my_retina["temporal_model"]
 
-    def _link_rf_to_vs(self, vs):
+
+class Cones(ReceptiveFieldsBase):
+    def __init__(
+        self,
+        my_retina,
+        ret_npz,
+        device,
+        interpolation_function,
+        lin_interp_and_double_lorenzian,
+    ) -> None:
+        super().__init__(my_retina)
+
+        self.my_retina = my_retina
+        self.ret_npz = ret_npz
+        self.device = device
+        self.interpolation_function = interpolation_function
+        self.lin_interp_and_double_lorenzian = lin_interp_and_double_lorenzian
+
+        self.cones_to_gcs_weights = ret_npz["cones_to_gcs_weights"]
+        self.cone_noise_parameters = ret_npz["cone_noise_parameters"]
+        self.cone_general_params = my_retina["cone_general_params"]
+        self.n_units = self.cones_to_gcs_weights.shape[0]
+
+    def _cornea_photon_flux_density_to_luminance(self, F, lambda_nm=555):
         """
-        Endows RGCs with stimulus/pixel space coordinates.
+        Convert photon flux density at cornea to luminance using human photopic vision V(lambda).
+
+        Parameters
+        ----------
+        F : float
+            Photon flux density at the cornea in photons/mm²/s.
+        lambda_nm : float, optional
+            Wavelength of the monochromatic light in nanometers, default is 555 nm (peak of human photopic sensitivity).
+
+        Returns
+        -------
+        L : float
+            Luminance in cd/m².
+
+        Notes
+        -----
+        The conversion uses the formula:
+
+        L = F * (hc/lambda) * kappa * V(lambda)
+
+        where:
+        - h is Planck's constant (6.626 x 10^-34 J·s),
+        - c is the speed of light (3.00 x 10^8 m/s),
+        - lambda is the wavelength of light in meters,
+        - kappa is the luminous efficacy of monochromatic radiation (683 lm/W at 555 nm),
+        - V(lambda) is the photopic luminous efficiency function value at lambda,
+        assumed to be 1 at 555 nm for peak human photopic sensitivity.
+        """
+        # Constants
+        h = 6.626e-34  # Planck's constant in J·s
+        c = 3.00e8  # Speed of light in m/s
+        lambda_m = lambda_nm * 1e-9  # Convert wavelength from nm to m
+        kappa = 683  # Luminous efficacy of monochromatic radiation in lm/W at 555 nm
+
+        # Energy of a photon at wavelength lambda in joules
+        E_photon = (h * c) / lambda_m
+
+        # Convert photon flux density F to luminance L in cd/m²
+        F_m2 = F * 1e6  # Convert photon flux density from mm² to m²
+        L = F_m2 * E_photon * kappa
+
+        return L
+
+    def _luminance_to_cornea_photon_flux_density(self, L, lambda_nm=555):
+        """
+        Convert luminance to photon flux density at cornea using human photopic vision V(lambda).
+
+        Parameters
+        ----------
+        L : float
+            Luminance in cd/m².
+        lambda_nm : float, optional
+            Wavelength of the monochromatic light in nanometers, default is 555 nm (peak of human photopic sensitivity).
+
+        Returns
+        -------
+        F : float
+            Photon flux density at the cornea in photons/mm²/s.
+        """
+        # Constants
+        h = 6.626e-34  # Planck's constant in J·s
+        c = 3.00e8  # Speed of light in m/s
+        lambda_m = lambda_nm * 1e-9  # Convert wavelength from nm to m
+        kappa = 683  # Luminous efficacy of monochromatic radiation in lm/W at 555 nm
+
+        # Energy of a photon at wavelength lambda in joules
+        E_photon = (h * c) / lambda_m
+
+        # Convert luminance L to photon flux density F in photons/mm²/s
+        F_m2 = L / (E_photon * kappa)
+        F = F_m2 / 1e6  # Convert from m² to mm²
+
+        return F
+
+    def _create_cone_noise(self, tvec, n_cones, *params):
+        tvec = tvec / b2u.second
+        freqs = fftpack.fftfreq(len(tvec), d=(tvec[1] - tvec[0]))
+
+        white_noise = np.random.normal(0, 1, (len(tvec), n_cones))
+        noise_fft = fftpack.fft(white_noise, axis=0)
+
+        # Generate the asymmetric concave function for scaling
+        f_scaled = np.abs(freqs)
+        # Prevent division by zero for zero frequency
+        f_scaled[f_scaled == 0] = 1e-10
+
+        # Transfer to log scale and
+        # combine the fitted amplitudes with fixed corner frequencies
+        a0 = params[0]
+        L1_params = np.array([params[1], self.cone_noise_wc[0]])
+        L2_params = np.array([params[2], self.cone_noise_wc[1]])
+
+        asymmetric_scale = self.lin_interp_and_double_lorenzian(
+            f_scaled, a0, L1_params, L2_params, self.cone_interp_response
+        )
+
+        noise_fft = noise_fft * asymmetric_scale[:, np.newaxis]
+
+        # Transform back to time domain
+        cone_noise = np.real(fftpack.ifft(noise_fft, axis=0))
+
+        return cone_noise
+
+    def _create_cone_signal_torch(self, cone_input, params_dict, tvec, device):
+
+        # Implementing the generate_simple_filter function based on the MATLAB code provided
+        def generate_simple_filter(tau, n, t):
+            f = t**n * np.exp(-t / tau)  # Functional form in paper
+            f = f / (tau ** (n + 1)) / gamma(n + 1)  # Normalize appropriately
+            return f
+
+        # Implementing the model's differential equation based on the provided dxdt function
+        def dxdt(x, t, p):
+            # Extracting parameters from the passed dictionary
+            B = p["B"]
+            A = p["A"]
+            tau_r = p["tau_r"]
+            # interp argumentit: (aikapiste, aikapisteet, y-arvot, vasen, oikea)
+            zt = np.interp(t, p["tvec"], p["z"], left=0, right=0)
+            yt = np.interp(t, p["tvec"], p["y"], left=0, right=0)
+
+            dx = 1 / tau_r * (A * yt - (1 + B * zt) * x)
+            return dx
+
+        # Renaming
+        p = {
+            "A": params_dict["alpha"],
+            "B": params_dict["beta"],
+            "C": params_dict["gamma"],
+            "tau_r": params_dict["tau_r"] / 1000,
+            "tau_y": params_dict["tau_y"] / 1000,
+            "n_y": params_dict["n_y"],
+            "tau_z": params_dict["tau_z"] / 1000,
+            "n_z": params_dict["n_z"],
+        }
+
+        Y0 = 0  # Initial condition for y, 0
+        Ky = generate_simple_filter(p["tau_y"], p["n_y"], tvec)
+        Kz_prime = generate_simple_filter(p["tau_z"], p["n_z"], tvec)
+        Kz = p["C"] * Ky + (1 - p["C"]) * Kz_prime  # Combining filters with 'C'
+
+        cone_output = np.zeros(cone_input.shape)
+        tqdm_desc = "Preparing cone output..."
+
+        for i in tqdm(range(cone_input.shape[0]), desc=tqdm_desc):
+            # for i in range(cone_input.shape[0]):
+            S = cone_input[i, :]
+            # S = cone_input[0, :]  # Stimulus
+
+            # Applying the filters to the stimulus
+            p["y"] = np.convolve(S, Ky, "full")[: len(S)]
+            p["z"] = np.convolve(S, Kz, "full")[: len(S)]
+            p["tvec"] = tvec
+
+            # Solving the ODE
+            # breakpoint()
+            cone_output[i, :] = odeint(dxdt, Y0, tvec, args=(p,)).squeeze()
+
+        return cone_output
+
+    def create_signal(self, vs, n_trials):
+        """
+        Generates cone signal.
+
+        Parameters
+        ----------
+        vs : VisualSignal
+            The visual signal object containing the transduction cascade from stimulus video
+            to RGC unit spike response.
+        n_trials : int
+            The number of trials to simulate.
+
+        Returns
+        -------
+        ndarray
+            The cone signal.
+        """
+
+        video_copy = vs.stimulus_video.frames.copy()
+        video_copy = np.transpose(
+            video_copy, (1, 2, 0)
+        )  # Original frames are now [height, width, time points]
+        video_copy = video_copy[np.newaxis, ...]  # Add new axis for broadcasting
+
+        cone_pos_mm = self.ret_npz["cone_optimized_pos_mm"]
+        cone_pos_deg = cone_pos_mm * vs.deg_per_mm
+        q, r = vs._vspace_to_pixspace(cone_pos_deg[:, 0], cone_pos_deg[:, 1])
+        q_idx = np.floor(q).astype(int)
+        r_idx = np.floor(r).astype(int)
+
+        # Ensure r_indices and q_indices are repeated for each unit
+        r_indices = r_idx.reshape(-1, 1, 1, 1)
+        q_indices = q_idx.reshape(-1, 1, 1, 1)
+        time_points_indices = np.arange(video_copy.shape[-1])
+
+        # Use advanced indexing for selecting pixels
+        cone_input_cropped = video_copy[0, r_indices, q_indices, time_points_indices]
+        cone_input = np.squeeze(cone_input_cropped)
+        cone_input_R = self.get_photoisomerizations_from_luminance(cone_input)
+
+        params_dict = self.my_retina["cone_signal_parameters"]
+
+        tvec = vs.tvec / b2u.second
+        # tvec = time_points_indices * dt
+        # breakpoint()
+
+        # Unpacking the dictionary and converting the appropriate values
+        params = (
+            params_dict["alpha"],
+            params_dict["beta"],
+            params_dict["gamma"],
+            params_dict["tau_y"] / 1000,  # Convert from ms to s
+            params_dict["n_y"],
+            params_dict["tau_z"] / 1000,  # Convert from ms to s
+            params_dict["n_z"],
+            params_dict["tau_r"] / 1000,  # Convert from ms to s
+        )
+
+        # Convert to pytorch tensors
+        # dt_t = torch.tensor(dt, dtype=torch.float, device=self.device)
+        # params_t = torch.tensor(params, dtype=torch.float, device=self.device)
+        # cone_input_R_t = torch.tensor(
+        #     cone_input_R, dtype=torch.float, device=self.device
+        # )
+        cone_signal = self._create_cone_signal_torch(
+            cone_input, params_dict, tvec, self.device
+        )
+        # # Convert to pytorch tensors
+        # dt_t = torch.tensor(dt, dtype=torch.float, device=self.device)
+        # params_t = torch.tensor(params, dtype=torch.float, device=self.device)
+        # cone_input_R_t = torch.tensor(
+        #     cone_input_R, dtype=torch.float, device=self.device
+        # )
+        # cone_signal_t = self._create_cone_signal_torch(
+        #     cone_input_R_t, params_t, dt_t, self.device
+        # )
+
+        # Converting the result back to numpy array and returning
+        # cone_signal = cone_signal_t.squeeze(1).cpu().numpy()
+
+        # plt.plot(cone_signal_t[0, :])
+        # # plt.plot(stim)
+        # plt.show()
+        # breakpoint()
+
+        # # Normalize noise to have one mean and unit sd at the noise data frequencies
+        # cone_signal_norm = 1 + (cone_signal - cone_signal.mean()) / np.std(
+        #     cone_signal, axis=0
+        # )
+
+        # vs.cone_signal = cone_signal_norm
+        vs.cone_signal = cone_signal
+
+        return vs
+
+    def create_noise(self, vs, n_trials):
+        """
+        Generates cone noise.
+
+        Parameters
+        ----------
+        vs : VisualSignal
+            The visual signal object containing the transduction cascade from stimulus video
+            to RGC unit spike response.
+        gcs : ReceptiveFields
+            The receptive fields object containing the RGCs and their parameters.
+        n_trials : int
+            The number of trials to simulate.
+
+        Returns
+        -------
+        ndarray
+            The normalized cone noise.
+        """
+        params = self.cone_noise_parameters
+        n_cones = self.n_units
+
+        # ret_file_npz = self.data_io.get_data(self.context.my_retina["ret_file"])
+        cone_frequency_data = self.ret_npz["cone_frequency_data"]
+        cone_power_data = self.ret_npz["cone_power_data"]
+        self.cone_interp_response = self.interpolation_function(
+            cone_frequency_data, cone_power_data
+        )
+        self.cone_noise_wc = self.cone_general_params["cone_noise_wc"]
+
+        # Make independent cone noise for multiple trials
+        if n_trials > 1:
+            for trial in range(n_trials):
+                cone_noise = self._create_cone_noise(vs.tvec, n_cones, *params)
+                if trial == 0:
+                    trials_noise = cone_noise
+                else:
+                    trials_noise = np.concatenate(
+                        (trials_noise, cone_noise), axis=1
+                    )  # TODO CHECK MULTIPLE TRIALS
+
+            cone_noise = trials_noise
+        else:
+            cone_noise = self._create_cone_noise(vs.tvec, n_cones, *params)
+
+        # Normalize noise to have one mean and unit sd at the noise data frequencies
+        cone_noise_norm = 1 + (cone_noise - cone_noise.mean()) / np.std(
+            cone_noise, axis=0
+        )
+
+        vs.cone_noise = cone_noise_norm
+
+        return vs
+
+    def _optical_aberration(self):
+        """
+        Gaussian smoothing from Navarro 1993 JOSAA: 2 arcmin FWHM under 20deg eccentricity.
+        """
+
+        # Turn the optical aberration of 2 arcmin FWHM to Gaussian function sigma
+        sigma_deg = self.optical_aberration / (2 * np.sqrt(2 * np.log(2)))
+        sigma_pix = self.pix_per_deg * sigma_deg
+        image = self.image
+
+        # Apply Gaussian blur to each frame in the image array
+        if len(image.shape) == 3:
+            self.image_after_optics = gaussian_filter(
+                image, sigma=[0, sigma_pix, sigma_pix]
+            )
+        elif len(image.shape) == 2:
+            self.image_after_optics = gaussian_filter(
+                image, sigma=[sigma_pix, sigma_pix]
+            )
+        else:
+            raise ValueError("Image must be 2D or 3D, aborting...")
+
+    def get_luminance_from_photoisomerizations(
+        self, I_cone, A_pupil=9.3, A_retina=670, a_c_end_on=3.21e-5, tau_media=1.0
+    ):
+        """
+        Calculate luminance from photoisomerizations.
+
+        Parameters
+        ----------
+        I_cone : float
+            The number of photoisomerizations per second per cone.
+        A_pupil : float
+            The area of the pupil in mm^2.
+            Mean tonic pupil radiusis 3.44/2 mm in macaques, from Selezneva_2021_FrontPsychol
+        A_retina : float
+            The area of the retina in mm^2.
+        a_c_end_on : float
+            Upper limit for the effective cross-sectional area of the total
+            pigment content of a photoreceptor for axially propagating light.
+            Default value is 3.21e-5 mm^2, derived from cone density at 5 deg ecc.
+        tau_media : float
+            The transmittance of the media. Default value is 1.0.
+        """
+
+        # Calculate photon flux at cornea
+        F_cornea = I_cone / (a_c_end_on * (A_pupil / A_retina) * tau_media)
+
+        # Get the luminance from the photon flux density
+        luminance = self._cornea_photon_flux_density_to_luminance(
+            F_cornea, lambda_nm=555
+        )
+
+        return luminance
+
+    def get_photoisomerizations_from_luminance(
+        self, L, A_pupil=9.3, A_retina=670, a_c_end_on=3.21e-5, tau_media=1.0
+    ):
+        """
+        Calculate the rate of photoisomerizations per cone per second from luminance.
+
+        Parameters
+        ----------
+        L : float
+            Luminance in cd/m².
+        A_pupil : float
+            The area of the pupil in mm^2.
+        A_retina : float
+            The area of the retina in mm^2.
+        a_c_end_on : float
+            The end-on collecting area for the cones in mm^2.
+        tau_media : float
+            The transmittance of the ocular media at wavelength λ.
+
+        Returns
+        -------
+        I_cone : float
+            The rate of photoisomerizations per cone per second (R* cone^-1 s^-1).
+        """
+        # Convert luminance to photon flux density
+        F_cornea = self._luminance_to_cornea_photon_flux_density(L, lambda_nm=555)
+
+        # Calculate the photon flux density at the retina (F_retina)
+        F_retina = F_cornea * (A_pupil / A_retina) * tau_media
+
+        # Calculate the rate of photoisomerizations per cone per second (I_cone)
+        I_cone = F_retina * a_c_end_on
+
+        return I_cone
+
+
+class Bipolars(ReceptiveFieldsBase):
+    def __init__(self, my_retina, ret_npz) -> None:
+        super().__init__(my_retina)
+        self.my_retina = my_retina
+        self.ret_npz = ret_npz
+
+
+class GanglionCells(ReceptiveFieldsBase):
+    def __init__(
+        self,
+        my_retina,
+        apricot_metadata,
+        rfs_npz,
+        gc_dataframe,
+        unit_index,
+        spike_generator_model,
+        pol2cart_df,
+    ):
+        super().__init__(my_retina)
+
+        self.spike_generator_model = spike_generator_model
+
+        self.mask_threshold = my_retina["center_mask_threshold"]
+        self.refractory_params = my_retina["refractory_params"]
+
+        assert isinstance(
+            self.mask_threshold, float
+        ), "mask_threshold must be float, aborting..."
+        assert (
+            self.mask_threshold >= 0 and self.mask_threshold <= 1
+        ), "mask_threshold must be between 0 and 1, aborting..."
+
+        self.apricot_metadata = apricot_metadata
+        self.data_microm_per_pixel = self.apricot_metadata["data_microm_per_pix"]
+        self.data_filter_fps = self.apricot_metadata["data_fps"]
+        self.data_filter_timesteps = self.apricot_metadata[
+            "data_temporalfilter_samples"
+        ]
+        self.data_filter_duration = self.data_filter_timesteps * (
+            1000 / self.data_filter_fps
+        )
+
+        rspace_pos_mm = pol2cart_df(gc_dataframe)
+        vspace_pos = rspace_pos_mm * self.deg_per_mm
+        vspace_coords_deg = pd.DataFrame(
+            {"x_deg": vspace_pos[:, 0], "y_deg": vspace_pos[:, 1]}
+        )
+        df = pd.concat([gc_dataframe, vspace_coords_deg], axis=1)
+
+        if self.DoG_model in ["ellipse_fixed"]:
+            # Convert RF center radii to degrees as well
+            df["semi_xc_deg"] = df.semi_xc_mm * self.deg_per_mm
+            df["semi_yc_deg"] = df.semi_yc_mm * self.deg_per_mm
+            # Drop rows (units) where semi_xc_deg and semi_yc_deg is zero.
+            # These have bad (>3SD deviation in any ellipse parameter) fits
+            df = df[(df.semi_xc_deg != 0) & (df.semi_yc_deg != 0)].reset_index(
+                drop=True
+            )
+        if self.DoG_model in ["ellipse_independent"]:
+            # Convert RF center radii to degrees as well
+            df["semi_xc_deg"] = df.semi_xc_mm * self.deg_per_mm
+            df["semi_yc_deg"] = df.semi_yc_mm * self.deg_per_mm
+            df["semi_xs_deg"] = df.semi_xs_mm * self.deg_per_mm
+            df["semi_ys_deg"] = df.semi_ys_mm * self.deg_per_mm
+            df = df[(df.semi_xc_deg != 0) & (df.semi_yc_deg != 0)].reset_index(
+                drop=True
+            )
+        elif self.DoG_model == "circular":
+            df["rad_c_deg"] = df.rad_c_mm * self.deg_per_mm
+            df["rad_s_deg"] = df.rad_s_mm * self.deg_per_mm
+            df = df[(df.rad_c_deg != 0) & (df.rad_s_deg != 0)].reset_index(drop=True)
+
+        # Drop retinal positions from the df (so that they are not used by accident)
+        df = df.drop(["pos_ecc_mm", "pos_polar_deg"], axis=1)
+
+        self.df = df
+
+        self.spat_rf = rfs_npz["gc_img"]
+        self.um_per_pix = rfs_npz["um_per_pix"]
+        self.sidelen_pix = rfs_npz["pix_per_side"]
+
+        # Run all units
+        if unit_index is None:
+            self.n_units = len(df.index)  # all units
+            unit_indices = np.arange(self.n_units)
+        # Run a subset of units
+        elif isinstance(unit_index, (list)):
+            unit_indices = np.array(unit_index)
+            self.n_units = len(unit_indices)
+        # Run one unit
+        elif isinstance(unit_index, (int)):
+            unit_indices = np.array([unit_index])
+            self.n_units = len(unit_indices)
+        else:
+            raise AssertionError(
+                "unit_index must be None, an integer or list, aborting..."
+            )
+        if isinstance(unit_indices, (int, np.int32, np.int64)):
+            unit_indices = np.array([unit_indices])
+        self.unit_indices = np.atleast_1d(unit_indices)
+
+    def link_gcs_to_vs(self, vs):
+        """
+        Endows ganglion cells with stimulus/pixel space coordinates.
 
         Here we make a new dataframe df_stimpix where everything is in pixels
         """
@@ -211,356 +860,6 @@ class ReceptiveFieldsBase(Printable):
         self.temporal_filter_len = int(self.data_filter_duration / (1000 / vs.fps))
 
 
-class Cones(ReceptiveFieldsBase):
-    def __init__(self, my_retina, ret_npz, interpolation_function) -> None:
-        super().__init__(my_retina)
-        self.my_retina = my_retina
-        self.ret_npz = ret_npz
-        self.interpolation_function = interpolation_function
-        self.cones_to_gcs_weights = ret_npz["cones_to_gcs_weights"]
-        self.cone_noise_parameters = ret_npz["cone_noise_parameters"]
-        self.cone_general_params = my_retina["cone_general_params"]
-
-    def _create_cone_noise(self, tvec, n_cones, *params):
-        tvec = tvec / b2u.second
-        freqs = fftpack.fftfreq(len(tvec), d=(tvec[1] - tvec[0]))
-
-        white_noise = np.random.normal(0, 1, (len(tvec), n_cones))
-        noise_fft = fftpack.fft(white_noise, axis=0)
-
-        # Generate the asymmetric concave function for scaling
-        f_scaled = np.abs(freqs)
-        # Prevent division by zero for zero frequency
-        f_scaled[f_scaled == 0] = 1e-10
-
-        # Transfer to log scale and
-        # combine the fitted amplitudes with fixed corner frequencies
-        a0 = params[0]
-        L1_params = np.array([params[1], self.cone_noise_wc[0]])
-        L2_params = np.array([params[2], self.cone_noise_wc[1]])
-
-        asymmetric_scale = self.lin_interp_and_double_lorenzian(
-            f_scaled, a0, L1_params, L2_params
-        )
-
-        noise_fft = noise_fft * asymmetric_scale[:, np.newaxis]
-
-        # Transform back to time domain
-        cone_noise = np.real(fftpack.ifft(noise_fft, axis=0))
-
-        return cone_noise
-
-    def get_cone_noise(self, vs, gcs, n_trials):
-        """
-        Generates cone noise.
-
-        Parameters
-        ----------
-        vs : VisualSignal
-            The visual signal object containing the transduction cascade from stimulus video
-            to RGC unit spike response.
-        gcs : ReceptiveFields
-            The receptive fields object containing the RGCs and their parameters.
-        n_trials : int
-            The number of trials to simulate.
-
-        Returns
-        -------
-        ndarray
-            The normalized cone noise.
-        """
-        cones_to_gcs_weights = self.cones_to_gcs_weights
-        params = self.cone_noise_parameters
-
-        cones_to_gcs_weights = cones_to_gcs_weights[:, gcs.unit_indices]
-        n_cones = cones_to_gcs_weights.shape[0]
-
-        # ret_file_npz = self.data_io.get_data(self.context.my_retina["ret_file"])
-        cone_frequency_data = self.ret_npz["cone_frequency_data"]
-        cone_power_data = self.ret_npz["cone_power_data"]
-        self.cone_interp_response = self.interpolation_function(
-            cone_frequency_data, cone_power_data
-        )
-        self.cone_noise_wc = self.cone_general_params["cone_noise_wc"]
-
-        # # Normalize weights by columns (ganglion cells)
-        # weights_norm = cones_to_gcs_weights / np.sum(cones_to_gcs_weights, axis=0)
-
-        # Make independent cone noise for multiple trials
-        if n_trials > 1:
-            for trial in range(n_trials):
-                cone_noise = self._create_cone_noise(vs.tvec, n_cones, *params)
-                if trial == 0:
-                    trials_noise = cone_noise
-                    # gc_noise = cone_noise @ weights_norm
-                else:
-                    trials_noise = np.concatenate(
-                        (trials_noise, cone_noise), axis=1
-                    )  # TODO CHECK THIS
-                    # gc_noise = np.concatenate(
-                    #     (gc_noise, cone_noise @ weights_norm), axis=1
-                    # )
-            cone_noise = trials_noise
-        elif vs.generator_potentials.shape[0] > 1:
-            cone_noise = self._create_cone_noise(vs.tvec, n_cones, *params)
-            # gc_noise = cone_noise @ weights_norm
-
-        # Normalize noise to have one mean and unit sd at the noise data frequencies
-        cone_noise_norm = 1 + (cone_noise - cone_noise.mean()) / np.std(
-            cone_noise, axis=0
-        )
-
-        vs.cone_noise = cone_noise_norm
-
-        return vs
-
-    def _optical_aberration(self):
-        """
-        Gaussian smoothing from Navarro 1993 JOSAA: 2 arcmin FWHM under 20deg eccentricity.
-        """
-
-        # Turn the optical aberration of 2 arcmin FWHM to Gaussian function sigma
-        sigma_deg = self.optical_aberration / (2 * np.sqrt(2 * np.log(2)))
-        sigma_pix = self.pix_per_deg * sigma_deg
-        image = self.image
-
-        # Apply Gaussian blur to each frame in the image array
-        if len(image.shape) == 3:
-            self.image_after_optics = gaussian_filter(
-                image, sigma=[0, sigma_pix, sigma_pix]
-            )
-        elif len(image.shape) == 2:
-            self.image_after_optics = gaussian_filter(
-                image, sigma=[sigma_pix, sigma_pix]
-            )
-        else:
-            raise ValueError("Image must be 2D or 3D, aborting...")
-
-
-class Bipolars(ReceptiveFieldsBase):
-    def __init__(self, my_retina, ret_npz) -> None:
-        super().__init__(my_retina)
-        self.my_retina = my_retina
-        self.ret_npz = ret_npz
-
-
-class PreGCProcessing:
-    """
-    PreGCProcessing is with SimulateRetina, because the latter needs the cone filtering for natural stimuli
-    (optical aberration and nonlinear luminance response).
-    """
-
-    def __init__(self, context, data_io) -> None:
-        self._context = context.set_context(self)
-        self._data_io = data_io
-
-        self.optical_aberration = self.context.my_retina["optical_aberration"]
-        self.rm = self.context.my_retina["cone_general_params"]["rm"]
-        self.k = self.context.my_retina["cone_general_params"]["k"]
-        self.cone_sensitivity_min = self.context.my_retina["cone_general_params"][
-            "sensitivity_min"
-        ]
-        self.cone_sensitivity_max = self.context.my_retina["cone_general_params"][
-            "sensitivity_max"
-        ]
-
-    @property
-    def context(self):
-        return self._context
-
-    @property
-    def data_io(self):
-        return self._data_io
-
-    def natural_stimuli_cone_filter(self):
-        image_file_name = self.context.my_stimulus_metadata["stimulus_file"]
-        self.pix_per_deg = self.context.my_stimulus_metadata["pix_per_deg"]
-        self.fps = self.context.my_stimulus_metadata["fps"]
-
-        # Process stimulus.
-        self.image = self.data_io.get_data(image_file_name)
-
-        # For videofiles, average over color channels
-        filename_extension = Path(image_file_name).suffix
-        if filename_extension in [".avi", ".mp4"]:
-            if self.image.shape[-1] == 3:
-                self.image = np.mean(self.image, axis=-1).squeeze()
-            options = self.context.my_stimulus_options
-
-        self._optical_aberration()
-        self._luminance2cone_response()
-
-    def _optical_aberration(self):
-        """
-        Gaussian smoothing from Navarro 1993 JOSAA: 2 arcmin FWHM under 20deg eccentricity.
-        """
-
-        # Turn the optical aberration of 2 arcmin FWHM to Gaussian function sigma
-        sigma_deg = self.optical_aberration / (2 * np.sqrt(2 * np.log(2)))
-        sigma_pix = self.pix_per_deg * sigma_deg
-        image = self.image
-
-        # Apply Gaussian blur to each frame in the image array
-        if len(image.shape) == 3:
-            self.image_after_optics = gaussian_filter(
-                image, sigma=[0, sigma_pix, sigma_pix]
-            )
-        elif len(image.shape) == 2:
-            self.image_after_optics = gaussian_filter(
-                image, sigma=[sigma_pix, sigma_pix]
-            )
-        else:
-            raise ValueError("Image must be 2D or 3D, aborting...")
-
-    def _luminance2cone_response(self):
-        """
-        Cone nonlinearity. Equation from Baylor_1987_JPhysiol.
-        """
-
-        # Range
-        response_range = np.ptp([self.cone_sensitivity_min, self.cone_sensitivity_max])
-
-        # Scale. Image should be between 0 and 1
-        image_at_response_scale = self.image * response_range
-        cone_input = image_at_response_scale + self.cone_sensitivity_min
-
-        # Cone nonlinearity
-        cone_response = self.rm * (1 - np.exp(-self.k * cone_input))
-
-        self.cone_response = cone_response
-
-        # Save the cone response to output folder
-        filename = self.context.my_stimulus_metadata["stimulus_file"]
-        self.data_io.save_cone_response_to_hdf5(filename, cone_response)
-
-    def linear_model(self, t, alpha, T_rise, T_decay, T_osc, omega):
-        """
-        NOT TESTED
-        Linear model from equation 3 in Angueyra_2022_JNeurosci.
-        """
-        # Compute the rise term
-        rise_term = (t / T_rise) ** 4 / (1 + (t / T_rise) ** 4)
-        # Compute the decay term
-        decay_term = np.exp(-t / T_decay)
-        # Compute the oscillation term
-        oscillation_term = np.cos((2 * np.pi * t / T_osc) + omega)
-
-        # Combine all terms to get f(t)
-        f_t = alpha * rise_term * decay_term * oscillation_term
-
-        return f_t
-
-    def LN_model(self, x, a=305.4, b=0.039, d=1.00, e=-262.9):
-        """
-        NOT TESTED
-        The nonlinear part of the LN model based on the cumulative density of a normal function. Equation 4 in Angueyra_2022_JNeurosci
-        Compressive nonlinearity.
-        Defaults from example fit in Angueyra_2022_JNeurosci.
-        """
-        x = np.linspace(x[0], x[1], 100)
-        # Transforming x using parameters a and b
-        z = (x - b) / a
-        # Using the cumulative distribution function of the standard normal distribution
-        cdf = norm.cdf(z)
-        # Scaling and shifting the output using parameters d and e
-        return x, d * cdf + e
-
-
-class GanglionCells(ReceptiveFieldsBase):
-    def __init__(
-        self,
-        my_retina,
-        apricot_metadata,
-        rfs_npz,
-        gc_dataframe,
-        unit_index,
-        spike_generator_model,
-        pol2cart_df,
-    ):
-        super().__init__(my_retina)
-
-        self.spike_generator_model = spike_generator_model
-
-        self.mask_threshold = my_retina["center_mask_threshold"]
-        self.refractory_params = my_retina["refractory_params"]
-
-        assert isinstance(
-            self.mask_threshold, float
-        ), "mask_threshold must be float, aborting..."
-        assert (
-            self.mask_threshold >= 0 and self.mask_threshold <= 1
-        ), "mask_threshold must be between 0 and 1, aborting..."
-
-        self.apricot_metadata = apricot_metadata
-        self.data_microm_per_pixel = self.apricot_metadata["data_microm_per_pix"]
-        self.data_filter_fps = self.apricot_metadata["data_fps"]
-        self.data_filter_timesteps = self.apricot_metadata[
-            "data_temporalfilter_samples"
-        ]
-        self.data_filter_duration = self.data_filter_timesteps * (
-            1000 / self.data_filter_fps
-        )
-
-        rspace_pos_mm = pol2cart_df(gc_dataframe)
-        vspace_pos = rspace_pos_mm * self.deg_per_mm
-        vspace_coords_deg = pd.DataFrame(
-            {"x_deg": vspace_pos[:, 0], "y_deg": vspace_pos[:, 1]}
-        )
-        df = pd.concat([gc_dataframe, vspace_coords_deg], axis=1)
-
-        if self.DoG_model in ["ellipse_fixed"]:
-            # Convert RF center radii to degrees as well
-            df["semi_xc_deg"] = df.semi_xc_mm * self.deg_per_mm
-            df["semi_yc_deg"] = df.semi_yc_mm * self.deg_per_mm
-            # Drop rows (units) where semi_xc_deg and semi_yc_deg is zero.
-            # These have bad (>3SD deviation in any ellipse parameter) fits
-            df = df[(df.semi_xc_deg != 0) & (df.semi_yc_deg != 0)].reset_index(
-                drop=True
-            )
-        if self.DoG_model in ["ellipse_independent"]:
-            # Convert RF center radii to degrees as well
-            df["semi_xc_deg"] = df.semi_xc_mm * self.deg_per_mm
-            df["semi_yc_deg"] = df.semi_yc_mm * self.deg_per_mm
-            df["semi_xs_deg"] = df.semi_xs_mm * self.deg_per_mm
-            df["semi_ys_deg"] = df.semi_ys_mm * self.deg_per_mm
-            df = df[(df.semi_xc_deg != 0) & (df.semi_yc_deg != 0)].reset_index(
-                drop=True
-            )
-        elif self.DoG_model == "circular":
-            df["rad_c_deg"] = df.rad_c_mm * self.deg_per_mm
-            df["rad_s_deg"] = df.rad_s_mm * self.deg_per_mm
-            df = df[(df.rad_c_deg != 0) & (df.rad_s_deg != 0)].reset_index(drop=True)
-
-        # Drop retinal positions from the df (so that they are not used by accident)
-        df = df.drop(["pos_ecc_mm", "pos_polar_deg"], axis=1)
-
-        self.df = df
-
-        self.spat_rf = rfs_npz["gc_img"]
-        self.um_per_pix = rfs_npz["um_per_pix"]
-        self.sidelen_pix = rfs_npz["pix_per_side"]
-
-        # Run all units
-        if unit_index is None:
-            self.n_units = len(df.index)  # all units
-            unit_indices = np.arange(self.n_units)
-        # Run a subset of units
-        elif isinstance(unit_index, (list)):
-            unit_indices = np.array(unit_index)
-            self.n_units = len(unit_indices)
-        # Run one unit
-        elif isinstance(unit_index, (int)):
-            unit_indices = np.array([unit_index])
-            self.n_units = len(unit_indices)
-        else:
-            raise AssertionError(
-                "unit_index must be None, an integer or list, aborting..."
-            )
-        if isinstance(unit_indices, (int, np.int32, np.int64)):
-            unit_indices = np.array([unit_indices])
-        self.unit_indices = np.atleast_1d(unit_indices)
-
-
 class VisualSignal(Printable):
     """
     Class containing information associated with visual signal
@@ -574,12 +873,14 @@ class VisualSignal(Printable):
         stimulus_center,
         load_stimulus_from_videofile,
         simulation_dt,
+        deg_per_mm,
         stimulus_video=None,
     ):
         # Parameters directly passed to the constructor
         self.my_stimulus_options = my_stimulus_options
         self.stimulus_center = stimulus_center
         self.load_stimulus_from_videofile = load_stimulus_from_videofile
+        self.deg_per_mm = deg_per_mm
 
         # Default value for computed variable
         self.stimulus_video = stimulus_video
@@ -656,10 +957,9 @@ class VisualSignal(Printable):
 
 
 class SimulateRetina(RetinaMath):
-    def __init__(self, context, data_io, cones, viz, project_data) -> None:
+    def __init__(self, context, data_io, viz, project_data) -> None:
         self._context = context.set_context(self)
         self._data_io = data_io
-        self._cones = cones
         self._viz = viz
         self._project_data = project_data
 
@@ -670,10 +970,6 @@ class SimulateRetina(RetinaMath):
     @property
     def data_io(self):
         return self._data_io
-
-    @property
-    def cones(self):
-        return self._cones
 
     @property
     def viz(self):
@@ -1206,48 +1502,20 @@ class SimulateRetina(RetinaMath):
         # Normalize weights by columns (ganglion cells)
         weights_norm = cones_to_gcs_weights / np.sum(cones_to_gcs_weights, axis=0)
 
-        def _create_cone_noise(tvec, n_cones, *params):
-            tvec = tvec / b2u.second
-            freqs = fftpack.fftfreq(len(tvec), d=(tvec[1] - tvec[0]))
-
-            white_noise = np.random.normal(0, 1, (len(tvec), n_cones))
-            noise_fft = fftpack.fft(white_noise, axis=0)
-
-            # Generate the asymmetric concave function for scaling
-            f_scaled = np.abs(freqs)
-            # Prevent division by zero for zero frequency
-            f_scaled[f_scaled == 0] = 1e-10
-
-            # Transfer to log scale and
-            # combine the fitted amplitudes with fixed corner frequencies
-            a0 = params[0]
-            L1_params = np.array([params[1], self.cone_noise_wc[0]])
-            L2_params = np.array([params[2], self.cone_noise_wc[1]])
-
-            asymmetric_scale = self.lin_interp_and_double_lorenzian(
-                f_scaled, a0, L1_params, L2_params
-            )
-
-            noise_fft = noise_fft * asymmetric_scale[:, np.newaxis]
-
-            # Transform back to time domain
-            cone_noise = np.real(fftpack.ifft(noise_fft, axis=0))
-
-            return cone_noise
-
         # Make independent cone noise for multiple trials
         if n_trials > 1:
             for trial in range(n_trials):
-                cone_noise = _create_cone_noise(vs.tvec, n_cones, *params)
+                # cone_noise = _create_cone_noise(vs.tvec, n_cones, *params)
                 if trial == 0:
-                    gc_noise = cone_noise @ weights_norm
+                    # breakpoint()
+                    gc_noise = vs.cone_noise @ weights_norm
                 else:
                     gc_noise = np.concatenate(
-                        (gc_noise, cone_noise @ weights_norm), axis=1
+                        (gc_noise, vs.cone_noise @ weights_norm), axis=1
                     )
         elif vs.generator_potentials.shape[0] > 1:
-            cone_noise = _create_cone_noise(vs.tvec, n_cones, *params)
-            gc_noise = cone_noise @ weights_norm
+            # cone_noise = _create_cone_noise(vs.tvec, n_cones, *params)
+            gc_noise = vs.cone_noise @ weights_norm
 
         # Normalize noise to have one mean and unit sd at the noise data frequencies
         gc_noise_norm = 1 + (gc_noise - gc_noise.mean()) / np.std(gc_noise, axis=0)
@@ -2147,19 +2415,31 @@ class SimulateRetina(RetinaMath):
                 spat_temp_filter_to_show
             )
 
+    def initialize_cones(self):
+        ret_npz_file = self.context.my_retina["ret_file"]
+        ret_npz = self.data_io.get_data(filename=ret_npz_file)
+
+        cones = Cones(
+            self.context.my_retina,
+            ret_npz,
+            self.context.device,
+            # RetinaMath methods:
+            self.interpolation_function,
+            self.lin_interp_and_double_lorenzian,
+        )
+
+        return cones
+
     def _initialize_build(
         self, stimulus, unit_index, spike_generator_model, simulation_dt
     ):
+        """
+        Inject dependencies to helper classes here
+        """
+        # This is needed also independently of the pipeline
+        cones = self.initialize_cones()
 
         # Abstraction for clarity
-        vs = VisualSignal(
-            self.context.my_stimulus_options,
-            self.context.my_retina["stimulus_center"],
-            self.data_io.load_stimulus_from_videofile,
-            simulation_dt,
-            stimulus_video=stimulus,
-        )
-
         rfs_npz_file = self.context.my_retina["spatial_rfs_file"]
         rfs_npz = self.data_io.get_data(filename=rfs_npz_file)
         mosaic_file = self.context.my_retina["mosaic_file"]
@@ -2178,19 +2458,21 @@ class SimulateRetina(RetinaMath):
         ret_npz_file = self.context.my_retina["ret_file"]
         ret_npz = self.data_io.get_data(filename=ret_npz_file)
 
-        cones = Cones(
-            self.context.my_retina,
-            ret_npz,
-            self.interpolation_function,
-        )
-
         bipolars = Bipolars(
             self.context.my_retina,
             ret_npz,
         )
-        # breakpoint()
 
-        gcs._link_rf_to_vs(vs)
+        vs = VisualSignal(
+            self.context.my_stimulus_options,
+            self.context.my_retina["stimulus_center"],
+            self.data_io.load_stimulus_from_videofile,
+            simulation_dt,
+            self.context.my_retina["deg_per_mm"],
+            stimulus_video=stimulus,
+        )
+
+        gcs.link_gcs_to_vs(vs)
 
         return vs, gcs, cones, bipolars
 
@@ -2241,7 +2523,7 @@ class SimulateRetina(RetinaMath):
             self._get_impulse_response(gcs, contrasts_for_impulse, vs.video_dt)
             return
 
-        # Get spatial_filters and center masks
+        # Get ganglion cell spatial_filters and center masks
         gcs = self._get_gc_spatial_filters(gcs)
 
         if get_uniformity_data is True:
@@ -2251,9 +2533,9 @@ class SimulateRetina(RetinaMath):
         # Get cropped stimulus, vectorized. One cropped sequence for each unit
         vs = self._get_spatially_cropped_video(vs, gcs, reshape=True)
 
-        # TÄHÄN JÄIT:
-        #   - RAKENNA TÄSSÄ CONE NOISE JA CONE2BIPO, SEKÄ BIPO2GC
-        #   - BIPOLAAREIHIN ReLu EPÄLINEAARISUUS
+        vs = cones.create_signal(vs, n_trials)
+        vs = cones.create_noise(vs, n_trials)
+        # breakpoint()
 
         # Get generator potentials
         if gcs.temporal_model == "dynamic":
@@ -2301,32 +2583,3 @@ class SimulateRetina(RetinaMath):
                 filename=filename,
                 simulation_dt=simulation_dt,
             )
-
-    def get_luminance_from_photoisomerizations(
-        self, I_cone, A_pupil=9.3, A_retina=670, a_c_end_on=3.21e-5
-    ):
-        """
-        Calculate luminance from photoisomerizations.
-
-        Parameters
-        ----------
-        I_cone : float
-            The number of photoisomerizations per second per cone.
-        A_pupil : float
-            The area of the pupil in mm^2.
-            Mean tonic pupil radiusis 3.44/2 mm in macaques, from Selezneva_2021_FrontPsychol
-        A_retina : float
-            The area of the retina in mm^2.
-            Default value is 800 mm^2, from Packer_1989_JCompNeurol, assumes stimulus covers RFs of all cones
-        a_c_end_on : float
-            Upper limit for the effective cross-sectional area of the total
-            pigment content of a photoreceptor for axially propagating light.
-            Default value is 3.21e-5 mm^2, derived from cone density at 5 deg ecc.
-        """
-
-        # Calculate photon flux at cornea
-        F_cornea = self.calculate_F_cornea(I_cone, a_c_end_on, A_pupil, A_retina)
-        # Get the luminance from the photon flux density
-        luminance = self.photon_flux_density_to_luminance(F_cornea, lambda_nm=555)
-
-        return luminance
