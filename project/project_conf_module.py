@@ -318,7 +318,7 @@ my_run_options = {
     "n_trials": 1,  # For each of the response files
     # "unit_index": 2,  # list of ints or None for all units
     # "n_trials": 10,  # For each of the response files
-    "spike_generator_model": "poisson",  # poisson or refractory
+    "spike_generator_model": "refractory",  # poisson or refractory
     "save_data": True,
     "gc_response_filenames": [f"gc_response_{x:02}" for x in range(n_files)],
     "simulation_dt": 0.0001,  # in sec 0.001 = 1 ms

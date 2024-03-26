@@ -27,6 +27,8 @@ import matplotlib.pyplot as plt
 import brian2 as b2
 import brian2.units as b2u
 
+# import brian2cuda as b2c
+
 # Local
 from cxsystem2.core.tools import write_to_file, load_from_file
 from retina.retina_math_module import RetinaMath
@@ -319,7 +321,7 @@ class Cones(ReceptiveFieldsBase):
 
         return cone_noise
 
-    def _create_cone_signal_torch(self, cone_input, params_dict, tvec, device):
+    def _create_cone_signal(self, cone_input, p, tvec):
 
         # Implementing the generate_simple_filter function based on the MATLAB code provided
         def generate_simple_filter(tau, n, t):
@@ -330,8 +332,8 @@ class Cones(ReceptiveFieldsBase):
         # Implementing the model's differential equation based on the provided dxdt function
         def dxdt(x, t, p):
             # Extracting parameters from the passed dictionary
-            B = p["B"]
-            A = p["A"]
+            B = p["beta"]
+            A = p["alpha"]
             tau_r = p["tau_r"]
             # interp argumentit: (aikapiste, aikapisteet, y-arvot, vasen, oikea)
             zt = np.interp(t, p["tvec"], p["z"], left=0, right=0)
@@ -340,30 +342,16 @@ class Cones(ReceptiveFieldsBase):
             dx = 1 / tau_r * (A * yt - (1 + B * zt) * x)
             return dx
 
-        # Renaming
-        p = {
-            "A": params_dict["alpha"],
-            "B": params_dict["beta"],
-            "C": params_dict["gamma"],
-            "tau_r": params_dict["tau_r"] / 1000,
-            "tau_y": params_dict["tau_y"] / 1000,
-            "n_y": params_dict["n_y"],
-            "tau_z": params_dict["tau_z"] / 1000,
-            "n_z": params_dict["n_z"],
-        }
-
         Y0 = 0  # Initial condition for y, 0
         Ky = generate_simple_filter(p["tau_y"], p["n_y"], tvec)
         Kz_prime = generate_simple_filter(p["tau_z"], p["n_z"], tvec)
-        Kz = p["C"] * Ky + (1 - p["C"]) * Kz_prime  # Combining filters with 'C'
+        Kz = p["gamma"] * Ky + (1 - p["gamma"]) * Kz_prime  # Combining filters with 'C'
 
         cone_output = np.zeros(cone_input.shape)
         tqdm_desc = "Preparing cone output..."
 
         for i in tqdm(range(cone_input.shape[0]), desc=tqdm_desc):
-            # for i in range(cone_input.shape[0]):
             S = cone_input[i, :]
-            # S = cone_input[0, :]  # Stimulus
 
             # Applying the filters to the stimulus
             p["y"] = np.convolve(S, Ky, "full")[: len(S)]
@@ -371,7 +359,6 @@ class Cones(ReceptiveFieldsBase):
             p["tvec"] = tvec
 
             # Solving the ODE
-            # breakpoint()
             cone_output[i, :] = odeint(dxdt, Y0, tvec, args=(p,)).squeeze()
 
         return cone_output
@@ -419,54 +406,9 @@ class Cones(ReceptiveFieldsBase):
         params_dict = self.my_retina["cone_signal_parameters"]
 
         tvec = vs.tvec / b2u.second
-        # tvec = time_points_indices * dt
-        # breakpoint()
 
-        # Unpacking the dictionary and converting the appropriate values
-        params = (
-            params_dict["alpha"],
-            params_dict["beta"],
-            params_dict["gamma"],
-            params_dict["tau_y"] / 1000,  # Convert from ms to s
-            params_dict["n_y"],
-            params_dict["tau_z"] / 1000,  # Convert from ms to s
-            params_dict["n_z"],
-            params_dict["tau_r"] / 1000,  # Convert from ms to s
-        )
+        cone_signal = self._create_cone_signal(cone_input, params_dict, tvec)
 
-        # Convert to pytorch tensors
-        # dt_t = torch.tensor(dt, dtype=torch.float, device=self.device)
-        # params_t = torch.tensor(params, dtype=torch.float, device=self.device)
-        # cone_input_R_t = torch.tensor(
-        #     cone_input_R, dtype=torch.float, device=self.device
-        # )
-        cone_signal = self._create_cone_signal_torch(
-            cone_input, params_dict, tvec, self.device
-        )
-        # # Convert to pytorch tensors
-        # dt_t = torch.tensor(dt, dtype=torch.float, device=self.device)
-        # params_t = torch.tensor(params, dtype=torch.float, device=self.device)
-        # cone_input_R_t = torch.tensor(
-        #     cone_input_R, dtype=torch.float, device=self.device
-        # )
-        # cone_signal_t = self._create_cone_signal_torch(
-        #     cone_input_R_t, params_t, dt_t, self.device
-        # )
-
-        # Converting the result back to numpy array and returning
-        # cone_signal = cone_signal_t.squeeze(1).cpu().numpy()
-
-        # plt.plot(cone_signal_t[0, :])
-        # # plt.plot(stim)
-        # plt.show()
-        # breakpoint()
-
-        # # Normalize noise to have one mean and unit sd at the noise data frequencies
-        # cone_signal_norm = 1 + (cone_signal - cone_signal.mean()) / np.std(
-        #     cone_signal, axis=0
-        # )
-
-        # vs.cone_signal = cone_signal_norm
         vs.cone_signal = cone_signal
 
         return vs
