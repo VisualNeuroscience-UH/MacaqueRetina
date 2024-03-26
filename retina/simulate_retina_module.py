@@ -48,128 +48,6 @@ import inspect
 b2.prefs["logging.display_brian_error_message"] = False
 
 
-class PreGCProcessing:
-    """
-    PreGCProcessing is with SimulateRetina, because the latter needs the cone filtering for natural stimuli
-    (optical aberration and nonlinear luminance response).
-    """
-
-    def __init__(self, context, data_io) -> None:
-        self._context = context.set_context(self)
-        self._data_io = data_io
-
-        self.optical_aberration = self.context.my_retina["optical_aberration"]
-        self.rm = self.context.my_retina["cone_general_params"]["rm"]
-        self.k = self.context.my_retina["cone_general_params"]["k"]
-        self.cone_sensitivity_min = self.context.my_retina["cone_general_params"][
-            "sensitivity_min"
-        ]
-        self.cone_sensitivity_max = self.context.my_retina["cone_general_params"][
-            "sensitivity_max"
-        ]
-
-    @property
-    def context(self):
-        return self._context
-
-    @property
-    def data_io(self):
-        return self._data_io
-
-    def natural_stimuli_cone_filter(self):
-        image_file_name = self.context.my_stimulus_metadata["stimulus_file"]
-        self.pix_per_deg = self.context.my_stimulus_metadata["pix_per_deg"]
-        self.fps = self.context.my_stimulus_metadata["fps"]
-
-        # Process stimulus.
-        self.image = self.data_io.get_data(image_file_name)
-
-        # For videofiles, average over color channels
-        filename_extension = Path(image_file_name).suffix
-        if filename_extension in [".avi", ".mp4"]:
-            if self.image.shape[-1] == 3:
-                self.image = np.mean(self.image, axis=-1).squeeze()
-            options = self.context.my_stimulus_options
-
-        self._optical_aberration()
-        self._luminance2cone_response()
-
-    def _optical_aberration(self):
-        """
-        Gaussian smoothing from Navarro 1993 JOSAA: 2 arcmin FWHM under 20deg eccentricity.
-        """
-
-        # Turn the optical aberration of 2 arcmin FWHM to Gaussian function sigma
-        sigma_deg = self.optical_aberration / (2 * np.sqrt(2 * np.log(2)))
-        sigma_pix = self.pix_per_deg * sigma_deg
-        image = self.image
-
-        # Apply Gaussian blur to each frame in the image array
-        if len(image.shape) == 3:
-            self.image_after_optics = gaussian_filter(
-                image, sigma=[0, sigma_pix, sigma_pix]
-            )
-        elif len(image.shape) == 2:
-            self.image_after_optics = gaussian_filter(
-                image, sigma=[sigma_pix, sigma_pix]
-            )
-        else:
-            raise ValueError("Image must be 2D or 3D, aborting...")
-
-    def _luminance2cone_response(self):
-        """
-        Cone nonlinearity. Equation from Baylor_1987_JPhysiol.
-        """
-
-        # Range
-        response_range = np.ptp([self.cone_sensitivity_min, self.cone_sensitivity_max])
-
-        # Scale. Image should be between 0 and 1
-        image_at_response_scale = self.image * response_range
-        cone_input = image_at_response_scale + self.cone_sensitivity_min
-
-        # Cone nonlinearity
-        cone_response = self.rm * (1 - np.exp(-self.k * cone_input))
-
-        self.cone_response = cone_response
-
-        # Save the cone response to output folder
-        filename = self.context.my_stimulus_metadata["stimulus_file"]
-        self.data_io.save_cone_response_to_hdf5(filename, cone_response)
-
-    def linear_model(self, t, alpha, T_rise, T_decay, T_osc, omega):
-        """
-        NOT TESTED
-        Linear model from equation 3 in Angueyra_2022_JNeurosci.
-        """
-        # Compute the rise term
-        rise_term = (t / T_rise) ** 4 / (1 + (t / T_rise) ** 4)
-        # Compute the decay term
-        decay_term = np.exp(-t / T_decay)
-        # Compute the oscillation term
-        oscillation_term = np.cos((2 * np.pi * t / T_osc) + omega)
-
-        # Combine all terms to get f(t)
-        f_t = alpha * rise_term * decay_term * oscillation_term
-
-        return f_t
-
-    def LN_model(self, x, a=305.4, b=0.039, d=1.00, e=-262.9):
-        """
-        NOT TESTED
-        The nonlinear part of the LN model based on the cumulative density of a normal function. Equation 4 in Angueyra_2022_JNeurosci
-        Compressive nonlinearity.
-        Defaults from example fit in Angueyra_2022_JNeurosci.
-        """
-        x = np.linspace(x[0], x[1], 100)
-        # Transforming x using parameters a and b
-        z = (x - b) / a
-        # Using the cumulative distribution function of the standard normal distribution
-        cdf = norm.cdf(z)
-        # Scaling and shifting the output using parameters d and e
-        return x, d * cdf + e
-
-
 class ReceptiveFieldsBase(Printable):
     """
     Class containing information associated with receptive fields, including
@@ -363,6 +241,52 @@ class Cones(ReceptiveFieldsBase):
 
         return cone_output
 
+    # Detached internal legacy functions
+    def _optical_aberration(self):
+        """
+        Gaussian smoothing from Navarro 1993 JOSAA: 2 arcmin FWHM under 20deg eccentricity.
+        """
+
+        # Turn the optical aberration of 2 arcmin FWHM to Gaussian function sigma
+        optical_aberration = self.context.my_retina["optical_aberration"]
+
+        sigma_deg = optical_aberration / (2 * np.sqrt(2 * np.log(2)))
+        sigma_pix = self.pix_per_deg * sigma_deg
+        image = self.image
+
+        # Apply Gaussian blur to each frame in the image array
+        if len(image.shape) == 3:
+            self.image_after_optics = gaussian_filter(
+                image, sigma=[0, sigma_pix, sigma_pix]
+            )
+        elif len(image.shape) == 2:
+            self.image_after_optics = gaussian_filter(
+                image, sigma=[sigma_pix, sigma_pix]
+            )
+        else:
+            raise ValueError("Image must be 2D or 3D, aborting...")
+
+    def _luminance2cone_response(self):
+        """
+        Cone nonlinearity. Equation from Baylor_1987_JPhysiol.
+        """
+
+        # Range
+        response_range = np.ptp([self.cone_sensitivity_min, self.cone_sensitivity_max])
+
+        # Scale. Image should be between 0 and 1
+        image_at_response_scale = self.image * response_range
+        cone_input = image_at_response_scale + self.cone_sensitivity_min
+
+        # Cone nonlinearity
+        cone_response = self.rm * (1 - np.exp(-self.k * cone_input))
+
+        self.cone_response = cone_response
+
+        # Save the cone response to output folder
+        filename = self.context.my_stimulus_metadata["stimulus_file"]
+        self.data_io.save_cone_response_to_hdf5(filename, cone_response)
+
     def create_signal(self, vs, n_trials):
         """
         Generates cone signal.
@@ -466,28 +390,6 @@ class Cones(ReceptiveFieldsBase):
         vs.cone_noise = cone_noise_norm
 
         return vs
-
-    def _optical_aberration(self):
-        """
-        Gaussian smoothing from Navarro 1993 JOSAA: 2 arcmin FWHM under 20deg eccentricity.
-        """
-
-        # Turn the optical aberration of 2 arcmin FWHM to Gaussian function sigma
-        sigma_deg = self.optical_aberration / (2 * np.sqrt(2 * np.log(2)))
-        sigma_pix = self.pix_per_deg * sigma_deg
-        image = self.image
-
-        # Apply Gaussian blur to each frame in the image array
-        if len(image.shape) == 3:
-            self.image_after_optics = gaussian_filter(
-                image, sigma=[0, sigma_pix, sigma_pix]
-            )
-        elif len(image.shape) == 2:
-            self.image_after_optics = gaussian_filter(
-                image, sigma=[sigma_pix, sigma_pix]
-            )
-        else:
-            raise ValueError("Image must be 2D or 3D, aborting...")
 
     def get_luminance_from_photoisomerizations(
         self, I_cone, A_pupil=9.3, A_retina=670, a_c_end_on=3.21e-5, tau_media=1.0

@@ -650,14 +650,10 @@ if __name__ == "__main__":
     accounts for the blur by the eye and the nonlinear cone response for natural images 
     and videos.
     """
-    # PM.cones.natural_stimuli_cone_filter()
-    # PM.viz.show_cone_filter_response(
-    #     PM.cones.image, PM.cones.image_after_optics, PM.cones.cone_response
-    # )
 
     # TÄHÄN JÄIT
     # tappiadaptaatiomalli, lue Clark_2013_PLoSComputBiol. vrt Angueyra_2022_JNeurosci jossa biophys malli
-    # TÄHÄN JÄIT: CONES: CLARK TOIMII. SPEED ME UP, SCOTTY.
+    # TÄHÄN JÄIT: CONES: CLARK TOIMII. Tarkasta kvantiteetit vrt Clark
 
     # Tarvitsetko primaattidataa jälkimmäisestä?
     # RF MÄÄRITTELY KIRJALLISUUDESTA ON YLLÄTTÄVÄN HANKALAA. VOISIKO
