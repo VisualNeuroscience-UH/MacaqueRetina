@@ -551,13 +551,12 @@ class DataIO(DataIOBase):
 
         # save all stimulus object attributes in the same format
         # Delete injected attributes "context", "data_io" and cones from stimulus object before saving, because they cannot be saved in hdf5 format.
-        stimulus_out = deepcopy(stimulus)
-        del stimulus_out._context
-        del stimulus_out._data_io
-        del stimulus_out._cones
+        del stimulus._context
+        del stimulus._data_io
+        del stimulus._cones
 
         full_path_out = f"{fullpath_filename}.hdf5"
-        self.save_dict_to_hdf5(full_path_out, stimulus_out.__dict__)
+        self.save_dict_to_hdf5(full_path_out, stimulus.__dict__)
 
     def load_stimulus_from_videofile(self, filename):
         """
