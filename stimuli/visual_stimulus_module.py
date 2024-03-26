@@ -2,7 +2,6 @@
 import numpy as np
 import numpy.matlib as npm
 
-# import numpy.matlib as matlib
 from scipy import ndimage
 import colorednoise as cn
 
@@ -14,9 +13,6 @@ import matplotlib.pyplot as plt
 
 # Builtin
 from pathlib import Path
-import pdb
-
-# import time
 
 plt.rcParams["image.cmap"] = "gray"
 
@@ -77,9 +73,11 @@ class VideoBaseClass(object):
         options["orientation"] = 0.0  # No rotation or vertical
         options["size_inner"] = None
         options["size_outer"] = None
-        options["on_proportion"] = (
-            0.5  # between 0 and 1, proportion of stimulus-on time
-        )
+
+        # Binary noise options
+        # between 0 and 1, proportion of stimulus-on time
+        options["on_proportion"] = 0.5
+        options["on_time"] = 0.1  # in seconds
         options["direction"] = "increment"  # or 'decrement'
 
         # Limits, no need to go beyond these
@@ -100,15 +98,16 @@ class VideoBaseClass(object):
         self.options = options
 
     def _scale_intensity(self):
-        """Scale intensity to 8-bit grey scale. Calculating peak-to-peak here allows different
-        luminances and contrasts"""
+        """
+        Scale intensity to 8-bit grey scale. Calculating peak-to-peak here allows different
+        luminances and contrasts
+        """
 
         intensity_max = np.max(self.options["intensity"])
         mean = self.options["mean"]  # This is the mean of final dynamic range
         contrast = self.options["contrast"]
         raw_min_value = np.min(self.options["raw_intensity"])
         raw_peak_to_peak = np.ptp(self.options["raw_intensity"])
-
         frames = self.frames
 
         # Simo's new version, Lmin, Lmax from mean and Michelson contrast, check against 0 and intensity_max
@@ -482,18 +481,25 @@ class StimulusPattern:
         nor 'decrement'. The raw intensity range is set to [-1, 1].
         """
         on_proportion = self.options["on_proportion"]
+        on_time = self.options["on_time"]
+        fps = self.options["fps"]
         samples = self.frames.shape[0]
         direction = self.options["direction"]
 
-        def _rand_bin_array(samples, on_proportion):
-            N = samples
+        def _rand_bin_array(samples, on_proportion, on_samples):
+            N = int(samples / on_samples)
             K = np.uint(N * on_proportion)
             arr = np.zeros(N)
             arr[:K] = 1
             np.random.shuffle(arr)
+
+            # Repeat each item in arr on_samples times
+            arr = np.repeat(arr, on_samples)
+
             return arr
 
-        frame_time_series = _rand_bin_array(samples, on_proportion)
+        on_samples = int(on_time * fps)
+        frame_time_series = _rand_bin_array(samples, on_proportion, on_samples)
 
         if direction == "decrement":
             frame_time_series = frame_time_series * -1  # flip
@@ -508,10 +514,11 @@ class StimulusPattern:
 
         # Note the stim has dyn range 1 and thus contrast will be halved by the
         # dyn range -1 1, thus the doubling
-        self.options["contrast"] = self.options["contrast"] * 2
+        # self.options["contrast"] = self.options["contrast"] * 2
         self.options["raw_intensity"] = (-1, 1)
-
-        self.frames = np.zeros(self.frames.shape) + frame_time_series
+        self.frames = (
+            np.zeros(self.frames.shape) + frame_time_series[:, np.newaxis, np.newaxis]
+        )
 
     def natural_images(self):
         """
