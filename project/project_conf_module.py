@@ -657,6 +657,8 @@ if __name__ == "__main__":
 
     # TÄHÄN JÄIT
     # tappiadaptaatiomalli, lue Clark_2013_PLoSComputBiol. vrt Angueyra_2022_JNeurosci jossa biophys malli
+    # TÄHÄN JÄIT: CONES: CLARK TOIMII. SPEED ME UP, SCOTTY.
+
     # Tarvitsetko primaattidataa jälkimmäisestä?
     # RF MÄÄRITTELY KIRJALLISUUDESTA ON YLLÄTTÄVÄN HANKALAA. VOISIKO
     # RF MÄÄRITELLÄ SIMULAATTORIPAPERISSA? NÄIN SIITÄ TULISI NEUROINFORMATIIKKA
@@ -678,10 +680,10 @@ if __name__ == "__main__":
     # luminance = PM.cones.get_luminance_from_photoisomerizations(I_cone)
     # print(f"{luminance:.2f} cd/m2")
 
-    luminance = 128  # Luminance in cd/m2
+    # luminance = 128  # Luminance in cd/m2
 
-    I_cone = PM.cones.get_photoisomerizations_from_luminance(luminance)
-    print(f"{I_cone:.2f} photoisomerizations per second per cone")
+    # I_cone = PM.cones.get_photoisomerizations_from_luminance(luminance)
+    # print(f"{I_cone:.2f} photoisomerizations per second per cone")
 
     # ##########################################
     # #   Sample figure data from literature  ##
