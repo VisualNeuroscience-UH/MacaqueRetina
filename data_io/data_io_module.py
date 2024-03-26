@@ -422,8 +422,13 @@ class DataIO(DataIOBase):
     def save_array_to_hdf5(self, filename, array):
         """
         Save a numpy array to hdf5 file.
-        :param array: numpy array to save
-        :param filename: hdf5 file name
+
+        Parameters
+        ----------
+        filename : str
+            The name of the hdf5 file to be saved.
+        array : np.ndarray
+            The numpy array to be saved.
         """
         assert isinstance(array, np.ndarray), f"Cannot save {type(array)} type"
         with h5py.File(filename, "w") as hdf5_file_handle:
@@ -612,8 +617,13 @@ class DataIO(DataIOBase):
     def save_cone_response_to_hdf5(self, filename, cone_response):
         """
         Save cone response to hdf5 file.
-        :param filename: hdf5 file name
-        :param cone_response: cone response object
+
+        Parameters
+        ----------
+        filename : str
+            The name of the hdf5 file to be saved.
+        cone_response : np.ndarray
+            The cone response data to be saved.
         """
         parent_path = self._check_output_folder()
 
