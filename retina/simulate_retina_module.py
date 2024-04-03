@@ -187,6 +187,8 @@ class Cones(ReceptiveFieldsBase):
         return cone_noise
 
     def _create_cone_signal_brian(self, cone_input, p, dt, duration, tvec):
+        
+        start = time.time()
 
         alpha = p["alpha"]
         beta = p["beta"]
@@ -244,7 +246,6 @@ class Cones(ReceptiveFieldsBase):
             :, pad_length : pad_length + len(tvec)
         ]
 
-        start = time.time()
         print("\nRunning Brian code for cones...")
         y_mtx_ta = b2.TimedArray(y_mtx.T, dt=dt)
         z_mtx_ta = b2.TimedArray(z_mtx.T, dt=dt)
