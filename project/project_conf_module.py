@@ -3,12 +3,11 @@ import matplotlib.pyplot as plt
 
 # Builtin
 from pathlib import Path
-import sys
-import pdb
 import time
 import warnings
-import random
-import math
+
+# Comput Neurosci
+import brian2.units as b2u
 
 # sys.path.append(Path(__file__).resolve().parent.parent)
 # Start measuring time
@@ -281,10 +280,10 @@ my_stimulus_options = {
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
     "fps": 350,  # 300 for good cg integration
-    "duration_seconds": 1,  # actual frames = floor(duration_seconds * fps)
+    "duration_seconds": 9,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
-    "pattern": "temporal_sine_pattern",  # One of the StimulusPatterns square_grating sine_grating
+    "pattern": "spatially_uniform_binary_noise",  # One of the StimulusPatterns square_grating sine_grating
     "stimulus_form": "rectangular",
     "size_inner": 0.1,  # deg, Applies to annulus only
     "size_outer": 1,  # deg, Applies to annulus only
@@ -380,7 +379,7 @@ cone_general_params = {
     "cone2gc_midget": 9,  # um, 1 SD of Gaussian
     "cone2gc_parasol": 27,  # um 27
     "cone2gc_cutoff_SD": 1,  # 3 SD is 99.7% of Gaussian
-    "cone_noise_magnitude": 0.2,  # firing rate relative to Benardete mean values, 0 for no noise
+    "cone_noise_magnitude": 0.0,  # 0.2  # firing rate relative to Benardete mean values, 0 for no noise
     "cone_noise_wc": [14, 160],  # lorenzian freqs, Angueyra_2013_NatNeurosci Fig1
 }
 
@@ -391,12 +390,13 @@ cone_signal_parameters = {
     "alpha": 19.4,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
     "beta": 0.36,  # unitless
     "gamma": 0.448,  # unitless
-    "tau_y": 4.49,  # milliseconds
+    "tau_y": 0.00449 * b2u.second,
     "n_y": 4.33,  # unitless
-    "tau_z": 166,  # milliseconds
+    "tau_z": 0.166 * b2u.second,
     "n_z": 1.0,  # unitless
-    "tau_r": 4.78,  # milliseconds
+    "tau_r": 0.00478 * b2u.second,
     "output_scaling": 1.0,  # unitless
+    "filter_limit_time": 0.5 * b2u.second,
 }
 
 bipolar_general_params = {
@@ -706,11 +706,10 @@ if __name__ == "__main__":
     Build and test your retina here, one gc type at a time. 
     """
 
-    PM.construct_retina.build()  # Main method for building the retina
+    # PM.construct_retina.build()  # Main method for building the retina
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # Thus, they are called after the retina is built.
-    # TODO: Check what project_data should be saved to npz files for viz.
 
     # The show_exp_build_process method visualizes the spatial and temporal filter responses, ganglion cell positions and density,
     # mosaic layout, spatial and temporal statistics, dendrite diameter versus eccentricity, and tonic drives

@@ -2,22 +2,15 @@
 import numpy as np
 
 import pandas as pd
-from scipy.signal import convolve
-from scipy.signal.windows import gaussian
+from scipy.signal import convolve, convolve2d
 from scipy.interpolate import interp1d
 from scipy.spatial import Delaunay
-from scipy.optimize import fsolve, curve_fit, least_squares
 from scipy.ndimage import gaussian_filter
-from scipy.special import erf, gamma
+from scipy.special import gamma as gamma_function
 import scipy.fftpack as fftpack
-from scipy import ndimage
-from scipy.stats import norm
 from scipy.integrate import odeint
 from skimage.transform import resize
 import torch
-
-# Data IO
-import cv2
 
 # Viz
 from tqdm import tqdm
@@ -27,23 +20,17 @@ import matplotlib.pyplot as plt
 import brian2 as b2
 import brian2.units as b2u
 
-# import brian2cuda as b2c
+import brian2cuda
 
 # Local
-from cxsystem2.core.tools import write_to_file, load_from_file
 from retina.retina_math_module import RetinaMath
 from project.project_utilities_module import Printable
 
 
 # Builtin
-from pathlib import Path
 from copy import deepcopy
-import pdb
 import sys
 import time
-from dataclasses import dataclass
-from typing import Any
-import inspect
 
 b2.prefs["logging.display_brian_error_message"] = False
 
@@ -199,45 +186,122 @@ class Cones(ReceptiveFieldsBase):
 
         return cone_noise
 
-    def _create_cone_signal(self, cone_input, p, tvec):
+    def _create_cone_signal_brian(self, cone_input, p, dt, duration, tvec):
 
-        # Implementing the generate_simple_filter function based on the MATLAB code provided
-        def generate_simple_filter(tau, n, t):
-            f = t**n * np.exp(-t / tau)  # Functional form in paper
-            f = f / (tau ** (n + 1)) / gamma(n + 1)  # Normalize appropriately
-            return f
+        alpha = p["alpha"]
+        beta = p["beta"]
+        gamma = p["gamma"]
+        tau_y = p["tau_y"] / b2u.second
+        n_y = p["n_y"]
+        tau_z = p["tau_z"] / b2u.second
+        n_z = p["n_z"]
+        tau_r = p["tau_r"]  # Goes into Brian which uses seconds for timed arrays
+        filter_limit_time = p["filter_limit_time"]
 
-        # Implementing the model's differential equation based on the provided dxdt function
-        def dxdt(x, t, p):
-            # Extracting parameters from the passed dictionary
-            B = p["beta"]
-            A = p["alpha"]
-            tau_r = p["tau_r"]
-            # interp argumentit: (aikapiste, aikapisteet, y-arvot, vasen, oikea)
-            zt = np.interp(t, p["tvec"], p["z"], left=0, right=0)
-            yt = np.interp(t, p["tvec"], p["y"], left=0, right=0)
+        def simple_filter(t, n, tau):
+            values = (t / tau) ** n * np.exp(-t / tau)
+            sum = np.sum(values)
+            return values / sum
 
-            dx = 1 / tau_r * (A * yt - (1 + B * zt) * x)
-            return dx
+        # filter_limit_time = 0.5 * b2u.second
 
-        Y0 = 0  # Initial condition for y, 0
-        Ky = generate_simple_filter(p["tau_y"], p["n_y"], tvec)
-        Kz_prime = generate_simple_filter(p["tau_z"], p["n_z"], tvec)
-        Kz = p["gamma"] * Ky + (1 - p["gamma"]) * Kz_prime  # Combining filters with 'C'
+        tvec_idx = tvec < filter_limit_time
+        tvec_filter = tvec / b2u.second
 
-        cone_output = np.zeros(cone_input.shape)
-        tqdm_desc = "Preparing cone output..."
+        Ky = simple_filter(tvec_filter, n_y, tau_y)
+        Kz_prime = simple_filter(tvec_filter, n_z, tau_z)
+        Kz = gamma * Ky + (1 - gamma) * Kz_prime
 
-        for i in tqdm(range(cone_input.shape[0]), desc=tqdm_desc):
-            S = cone_input[i, :]
+        # Cut filters for computational efficiency
+        Ky = Ky[tvec_idx]
+        Kz = Kz[tvec_idx]
+        print(f"The Ky filter provides {Ky.sum() * 100:.2f}% of total signal. ")
+        print(f"The Kz filter provides {Kz.sum() * 100:.2f}% of total signal. ")
 
-            # Applying the filters to the stimulus
-            p["y"] = np.convolve(S, Ky, "full")[: len(S)]
-            p["z"] = np.convolve(S, Kz, "full")[: len(S)]
-            p["tvec"] = tvec
+        # Prepare 2D convolution for the filters,
+        Ky_2D_kernel = Ky.reshape(1, -1)
+        Kz_2D_kernel = Kz.reshape(1, -1)
 
-            # Solving the ODE
-            cone_output[i, :] = odeint(dxdt, Y0, tvec, args=(p,)).squeeze()
+        pad_value = cone_input[0, 0]
+        pad_length = len(Ky) - 1
+        assert all(
+            cone_input[:, 0] == pad_value
+        ), "All values in the first column must be the same. Padding failed..."
+
+        # Pad cone input start with the initial value to avoid edge effects. Use filter limit time.
+        cone_input_padded = np.pad(
+            cone_input,
+            ((0, 0), (pad_length, 0)),
+            mode="constant",
+            constant_values=((0, 0), (pad_value, 0)),
+        )
+
+        print("\nConvolving cone signal matrices...")
+        y_mtx = convolve(cone_input_padded, Ky_2D_kernel, mode="full", method="direct")[
+            :, pad_length : pad_length + len(tvec)
+        ]
+        z_mtx = convolve(cone_input_padded, Kz_2D_kernel, mode="full", method="direct")[
+            :, pad_length : pad_length + len(tvec)
+        ]
+
+        start = time.time()
+        print("\nRunning Brian code for cones...")
+        y_mtx_ta = b2.TimedArray(y_mtx.T, dt=dt)
+        z_mtx_ta = b2.TimedArray(z_mtx.T, dt=dt)
+
+        eqs = b2.Equations(
+            """
+            dr/dt = (alpha * y_mtx_ta(t,i) - (1 + beta * z_mtx_ta(t,i)) * r) / tau_r : 1
+            """
+        )
+
+        r_initial_value = alpha * y_mtx[0, 0] / (1 + beta * z_mtx[0, 0])
+
+        G = b2.NeuronGroup(self.n_units, eqs, dt=dt)
+        G.r = r_initial_value
+        M = b2.StateMonitor(G, ("r"), record=True)
+        b2.run(duration)
+        end = time.time()
+        print(f"\nTime elapsed: {end - start}")
+
+        # fig, ax = plt.subplots(3, 1)
+        # ax[0].imshow(cone_input)
+        # # annotate ax[0] with min and max values of cone input
+        # ax[0].annotate(
+        #     f"min: {np.min(cone_input):.2f}, max: {np.max(cone_input):.2f}",
+        #     xy=(0.5, 0.5),
+        #     xycoords="axes fraction",
+        #     ha="center",
+        #     va="center",
+        # )
+        # ax[1].imshow(y_mtx)
+        # ax[1].annotate(
+        #     f"min: {np.min(y_mtx):.2f}, max: {np.max(y_mtx):.2f}",
+        #     xy=(0.5, 0.5),
+        #     xycoords="axes fraction",
+        #     ha="center",
+        #     va="center",
+        # )
+        # ax[2].imshow(z_mtx)
+        # ax[2].annotate(
+        #     f"min: {np.min(z_mtx):.2f}, max: {np.max(z_mtx):.2f}",
+        #     xy=(0.5, 0.5),
+        #     xycoords="axes fraction",
+        #     ha="center",
+        #     va="center",
+        # )
+
+        # breakpoint()
+
+        # plt.figure()
+        # plt.plot(M.t / b2u.ms, M.r[0, :])
+        # # plt.plot(M.t / b2u.ms, M.kz[0])
+        # plt.xlabel("Time (ms)")
+        # plt.ylabel("value")
+        # plt.show()
+        # breakpoint()
+
+        cone_output = M.r
 
         return cone_output
 
@@ -325,13 +389,33 @@ class Cones(ReceptiveFieldsBase):
         # Use advanced indexing for selecting pixels
         cone_input_cropped = video_copy[0, r_indices, q_indices, time_points_indices]
         cone_input = np.squeeze(cone_input_cropped)
-        cone_input_R = self.get_photoisomerizations_from_luminance(cone_input)
+
+        # cone_input_R = self.get_photoisomerizations_from_luminance(cone_input)
+        if 0:
+
+            def impulse_input(inp):
+                # Get max values
+                max_values_idx = np.argmax(inp, axis=1)
+                inp_values = np.zeros_like(inp)
+                inp_values[:, max_values_idx] = 1
+                print(f"{max_values_idx=}")
+                return inp_values
+
+            cone_input = impulse_input(cone_input)
+        # breakpoint()
+
+        # cone_input_ta = b2.TimedArray(cone_input.T, dt=vs.video_dt)  # Note transpose
 
         params_dict = self.my_retina["cone_signal_parameters"]
 
-        tvec = vs.tvec / b2u.second
+        tvec = vs.tvec
+        dt = vs.video_dt
+        duration = vs.duration
 
-        cone_signal = self._create_cone_signal(cone_input, params_dict, tvec)
+        cone_signal = self._create_cone_signal_brian(
+            cone_input, params_dict, dt, duration, tvec
+        )
+        # cone_signal = self._create_cone_signal(cone_input, params_dict, tvec)
 
         vs.cone_signal = cone_signal
 
@@ -2239,6 +2323,8 @@ class SimulateRetina(RetinaMath):
             "video_dt": vs.video_dt,
             "tvec_new": vs.tvec_new,
         }
+
+        # breakpoint()
 
         # Attach data requested by other classes to project_data
         self.project_data.simulate_retina["stim_to_show"] = stim_to_show
