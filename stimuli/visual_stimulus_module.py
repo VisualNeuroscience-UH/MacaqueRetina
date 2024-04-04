@@ -94,7 +94,7 @@ class VideoBaseClass(object):
         options["baseline_start_seconds"] = 0
         options["baseline_end_seconds"] = 0
         options["stimulus_video_name"] = None
-        options["dtype"] = "uint8"
+        options["dtype_name"] = "uint8"
 
         self.options = options
 
@@ -727,7 +727,7 @@ class VisualStimulus(VideoBaseClass):
             ), f"The option '{this_option}' was not recognized"
 
         self.options.update(my_stimulus_options)
-        self.options["dtype"] = getattr(np, self.options["dtype"])
+        self.options["dtype"] = getattr(np, self.options["dtype_name"])
 
         # background for stimulus
         self.frames = self._create_frames(self.options["duration_seconds"])
