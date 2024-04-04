@@ -65,6 +65,7 @@ class Cones(ReceptiveFieldsBase):
         my_retina,
         ret_npz,
         device,
+        ND_filter,
         interpolation_function,
         lin_interp_and_double_lorenzian,
     ) -> None:
@@ -73,6 +74,7 @@ class Cones(ReceptiveFieldsBase):
         self.my_retina = my_retina
         self.ret_npz = ret_npz
         self.device = device
+        self.ND_filter = ND_filter
         self.interpolation_function = interpolation_function
         self.lin_interp_and_double_lorenzian = lin_interp_and_double_lorenzian
 
@@ -221,8 +223,7 @@ class Cones(ReceptiveFieldsBase):
 
         def simple_filter(t, n, tau):
             values = (t / tau) ** n * np.exp(-t / tau)
-            sum = np.sum(values)
-            return values / sum
+            return values
 
         # filter_limit_time = 0.5 * b2u.second
 
@@ -238,6 +239,10 @@ class Cones(ReceptiveFieldsBase):
         Kz = Kz[tvec_idx]
         print(f"The Ky filter provides {Ky.sum() * 100:.2f}% of total signal. ")
         print(f"The Kz filter provides {Kz.sum() * 100:.2f}% of total signal. ")
+
+        # Normalize filters to full filter = 1.0
+        Ky = Ky / Ky.sum()
+        Kz = Kz / Kz.sum()
 
         # Prepare 2D convolution for the filters,
         Ky_2D_kernel = Ky.reshape(1, -1)
@@ -272,7 +277,7 @@ class Cones(ReceptiveFieldsBase):
 
         eqs = b2.Equations(
             """
-            dr/dt = (alpha * y_mtx_ta(t,i) - (1 + beta * z_mtx_ta(t,i)) * r) / tau_r : 1
+            dr/dt = alpha * y_mtx_ta(t,i) / tau_r - (1 + beta * z_mtx_ta(t,i)) * r / tau_r : 1
             """
         )
         # Assuming dr/dt is zero at t=0, a.k.a. steady state
@@ -372,20 +377,10 @@ class Cones(ReceptiveFieldsBase):
         cone_input_cropped = video_copy[0, r_indices, q_indices, time_points_indices]
         cone_input = np.squeeze(cone_input_cropped)
 
-        # cone_input = self.get_photoisomerizations_from_luminance(cone_input)
-        if 0:
-
-            def impulse_input(inp):
-                # Get max values
-                max_values_idx = np.argmax(inp, axis=1)
-                inp_values = np.zeros_like(inp)
-                inp_values[:, max_values_idx] = 1
-                print(f"{max_values_idx=}")
-                return inp_values
-
-            cone_input = impulse_input(cone_input)
-
-        # cone_input_ta = b2.TimedArray(cone_input.T, dt=vs.video_dt)  # Note transpose
+        # Photoisomerization units need more bits to represent the signal
+        cone_input = np.squeeze(cone_input_cropped).astype(np.float32)
+        cone_input = self.get_photoisomerizations_from_luminance(cone_input)
+        cone_input = cone_input * np.power(10, -self.ND_filter)
 
         params_dict = self.my_retina["cone_signal_parameters"]
 
@@ -396,7 +391,8 @@ class Cones(ReceptiveFieldsBase):
         cone_signal = self._create_cone_signal_brian(
             cone_input, params_dict, dt, duration, tvec
         )
-        # cone_signal = self._create_cone_signal(cone_input, params_dict, tvec)
+
+        # breakpoint()
 
         vs.cone_signal = cone_signal
 
@@ -2343,6 +2339,7 @@ class SimulateRetina(RetinaMath):
             self.context.my_retina,
             ret_npz,
             self.context.device,
+            self.context.my_stimulus_options["ND_filter"],
             # RetinaMath methods:
             self.interpolation_function,
             self.lin_interp_and_double_lorenzian,

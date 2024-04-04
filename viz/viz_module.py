@@ -2639,7 +2639,7 @@ class Viz:
         if savefigname is not None:
             self._figsave(figurename=savefigname)
 
-    def show_cone_responses(self, savefigname=None):
+    def show_cone_responses(self, time_range=None, savefigname=None):
         """ """
         gc_responses_to_show = self.project_data.simulate_retina["gc_responses_to_show"]
         duration = gc_responses_to_show["duration"]
@@ -2666,10 +2666,18 @@ class Viz:
         ax[0].set_title("Stimulus mean vector")
 
         ax[1].plot(tvec_mean, cone_signal_mean, label="cone_signal")
+        # Draw a vertical line at the time of max cone signal
+        max_cone_signal_time = tvec_mean[np.argmax(cone_signal_mean)]
+        ax[1].axvline(max_cone_signal_time, color="r", linestyle="--")
+
         ax[1].set_xlim([0, duration / b2u.second])
         ax[1].set_ylabel("a.u.")
         ax[1].set_xlabel("Time (s)")
         ax[1].set_title("Cone signal mean")
+
+        if time_range is not None:
+            ax[0].set_xlim(time_range)
+            ax[1].set_xlim(time_range)
 
         if savefigname is not None:
             self._figsave(figurename=savefigname)

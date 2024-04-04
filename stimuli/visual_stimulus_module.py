@@ -95,6 +95,7 @@ class VideoBaseClass(object):
         options["baseline_end_seconds"] = 0
         options["stimulus_video_name"] = None
         options["dtype_name"] = "uint8"
+        options["ND_filter"] = 0.0  # ND filter value at log10 units
 
         self.options = options
 
