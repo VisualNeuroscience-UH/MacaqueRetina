@@ -245,6 +245,7 @@ class Cones(ReceptiveFieldsBase):
 
         pad_value = cone_input[0, 0]
         pad_length = len(Ky) - 1
+
         assert all(
             cone_input[:, 0] == pad_value
         ), "All values in the first column must be the same. Padding failed..."
@@ -371,7 +372,7 @@ class Cones(ReceptiveFieldsBase):
         cone_input_cropped = video_copy[0, r_indices, q_indices, time_points_indices]
         cone_input = np.squeeze(cone_input_cropped)
 
-        cone_input = self.get_photoisomerizations_from_luminance(cone_input)
+        # cone_input = self.get_photoisomerizations_from_luminance(cone_input)
         if 0:
 
             def impulse_input(inp):
@@ -383,7 +384,6 @@ class Cones(ReceptiveFieldsBase):
                 return inp_values
 
             cone_input = impulse_input(cone_input)
-        # breakpoint()
 
         # cone_input_ta = b2.TimedArray(cone_input.T, dt=vs.video_dt)  # Note transpose
 

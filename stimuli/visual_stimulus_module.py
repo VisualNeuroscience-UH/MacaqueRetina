@@ -94,6 +94,7 @@ class VideoBaseClass(object):
         options["baseline_start_seconds"] = 0
         options["baseline_end_seconds"] = 0
         options["stimulus_video_name"] = None
+        options["dtype"] = "uint8"
 
         self.options = options
 
@@ -135,8 +136,9 @@ class VideoBaseClass(object):
         assert np.all(0 <= frames.flatten()) and np.all(
             frames.flatten() <= 255
         ), f"Cannot safely convert range {np.min(frames.flatten())}- {np.max(frames.flatten())}to uint8. Check intensity/dynamic range."
+
         # Return
-        self.frames = frames.astype(np.uint8)
+        self.frames = frames.astype(self.options["dtype"])
 
     def _prepare_grating(self, grating_type="sine"):
         """Create temporospatial grating based on specified grating type."""
@@ -319,7 +321,7 @@ class VideoBaseClass(object):
                     self.options["image_height"],
                     self.options["image_width"],
                 ),
-                dtype=np.uint8,
+                dtype=self.options["dtype"],
             )
             * self.options["background"]
         )
@@ -725,10 +727,10 @@ class VisualStimulus(VideoBaseClass):
             ), f"The option '{this_option}' was not recognized"
 
         self.options.update(my_stimulus_options)
+        self.options["dtype"] = getattr(np, self.options["dtype"])
 
-        self.frames = self._create_frames(
-            self.options["duration_seconds"]
-        )  # background for stimulus
+        # background for stimulus
+        self.frames = self._create_frames(self.options["duration_seconds"])
 
         # Check that phase shift is in radians
         assert (
@@ -758,7 +760,6 @@ class VisualStimulus(VideoBaseClass):
         # Not implemented yet
         # Natural images are filtered at the StimulusPattern method,
         # because they are typically not evolving over time
-
         self.frames_baseline_start = self._create_frames(
             self.options["baseline_start_seconds"]
         )  # background for baseline before stimulus
@@ -770,9 +771,7 @@ class VisualStimulus(VideoBaseClass):
         self.frames = np.concatenate(
             (self.frames_baseline_start, self.frames, self.frames_baseline_end), axis=0
         )
-        self.frames = self.frames.astype(np.uint8)
-
-        # self.video = self.frames.transpose(2, 0, 1)
+        self.frames = self.frames.astype(self.options["dtype"])
         self.video = self.frames
         self.fps = self.options["fps"]
         self.pix_per_deg = self.options["pix_per_deg"]

@@ -385,19 +385,29 @@ class DataIO(DataIOBase):
                         compression=compression,
                         compression_opts=compression_opts,
                     )
+                elif isinstance(item, type):
+                    continue
                 else:
                     raise ValueError("Cannot save %s type" % type(item))
 
     def load_dict_from_hdf5(self, filename):
         """
         Load a dictionary from hdf5 file.
-        :param filename: hdf5 file name
+
+        Parameters
+        ----------
+        filename: hdf5 file name
+
+        Returns
+        -------
+        dict
+            The dictionary loaded from the hdf5 file.
         """
         with h5py.File(filename, "r") as h5file:
             return self._recursively_load_dict_contents_from_group(h5file, "/")
 
     def _recursively_load_dict_contents_from_group(self, h5file, path):
-        ans = {}
+        data_dict = {}
         for key, item in h5file[path].items():
             if isinstance(item, h5py._hl.dataset.Dataset):
                 # Convert single item numpy arrays to their corresponding scalars
@@ -411,13 +421,12 @@ class DataIO(DataIOBase):
                     # If it's a size-1 array, convert to python scalar
                     elif val.shape == (1,):
                         val = val[0]
-
-                ans[key] = val
+                data_dict[key] = val
             elif isinstance(item, h5py._hl.group.Group):
-                ans[key] = self._recursively_load_dict_contents_from_group(
+                data_dict[key] = self._recursively_load_dict_contents_from_group(
                     h5file, path + key + "/"
                 )
-        return ans
+        return data_dict
 
     def save_array_to_hdf5(self, filename, array):
         """
@@ -447,8 +456,14 @@ class DataIO(DataIOBase):
             array = hdf5_file_handle["array"][...]
         return array
 
-    def _write_frames_to_videofile(self, pl_fullpath_filename, stimulus):
+    def _write_frames_to_mp4_videofile(self, pl_fullpath_filename, stimulus):
         """Write frames to videofile"""
+
+        # Convert frames to uint8
+        frames = stimulus.frames.copy()
+        frames = np.around(frames).astype(np.uint8)
+        print("The mp4 videofile for viewing is saved as uint8 type.")
+
         # Init openCV VideoWriter
         fourcc = cv2.VideoWriter_fourcc(*stimulus.options["codec"])
         fullpath_filename = str(pl_fullpath_filename)
@@ -462,8 +477,8 @@ class DataIO(DataIOBase):
         )  # path, codec, fps, size. Note, the isColor the flag is currently supported on Windows only
 
         # Write frames to videofile frame-by-frame
-        for index in np.arange(stimulus.frames.shape[0]):
-            video.write(stimulus.frames[index, :, :])
+        for index in np.arange(frames.shape[0]):
+            video.write(frames[index, :, :])
 
         video.release()
 
@@ -547,7 +562,7 @@ class DataIO(DataIOBase):
         fullpath_filename = self.get_video_full_name(filename)
 
         # To display to user
-        self._write_frames_to_videofile(fullpath_filename, stimulus)
+        self._write_frames_to_mp4_videofile(fullpath_filename, stimulus)
 
         # save all stimulus object attributes in the same format
         # Delete injected attributes "context", "data_io" and cones from stimulus object before saving, because they cannot be saved in hdf5 format.

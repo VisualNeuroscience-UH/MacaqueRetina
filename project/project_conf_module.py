@@ -279,6 +279,7 @@ my_stimulus_options = {
     "image_width": 240,  # 752 for nature1.avi
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
+    "dtype": "float16",  # "float16",  # "uint8",
     "fps": 350,  # 300 for good cg integration
     "duration_seconds": 1,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
@@ -788,12 +789,12 @@ if __name__ == "__main__":
     # PM.viz.show_all_gc_histogram(savefigname=None)
     PM.viz.show_cone_responses(savefigname=None)
 
-    # PM.viz.show_stimulus_with_gcs(
-    #     example_gc=my_run_options["unit_index"],  # [int,], my_run_options["unit_index"]
-    #     frame_number=301,  # depends on fps, and video and baseline lengths
-    #     show_rf_id=False,
-    #     savefigname=None,
-    # )
+    PM.viz.show_stimulus_with_gcs(
+        example_gc=my_run_options["unit_index"],  # [int,], my_run_options["unit_index"]
+        frame_number=301,  # depends on fps, and video and baseline lengths
+        show_rf_id=False,
+        savefigname=None,
+    )
 
     ##########################################
     ###       Show impulse response        ###
