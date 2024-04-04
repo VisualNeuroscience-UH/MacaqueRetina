@@ -310,12 +310,12 @@ class VideoBaseClass(object):
     def _raw_intensity_from_data(self):
         self.options["raw_intensity"] = (np.min(self.frames), np.max(self.frames))
 
-    def _create_frames(self, epoch__in_seconds):
+    def _create_frames(self, epoch_in_seconds):
         # Create frames for the requested duration in sec
         frames = (
             np.ones(
                 (
-                    int(self.options["fps"] * epoch__in_seconds),
+                    int(self.options["fps"] * epoch_in_seconds),
                     self.options["image_height"],
                     self.options["image_width"],
                 ),

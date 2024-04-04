@@ -2655,7 +2655,7 @@ class Viz:
         # Create subplots
         fig, ax = plt.subplots(2, 1, sharex=True)
 
-        svecs_mean = np.abs(svecs).mean(axis=0)
+        svecs_mean = svecs.mean(axis=0)
         tvec_mean = np.linspace(0, duration / b2u.second, len(svecs_mean))
         cone_signal_mean = np.abs(cone_signal).mean(axis=0)
 

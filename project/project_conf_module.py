@@ -280,19 +280,19 @@ my_stimulus_options = {
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
     "fps": 350,  # 300 for good cg integration
-    "duration_seconds": 9,  # actual frames = floor(duration_seconds * fps)
+    "duration_seconds": 1,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
-    "pattern": "spatially_uniform_binary_noise",  # One of the StimulusPatterns square_grating sine_grating
+    "pattern": "temporal_sine_pattern",  # One of the StimulusPatterns square_grating sine_grating
     "stimulus_form": "rectangular",
     "size_inner": 0.1,  # deg, Applies to annulus only
     "size_outer": 1,  # deg, Applies to annulus only
     "stimulus_position": (0.0, 0.0),
     "stimulus_size": 1,  # 0.04,  # 2,  # deg, radius for circle, sidelen/2 for rectangle.
     "background": 128,
-    "contrast": 0.95,  # Weber constrast
+    "contrast": 0.05,  # Weber constrast
     "mean": 128,
-    "temporal_frequency": 6.0,  # 0.01,  # 4.0,  # 40,  # Hz
+    "temporal_frequency": 2.5,  # 0.01,  # 4.0,  # 40,  # Hz
     "spatial_frequency": 5.0,  # cpd
     "orientation": 0,  # degrees
     "phase_shift": 0,  # math.pi,  # radians
@@ -317,7 +317,7 @@ my_run_options = {
     "n_trials": 1,  # For each of the response files
     # "unit_index": 2,  # list of ints or None for all units
     # "n_trials": 10,  # For each of the response files
-    "spike_generator_model": "refractory",  # poisson or refractory
+    "spike_generator_model": "poisson",  # poisson or refractory
     "save_data": True,
     "gc_response_filenames": [f"gc_response_{x:02}" for x in range(n_files)],
     "simulation_dt": 0.0001,  # in sec 0.001 = 1 ms
@@ -758,7 +758,7 @@ if __name__ == "__main__":
     ########################
 
     # Based on my_stimulus_options above
-    # PM.stimulate.make_stimulus_video()
+    PM.stimulate.make_stimulus_video()
 
     ####################################
     ### Run multiple trials or units ###
@@ -784,13 +784,14 @@ if __name__ == "__main__":
     ################################################
 
     # Based on my_run_options above
-    PM.viz.show_all_gc_responses(savefigname=None)
+    # PM.viz.show_all_gc_responses(savefigname=None)
     # PM.viz.show_all_gc_histogram(savefigname=None)
+    PM.viz.show_cone_responses(savefigname=None)
 
     # PM.viz.show_stimulus_with_gcs(
     #     example_gc=my_run_options["unit_index"],  # [int,], my_run_options["unit_index"]
     #     frame_number=301,  # depends on fps, and video and baseline lengths
-    #     show_rf_id=True,
+    #     show_rf_id=False,
     #     savefigname=None,
     # )
 
