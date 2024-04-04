@@ -2565,6 +2565,12 @@ class Viz:
         video_dt = gc_responses_to_show["video_dt"]
         tvec_new = gc_responses_to_show["tvec_new"]
 
+        intermediate_responses_to_show = self.project_data.simulate_retina[
+            "intermediate_responses_to_show"
+        ]
+        svecs = intermediate_responses_to_show["svecs"]
+        cone_signal = intermediate_responses_to_show["cone_signal"]
+
         # Prepare data for manual visualization
         for_eventplot = all_spiketrains.copy()  # list of different leght arrays
         for_histogram = np.concatenate(all_spiketrains)
@@ -2582,7 +2588,7 @@ class Viz:
             )
 
         # Create subplots
-        fig, ax = plt.subplots(2, 1, sharex=True)
+        fig, ax = plt.subplots(3, 1, sharex=True)
 
         # Event plot on first subplot
         ax[0].eventplot(for_eventplot)
@@ -2610,12 +2616,60 @@ class Viz:
 
         # Update average firing rate calculation based on the new hist_dt
         avg_fr = hist / (n_samples * (hist_dt / b2u.second))
-        # breakpoint()
         ax[1].plot(bin_edges[:-1], avg_fr, label="Measured")
-
         ax[1].set_ylabel("Firing rate (Hz)")
         ax[1].set_xlabel("Time (s)")
         ax[1].legend()
+
+        svecs_mean = np.abs(svecs).mean(axis=0)
+        svecs_mean_norm = np.abs(svecs).mean(axis=0) / np.abs(svecs_mean).max()
+        tvec_mean = np.linspace(0, duration / b2u.second, len(svecs_mean_norm))
+        cone_signal_mean = np.abs(cone_signal).mean(axis=0)
+        cone_signal_mean_norm = (
+            np.abs(cone_signal).mean(axis=0) / np.abs(cone_signal_mean).max()
+        )
+        # breakpoint()
+        ax[2].plot(tvec_mean, svecs_mean_norm, label="svec")
+        ax[2].plot(tvec_mean, cone_signal_mean_norm, label="cone_signal")
+        ax[2].set_xlim([0, duration / b2u.second])
+        ax[2].set_ylabel("a.u.")
+        ax[2].set_xlabel("Time (s)")
+        ax[2].legend()
+
+        if savefigname is not None:
+            self._figsave(figurename=savefigname)
+
+    def show_cone_responses(self, savefigname=None):
+        """ """
+        gc_responses_to_show = self.project_data.simulate_retina["gc_responses_to_show"]
+        duration = gc_responses_to_show["duration"]
+        video_dt = gc_responses_to_show["video_dt"]
+        tvec_new = gc_responses_to_show["tvec_new"]
+
+        intermediate_responses_to_show = self.project_data.simulate_retina[
+            "intermediate_responses_to_show"
+        ]
+        svecs = intermediate_responses_to_show["svecs"]
+        cone_signal = intermediate_responses_to_show["cone_signal"]
+
+        # Create subplots
+        fig, ax = plt.subplots(2, 1, sharex=True)
+
+        svecs_mean = np.abs(svecs).mean(axis=0)
+        tvec_mean = np.linspace(0, duration / b2u.second, len(svecs_mean))
+        cone_signal_mean = np.abs(cone_signal).mean(axis=0)
+
+        ax[0].plot(tvec_mean, svecs_mean, label="svec")
+        ax[0].set_xlim([0, duration / b2u.second])
+        ax[0].set_ylabel("a.u.")
+        ax[0].set_xlabel("Time (s)")
+        ax[0].set_title("Stimulus mean vector")
+
+        ax[1].plot(tvec_mean, cone_signal_mean, label="cone_signal")
+        ax[1].set_xlim([0, duration / b2u.second])
+        ax[1].set_ylabel("a.u.")
+        ax[1].set_xlabel("Time (s)")
+        ax[1].set_title("Cone signal mean")
 
         if savefigname is not None:
             self._figsave(figurename=savefigname)
