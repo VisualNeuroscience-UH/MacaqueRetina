@@ -187,8 +187,27 @@ class Cones(ReceptiveFieldsBase):
         return cone_noise
 
     def _create_cone_signal_brian(self, cone_input, p, dt, duration, tvec):
-        
-        start = time.time()
+        """
+        Create cone signal using Brian2. Works in video time domain.
+
+        Parameters
+        ----------
+        cone_input : ndarray
+            The cone input of shape (n_cones, n_timepoints).
+        p : dict
+            The cone signal parameters.
+        dt : float
+            The video time step.
+        duration : float
+            The duration of input video.
+        tvec : ndarray
+            The time vector of input video.
+
+        Returns
+        -------
+        ndarray
+            The cone signal of shape (n_cones, n_timepoints).
+        """
 
         alpha = p["alpha"]
         beta = p["beta"]
@@ -255,52 +274,13 @@ class Cones(ReceptiveFieldsBase):
             dr/dt = (alpha * y_mtx_ta(t,i) - (1 + beta * z_mtx_ta(t,i)) * r) / tau_r : 1
             """
         )
-
+        # Assuming dr/dt is zero at t=0, a.k.a. steady state
         r_initial_value = alpha * y_mtx[0, 0] / (1 + beta * z_mtx[0, 0])
 
         G = b2.NeuronGroup(self.n_units, eqs, dt=dt)
         G.r = r_initial_value
         M = b2.StateMonitor(G, ("r"), record=True)
         b2.run(duration)
-        end = time.time()
-        print(f"\nTime elapsed: {end - start}")
-
-        # fig, ax = plt.subplots(3, 1)
-        # ax[0].imshow(cone_input)
-        # # annotate ax[0] with min and max values of cone input
-        # ax[0].annotate(
-        #     f"min: {np.min(cone_input):.2f}, max: {np.max(cone_input):.2f}",
-        #     xy=(0.5, 0.5),
-        #     xycoords="axes fraction",
-        #     ha="center",
-        #     va="center",
-        # )
-        # ax[1].imshow(y_mtx)
-        # ax[1].annotate(
-        #     f"min: {np.min(y_mtx):.2f}, max: {np.max(y_mtx):.2f}",
-        #     xy=(0.5, 0.5),
-        #     xycoords="axes fraction",
-        #     ha="center",
-        #     va="center",
-        # )
-        # ax[2].imshow(z_mtx)
-        # ax[2].annotate(
-        #     f"min: {np.min(z_mtx):.2f}, max: {np.max(z_mtx):.2f}",
-        #     xy=(0.5, 0.5),
-        #     xycoords="axes fraction",
-        #     ha="center",
-        #     va="center",
-        # )
-
-        # breakpoint()
-
-        # plt.figure()
-        # plt.plot(M.t / b2u.ms, M.r[0, :])
-        # # plt.plot(M.t / b2u.ms, M.kz[0])
-        # plt.xlabel("Time (ms)")
-        # plt.ylabel("value")
-        # plt.show()
-        # breakpoint()
 
         cone_output = M.r
 
@@ -391,7 +371,7 @@ class Cones(ReceptiveFieldsBase):
         cone_input_cropped = video_copy[0, r_indices, q_indices, time_points_indices]
         cone_input = np.squeeze(cone_input_cropped)
 
-        # cone_input_R = self.get_photoisomerizations_from_luminance(cone_input)
+        cone_input = self.get_photoisomerizations_from_luminance(cone_input)
         if 0:
 
             def impulse_input(inp):
@@ -2315,6 +2295,12 @@ class SimulateRetina(RetinaMath):
             "stimulus_cropped": vs.stimulus_cropped,
         }
 
+        intermediate_responses_to_show = {
+            "cone_noise": vs.cone_noise,
+            "cone_signal": vs.cone_signal,
+            "svecs": vs.svecs,
+        }
+
         gc_responses_to_show = {
             "n_trials": n_trials,
             "n_units": gcs.n_units,
@@ -2330,6 +2316,9 @@ class SimulateRetina(RetinaMath):
         # Attach data requested by other classes to project_data
         self.project_data.simulate_retina["stim_to_show"] = stim_to_show
         self.project_data.simulate_retina["gc_responses_to_show"] = gc_responses_to_show
+        self.project_data.simulate_retina["intermediate_responses_to_show"] = (
+            intermediate_responses_to_show
+        )
 
         if gcs.temporal_model == "fixed":
             spat_temp_filter_to_show = {
