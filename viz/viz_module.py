@@ -2628,7 +2628,7 @@ class Viz:
         cone_signal_mean_norm = (
             np.abs(cone_signal).mean(axis=0) / np.abs(cone_signal_mean).max()
         )
-        # breakpoint()
+
         ax[2].plot(tvec_mean, svecs_mean_norm, label="svec")
         ax[2].plot(tvec_mean, cone_signal_mean_norm, label="cone_signal")
         ax[2].set_xlim([0, duration / b2u.second])
@@ -2643,35 +2643,42 @@ class Viz:
         """ """
         gc_responses_to_show = self.project_data.simulate_retina["gc_responses_to_show"]
         duration = gc_responses_to_show["duration"]
-        video_dt = gc_responses_to_show["video_dt"]
-        tvec_new = gc_responses_to_show["tvec_new"]
 
         intermediate_responses_to_show = self.project_data.simulate_retina[
             "intermediate_responses_to_show"
         ]
-        svecs = intermediate_responses_to_show["svecs"]
+        photodiode_response = intermediate_responses_to_show["photodiode_response"]
         cone_signal = intermediate_responses_to_show["cone_signal"]
 
         # Create subplots
         fig, ax = plt.subplots(2, 1, sharex=True)
 
-        svecs_mean = svecs.mean(axis=0)
-        tvec_mean = np.linspace(0, duration / b2u.second, len(svecs_mean))
+        tvec_mean = np.linspace(0, duration / b2u.second, len(photodiode_response))
         cone_signal_mean = np.abs(cone_signal).mean(axis=0)
 
-        ax[0].plot(tvec_mean, svecs_mean, label="svec")
+        ax[0].plot(tvec_mean, photodiode_response, label="photodiode_response")
         ax[0].set_xlim([0, duration / b2u.second])
-        ax[0].set_ylabel("a.u.")
+        ax[0].set_ylabel("Luminance (cd/m2)")
         ax[0].set_xlabel("Time (s)")
-        ax[0].set_title("Stimulus mean vector")
+        ax[0].set_title("Luminance at center of the stimulus")
 
-        ax[1].plot(tvec_mean, cone_signal_mean, label="cone_signal")
+        ax[1].plot(tvec_mean, cone_signal.T, label="cone_signal")
+        # ax[1].plot(tvec_mean, cone_signal_mean, label="cone_signal")
         # Draw a vertical line at the time of max cone signal
         max_cone_signal_time = tvec_mean[np.argmax(cone_signal_mean)]
+        max_cone_signal = np.max(cone_signal_mean)
         ax[1].axvline(max_cone_signal_time, color="r", linestyle="--")
+        # Annotated text showing max_cone_signal_time at left top
+        ax[1].text(
+            max_cone_signal_time,
+            max_cone_signal,
+            f"Max signal at {max_cone_signal_time:.3f} s  ",
+            verticalalignment="top",
+            horizontalalignment="right",
+        )
 
         ax[1].set_xlim([0, duration / b2u.second])
-        ax[1].set_ylabel("a.u.")
+        ax[1].set_ylabel("Amplitude (mV)")
         ax[1].set_xlabel("Time (s)")
         ax[1].set_title("Cone signal mean")
 
@@ -2723,7 +2730,7 @@ class Viz:
         ]
 
         # Change to arrays
-        # breakpoint()
+
         mean_spike_rates = np.array(spike_rates)
         # sd_spike_rates = np.std(spike_rates)
 

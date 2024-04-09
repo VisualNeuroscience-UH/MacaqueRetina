@@ -188,7 +188,9 @@ class Cones(ReceptiveFieldsBase):
 
         return cone_noise
 
-    def _create_cone_signal_brian(self, cone_input, p, dt, duration, tvec):
+    def _create_cone_signal_brian(
+        self, cone_input, p, dt, duration, tvec, pad_value=0.0
+    ):
         """
         Create cone signal using Brian2. Works in video time domain.
 
@@ -237,8 +239,6 @@ class Cones(ReceptiveFieldsBase):
         # Cut filters for computational efficiency
         Ky = Ky[tvec_idx]
         Kz = Kz[tvec_idx]
-        print(f"The Ky filter provides {Ky.sum() * 100:.2f}% of total signal. ")
-        print(f"The Kz filter provides {Kz.sum() * 100:.2f}% of total signal. ")
 
         # Normalize filters to full filter = 1.0
         Ky = Ky / Ky.sum()
@@ -248,12 +248,9 @@ class Cones(ReceptiveFieldsBase):
         Ky_2D_kernel = Ky.reshape(1, -1)
         Kz_2D_kernel = Kz.reshape(1, -1)
 
-        pad_value = cone_input[0, 0]
         pad_length = len(Ky) - 1
 
-        assert all(
-            cone_input[:, 0] == pad_value
-        ), "All values in the first column must be the same. Padding failed..."
+        assert all(cone_input[:, 0] == pad_value), "Padding failed..."
 
         # Pad cone input start with the initial value to avoid edge effects. Use filter limit time.
         cone_input_padded = np.pad(
@@ -275,6 +272,9 @@ class Cones(ReceptiveFieldsBase):
         y_mtx_ta = b2.TimedArray(y_mtx.T, dt=dt)
         z_mtx_ta = b2.TimedArray(z_mtx.T, dt=dt)
 
+        # r(t) is the photoreceptor response = V(t) - Vrest, where
+        # Vrest is the hyperpolarized cone membrane potential in the dark.
+        # Positive r means depolarization from the resting potential in millivolts.
         eqs = b2.Equations(
             """
             dr/dt = alpha * y_mtx_ta(t,i) / tau_r - (1 + beta * z_mtx_ta(t,i)) * r / tau_r : 1
@@ -282,7 +282,7 @@ class Cones(ReceptiveFieldsBase):
         )
         # Assuming dr/dt is zero at t=0, a.k.a. steady state
         r_initial_value = alpha * y_mtx[0, 0] / (1 + beta * z_mtx[0, 0])
-
+        print(f"Initial value of r: {r_initial_value}")
         G = b2.NeuronGroup(self.n_units, eqs, dt=dt)
         G.r = r_initial_value
         M = b2.StateMonitor(G, ("r"), record=True)
@@ -378,9 +378,28 @@ class Cones(ReceptiveFieldsBase):
         cone_input = np.squeeze(cone_input_cropped)
 
         # Photoisomerization units need more bits to represent the signal
-        cone_input = np.squeeze(cone_input_cropped).astype(np.float32)
+        cone_input = np.squeeze(cone_input_cropped).astype(np.float64)
+        minl = np.min(cone_input)
+        maxl = np.max(cone_input)
+
         cone_input = self.get_photoisomerizations_from_luminance(cone_input)
-        cone_input = cone_input * np.power(10, -self.ND_filter)
+
+        # Neutral Density filtering factor to reduce or increase luminance
+        ff = np.power(10.0, -self.ND_filter)
+        cone_input = cone_input * ff
+        minp = np.min(cone_input).astype(int)
+        maxp = np.max(cone_input).astype(int)
+
+        print(f"\nLuminance range: {minl * ff:.2f} to {maxl * ff:.2f} cd/m²")
+        print(f"\nR* range: {minp} to {maxp} photoisomerizations/cone/s")
+
+        # Update visual stimulus photodiode response
+        vs.photodiode_response = vs.photodiode_response * ff
+
+        # Update mean value
+        mean_val = vs.options_from_file["mean"]
+        mean_val = self.get_photoisomerizations_from_luminance(mean_val)
+        mean_val = mean_val * ff
 
         params_dict = self.my_retina["cone_signal_parameters"]
 
@@ -389,10 +408,11 @@ class Cones(ReceptiveFieldsBase):
         duration = vs.duration
 
         cone_signal = self._create_cone_signal_brian(
-            cone_input, params_dict, dt, duration, tvec
+            cone_input, params_dict, dt, duration, tvec, mean_val
         )
 
-        # breakpoint()
+        print("\nCone signal min:", cone_signal.min())
+        print("Cone signal max:", cone_signal.max())
 
         vs.cone_signal = cone_signal
 
@@ -755,7 +775,6 @@ class GanglionCells(ReceptiveFieldsBase):
         df_stimpix["xos_pix"] = xos
         df_stimpix["yos_pix"] = yos
 
-        # breakpoint()
         df_stimpix["ampl_c"] = df.ampl_c_norm
         df_stimpix["ampl_s"] = df.ampl_s_norm
 
@@ -790,21 +809,25 @@ class VisualSignal(Printable):
         # Default value for computed variable
         self.stimulus_video = stimulus_video
 
-        # Extracting and computing values from provided parameters
-        self.video_file_name = self.my_stimulus_options["stimulus_video_name"]
-        self.stimulus_width_pix = self.my_stimulus_options["image_width"]
-        self.stimulus_height_pix = self.my_stimulus_options["image_height"]
-        self.pix_per_deg = self.my_stimulus_options["pix_per_deg"]
-        self.fps = self.my_stimulus_options["fps"]
-
-        self.stimulus_width_deg = self.stimulus_width_pix / self.pix_per_deg
-        self.stimulus_height_deg = self.stimulus_height_pix / self.pix_per_deg
-
         # Load stimulus video if not already loaded
         if self.stimulus_video is None:
+            self.video_file_name = self.my_stimulus_options["stimulus_video_name"]
             self.stimulus_video = self.load_stimulus_from_videofile(
                 self.video_file_name
             )
+
+            self.options_from_file = self.stimulus_video.options
+            self.stimulus_width_pix = self.options_from_file["image_width"]
+            self.stimulus_height_pix = self.options_from_file["image_height"]
+            self.pix_per_deg = self.options_from_file["pix_per_deg"]
+            self.fps = self.options_from_file["fps"]
+
+            self.stimulus_width_deg = self.stimulus_width_pix / self.pix_per_deg
+            self.stimulus_height_deg = self.stimulus_height_pix / self.pix_per_deg
+
+        cen_x = self.options_from_file["center_pix"][0]
+        cen_y = self.options_from_file["center_pix"][1]
+        self.photodiode_response = self.stimulus_video.frames[:, cen_y, cen_x]
 
         # Assertions to ensure stimulus video properties match expected parameters
         assert (
@@ -1412,7 +1435,7 @@ class SimulateRetina(RetinaMath):
             for trial in range(n_trials):
                 # cone_noise = _create_cone_noise(vs.tvec, n_cones, *params)
                 if trial == 0:
-                    # breakpoint()
+
                     gc_noise = vs.cone_noise @ weights_norm
                 else:
                     gc_noise = np.concatenate(
@@ -1574,6 +1597,7 @@ class SimulateRetina(RetinaMath):
         # victor_1987_JPhysiol: input to model is s(t)), the signed Weber contrast at the centre.
         # However, we assume that the surround suppression is early (horizontal units) and linear,
         # so we approximate s(t) = RF * stimulus
+        # TODO Check svec dynamic range, should be [-1, 1] for contrast stimuli
         if gcs.gc_type == "parasol":
 
             # This is the stimulus contrast viewed through spatial rf filter, and summed over spatial dimension.
@@ -2294,7 +2318,7 @@ class SimulateRetina(RetinaMath):
         intermediate_responses_to_show = {
             "cone_noise": vs.cone_noise,
             "cone_signal": vs.cone_signal,
-            "svecs": vs.svecs,
+            "photodiode_response": vs.photodiode_response,
         }
 
         gc_responses_to_show = {
@@ -2306,8 +2330,6 @@ class SimulateRetina(RetinaMath):
             "video_dt": vs.video_dt,
             "tvec_new": vs.tvec_new,
         }
-
-        # breakpoint()
 
         # Attach data requested by other classes to project_data
         self.project_data.simulate_retina["stim_to_show"] = stim_to_show
@@ -2434,8 +2456,6 @@ class SimulateRetina(RetinaMath):
             stimulus, unit_index, spike_generator_model, simulation_dt
         )
 
-        # breakpoint()
-
         if get_impulse_response is True:
             self._get_impulse_response(gcs, contrasts_for_impulse, vs.video_dt)
             return
@@ -2452,7 +2472,6 @@ class SimulateRetina(RetinaMath):
 
         vs = cones.create_signal(vs, n_trials)
         vs = cones.create_noise(vs, n_trials)
-        # breakpoint()
 
         # Get generator potentials
         if gcs.temporal_model == "dynamic":

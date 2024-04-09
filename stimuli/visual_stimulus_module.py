@@ -40,28 +40,24 @@ class VideoBaseClass(object):
         options["image_width"] = 1280  # Image width in pixels
         options["image_height"] = 720  # Image height in pixels
         options["container"] = "mp4"  # file format to export
-        # options["codec"] = "MP42"
         options["codec"] = "mp4v"  # only mp4v works for my ubuntu 22.04
         options["fps"] = 100.0  # 64.0  # Frames per second
         options["duration_seconds"] = 1.0  # seconds
-        options["intensity"] = (0, 255)  # video grey scale dynamic range.
+        # Video luminance range. If none, defined by mean and contrast.
+        options["intensity"] = None
         options["mean"] = 128  # intensity mean
         options["contrast"] = 1
-        options["raw_intensity"] = (
-            None  # Dynamic range before scaling, set by each stimulus pattern method
-        )
-        # Valid options sine_grating; square_grating; colored_temporal_noise; white_gaussian_noise; natural_images; natural_video
+
+        # Dynamic range before scaling, set by each stimulus pattern method
+        options["raw_intensity"] = None
         options["pattern"] = "sine_grating"
-        options["phase_shift"] = (
-            0  # 0 - 2pi, to have grating or temporal oscillation phase shifted
-        )
-        options["stimulus_form"] = (
-            "circular"  # Valid options circular, rectangular, annulus
-        )
-        options["stimulus_position"] = (
-            0.0,
-            0.0,
-        )  # Stimulus center position in degrees inside the video. (0,0) is the center.
+
+        # 0 - 2pi, to have grating or temporal oscillation phase shifted
+        options["phase_shift"] = 0
+        options["stimulus_form"] = "circular"
+
+        # Stimulus center position in degrees inside the video. (0,0) is the center.
+        options["stimulus_position"] = (0.0, 0.0)
 
         # In degrees. Radius for circle and annulus, half-width for rectangle. 0 gives smallest distance from image borders, ie max radius
         options["stimulus_size"] = 0.0
@@ -105,17 +101,19 @@ class VideoBaseClass(object):
         luminances and contrasts
         """
 
-        intensity_max = np.max(self.options["intensity"])
-        mean = self.options["mean"]  # This is the mean of final dynamic range
-        contrast = self.options["contrast"]
         raw_min_value = np.min(self.options["raw_intensity"])
         raw_peak_to_peak = np.ptp(self.options["raw_intensity"])
         frames = self.frames
 
-        # Simo's new version, Lmin, Lmax from mean and Michelson contrast, check against 0 and intensity_max
-        # Michelson contrast = (Lmax -Lmin) / (Lmax + Lmin); mean = (Lmax + Lmin) / 2 =>
-        Lmax = mean * (contrast + 1)
-        Lmin = 2 * mean - Lmax
+        if self.options["intensity"] is not None:
+            Lmax = np.max(self.options["intensity"])
+            Lmin = np.min(self.options["intensity"])
+        else:
+            mean = self.options["mean"]  # This is the mean of final dynamic range
+            contrast = self.options["contrast"]
+            Lmax = mean * (1 + contrast)
+            Lmin = mean * (1 - contrast)
+
         peak_to_peak = Lmax - Lmin
 
         # Scale values
@@ -235,6 +233,8 @@ class VideoBaseClass(object):
         center_pix[1] = int(
             height / 2 + pix_per_deg * -center_deg[1]
         )  # NOTE Height goes to y-coordinate. Inverted to get positive up
+
+        self.options["center_pix"] = center_pix  # x, y
 
         if (
             radius_deg == 0

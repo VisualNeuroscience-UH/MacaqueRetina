@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import time
 import warnings
+import math
 
 # Comput Neurosci
 import brian2.units as b2u
@@ -253,6 +254,8 @@ Note if mean + ((contrast * max(intensity)) / 2) exceed 255 or if
         mean - ((contrast * max(intensity)) / 2) go below 0
         the stimulus generation fails
 
+If intensity (min, max) is defined, it overrides contrast and mean becomes baseline.
+
 For sine_grating and square_grating, additional arguments are:
 temporal_frequency: in Hz
 spatial_frequency: in cycles per degree
@@ -281,23 +284,24 @@ my_stimulus_options = {
     "pix_per_deg": 60,
     "dtype_name": "float16",  # low contrast needs "float16", for performance, use "uint8",
     "fps": 350,  # 300 for good cg integration
-    "duration_seconds": 2,  # actual frames = floor(duration_seconds * fps)
+    "duration_seconds": 0.1,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 1.0,  # Total duration is duration + both baselines
-    "baseline_end_seconds": 0.0,
+    "baseline_end_seconds": 0.5,
     "pattern": "temporal_square_pattern",  # One of the StimulusPatterns square_grating sine_grating
     "stimulus_form": "rectangular",
     "size_inner": 0.1,  # deg, Applies to annulus only
     "size_outer": 1,  # deg, Applies to annulus only
     "stimulus_position": (0.0, 0.0),
     "stimulus_size": 1,  # 0.04,  # 2,  # deg, radius for circle, sidelen/2 for rectangle.
-    "background": 100,
+    "background": 128,
     "contrast": 0.99,  # Weber constrast
-    "mean": 100,  # Consider this as cd/m2
-    "ND_filter": -10.0,  # 0.0, log10 of the filter factor, can be negative
-    "temporal_frequency": 0.01,  # 0.01,  # 4.0,  # 40,  # Hz
+    "intensity": (0, 255),  # min 0, max 255. Overrides contrast and mean=>baseline.
+    "mean": 128,  # Consider this as cd/m2
+    "ND_filter": 0.0,  # 0.0, log10 of the filter factor, can be negative
+    "temporal_frequency": 2.0,  # 0.01,  # 4.0,  # 40,  # Hz
     "spatial_frequency": 5.0,  # cpd
     "orientation": 0,  # degrees
-    "phase_shift": 0,  # math.pi,  # radians
+    "phase_shift": math.pi + math.pi / 100,  # math.pi,  # radians
     "stimulus_video_name": f"{stimulus_folder}.mp4",
 }
 
@@ -385,21 +389,37 @@ cone_general_params = {
     "cone_noise_wc": [14, 160],  # lorenzian freqs, Angueyra_2013_NatNeurosci Fig1
 }
 
-# Parameters from Clark_2013_PLoSComputBiol model DN
+# Parameters from Clark_2013_PLoSComputBiol model B
 # Light intensity photons/microm^2/second
 cone_signal_parameters = {
     "input_gain": 3.0,  # unitless
-    "alpha": 1.4,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
-    "beta": 0.074,  # unitless
-    "gamma": 0.22,  # unitless
-    "tau_y": 0.018 * b2u.second,
-    "n_y": 3.7,  # unitless
-    "tau_z": 0.013 * b2u.second,
-    "n_z": 7.8,  # unitless
-    "tau_r": 0.066 * b2u.second,
+    "alpha": 2.1,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
+    "beta": 0.1407,  # unitless
+    "gamma": 0.57,  # unitless
+    "tau_y": 0.020 * b2u.second,
+    "n_y": 3.0,  # unitless
+    "tau_z": 0.020 * b2u.second,
+    "n_z": 7.0,  # unitless
+    "tau_r": 0.050 * b2u.second,
     "output_scaling": 1.0,  # unitless
     "filter_limit_time": 1.0 * b2u.second,
 }
+
+# # Parameters from Clark_2013_PLoSComputBiol model DN
+# # Light intensity photons/microm^2/second
+# cone_signal_parameters = {
+#     "input_gain": 3.0,  # unitless
+#     "alpha": 1.4,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
+#     "beta": 0.074,  # unitless
+#     "gamma": 0.22,  # unitless
+#     "tau_y": 0.018 * b2u.second,
+#     "n_y": 3.7,  # unitless
+#     "tau_z": 0.013 * b2u.second,
+#     "n_z": 7.8,  # unitless
+#     "tau_r": 0.066 * b2u.second,
+#     "output_scaling": 1.0,  # unitless
+#     "filter_limit_time": 1.0 * b2u.second,
+# }
 
 # # Parameters from Angueyra_2022_JNeurosci, model according to Clark_2013_PLoSComputBiol
 # # Light intensity photons/microm^2/second
@@ -669,8 +689,8 @@ if __name__ == "__main__":
     and videos.
     """
 
-    # TÄHÄN JÄIT: CONES: CLARK TOIMII. Tarkasta kvantiteetit vrt Clark
-
+    # TÄHÄN JÄIT: CONES: CLARK TOIMII. Tarkasta latenssit ja kvantiteetit vrt Clark
+    # aja conf niin näet
     # SUBUNIT MODEL:
     # - SIMULATE RETINA: VIE PIKSELIT TAPPIEN KAUTTA BIPOLAAREIHIN JA EDELLEEN GC:HIN
     # - SIMULATE RETINA: BIPOLAAREIHIN ReLu EPÄLINEAARISUUS
@@ -804,7 +824,7 @@ if __name__ == "__main__":
     # Based on my_run_options above
     # PM.viz.show_all_gc_responses(savefigname=None)
     # PM.viz.show_all_gc_histogram(savefigname=None)
-    PM.viz.show_cone_responses(time_range=[0.8, 2.1], savefigname=None)
+    PM.viz.show_cone_responses(time_range=None, savefigname=None)
 
     # PM.viz.show_stimulus_with_gcs(
     #     example_gc=my_run_options["unit_index"],  # [int,], my_run_options["unit_index"]
