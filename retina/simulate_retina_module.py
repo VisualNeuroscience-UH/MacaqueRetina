@@ -395,6 +395,7 @@ class Cones(ReceptiveFieldsBase):
 
         # Update visual stimulus photodiode response
         vs.photodiode_response = vs.photodiode_response * ff
+        vs.photodiode_Rstar_range = [minp, maxp]
 
         # Update mean value
         mean_val = vs.options_from_file["mean"]
@@ -2319,6 +2320,7 @@ class SimulateRetina(RetinaMath):
             "cone_noise": vs.cone_noise,
             "cone_signal": vs.cone_signal,
             "photodiode_response": vs.photodiode_response,
+            "photodiode_Rstar_range": vs.photodiode_Rstar_range,
         }
 
         gc_responses_to_show = {

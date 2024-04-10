@@ -2648,6 +2648,10 @@ class Viz:
             "intermediate_responses_to_show"
         ]
         photodiode_response = intermediate_responses_to_show["photodiode_response"]
+        photodiode_Rstar_range = intermediate_responses_to_show[
+            "photodiode_Rstar_range"
+        ]
+        print(f"{photodiode_Rstar_range=}")
         cone_signal = intermediate_responses_to_show["cone_signal"]
 
         # Create subplots
@@ -2662,8 +2666,16 @@ class Viz:
         ax[0].set_xlabel("Time (s)")
         ax[0].set_title("Luminance at center of the stimulus")
 
-        ax[1].plot(tvec_mean, cone_signal.T, label="cone_signal")
-        # ax[1].plot(tvec_mean, cone_signal_mean, label="cone_signal")
+        margins = ax[0].margins()
+        ax0_right = ax[0].twinx()
+        data_range = photodiode_Rstar_range[1] - photodiode_Rstar_range[0]
+        ax0_right.set_ylim(
+            photodiode_Rstar_range[0] - margins[0] * data_range,
+            photodiode_Rstar_range[1] + margins[1] * data_range,
+        )
+        ax0_right.set_ylabel("R* (s-1)")
+
+        ax[1].plot(tvec_mean, cone_signal_mean, label="cone_signal")
         # Draw a vertical line at the time of max cone signal
         max_cone_signal_time = tvec_mean[np.argmax(cone_signal_mean)]
         max_cone_signal = np.max(cone_signal_mean)
