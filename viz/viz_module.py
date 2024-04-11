@@ -2658,8 +2658,7 @@ class Viz:
         fig, ax = plt.subplots(2, 1, sharex=True)
 
         tvec_mean = np.linspace(0, duration / b2u.second, len(photodiode_response))
-        cone_signal_mean = np.abs(cone_signal).mean(axis=0)
-
+        cone_signal_mean = cone_signal.mean(axis=0)
         ax[0].plot(tvec_mean, photodiode_response, label="photodiode_response")
         ax[0].set_xlim([0, duration / b2u.second])
         ax[0].set_ylabel("Luminance (cd/m2)")
@@ -2673,12 +2672,14 @@ class Viz:
             photodiode_Rstar_range[0] - margins[0] * data_range,
             photodiode_Rstar_range[1] + margins[1] * data_range,
         )
-        ax0_right.set_ylabel("R* (s-1)")
+        ax0_right.set_ylabel("R*/s")
 
         ax[1].plot(tvec_mean, cone_signal_mean, label="cone_signal")
         # Draw a vertical line at the time of max cone signal
-        max_cone_signal_time = tvec_mean[np.argmax(cone_signal_mean)]
-        max_cone_signal = np.max(cone_signal_mean)
+        peak_idx = np.argmax(np.abs(cone_signal_mean))
+        max_cone_signal_time = tvec_mean[peak_idx]
+        # Get value at peak, wheter positive or negative
+        max_cone_signal = cone_signal_mean[peak_idx]
         ax[1].axvline(max_cone_signal_time, color="r", linestyle="--")
         # Annotated text showing max_cone_signal_time at left top
         ax[1].text(

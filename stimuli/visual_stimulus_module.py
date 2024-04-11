@@ -131,10 +131,10 @@ class VideoBaseClass(object):
         # Round result to avoid unnecessary errors
         frames = np.round(frames, 1)
 
-        # Check that the values are between 0 and 255 to get correct conversion to uint8
-        assert np.all(0 <= frames.flatten()) and np.all(
-            frames.flatten() <= 255
-        ), f"Cannot safely convert range {np.min(frames.flatten())}- {np.max(frames.flatten())}to uint8. Check intensity/dynamic range."
+        # # Check that the values are between 0 and 255 to get correct conversion to uint8
+        # assert np.all(0 <= frames.flatten()) and np.all(
+        #     frames.flatten() <= 255
+        # ), f"Cannot safely convert range {np.min(frames.flatten())}- {np.max(frames.flatten())}to uint8. Check intensity/dynamic range."
 
         # Return
         self.frames = frames.astype(self.options["dtype"])

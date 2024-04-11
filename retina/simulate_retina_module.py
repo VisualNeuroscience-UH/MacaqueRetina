@@ -224,10 +224,10 @@ class Cones(ReceptiveFieldsBase):
         filter_limit_time = p["filter_limit_time"]
 
         def simple_filter(t, n, tau):
-            values = (t / tau) ** n * np.exp(-t / tau)
+            norm_coef = gamma_function(n + 1) * np.power(tau, n + 1)
+            values = (t**n / norm_coef) * np.exp(-t / tau)
+            # values = (t / tau) ** n * np.exp(-t / tau)
             return values
-
-        # filter_limit_time = 0.5 * b2u.second
 
         tvec_idx = tvec < filter_limit_time
         tvec_filter = tvec / b2u.second
@@ -239,6 +239,7 @@ class Cones(ReceptiveFieldsBase):
         # Cut filters for computational efficiency
         Ky = Ky[tvec_idx]
         Kz = Kz[tvec_idx]
+        Kz_prime = Kz_prime[tvec_idx]
 
         # Normalize filters to full filter = 1.0
         Ky = Ky / Ky.sum()
@@ -273,22 +274,22 @@ class Cones(ReceptiveFieldsBase):
         z_mtx_ta = b2.TimedArray(z_mtx.T, dt=dt)
 
         # r(t) is the photoreceptor response = V(t) - Vrest, where
-        # Vrest is the hyperpolarized cone membrane potential in the dark.
-        # Positive r means depolarization from the resting potential in millivolts.
+        # Vrest is the depolarized cone membrane potential in the dark.
+        # Negative r means hyperpolarization from the resting potential in millivolts.
         eqs = b2.Equations(
             """
-            dr/dt = alpha * y_mtx_ta(t,i) / tau_r - (1 + beta * z_mtx_ta(t,i)) * r / tau_r : 1
+            dr/dt = (alpha * y_mtx_ta(t,i)) / tau_r - ((1 + beta * z_mtx_ta(t,i)) * r) / tau_r : 1
             """
         )
-        # Assuming dr/dt is zero at t=0, a.k.a. steady state
+        # Assuming dr/dt is zero at t=0, a.k.a. steady illumination
         r_initial_value = alpha * y_mtx[0, 0] / (1 + beta * z_mtx[0, 0])
-        print(f"Initial value of r: {r_initial_value}")
-        G = b2.NeuronGroup(self.n_units, eqs, dt=dt)
+        # print(f"Initial value of r: {r_initial_value}")
+        G = b2.NeuronGroup(self.n_units, eqs, dt=dt, method="exact")
         G.r = r_initial_value
         M = b2.StateMonitor(G, ("r"), record=True)
         b2.run(duration)
 
-        cone_output = M.r
+        cone_output = M.r - r_initial_value  # Get zero baseline
 
         return cone_output
 
@@ -338,6 +339,7 @@ class Cones(ReceptiveFieldsBase):
         filename = self.context.my_stimulus_metadata["stimulus_file"]
         self.data_io.save_cone_response_to_hdf5(filename, cone_response)
 
+    # Public functions
     def create_signal(self, vs, n_trials):
         """
         Generates cone signal.
@@ -398,9 +400,11 @@ class Cones(ReceptiveFieldsBase):
         vs.photodiode_Rstar_range = [minp, maxp]
 
         # Update mean value
-        mean_val = vs.options_from_file["mean"]
-        mean_val = self.get_photoisomerizations_from_luminance(mean_val)
-        mean_val = mean_val * ff
+        background = vs.options_from_file["background"]
+        background_R = self.get_photoisomerizations_from_luminance(background)
+        background_R = background_R * ff
+
+        print(f"\nbackground_R* {background_R} photoisomerizations/cone/s")
 
         params_dict = self.my_retina["cone_signal_parameters"]
 
@@ -409,7 +413,7 @@ class Cones(ReceptiveFieldsBase):
         duration = vs.duration
 
         cone_signal = self._create_cone_signal_brian(
-            cone_input, params_dict, dt, duration, tvec, mean_val
+            cone_input, params_dict, dt, duration, tvec, background_R
         )
 
         print("\nCone signal min:", cone_signal.min())
@@ -841,10 +845,10 @@ class VisualSignal(Printable):
         assert (
             self.stimulus_video.pix_per_deg == self.pix_per_deg
         ), "Check that stimulus resolution matches that of the mosaic"
-        assert (
-            np.min(self.stimulus_video.frames) >= 0
-            and np.max(self.stimulus_video.frames) <= 255
-        ), "Stimulus pixel values must be between 0 and 255"
+        # assert (
+        #     np.min(self.stimulus_video.frames) >= 0
+        #     and np.max(self.stimulus_video.frames) <= 255
+        # ), "Stimulus pixel values must be between 0 and 255"
 
         self.video_dt = (1 / self.stimulus_video.fps) * b2u.second  # input
         self.stim_len_tp = self.stimulus_video.video_n_frames

@@ -282,10 +282,10 @@ my_stimulus_options = {
     "image_width": 240,  # 752 for nature1.avi
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
-    "dtype_name": "float16",  # low contrast needs "float16", for performance, use "uint8",
+    "dtype_name": "float64",  # low contrast needs "float16", for performance, use "uint8",
     "fps": 350,  # 300 for good cg integration
-    "duration_seconds": 1.0,  # actual frames = floor(duration_seconds * fps)
-    "baseline_start_seconds": 1.0,  # Total duration is duration + both baselines
+    "duration_seconds": 0.003,  # actual frames = floor(duration_seconds * fps)
+    "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
     "pattern": "temporal_square_pattern",  # One of the StimulusPatterns
     "stimulus_form": "rectangular",
@@ -293,11 +293,11 @@ my_stimulus_options = {
     "size_outer": 1,  # deg, applies to annulus only
     "stimulus_position": (0.0, 0.0),  # relative to stimuls center in retina
     "stimulus_size": 1,  # 0.04,  # 2,  # deg, radius for circle, sidelen/2 for rectangle.
-    "background": 128,
-    "contrast": 0.99,  # Weber constrast
-    # "intensity": (0, 255),  # min 0, max 255. Overrides contrast and mean=>baseline.
+    "contrast": 0.99,  # mean +- (1 + contrast) * mean
     "mean": 128,  # Consider this as cd/m2
-    "ND_filter": 0.0,  # 0.0, log10 Neutral Density filter factor, can be negative
+    "intensity": (0, 0.6),  # cd/m2. Overrides contrast and mean.
+    "background": 0,  # The "frame", around stimulus in time and space
+    "ND_filter": 2.0,  # 0.0, log10 Neutral Density filter factor, can be negative
     "temporal_frequency": 2.0,  # 0.01,  # 4.0,  # 40,  # Hz
     "spatial_frequency": 5.0,  # cpd
     "orientation": 0,  # degrees
@@ -393,8 +393,9 @@ cone_general_params = {
 # Light intensity photons/microm^2/second
 cone_signal_parameters = {
     "input_gain": 3.0,  # unitless
-    "alpha": 1.1,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
+    "alpha": -1.1,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
     "beta": 0.0484,  # unitless
+    # "gamma": 0.9,  # unitless
     "gamma": 0.93,  # unitless
     "tau_y": 0.038 * b2u.second,
     "n_y": 1.5,  # unitless
@@ -402,7 +403,7 @@ cone_signal_parameters = {
     "n_z": 7.0,  # unitless
     "tau_r": 0.039 * b2u.second,
     "output_scaling": 1.0,  # unitless
-    "filter_limit_time": 1.0 * b2u.second,
+    "filter_limit_time": 2.0 * b2u.second,
 }
 
 # # Parameters from Clark_2013_PLoSComputBiol model B
@@ -840,7 +841,7 @@ if __name__ == "__main__":
     # Based on my_run_options above
     # PM.viz.show_all_gc_responses(savefigname=None)
     # PM.viz.show_all_gc_histogram(savefigname=None)
-    PM.viz.show_cone_responses(time_range=[0.8, 1.1], savefigname=None)
+    PM.viz.show_cone_responses(time_range=[0.4, 1.1], savefigname=None)
     # PM.viz.show_cone_responses(time_range=None, savefigname=None)
 
     # PM.viz.show_stimulus_with_gcs(
