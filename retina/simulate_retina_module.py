@@ -188,7 +188,7 @@ class Cones(ReceptiveFieldsBase):
 
         return cone_noise
 
-    def _create_cone_signal_brian(
+    def _create_cone_signal_clark(
         self, cone_input, p, dt, duration, tvec, pad_value=0.0
     ):
         """
@@ -412,7 +412,7 @@ class Cones(ReceptiveFieldsBase):
         dt = vs.video_dt
         duration = vs.duration
 
-        cone_signal = self._create_cone_signal_brian(
+        cone_signal = self._create_cone_signal_clark(
             cone_input, params_dict, dt, duration, tvec, background_R
         )
 

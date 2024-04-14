@@ -284,7 +284,7 @@ my_stimulus_options = {
     "pix_per_deg": 60,
     "dtype_name": "float64",  # low contrast needs "float16", for performance, use "uint8",
     "fps": 350,  # 300 for good cg integration
-    "duration_seconds": 0.003,  # actual frames = floor(duration_seconds * fps)
+    "duration_seconds": 0.1,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
     "pattern": "temporal_square_pattern",  # One of the StimulusPatterns
@@ -295,13 +295,13 @@ my_stimulus_options = {
     "stimulus_size": 1,  # 0.04,  # 2,  # deg, radius for circle, sidelen/2 for rectangle.
     "contrast": 0.99,  # mean +- (1 + contrast) * mean
     "mean": 128,  # Consider this as cd/m2
-    "intensity": (0, 0.6),  # cd/m2. Overrides contrast and mean.
-    "background": 0,  # The "frame", around stimulus in time and space
-    "ND_filter": 2.0,  # 0.0, log10 Neutral Density filter factor, can be negative
-    "temporal_frequency": 2.0,  # 0.01,  # 4.0,  # 40,  # Hz
+    "intensity": (0, 255),  # cd/m2. Overrides contrast and mean.
+    "background": 128,  # The "frame", around stimulus in time and space
+    "ND_filter": 0.0,  # 0.0, log10 Neutral Density filter factor, can be negative
+    "temporal_frequency": 0.1,  # 0.01,  # 4.0,  # 40,  # Hz
     "spatial_frequency": 5.0,  # cpd
     "orientation": 0,  # degrees
-    "phase_shift": 0,  # math.pi,  # radians
+    "phase_shift": math.pi + 0.1,  # radians
     "stimulus_video_name": f"{stimulus_folder}.mp4",
 }
 
@@ -389,28 +389,27 @@ cone_general_params = {
     "cone_noise_wc": [14, 160],  # lorenzian freqs, Angueyra_2013_NatNeurosci Fig1
 }
 
-# Parameters from Clark_2013_PLoSComputBiol model BHL
-# Light intensity photons/microm^2/second
-cone_signal_parameters = {
-    "input_gain": 3.0,  # unitless
-    "alpha": -1.1,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
-    "beta": 0.0484,  # unitless
-    # "gamma": 0.9,  # unitless
-    "gamma": 0.93,  # unitless
-    "tau_y": 0.038 * b2u.second,
-    "n_y": 1.5,  # unitless
-    "tau_z": 0.020 * b2u.second,
-    "n_z": 7.0,  # unitless
-    "tau_r": 0.039 * b2u.second,
-    "output_scaling": 1.0,  # unitless
-    "filter_limit_time": 2.0 * b2u.second,
-}
+# # Parameters from Clark_2013_PLoSComputBiol model BHL
+# # Light intensity photons/microm^2/second
+# cone_signal_parameters = {
+#     "input_gain": 3.0,  # unitless
+#     "alpha": -1.1,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
+#     "beta": 0.0484,  # unitless
+#     "gamma": 0.93,  # unitless
+#     "tau_y": 0.038 * b2u.second,
+#     "n_y": 1.5,  # unitless
+#     "tau_z": 0.020 * b2u.second,
+#     "n_z": 7.0,  # unitless
+#     "tau_r": 0.039 * b2u.second,
+#     "output_scaling": 1.0,  # unitless
+#     "filter_limit_time": 2.0 * b2u.second,
+# }
 
 # # Parameters from Clark_2013_PLoSComputBiol model B
 # # Light intensity photons/microm^2/second
 # cone_signal_parameters = {
 #     "input_gain": 3.0,  # unitless
-#     "alpha": 2.1,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
+#     "alpha": -2.1,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
 #     "beta": 0.1407,  # unitless
 #     "gamma": 0.57,  # unitless
 #     "tau_y": 0.020 * b2u.second,
@@ -422,27 +421,27 @@ cone_signal_parameters = {
 #     "filter_limit_time": 1.0 * b2u.second,
 # }
 
-# # Parameters from Clark_2013_PLoSComputBiol model DN
-# # Light intensity photons/microm^2/second
-# cone_signal_parameters = {
-#     "input_gain": 3.0,  # unitless
-#     "alpha": 1.4,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
-#     "beta": 0.074,  # unitless
-#     "gamma": 0.22,  # unitless
-#     "tau_y": 0.018 * b2u.second,
-#     "n_y": 3.7,  # unitless
-#     "tau_z": 0.013 * b2u.second,
-#     "n_z": 7.8,  # unitless
-#     "tau_r": 0.066 * b2u.second,
-#     "output_scaling": 1.0,  # unitless
-#     "filter_limit_time": 1.0 * b2u.second,
-# }
+# Parameters from Clark_2013_PLoSComputBiol model DN
+# Light intensity photons/microm^2/second
+cone_signal_parameters = {
+    "input_gain": 3.0,  # unitless
+    "alpha": -1.4,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
+    "beta": 0.074,  # unitless
+    "gamma": 0.22,  # unitless
+    "tau_y": 0.018 * b2u.second,
+    "n_y": 3.7,  # unitless
+    "tau_z": 0.013 * b2u.second,
+    "n_z": 7.8,  # unitless
+    "tau_r": 0.066 * b2u.second,
+    "output_scaling": 1.0,  # unitless
+    "filter_limit_time": 1.0 * b2u.second,
+}
 
 # # Parameters from Angueyra_2022_JNeurosci, model according to Clark_2013_PLoSComputBiol
 # # Light intensity photons/microm^2/second
 # cone_signal_parameters = {
 #     "input_gain": 3.0,  # unitless
-#     "alpha": 19.4,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
+#     "alpha": -19.4,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
 #     "beta": 0.36,  # unitless
 #     "gamma": 0.448,  # unitless
 #     "tau_y": 0.00449 * b2u.second,
@@ -841,8 +840,8 @@ if __name__ == "__main__":
     # Based on my_run_options above
     # PM.viz.show_all_gc_responses(savefigname=None)
     # PM.viz.show_all_gc_histogram(savefigname=None)
-    PM.viz.show_cone_responses(time_range=[0.4, 1.1], savefigname=None)
-    # PM.viz.show_cone_responses(time_range=None, savefigname=None)
+    # PM.viz.show_cone_responses(time_range=[0.4, 1.1], savefigname=None)
+    PM.viz.show_cone_responses(time_range=None, savefigname=None)
 
     # PM.viz.show_stimulus_with_gcs(
     #     example_gc=my_run_options["unit_index"],  # [int,], my_run_options["unit_index"]
