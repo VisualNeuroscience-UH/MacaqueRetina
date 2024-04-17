@@ -41,6 +41,8 @@ from tqdm import tqdm
 # Local
 from retina.retina_math_module import RetinaMath
 from retina.vae_module import RetinaVAE
+from project.project_utilities_module import Printable
+
 
 # Builtin
 from pathlib import Path
@@ -51,7 +53,7 @@ import sys
 from dataclasses import dataclass
 
 
-class Retina:
+class Retina(Printable):
     """
     A class housing the retina-level parameters. Most values are defined in the project configuration file.
 
@@ -185,7 +187,7 @@ class Retina:
 
 
 @dataclass
-class GanglionCellData:
+class GanglionCellData(Printable):
     """
     A class to store and process data related to ganglion cell receptive field models.
 
@@ -1731,30 +1733,30 @@ class ConstructRetina(RetinaMath):
         n_bipos = bipo_pos_mm.shape[0]
         selected_bipolars_df = ret.selected_bipolars_df
 
+        # div 1000 for um to mm transition
+        bipo_cen_sd_mm = ret.bipolar_general_params["bipo_sub_cen_sd"] / 1000
+        bipo_sur_sd_mm = ret.bipolar_general_params["bipo_sub_sur_sd"] / 1000
+        bipo_sur2cen_amp_ratio = ret.bipolar_general_params["bipo_sub_sur2cen"]
+
         # count distances
-        cone_reshaped = cone_pos_mm[np.newaxis, :, :]  # Shape becomes (1, n_cones, 2)
-        bipo_reshaped = bipo_pos_mm[:, np.newaxis, :]  # Shape becomes (n_bipos, 1, 2)
+        cone_reshaped = cone_pos_mm[:, np.newaxis, :]  # Shape becomes (n_cones, 1, 2)
+        bipo_reshaped = bipo_pos_mm[np.newaxis, :, :]  # Shape becomes (1, n_bipos, 2)
 
         # This may cause memory issues with large retinas
         squared_diffs = (cone_reshaped - bipo_reshaped) ** 2
         squared_distances = squared_diffs.sum(axis=2)
         distances = np.sqrt(squared_distances)
 
-        # sort distances
-        sorted_indices = np.argsort(distances, axis=1)
+        G_cen = np.exp(-((distances / bipo_cen_sd_mm) ** 2))
+        G_sur = np.exp(-((distances / bipo_sur_sd_mm) ** 2))
+        G_cen_probability = G_cen / G_cen.sum(axis=1)[:, np.newaxis]
+        G_sur_probability = G_sur / G_sur.sum(axis=1)[:, np.newaxis]
+        G_cen_weight = G_cen_probability
+        G_sur_weight = G_sur_probability * bipo_sur2cen_amp_ratio
 
-        # take N-M neighbours
-        string_arrays = selected_bipolars_df.loc["Cone_contacts_Range"].values.tolist()
-        numbers = [int(num) for s in string_arrays for num in s.split("-")]
-        smallest = min(numbers)
-        largest = max(numbers)
-        n_connections = np.random.randint(smallest, largest + 1, n_bipos)
+        probability = G_cen_weight - G_sur_weight
 
-        connection_matrix = np.zeros_like(distances, dtype=int)
-        for i in range(n_bipos):
-            connection_matrix[i, sorted_indices[i, : n_connections[i]]] = 1
-
-        ret.cones_to_bipolars_mtx = connection_matrix
+        ret.cones_to_bipolars_mtx = probability
 
         return ret
 
@@ -2120,7 +2122,8 @@ class ConstructRetina(RetinaMath):
         # Thus we need to zoom units to the same size.
         gc.df["zoom_factor"] = gc_um_per_pix / new_um_per_pix
 
-        # Set gc img parameters
+        # Set gc img parameters. NB HERE ARE THE RF PIXEL SIZES DEFINED.
+        # this is the likely place to manage subunit sizes
         gc.um_per_pix = new_um_per_pix
         gc.pix_per_side = new_pix_per_side
         gc.um_per_side = new_um_per_pix * new_pix_per_side
@@ -2198,7 +2201,6 @@ class ConstructRetina(RetinaMath):
                 ]
 
             img_upsampled[i] = img_cropped
-
         return img_upsampled
 
     def _get_dd_in_um(self, gc):
@@ -3427,6 +3429,7 @@ class ConstructRetina(RetinaMath):
             "cone_noise_power_fit": ret.cone_noise_power_fit,
             "cones_to_bipolars_mtx": ret.cones_to_bipolars_mtx,
             "bipolar_to_gcs_weights": ret.bipolar_to_gcs_weights,
+            "bipolar_optimized_pos_mm": ret.bipolar_optimized_pos_mm,
         }
 
         self.data_io.save_np_dict_to_npz(
