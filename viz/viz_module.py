@@ -12,8 +12,6 @@ import torch
 import torchvision.transforms.functional as TF
 from torchsummary import summary
 
-# import cv2
-
 # Comput Neurosci
 import brian2.units as b2u
 
@@ -23,10 +21,7 @@ import matplotlib.colors as mcolors
 from matplotlib.patches import Ellipse, Polygon, Circle
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
-
 import seaborn as sns
-
-# from tqdm import tqdm
 
 # Local
 from retina.vae_module import AugmentedDataset
@@ -34,7 +29,6 @@ from retina.vae_module import AugmentedDataset
 # Builtin
 import os
 from pathlib import Path
-import pdb
 import copy
 from functools import reduce
 import math
@@ -2054,6 +2048,8 @@ class Viz:
             # Plot each cone with alpha based on connection probability
             connection_probs = weights[:, this_sample]
             n_connected = np.sum(connection_probs > 0)
+            # breakpoint()
+
             for cone_pos, prob in zip(cone_positions, connection_probs):
                 ax[idx].scatter(*cone_pos, alpha=prob, color="blue")
 
@@ -2079,6 +2075,143 @@ class Viz:
 
         if savefigname:
             self._figsave(figurename=savefigname)
+
+    def show_bipolars_linked_to_gc(
+        self, gc_list=None, n_samples=None, savefigname=None
+    ):
+        """
+        Visualize a ganglion cell and its connected bipolars.
+        """
+
+        gc_df = self.data_io.get_data(self.context.my_retina["mosaic_file"])
+        gc_npz = self.data_io.get_data(self.context.my_retina["spatial_rfs_file"])
+
+        x_mm, y_mm = self.pol2cart(
+            gc_df[["pos_ecc_mm"]].values, gc_df[["pos_polar_deg"]].values
+        )
+        gc_pos_mm = np.column_stack((x_mm, y_mm))
+        X_grid_mm = gc_npz["X_grid_mm"]
+        Y_grid_mm = gc_npz["Y_grid_mm"]
+        gc_img_mask = gc_npz["gc_img_mask"]
+
+        ret_npz = self.data_io.get_data(self.context.my_retina["ret_file"])
+
+        weights = ret_npz["bipolar_to_gcs_weights"]
+        bipolar_positions = ret_npz["bipolar_optimized_pos_mm"]
+
+        if isinstance(gc_list, list):
+            pass  # gc_list supercedes n_samples
+        elif isinstance(n_samples, int):
+            gc_list = np.random.choice(range(len(gc_df)), n_samples, replace=False)
+        else:
+            raise ValueError("Either gc_list or n_samples must be provided.")
+
+        fig, ax = plt.subplots(1, len(gc_list), figsize=(12, 10))
+        if len(gc_list) == 1:
+            ax = [ax]
+
+        for idx, this_sample in enumerate(gc_list):
+            gc_position = gc_pos_mm[this_sample, :]
+            if self.context.my_retina["DoG_model"] == "circular":
+                DoG_patch = Circle(
+                    xy=gc_position,
+                    radius=gc_df.loc[this_sample, "rad_c_mm"],
+                    edgecolor="g",
+                    facecolor="none",
+                )
+            elif self.context.my_retina["DoG_model"] in [
+                "ellipse_independent",
+                "ellipse_fixed",
+            ]:
+                # Create ellipse patch for visualizing the RF
+                DoG_patch = Ellipse(
+                    xy=gc_position,
+                    width=2 * gc_df.loc[this_sample, "semi_xc_mm"],
+                    height=2 * gc_df.loc[this_sample, "semi_yc_mm"],
+                    angle=gc_df.loc[this_sample, "orient_cen_rad"] * 180 / np.pi,
+                    edgecolor="g",
+                    facecolor="none",
+                )
+            ax[idx].scatter(*gc_position, color="red", label="ganglion cell")
+
+            # Plot each bipolar with alpha based on connection normalized probability
+            connection_probs = weights[:, this_sample] / weights[:, this_sample].max()
+            n_connected = np.sum(connection_probs > 0)
+            # breakpoint()
+            for bipolar_pos, prob in zip(bipolar_positions, connection_probs):
+                ax[idx].scatter(*bipolar_pos, alpha=prob, color="blue")
+
+            mask = gc_img_mask[this_sample, ...]
+            x_mm = X_grid_mm[this_sample, ...] * mask
+            y_mm = Y_grid_mm[this_sample, ...] * mask
+            x_mm = x_mm[x_mm != 0]
+            y_mm = y_mm[y_mm != 0]
+
+            ax[idx].plot(x_mm, y_mm, ".g", label="RF center pixel midpoints")
+
+            # Add DoG_patch to the plot
+            ax[idx].add_patch(DoG_patch)
+
+            ax[idx].set_xlabel("X Position (mm)")
+            ax[idx].set_ylabel("Y Position (mm)")
+            ax[idx].set_title(
+                f"Ganglion cell {this_sample} and connected {n_connected} bipolars, relative conn prob"
+            )
+            ax[idx].legend()
+            # Set equal aspect ratio
+            ax[idx].set_aspect("equal", adjustable="box")
+
+        if savefigname:
+            self._figsave(figurename=savefigname)
+
+    # TODO: Implement this
+    # def show_cones_linked_to_bipolars(
+    #     self, bipo_list=None, n_samples=None, savefigname=None
+    # ):
+    #     """
+    #     Visualize a ganglion cell and its connected bipolars.
+    #     """
+
+    #     ret_npz = self.data_io.get_data(self.context.my_retina["ret_file"])
+
+    #     weights = ret_npz["cones_to_bipolars_mtx"]
+    #     cone_positions = ret_npz["cone_optimized_pos_mm"]
+    #     bipolar_positions = ret_npz["bipolar_optimized_pos_mm"]
+
+    #     if isinstance(bipo_list, list):
+    #         pass  # bipo_list supercedes n_samples
+    #     elif isinstance(n_samples, int):
+    #         bipo_list = np.random.choice(range(len(gc_df)), n_samples, replace=False)
+    #     else:
+    #         raise ValueError("Either bipo_list or n_samples must be provided.")
+
+    #     fig, ax = plt.subplots(1, len(bipo_list), figsize=(12, 10))
+    #     if len(bipo_list) == 1:
+    #         ax = [ax]
+
+    #     for idx, this_sample in enumerate(bipo_list):
+    #         this_bipo_pos = bipolar_positions[this_sample, :]
+
+    #         ax[idx].scatter(*this_bipo_pos, color="red", label="bipolar cell")
+
+    #         # Plot each bipolar with alpha based on connection probability
+    #         connection_probs = weights[:, this_sample]
+    #         n_connected = np.sum(connection_probs > 0)
+
+    #         for cone_pos, prob in zip(cone_positions, connection_probs):
+    #             ax[idx].scatter(*cone_pos, alpha=prob, color="blue")
+
+    #         ax[idx].set_xlabel("X Position (mm)")
+    #         ax[idx].set_ylabel("Y Position (mm)")
+    #         ax[idx].set_title(
+    #             f"Bipolar cell {this_sample} and connected {n_connected} cones"
+    #         )
+    #         ax[idx].legend()
+    #         # Set equal aspect ratio
+    #         ax[idx].set_aspect("equal", adjustable="box")
+
+    #     if savefigname:
+    #         self._figsave(figurename=savefigname)
 
     def show_DoG_img_grid(self, gc_list=None, n_samples=None, savefigname=None):
         """
