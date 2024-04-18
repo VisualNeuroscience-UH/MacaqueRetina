@@ -2757,13 +2757,13 @@ class Viz:
         # Update bin_edges based on the new hist_dt
         num_bins = int(np.ceil(duration / hist_dt))
         bin_edges = np.linspace(0, duration / b2u.second, num_bins + 1)
-
-        # Compute histogram with the new hist_dt
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
         hist, _ = np.histogram(for_histogram, bins=bin_edges)
 
         # Update average firing rate calculation based on the new hist_dt
         avg_fr = hist / (n_samples * (hist_dt / b2u.second))
-        ax[1].plot(bin_edges[:-1], avg_fr, label="Measured")
+
+        ax[1].plot(bin_centers, avg_fr, label="Measured")
         ax[1].set_ylabel("Firing rate (Hz)")
         ax[1].set_xlabel("Time (s)")
         ax[1].legend()
