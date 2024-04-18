@@ -18,6 +18,8 @@ import brian2.units as b2u
 # Viz
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+from matplotlib import cm
+import matplotlib.colors as colors
 from matplotlib.patches import Ellipse, Polygon, Circle
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
@@ -2164,54 +2166,66 @@ class Viz:
         if savefigname:
             self._figsave(figurename=savefigname)
 
-    # TODO: Implement this
-    # def show_cones_linked_to_bipolars(
-    #     self, bipo_list=None, n_samples=None, savefigname=None
-    # ):
-    #     """
-    #     Visualize a ganglion cell and its connected bipolars.
-    #     """
+    def show_cones_linked_to_bipolars(
+        self, bipo_list=None, n_samples=None, savefigname=None
+    ):
+        """
+        Visualize a ganglion cell and its connected bipolars.
+        """
 
-    #     ret_npz = self.data_io.get_data(self.context.my_retina["ret_file"])
+        ret_npz = self.data_io.get_data(self.context.my_retina["ret_file"])
 
-    #     weights = ret_npz["cones_to_bipolars_mtx"]
-    #     cone_positions = ret_npz["cone_optimized_pos_mm"]
-    #     bipolar_positions = ret_npz["bipolar_optimized_pos_mm"]
+        weights = ret_npz["cones_to_bipolars_mtx"]
+        cone_positions = ret_npz["cone_optimized_pos_mm"]
+        bipolar_positions = ret_npz["bipolar_optimized_pos_mm"]
 
-    #     if isinstance(bipo_list, list):
-    #         pass  # bipo_list supercedes n_samples
-    #     elif isinstance(n_samples, int):
-    #         bipo_list = np.random.choice(range(len(gc_df)), n_samples, replace=False)
-    #     else:
-    #         raise ValueError("Either bipo_list or n_samples must be provided.")
+        if isinstance(bipo_list, list):
+            pass  # bipo_list supercedes n_samples
+        elif isinstance(n_samples, int):
+            bipo_list = np.random.choice(
+                range(bipolar_positions.shape[0]), n_samples, replace=False
+            )
+        else:
+            raise ValueError("Either bipo_list or n_samples must be provided.")
 
-    #     fig, ax = plt.subplots(1, len(bipo_list), figsize=(12, 10))
-    #     if len(bipo_list) == 1:
-    #         ax = [ax]
+        fig, ax = plt.subplots(1, len(bipo_list), figsize=(12, 10))
+        cmap = cm.coolwarm
+        divnorm = colors.TwoSlopeNorm(vmin=weights.min(), vcenter=0, vmax=weights.max())
+        if len(bipo_list) == 1:
+            ax = [ax]
 
-    #     for idx, this_sample in enumerate(bipo_list):
-    #         this_bipo_pos = bipolar_positions[this_sample, :]
+        for idx, this_sample in enumerate(bipo_list):
+            this_bipo_pos = bipolar_positions[this_sample, :]
 
-    #         ax[idx].scatter(*this_bipo_pos, color="red", label="bipolar cell")
+            ax[idx].scatter(*this_bipo_pos, color="black", label="bipolar cell")
 
-    #         # Plot each bipolar with alpha based on connection probability
-    #         connection_probs = weights[:, this_sample]
-    #         n_connected = np.sum(connection_probs > 0)
+            # Plot each bipolar with alpha based on connection probability
+            connection_probs = weights[:, this_sample]
+            n_connected = np.sum(connection_probs > 0)
 
-    #         for cone_pos, prob in zip(cone_positions, connection_probs):
-    #             ax[idx].scatter(*cone_pos, alpha=prob, color="blue")
+            # Scatter plot
+            sc = ax[idx].scatter(
+                cone_positions[:, 0],  # x positions
+                cone_positions[:, 1],  # y positions
+                c=connection_probs,  # Color values
+                cmap=cmap,  # Colormap
+                norm=divnorm,  # Normalization centered at 0
+            )
 
-    #         ax[idx].set_xlabel("X Position (mm)")
-    #         ax[idx].set_ylabel("Y Position (mm)")
-    #         ax[idx].set_title(
-    #             f"Bipolar cell {this_sample} and connected {n_connected} cones"
-    #         )
-    #         ax[idx].legend()
-    #         # Set equal aspect ratio
-    #         ax[idx].set_aspect("equal", adjustable="box")
+            ax[idx].set_xlabel("X Position (mm)")
+            ax[idx].set_ylabel("Y Position (mm)")
+            ax[idx].set_title(f"Bipolar {this_sample} sums {n_connected} cones")
+            ax[idx].legend()
+            # Set equal aspect ratio
+            ax[idx].set_aspect("equal", adjustable="box")
 
-    #     if savefigname:
-    #         self._figsave(figurename=savefigname)
+        # Mark weights.min() as the tick to min colorbar value
+        cbar = fig.colorbar(sc, ax=ax, extend="both")
+        cbar.set_ticks([weights.min(), 0, weights.max()])
+        cbar.set_ticklabels([f"{weights.min():.2f}", "0", f"{weights.max():.2f}"])
+
+        if savefigname:
+            self._figsave(figurename=savefigname)
 
     def show_DoG_img_grid(self, gc_list=None, n_samples=None, savefigname=None):
         """
