@@ -2715,7 +2715,7 @@ class Viz:
         intermediate_responses_to_show = self.project_data.simulate_retina[
             "intermediate_responses_to_show"
         ]
-        svecs = intermediate_responses_to_show["svecs"]
+        photodiode_response = intermediate_responses_to_show["photodiode_response"]
         cone_signal = intermediate_responses_to_show["cone_signal"]
 
         # Prepare data for manual visualization
@@ -2768,16 +2768,14 @@ class Viz:
         ax[1].set_xlabel("Time (s)")
         ax[1].legend()
 
-        svecs_mean = np.abs(svecs).mean(axis=0)
-        svecs_mean_norm = np.abs(svecs).mean(axis=0) / np.abs(svecs_mean).max()
-        tvec_mean = np.linspace(0, duration / b2u.second, len(svecs_mean_norm))
-        cone_signal_mean = np.abs(cone_signal).mean(axis=0)
+        photodiode_norm = photodiode_response / np.abs(photodiode_response).max()
+        cone_signal_mean = cone_signal.mean(axis=0)
         cone_signal_mean_norm = (
-            np.abs(cone_signal).mean(axis=0) / np.abs(cone_signal_mean).max()
+            cone_signal.mean(axis=0) / np.abs(cone_signal_mean).max()
         )
 
-        ax[2].plot(tvec_mean, svecs_mean_norm, label="svec")
-        ax[2].plot(tvec_mean, cone_signal_mean_norm, label="cone_signal")
+        ax[2].plot(tvec, photodiode_norm, label="photodiode")
+        ax[2].plot(tvec, cone_signal_mean_norm, label="cone_signal")
         ax[2].set_xlim([0, duration / b2u.second])
         ax[2].set_ylabel("a.u.")
         ax[2].set_xlabel("Time (s)")
