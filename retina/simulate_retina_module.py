@@ -1598,7 +1598,7 @@ class SimulateRetina(RetinaMath):
         # Reshape masks and spatial_filters to match the dimensions of stimulus_cropped
         spatial_filters = gcs.spatial_filters_flat.copy()
         spatial_filters_reshaped = np.expand_dims(spatial_filters, axis=2)
-
+        breakpoint()
         # victor_1987_JPhysiol: input to model is s(t)), the signed Weber contrast at the centre.
         # However, we assume that the surround suppression is early (horizontal units) and linear,
         # so we approximate s(t) = RF * stimulus

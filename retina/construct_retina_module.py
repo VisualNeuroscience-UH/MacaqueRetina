@@ -1756,7 +1756,7 @@ class ConstructRetina(RetinaMath):
 
         probability = G_cen_weight - G_sur_weight
 
-        ret.cones_to_bipolars_mtx = probability
+        ret.cones_to_bipolars_weights = probability
 
         return ret
 
@@ -3427,7 +3427,7 @@ class ConstructRetina(RetinaMath):
             "cone_frequency_data": ret.cone_frequency_data,
             "cone_power_data": ret.cone_power_data,
             "cone_noise_power_fit": ret.cone_noise_power_fit,
-            "cones_to_bipolars_mtx": ret.cones_to_bipolars_mtx,
+            "cones_to_bipolars_weights": ret.cones_to_bipolars_weights,
             "bipolar_to_gcs_weights": ret.bipolar_to_gcs_weights,
             "bipolar_optimized_pos_mm": ret.bipolar_optimized_pos_mm,
         }

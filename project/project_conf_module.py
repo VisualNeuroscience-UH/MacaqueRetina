@@ -211,7 +211,6 @@ my_retina = {
     "dd_regr_model": "quadratic",  # linear, quadratic, cubic, loglog. For midget < 20 deg, use quadratic; for parasol use loglog
     "ecc_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
-    # "temporal_model": "fixed",  # fixed, dynamic
     "temporal_model": "dynamic",  # fixed, dynamic
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
     "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder
@@ -457,6 +456,9 @@ bipolar_general_params = {
     "bipo2gc_midget": 42,  # um, from pix center to pix corner
     "bipo2gc_parasol": 42,
     "bipo2gc_cutoff_SD": 1,  # Multiplier for above value
+    "bipo_sub_cen_sd": 10,  # um, Turner_2018_eLife
+    "bipo_sub_sur_sd": 150,
+    "bipo_sub_sur2cen": 1.0,  # Surround / Center amplitude ratio
 }
 
 # Recovery function from Berry_1998_JNeurosci, Uzzell_2004_JNeurophysiol
@@ -489,7 +491,7 @@ gc_placement_params = {
     "diffusion_speed": 0.0001,  # f only, adjusted with ecc
     "border_repulsion_stength": 10,  # f only
     "border_distance_threshold": 0.01,  # f only
-    "show_placing_progress": True,  # True False
+    "show_placing_progress": False,  # True False
     "show_skip_steps": 1,  # v 1, f 100
 }
 
@@ -507,21 +509,21 @@ cone_placement_params = {
 }
 
 bipolar_placement_params = {
-    "algorithm": None,  # "voronoi" or "force" or None
-    "n_iterations": 3,  # v 20, f 300
+    "algorithm": "force",  # "voronoi" or "force" or None
+    "n_iterations": 5,  # v 20, f 300
     "change_rate": 0.0001,  # f 0.0005, v 0.5
     "unit_repulsion_stregth": 2,  # 10 f only
     "unit_distance_threshold": 0.1,  # f only, adjusted with ecc
     "diffusion_speed": 0.005,  # f only, adjusted with ecc
     "border_repulsion_stength": 5,  # f only
     "border_distance_threshold": 0.0001,  # f only
-    "show_placing_progress": True,  # True False
+    "show_placing_progress": False,  # True False
     "show_skip_steps": 1,  # v 1, f 100
 }
 
 # For VAE, this is enough to have good distribution between units.
 rf_repulsion_params = {
-    "n_iterations": 1,  # 200
+    "n_iterations": 200,  # 200
     "change_rate": 0.01,
     "cooling_rate": 0.999,  # each iteration change_rate = change_rate * cooling_rate
     "border_repulsion_stength": 5,
@@ -705,8 +707,10 @@ if __name__ == "__main__":
     and videos.
     """
 
-    # TÄHÄN JÄIT: CONES: CLARK TOIMII. Tarkasta latenssit ja kvantiteetit vrt Clark
-    # aja conf niin näet
+    # TÄHÄN JÄIT:
+    # Suunnittele subunit c ja s painokertoimet
+    # ReLu Turner -18 datasta
+
     # SUBUNIT MODEL:
     # - SIMULATE RETINA: VIE PIKSELIT TAPPIEN KAUTTA BIPOLAAREIHIN JA EDELLEEN GC:HIN
     # - SIMULATE RETINA: BIPOLAAREIHIN ReLu EPÄLINEAARISUUS
@@ -752,7 +756,7 @@ if __name__ == "__main__":
     Build and test your retina here, one gc type at a time. 
     """
 
-    # PM.construct_retina.build()  # Main method for building the retina
+    PM.construct_retina.build()  # Main method for building the retina
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # Thus, they are called after the retina is built.
@@ -762,6 +766,9 @@ if __name__ == "__main__":
     # in the retina mosaic building process.
 
     # For FIT and VAE
+    PM.viz.show_cones_linked_to_bipolars(n_samples=4, savefigname=None)
+    # PM.viz.show_bipolars_linked_to_gc(gc_list=[10, 17], savefigname=None)
+    # PM.viz.show_bipolars_linked_to_gc(n_samples=4, savefigname=None)
     # PM.viz.show_cones_linked_to_gc(gc_list=[10, 17], savefigname=None)
     # PM.viz.show_cones_linked_to_gc(n_samples=4, savefigname=None)
     # PM.viz.show_DoG_img_grid(gc_list=[10, 17, 46], savefigname=None)
@@ -812,14 +819,14 @@ if __name__ == "__main__":
     ########################
 
     # Based on my_stimulus_options above
-    PM.stimulate.make_stimulus_video()
+    # PM.stimulate.make_stimulus_video()
 
     ####################################
     ### Run multiple trials or units ###
     ####################################
 
     # Load stimulus to get working retina, necessary for running units
-    PM.simulate_retina.run_with_my_run_options()
+    # PM.simulate_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
@@ -841,7 +848,7 @@ if __name__ == "__main__":
     # PM.viz.show_all_gc_responses(savefigname=None)
     # PM.viz.show_all_gc_histogram(savefigname=None)
     # PM.viz.show_cone_responses(time_range=[0.4, 1.1], savefigname=None)
-    PM.viz.show_cone_responses(time_range=None, savefigname=None)
+    # PM.viz.show_cone_responses(time_range=None, savefigname=None)
 
     # PM.viz.show_stimulus_with_gcs(
     #     example_gc=my_run_options["unit_index"],  # [int,], my_run_options["unit_index"]
