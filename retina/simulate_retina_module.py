@@ -404,7 +404,7 @@ class Cones(ReceptiveFieldsBase):
         background_R = self.get_photoisomerizations_from_luminance(background)
         background_R = background_R * ff
 
-        print(f"\nbackground_R* {background_R} photoisomerizations/cone/s")
+        print(f"\nbackground_R* {background_R:.0f} photoisomerizations/cone/s")
 
         params_dict = self.my_retina["cone_signal_parameters"]
 
@@ -416,8 +416,8 @@ class Cones(ReceptiveFieldsBase):
             cone_input, params_dict, dt, duration, tvec, background_R
         )
 
-        print("\nCone signal min:", cone_signal.min())
-        print("Cone signal max:", cone_signal.max())
+        print(f"\nCone signal min:{cone_signal.min():.1f} mV")
+        print(f"Cone signal max:{cone_signal.max():.1f} mV")
 
         vs.cone_signal = cone_signal
 
@@ -1598,34 +1598,30 @@ class SimulateRetina(RetinaMath):
         # Reshape masks and spatial_filters to match the dimensions of stimulus_cropped
         spatial_filters = gcs.spatial_filters_flat.copy()
         spatial_filters_reshaped = np.expand_dims(spatial_filters, axis=2)
-        breakpoint()
+
         # victor_1987_JPhysiol: input to model is s(t)), the signed Weber contrast at the centre.
         # However, we assume that the surround suppression is early (horizontal units) and linear,
-        # so we approximate s(t) = RF * stimulus
-        # TODO Check svec dynamic range, should be [-1, 1] for contrast stimuli
-        if gcs.gc_type == "parasol":
+        # so we could approximate s(t) = RF * stimulus
+        # However, the nonlinear subunit model by Turner et al. 2016 and 2018 breaks that linearity assumption.
 
-            # This is the stimulus contrast viewed through spatial rf filter, and summed over spatial dimension.
-            # The np.einsum provides a fast and memory-efficient way to do this.
-            # i is the unit, j is the spatial dimension, k is the time dimension
-            vs.svecs = np.einsum(
-                "ijk,ijk->ik", spatial_filters_reshaped, vs.stimulus_cropped
-            )
+        # svec_cen and svec_sur are the  stimulus contrast viewed through
+        # center and surround spatial rf filter, and summed over spatial dimension.
+        # The np.einsum provides a fast and memory-efficient way to do this.
+        # i is the unit, j is the spatial dimension, k is the time dimension
 
-        elif gcs.gc_type == "midget":
-            masks_sur = gcs.surround_masks_flat[:, :, np.newaxis]
-            vs.svecs_sur = np.einsum(
-                "ijk,ijk->ik",
-                spatial_filters_reshaped * masks_sur,
-                vs.stimulus_cropped,
-            )
+        masks_sur = gcs.surround_masks_flat[:, :, np.newaxis]
+        vs.svecs_sur = np.einsum(
+            "ijk,ijk->ik",
+            spatial_filters_reshaped * masks_sur,
+            vs.stimulus_cropped,
+        )
 
-            masks_cen = gcs.center_masks_flat[:, :, np.newaxis]
-            vs.svecs_cen = np.einsum(
-                "ijk,ijk->ik",
-                spatial_filters_reshaped * masks_cen,
-                vs.stimulus_cropped,
-            )
+        masks_cen = gcs.center_masks_flat[:, :, np.newaxis]
+        vs.svecs_cen = np.einsum(
+            "ijk,ijk->ik",
+            spatial_filters_reshaped * masks_cen,
+            vs.stimulus_cropped,
+        )
 
         return vs
 
@@ -2192,7 +2188,7 @@ class SimulateRetina(RetinaMath):
             except KeyError:
                 raise KeyError(KeyErrorMsg)
             params_t = torch.tensor(params, device=device)
-            svecs_t = torch.tensor(vs.svecs, device=device)
+            svecs_t = torch.tensor(vs.svecs_cen, device=device)
         elif gcs.gc_type == "midget":
             columns_cen = [
                 "NL_cen",
@@ -2323,6 +2319,7 @@ class SimulateRetina(RetinaMath):
         intermediate_responses_to_show = {
             "cone_noise": vs.cone_noise,
             "cone_signal": vs.cone_signal,
+            "svecs_cen": vs.svecs_cen,
             "photodiode_response": vs.photodiode_response,
             "photodiode_Rstar_range": vs.photodiode_Rstar_range,
         }
