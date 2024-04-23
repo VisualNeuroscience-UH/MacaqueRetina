@@ -3312,6 +3312,9 @@ class ConstructRetina(RetinaMath):
         elif gc.temporal_model == "dynamic":
             gc = self._create_dynamic_temporal_rfs(gc)  # Benardete & Kaplan data
 
+        # For subunit model we do not need to create temporal RFs -- we use
+        # cone dynamics and bipolar non-linearity to model temporal RFs
+
         return gc
 
     def _initialize_build(self):
