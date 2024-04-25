@@ -2715,8 +2715,10 @@ class Viz:
         intermediate_responses_to_show = self.project_data.simulate_retina[
             "intermediate_responses_to_show"
         ]
+
         photodiode_response = intermediate_responses_to_show["photodiode_response"]
-        cone_signal = intermediate_responses_to_show["cone_signal"]
+        if "cone_signal" in intermediate_responses_to_show.keys():
+            cone_signal = intermediate_responses_to_show["cone_signal"]
 
         # Prepare data for manual visualization
         for_eventplot = all_spiketrains.copy()  # list of different leght arrays
@@ -2769,13 +2771,14 @@ class Viz:
         ax[1].legend()
 
         photodiode_norm = photodiode_response / np.abs(photodiode_response).max()
-        cone_signal_mean = cone_signal.mean(axis=0)
-        cone_signal_mean_norm = (
-            cone_signal.mean(axis=0) / np.abs(cone_signal_mean).max()
-        )
+        if "cone_signal" in intermediate_responses_to_show.keys():
+            cone_signal_mean = cone_signal.mean(axis=0)
+            cone_signal_mean_norm = (
+                cone_signal.mean(axis=0) / np.abs(cone_signal_mean).max()
+            )
+            ax[2].plot(tvec, cone_signal_mean_norm, label="cone_signal")
 
         ax[2].plot(tvec, photodiode_norm, label="photodiode")
-        ax[2].plot(tvec, cone_signal_mean_norm, label="cone_signal")
         ax[2].set_xlim([0, duration / b2u.second])
         ax[2].set_ylabel("a.u.")
         ax[2].set_xlabel("Time (s)")
