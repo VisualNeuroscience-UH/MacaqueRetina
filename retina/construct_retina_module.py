@@ -740,22 +740,11 @@ class ConstructRetina(RetinaMath):
         - `fit_log_interp_and_double_lorenzian` for fitting in log space to equalize errors across the power range.
         """
 
-        def data_extractor(data):
-
-            data_set_x = np.squeeze(data["Xdata"])
-            data_set_y = np.squeeze(data["Ydata"])
-
-            data_set_x_index = np.argsort(data_set_x)
-            frequency_data = data_set_x[data_set_x_index]
-            power_data = data_set_y[data_set_x_index]
-
-            return frequency_data, power_data
-
         # Interpolate cone response at 400 k photoisomerization background
         cone_response = self.data_io.get_data(
             self.context.literature_data_files["cone_response_fullpath"]
         )
-        cone_frequency_data, cone_power_data = data_extractor(cone_response)
+        cone_frequency_data, cone_power_data = self._data_extractor(cone_response)
 
         ret.cone_frequency_data = cone_frequency_data
         ret.cone_power_data = cone_power_data
@@ -772,7 +761,7 @@ class ConstructRetina(RetinaMath):
             self.context.literature_data_files["cone_noise_fullpath"]
         )
 
-        noise_frequency_data, noise_power_data = data_extractor(cone_noise)
+        noise_frequency_data, noise_power_data = self._data_extractor(cone_noise)
         log_frequency_data, log_power_data = np.log(noise_frequency_data), np.log(
             noise_power_data
         )
@@ -806,6 +795,49 @@ class ConstructRetina(RetinaMath):
         ret.cone_noise_power_fit = np.exp(
             self.fit_log_interp_and_double_lorenzian(log_frequency_data, *log_popt)
         )
+
+        return ret
+
+    def _data_extractor(self, data):
+        """
+        Return sorted and squeezed data from an npz data file.
+        """
+        data_set_x = np.squeeze(data["Xdata"])
+        data_set_y = np.squeeze(data["Ydata"])
+
+        data_set_x_index = np.argsort(data_set_x)
+        x_data = data_set_x[data_set_x_index]
+        y_data = data_set_y[data_set_x_index]
+
+        return x_data, y_data
+
+    def _fit_bipolar_rectification_index(self, ret):
+        """
+        Fit the rectification index data from Turner_2018_eLife assuming parabolic function.
+        """
+        unit_type = self.context.my_retina["gc_type"]
+        response_type = self.context.my_retina["response_type"]
+        # Interpolate cone response at 400 k photoisomerization background
+        RI_values_npz = self.data_io.get_data(
+            self.context.literature_data_files[
+                f"{unit_type}_{response_type}_RI_values_fullpath"
+            ]
+        )
+        g_sur_values, target_RI_values = self._data_extractor(RI_values_npz)
+
+        fitted_function = self.parabola
+
+        g_sur_min = np.min(g_sur_values)
+        g_sur_max = np.max(g_sur_values)
+        g_sur_scaled = 2 * (g_sur_values - g_sur_min) / (g_sur_max - g_sur_min) - 1
+
+        # We treat the first value as an outlier and remove it
+        popt, _ = opt.curve_fit(fitted_function, g_sur_scaled[1:], target_RI_values[1:])
+
+        ret.bipolar_nonlinearity_parameters = popt  # Convert params to linear space
+        ret.g_sur_scaled = g_sur_scaled
+        ret.target_RI_values = target_RI_values
+        ret.bipolar_nonlinearity_fit = fitted_function(g_sur_scaled, *popt)
 
         return ret
 
@@ -3379,6 +3411,7 @@ class ConstructRetina(RetinaMath):
         ret = self._link_cone_noise_units_to_gcs(ret, gc)
 
         ret = self._fit_cone_noise_vs_freq(ret)
+        ret = self._fit_bipolar_rectification_index(ret)
 
         # -- Third, endow units with temporal receptive fields
         gc = self._create_temporal_rfs(gc)
@@ -3433,6 +3466,10 @@ class ConstructRetina(RetinaMath):
             "cones_to_bipolars_weights": ret.cones_to_bipolars_weights,
             "bipolar_to_gcs_weights": ret.bipolar_to_gcs_weights,
             "bipolar_optimized_pos_mm": ret.bipolar_optimized_pos_mm,
+            "bipolar_nonlinearity_parameters": ret.bipolar_nonlinearity_parameters,
+            "bipolar_nonlinearity_fit": ret.bipolar_nonlinearity_fit,
+            "bipolar_g_sur_scaled": ret.g_sur_scaled,
+            "bipolar_RI_values": ret.target_RI_values,
         }
 
         self.data_io.save_np_dict_to_npz(
