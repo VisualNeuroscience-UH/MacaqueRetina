@@ -2050,7 +2050,6 @@ class Viz:
             # Plot each cone with alpha based on connection probability
             connection_probs = weights[:, this_sample]
             n_connected = np.sum(connection_probs > 0)
-            # breakpoint()
 
             for cone_pos, prob in zip(cone_positions, connection_probs):
                 ax[idx].scatter(*cone_pos, alpha=prob, color="blue")
@@ -2062,17 +2061,13 @@ class Viz:
             y_mm = y_mm[y_mm != 0]
 
             ax[idx].plot(x_mm, y_mm, ".g", label="RF center pixel midpoints")
-
-            # Add DoG_patch to the plot
             ax[idx].add_patch(DoG_patch)
-
             ax[idx].set_xlabel("X Position (mm)")
             ax[idx].set_ylabel("Y Position (mm)")
             ax[idx].set_title(
                 f"ganglion cell {this_sample} and Connected {n_connected} cones"
             )
             ax[idx].legend()
-            # Set equal aspect ratio
             ax[idx].set_aspect("equal", adjustable="box")
 
         if savefigname:
@@ -2139,7 +2134,7 @@ class Viz:
             # Plot each bipolar with alpha based on connection normalized probability
             connection_probs = weights[:, this_sample] / weights[:, this_sample].max()
             n_connected = np.sum(connection_probs > 0)
-            # breakpoint()
+
             for bipolar_pos, prob in zip(bipolar_positions, connection_probs):
                 ax[idx].scatter(*bipolar_pos, alpha=prob, color="blue")
 
@@ -2358,6 +2353,27 @@ class Viz:
             0.30,
             f"{this_function.__name__}\nfit parameters: {formatted_fit_parameters}",
             transform=ax.transAxes,
+        )
+
+        if savefigname:
+            self._figsave(figurename=savefigname)
+
+    def show_bipolar_nonlinearity(self, savefigname=None):
+
+        ret_file_npz = self.data_io.get_data(self.context.my_retina["ret_file"])
+        popt = ret_file_npz["bipolar_nonlinearity_parameters"]
+        bipolar_g_sur_scaled = ret_file_npz["bipolar_g_sur_scaled"]
+        bipolar_RI_values = ret_file_npz["bipolar_RI_values"]
+        bipolar_nonlinearity_fit = ret_file_npz["bipolar_nonlinearity_fit"]
+
+        x = np.linspace(-1, 1, 100)
+        y = bipolar_nonlinearity_fit
+
+        plt.plot(bipolar_g_sur_scaled, bipolar_RI_values, "o")
+        plt.plot(bipolar_g_sur_scaled, y)
+        # Annotate as text the 3 second order polynomial parameters
+        plt.text(
+            0.05, 0.95, f"Parameters: {popt[0]:.2f}x^2 + {popt[1]:.2f}x + {popt[2]:.2f}"
         )
 
         if savefigname:
