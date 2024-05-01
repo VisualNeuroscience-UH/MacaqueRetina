@@ -394,9 +394,14 @@ class RetinaMath:
 
         return log_power_spectrum
 
-    def logistic_function(self, x, L, k, x0):
-        """Logistic function."""
+    def basic_logistic_function(self, x):
+        return 1 / (1 + np.exp(-x))
+
+    def generalized_logistic_function(self, x, L, k, x0):
         return L / (1 + np.exp(-k * (x - x0)))
+
+    def parabola(self, x, a, b, c):
+        return a * x**2 + b * x + c
 
     # Fit method
     def lowpass(self, t, n, p, tau):
