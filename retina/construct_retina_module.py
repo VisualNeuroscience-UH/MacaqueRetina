@@ -816,6 +816,10 @@ class ConstructRetina(RetinaMath):
         Fit the rectification index data from Turner_2018_eLife assuming parabolic function.
         """
         unit_type = self.context.my_retina["gc_type"]
+
+        if unit_type == "midget":
+            return ret
+
         response_type = self.context.my_retina["response_type"]
         # Interpolate cone response at 400 k photoisomerization background
         RI_values_npz = self.data_io.get_data(
@@ -3330,22 +3334,31 @@ class ConstructRetina(RetinaMath):
         #########################################################
 
     def _create_temporal_rfs(self, gc):
-        if gc.temporal_model == "fixed":
-            gc = self._create_fixed_temporal_rfs(gc)  # Chichilnisky data
+        """
+        For fixed and subunit models, we borrow the gain and mean firing rates from the Benardete & Kaplan data
+        """
 
-            # For fixed model, we borrow the gain and mean firing rates from the Bnardete & Kaplan data
+        def borrow_A_and_Mean(gc):
+            """
+            Get the length of the A and Mean columns in the dataframe.
+            """
             gc_to_get_A = deepcopy(gc)
             gc_to_get_A = self._create_dynamic_temporal_rfs(
                 gc_to_get_A
             )  # Benardete & Kaplan data
             gc.df["A"] = gc_to_get_A.df["A"]
             gc.df["Mean"] = gc_to_get_A.df["Mean"]
+            return gc
+
+        if gc.temporal_model == "fixed":
+            gc = self._create_fixed_temporal_rfs(gc)  # Chichilnisky data
+            gc = borrow_A_and_Mean(gc)
 
         elif gc.temporal_model == "dynamic":
             gc = self._create_dynamic_temporal_rfs(gc)  # Benardete & Kaplan data
 
-        # For subunit model we do not need to create temporal RFs -- we use
-        # cone dynamics and bipolar non-linearity to model temporal RFs
+        elif gc.temporal_model == "subunit":
+            gc = borrow_A_and_Mean(gc)
 
         return gc
 
@@ -3388,8 +3401,6 @@ class ConstructRetina(RetinaMath):
     def build(self):
         """
         Builds the receptive field mosaic. This is the main method to call.
-
-        When ret or gc are updated, they are returned from the method.
         """
         ret, gc = self._initialize_build()
 

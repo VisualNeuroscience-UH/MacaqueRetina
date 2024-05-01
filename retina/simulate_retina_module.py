@@ -469,9 +469,7 @@ class Cones(ReceptiveFieldsBase):
             cone_noise = self._create_cone_noise(vs.tvec, n_cones, *params)
 
         # Normalize noise to have one mean and unit sd at the noise data frequencies
-        cone_noise_norm = 1 + (cone_noise - cone_noise.mean()) / np.std(
-            cone_noise, axis=0
-        )
+        cone_noise_norm = (cone_noise - cone_noise.mean()) / np.std(cone_noise, axis=0)
 
         # invert cone_noise_norm for shape (n_cones, n_timepoints)
         vs.bipolar_synaptic_noise = cone_noise_norm.T
@@ -593,7 +591,7 @@ class Bipolars(ReceptiveFieldsBase):
         RI = self.parabola(vs.svecs_sur, *popt)
         neg_scaler = 1 - RI
         cones_to_bipolars_weights = self.ret_npz["cones_to_bipolars_weights"]
-        cone_output = vs.cone_signal + vs.bipolar_synaptic_noise
+        cone_output = vs.cone_signal  # + vs.bipolar_synaptic_noise
         bipolar_input_sum = cones_to_bipolars_weights.T @ cone_output
         bipolar_output_sum = bipolar_to_gcs_weights.T @ bipolar_input_sum
 
@@ -601,7 +599,7 @@ class Bipolars(ReceptiveFieldsBase):
         neg_idx = bipolar_output_sum < 0
         gc_synaptic_input = bipolar_output_sum.copy()
         gc_synaptic_input[neg_idx] = bipolar_output_sum[neg_idx] * neg_scaler[neg_idx]
-        vs.gc_synaptic_input = gc_synaptic_input
+        vs.generator_potentials = gc_synaptic_input
 
         return vs
 
@@ -1982,7 +1980,7 @@ class SimulateRetina(RetinaMath):
 
         return gcs
 
-    def _convolve_stimulus(self, vs, gcs):
+    def _create_fixed_generator_potential(self, vs, gcs):
         """
         Convolves the stimulus with the spatiotemporal filter for a given set of units.
 
@@ -2191,7 +2189,7 @@ class SimulateRetina(RetinaMath):
 
         return vs
 
-    def _get_dynamic_generator_potentials(self, vs, gcs):
+    def _create_dynamic_generator_potentials(self, vs, gcs):
 
         device = self.context.device
 
@@ -2503,23 +2501,22 @@ class SimulateRetina(RetinaMath):
         if gcs.temporal_model == "dynamic":
 
             vs = self._create_dynamic_contrast(vs, gcs)
-            vs = self._get_dynamic_generator_potentials(vs, gcs)
+            vs = self._create_dynamic_generator_potentials(vs, gcs)
 
         elif gcs.temporal_model == "subunit":
 
             vs = self._create_dynamic_contrast(vs, gcs)
             vs = cones.create_signal(vs, n_trials)
-            vs = bipolars.create_signal(vs)
-
-            breakpoint()
+            vs = bipolars.create_signal(vs)  # Creates generator potentials
 
         elif gcs.temporal_model == "fixed":  # Linear model
 
             gcs = self._get_linear_temporal_filters(gcs)
             gcs = self._get_linear_spatiotemporal_filters(gcs)
-            vs = self._convolve_stimulus(vs, gcs)
+            vs = self._create_fixed_generator_potential(vs, gcs)
+
         # From generator potential to spikes
-        vs = self._generator_to_firing_rate_noise(vs, gcs, cones, n_trials)
+        vs = self._generator_to_firing_rate_noise(vs, gcs, n_trials)
         vs = self._firing_rates2brian_timed_arrays(vs)
         vs = self._brian_spike_generation(vs, gcs, n_trials)
 

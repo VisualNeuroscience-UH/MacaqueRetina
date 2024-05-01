@@ -384,7 +384,7 @@ cone_general_params = {
     "cone2gc_midget": 9,  # um, 1 SD of Gaussian
     "cone2gc_parasol": 27,  # um 27
     "cone2gc_cutoff_SD": 1,  # 3 SD is 99.7% of Gaussian
-    "cone_noise_magnitude": 0.0,  # 0.2  # firing rate relative to Benardete mean values, 0 for no noise
+    "cone_noise_magnitude": 1.0,  # 0.2  # firing rate relative to Benardete mean values, 0 for no noise
     "cone_noise_wc": [14, 160],  # lorenzian freqs, Angueyra_2013_NatNeurosci Fig1
 }
 
@@ -781,7 +781,7 @@ if __name__ == "__main__":
     # PM.viz.show_dendrite_diam_vs_ecc(log_x=False, log_y=False, savefigname=None)
     # PM.viz.show_retina_img(savefigname=None)
     # PM.viz.show_cone_noise_vs_freq(savefigname=None)
-    PM.viz.show_bipolar_nonlinearity(savefigname=None)
+    # PM.viz.show_bipolar_nonlinearity(savefigname=None)
 
     # For FIT (DoG fits, temporal kernels and tonic drives)
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
