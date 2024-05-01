@@ -195,7 +195,7 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 # is not the case in the VAE model, and not very physiological.
 
 gc_type = "parasol"  # "parasol" or "midget"
-response_type = "on"  # "on" or "off"
+response_type = "off"  # "on" or "off"
 
 # These values are used for building a new retina
 my_retina = {
@@ -211,7 +211,7 @@ my_retina = {
     "dd_regr_model": "quadratic",  # linear, quadratic, cubic, loglog. For midget < 20 deg, use quadratic; for parasol use loglog
     "ecc_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
-    "temporal_model": "dynamic",  # fixed, dynamic
+    "temporal_model": "subunit",  # fixed, dynamic, subunit
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
     "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
@@ -294,13 +294,13 @@ my_stimulus_options = {
     "stimulus_size": 1,  # 0.04,  # 2,  # deg, radius for circle, sidelen/2 for rectangle.
     "contrast": 0.99,  # mean +- (1 + contrast) * mean
     "mean": 128,  # Consider this as cd/m2
-    "intensity": (0, 255),  # cd/m2. Overrides contrast and mean.
+    "intensity": (0, 255),  # Overrides contrast and mean, comment this line for them
     "background": 128,  # The "frame", around stimulus in time and space
     "ND_filter": 0.0,  # 0.0, log10 Neutral Density filter factor, can be negative
     "temporal_frequency": 0.1,  # 0.01,  # 4.0,  # 40,  # Hz
     "spatial_frequency": 5.0,  # cpd
     "orientation": 0,  # degrees
-    "phase_shift": math.pi + 0.1,  # radians
+    "phase_shift": 0,  # math.pi + 0.1,  # radians
     "stimulus_video_name": f"{stimulus_folder}.mp4",
 }
 
@@ -639,6 +639,13 @@ cone_response_fullpath = (
 
 bipolar_table_fullpath = literature_data_folder / "Boycott_1991_EurJNeurosci_Table1.csv"
 
+parasol_on_RI_values_fullpath = (
+    literature_data_folder / "Turner_2018_eLife_Fig5C_ON_c.npz"
+)
+parasol_off_RI_values_fullpath = (
+    literature_data_folder / "Turner_2018_eLife_Fig5C_OFF_c.npz"
+)
+
 literature_data_files = {
     "gc_density_fullpath": gc_density_fullpath,
     "dendr_diam1_fullpath": dendr_diam1_fullpath,
@@ -652,6 +659,8 @@ literature_data_files = {
     "cone_noise_fullpath": cone_noise_fullpath,
     "cone_response_fullpath": cone_response_fullpath,
     "bipolar_table_fullpath": bipolar_table_fullpath,
+    "parasol_on_RI_values_fullpath": parasol_on_RI_values_fullpath,
+    "parasol_off_RI_values_fullpath": parasol_off_RI_values_fullpath,
 }
 
 
@@ -707,16 +716,6 @@ if __name__ == "__main__":
     and videos.
     """
 
-    # TÄHÄN JÄIT:
-    # Suunnittele subunit c ja s painokertoimet
-    # ReLu Turner -18 datasta
-
-    # SUBUNIT MODEL:
-    # - SIMULATE RETINA: VIE PIKSELIT TAPPIEN KAUTTA BIPOLAAREIHIN JA EDELLEEN GC:HIN
-    # - SIMULATE RETINA: BIPOLAAREIHIN ReLu EPÄLINEAARISUUS
-    # - VIZ: TARKISTA LINKITYKSET
-    # - VIZ: TARKISTA SUBUNIT MALLIN TOIMIVUUS
-
     ###########################################
     ##   Luminance and Photoisomerizations   ##
     ###########################################
@@ -735,14 +734,14 @@ if __name__ == "__main__":
     # #   Sample figure data from literature  ##
     # ##########################################
 
-    # # If possible, sample only temporal hemiretina
+    # # # If possible, sample only temporal hemiretina
     # from project.project_utilities_module import DataSampler
 
-    # filename = "Angueyra_2013_NatNeurosci_Fig6B.jpg"
+    # filename = "Turner_2018_eLife_Fig5C_OFF.jpg"
     # filename_full = git_repo_root.joinpath(r"retina/literature_data", filename)
     # # Fig lowest and highest tick values in the image, use these as calibration points
-    # min_X, max_X, min_Y, max_Y = (1, 600, 1e-11, 1e-3)
-    # ds = DataSampler(filename_full, min_X, max_X, min_Y, max_Y, logX=True, logY=True)
+    # min_X, max_X, min_Y, max_Y = (-5, 5, 0, 1.0)
+    # ds = DataSampler(filename_full, min_X, max_X, min_Y, max_Y, logX=False, logY=False)
     # ds.collect_and_save_points()
     # ds.quality_control(restore=True)
 
@@ -766,7 +765,7 @@ if __name__ == "__main__":
     # in the retina mosaic building process.
 
     # For FIT and VAE
-    PM.viz.show_cones_linked_to_bipolars(n_samples=4, savefigname=None)
+    # PM.viz.show_cones_linked_to_bipolars(n_samples=4, savefigname=None)
     # PM.viz.show_bipolars_linked_to_gc(gc_list=[10, 17], savefigname=None)
     # PM.viz.show_bipolars_linked_to_gc(n_samples=4, savefigname=None)
     # PM.viz.show_cones_linked_to_gc(gc_list=[10, 17], savefigname=None)
@@ -782,6 +781,7 @@ if __name__ == "__main__":
     # PM.viz.show_dendrite_diam_vs_ecc(log_x=False, log_y=False, savefigname=None)
     # PM.viz.show_retina_img(savefigname=None)
     # PM.viz.show_cone_noise_vs_freq(savefigname=None)
+    PM.viz.show_bipolar_nonlinearity(savefigname=None)
 
     # For FIT (DoG fits, temporal kernels and tonic drives)
     # PM.viz.show_exp_build_process(show_all_spatial_fits=False)
@@ -826,7 +826,7 @@ if __name__ == "__main__":
     ####################################
 
     # Load stimulus to get working retina, necessary for running units
-    # PM.simulate_retina.run_with_my_run_options()
+    PM.simulate_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
@@ -845,7 +845,7 @@ if __name__ == "__main__":
     ################################################
 
     # Based on my_run_options above
-    # PM.viz.show_all_gc_responses(savefigname=None)
+    PM.viz.show_all_gc_responses(savefigname=None)
     # PM.viz.show_all_gc_histogram(savefigname=None)
     # PM.viz.show_cone_responses(time_range=[0.4, 1.1], savefigname=None)
     # PM.viz.show_cone_responses(time_range=None, savefigname=None)
