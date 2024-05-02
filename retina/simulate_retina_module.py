@@ -572,7 +572,7 @@ class Bipolars(ReceptiveFieldsBase):
         gcs : GanglionCells
             An object containing properties and methods related to the ganglion cells.
             Expected to have attributes `response_type` (ON or OFF).
-            
+
         Returns
         -------
         VisualStimulus
@@ -2521,7 +2521,6 @@ class SimulateRetina(RetinaMath):
 
             vs = self._create_dynamic_contrast(vs, gcs)
             vs = cones.create_signal(vs, n_trials)
-            breakpoint()
             vs = bipolars.create_signal(vs, gcs)  # Creates generator potentials
 
         elif gcs.temporal_model == "fixed":  # Linear model
