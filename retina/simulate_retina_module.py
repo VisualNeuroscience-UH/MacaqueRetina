@@ -596,7 +596,7 @@ class Bipolars(ReceptiveFieldsBase):
         cones_to_bipolars_weights = self.ret_npz["cones_to_bipolars_weights"]
         cone_output = vs.cone_signal  # + vs.bipolar_synaptic_noise
         bipolar_input_sum = cones_to_bipolars_weights.T @ cone_output
-        # Sign inversion for cones => ON bipolars
+        # Sign inversion for cones' glutamate release => ON bipolars
         if gcs.response_type == "on":
             bipolar_input_sum = -bipolar_input_sum
         bipolar_output_sum = bipolar_to_gcs_weights.T @ bipolar_input_sum
