@@ -102,6 +102,8 @@ class VideoBaseClass(object):
         """
 
         raw_min_value = np.min(self.options["raw_intensity"])
+        # breakpoint()
+
         raw_peak_to_peak = np.ptp(self.options["raw_intensity"])
         frames = self.frames
 
@@ -450,11 +452,22 @@ class StimulusPattern:
         fps = self.options["fps"]
         n_frames = self.frames.shape[0]
         frame_indices = np.round(tp_scaled * fps).astype(int)
+        intensity_array = np.zeros(n_frames)
 
-        breakpoint()
+        for idx in range(len(frame_indices) - 1):
+            fr_idx = range(frame_indices[idx + 1] - frame_indices[idx])
+            d_y = (amp[idx + 1] - amp[idx]) / len(fr_idx)
+            y0 = amp[idx]
+            fr_y = y0 + d_y * fr_idx
+            intensity_array[frame_indices[idx] : frame_indices[idx + 1]] = fr_y
 
-        self.frames[self.frames >= threshold] = 1
-        self.frames[self.frames < threshold] = -1
+        # Scale intensity to [-1, 1]
+        self.options["raw_intensity"] = (-1, 1)
+        intensity_array = intensity_array - np.min(intensity_array)
+        intensity_array = intensity_array / np.max(intensity_array)
+        intensity_array = intensity_array * 2 - 1
+
+        self.frames = np.zeros(self.frames.shape) + intensity_array[:, None, None]
 
     def colored_temporal_noise(self, beta=1):
         """
