@@ -13,6 +13,7 @@ import logging
 import pdb
 from copy import deepcopy
 import sys
+import types
 
 # io tools from common packages
 import scipy.io as sio
@@ -386,6 +387,8 @@ class DataIO(DataIOBase):
                         compression_opts=compression_opts,
                     )
                 elif isinstance(item, type):
+                    continue
+                elif isinstance(item, types.MethodType):
                     continue
                 else:
                     raise ValueError("Cannot save %s type" % type(item))
