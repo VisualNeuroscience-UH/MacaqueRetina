@@ -2335,7 +2335,6 @@ class SimulateRetina(RetinaMath):
 
         intermediate_responses_to_show = {
             "cone_noise": vs.bipolar_synaptic_noise,
-            "svecs_cen": vs.svecs_cen,
             "photodiode_response": vs.photodiode_response,
         }
 
@@ -2465,14 +2464,24 @@ class SimulateRetina(RetinaMath):
         References
         ----------
         The theoretical background and models used in this simulation refer to:
+
+        Dynamic gain control model:
         [1] Victor 1987 Journal of Physiology
         [2] Benardete & Kaplan 1997 Visual Neuroscience
         [3] Kaplan & Benardete 1999 Journal of Physiology
+
+        Spatial RF and fixed temporal filters:
         [4] Chichilnisky 2001 Network
         [5] Chichilnisky & Kalmar 2002 Journal of Neuroscience
         [6] Field et al. 2010 Nature
+
+        Cone noise:
         [8] Ala-Laurila et al. 2011 NatNeurosci
         [9] Angueyra & Rieke 2013 NatNeurosci
+
+        Subunit model:
+        [10] Turner & Rieke 2016 Neuron
+        [11] Turner, Schwartz & Rieke 2018 eLife
         """
 
         # Initialize
