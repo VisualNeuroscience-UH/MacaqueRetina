@@ -104,7 +104,7 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         fit = Fit(context, data_io, project_data)
 
         self.construct_retina = ConstructRetina(
-            context, data_io, viz, fit, project_data
+            context, data_io, viz, fit, project_data, self.data_extractor
         )
         self.viz.construct_retina = self.construct_retina
 
@@ -112,7 +112,7 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         cones = self.simulate_retina.initialize_cones()
         self.cones = cones
 
-        stimulate = VisualStimulus(context, data_io, cones)
+        stimulate = VisualStimulus(context, data_io, cones, self.data_extractor)
         self.stimulate = stimulate
 
         experiment = Experiment(context, data_io)
