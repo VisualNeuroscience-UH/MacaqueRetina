@@ -290,6 +290,19 @@ class ProjectUtilities:
 
         return wrapper
 
+    def data_extractor(self, data):
+        """
+        Return sorted and squeezed data from an npz data file.
+        """
+        data_set_x = np.squeeze(data["Xdata"])
+        data_set_y = np.squeeze(data["Ydata"])
+
+        data_set_x_index = np.argsort(data_set_x)
+        x_data = data_set_x[data_set_x_index]
+        y_data = data_set_y[data_set_x_index]
+
+        return x_data, y_data
+
 
 class DataSampler:
     """
