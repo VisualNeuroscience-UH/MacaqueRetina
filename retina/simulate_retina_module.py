@@ -559,7 +559,7 @@ class Bipolars(ReceptiveFieldsBase):
         self.ret_npz = ret_npz
         self.n_units = self.ret_npz["bipolar_to_gcs_weights"].shape[0]
 
-    def create_signal(self, vs):
+    def create_signal(self, vs, gcs):
         """
         Apply a bipolar nonlinearity function.
 
@@ -569,7 +569,10 @@ class Bipolars(ReceptiveFieldsBase):
             An object containing properties and methods related to the visual stimulus.
             Expected to have attributes `svecs_sur` (stimulus vectors for surround),
             `cone_signal`, and `cone_noise`.
-
+        gcs : GanglionCells
+            An object containing properties and methods related to the ganglion cells.
+            Expected to have attributes `response_type` (ON or OFF).
+            
         Returns
         -------
         VisualStimulus
@@ -593,6 +596,8 @@ class Bipolars(ReceptiveFieldsBase):
         cones_to_bipolars_weights = self.ret_npz["cones_to_bipolars_weights"]
         cone_output = vs.cone_signal  # + vs.bipolar_synaptic_noise
         bipolar_input_sum = cones_to_bipolars_weights.T @ cone_output
+        if gcs.response_type == "off":
+            bipolar_input_sum = -bipolar_input_sum
         bipolar_output_sum = bipolar_to_gcs_weights.T @ bipolar_input_sum
 
         # Apply synaptic input scaling for negative responses (rectification/nonlinearity)
@@ -2516,7 +2521,8 @@ class SimulateRetina(RetinaMath):
 
             vs = self._create_dynamic_contrast(vs, gcs)
             vs = cones.create_signal(vs, n_trials)
-            vs = bipolars.create_signal(vs)  # Creates generator potentials
+            breakpoint()
+            vs = bipolars.create_signal(vs, gcs)  # Creates generator potentials
 
         elif gcs.temporal_model == "fixed":  # Linear model
 
