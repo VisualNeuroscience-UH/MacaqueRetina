@@ -1785,8 +1785,9 @@ class ConstructRetina(RetinaMath):
 
         G_cen = np.exp(-((distances / bipo_cen_sd_mm) ** 2))
         G_sur = np.exp(-((distances / bipo_sur_sd_mm) ** 2))
-        G_cen_probability = G_cen / G_cen.sum(axis=1)[:, np.newaxis]
-        G_sur_probability = G_sur / G_sur.sum(axis=1)[:, np.newaxis]
+        G_cen_probability = G_cen / G_cen.sum(axis=0)[np.newaxis, :]
+        G_sur_probability = G_sur / G_sur.sum(axis=0)[np.newaxis, :]
+
         G_cen_weight = G_cen_probability
         G_sur_weight = G_sur_probability * bipo_sur2cen_amp_ratio
 
