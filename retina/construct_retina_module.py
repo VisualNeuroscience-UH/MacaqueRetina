@@ -363,7 +363,9 @@ class ConstructRetina(RetinaMath):
 
     _properties_list = []
 
-    def __init__(self, context, data_io, viz, fit, project_data) -> None:
+    def __init__(
+        self, context, data_io, viz, fit, project_data, data_extractor
+    ) -> None:
         # Dependency injection at ProjectManager construction
         self._context = context.set_context(self)
         self._data_io = data_io
@@ -371,6 +373,10 @@ class ConstructRetina(RetinaMath):
         self._fit = fit
         self._project_data = project_data
 
+        # Set additional methods
+        self.data_extractor = data_extractor
+
+        # Set attributes
         self.device = self.context.device
 
         # Make or read fits
@@ -744,7 +750,7 @@ class ConstructRetina(RetinaMath):
         cone_response = self.data_io.get_data(
             self.context.literature_data_files["cone_response_fullpath"]
         )
-        cone_frequency_data, cone_power_data = self._data_extractor(cone_response)
+        cone_frequency_data, cone_power_data = self.data_extractor(cone_response)
 
         ret.cone_frequency_data = cone_frequency_data
         ret.cone_power_data = cone_power_data
@@ -761,7 +767,7 @@ class ConstructRetina(RetinaMath):
             self.context.literature_data_files["cone_noise_fullpath"]
         )
 
-        noise_frequency_data, noise_power_data = self._data_extractor(cone_noise)
+        noise_frequency_data, noise_power_data = self.data_extractor(cone_noise)
         log_frequency_data, log_power_data = np.log(noise_frequency_data), np.log(
             noise_power_data
         )
@@ -798,19 +804,6 @@ class ConstructRetina(RetinaMath):
 
         return ret
 
-    def _data_extractor(self, data):
-        """
-        Return sorted and squeezed data from an npz data file.
-        """
-        data_set_x = np.squeeze(data["Xdata"])
-        data_set_y = np.squeeze(data["Ydata"])
-
-        data_set_x_index = np.argsort(data_set_x)
-        x_data = data_set_x[data_set_x_index]
-        y_data = data_set_y[data_set_x_index]
-
-        return x_data, y_data
-
     def _fit_bipolar_rectification_index(self, ret):
         """
         Fit the rectification index data from Turner_2018_eLife assuming parabolic function.
@@ -827,7 +820,7 @@ class ConstructRetina(RetinaMath):
                 f"{unit_type}_{response_type}_RI_values_fullpath"
             ]
         )
-        g_sur_values, target_RI_values = self._data_extractor(RI_values_npz)
+        g_sur_values, target_RI_values = self.data_extractor(RI_values_npz)
 
         fitted_function = self.parabola
 

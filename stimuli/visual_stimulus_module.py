@@ -429,6 +429,33 @@ class StimulusPattern:
         self.frames[self.frames >= threshold] = 1
         self.frames[self.frames < threshold] = -1
 
+    def temporal_digitized_pattern(self):
+        """
+        Create a temporal wave pattern from digitized temporal sequence.
+
+        """
+        filepath = self.context.literature_data_files["temporal_pattern_fullpath"]
+        data_npz = self.data_io.get_data(filepath)
+        tp, amp = self.data_extractor(data_npz)
+        duration = self.options["duration_seconds"]
+
+        # Transform digitized times to stimulus duration
+        tp_min = np.min(tp)
+        tp_max = np.max(tp)
+        tp_zeroed = tp - tp_min
+        tp_scaled = tp_zeroed / (tp_max - tp_min)
+        tp_scaled = tp_scaled * duration
+
+        # Get closest frame index
+        fps = self.options["fps"]
+        n_frames = self.frames.shape[0]
+        frame_indices = np.round(tp_scaled * fps).astype(int)
+
+        breakpoint()
+
+        self.frames[self.frames >= threshold] = 1
+        self.frames[self.frames < threshold] = -1
+
     def colored_temporal_noise(self, beta=1):
         """
         Generate a colored temporal noise pattern.
@@ -651,12 +678,14 @@ class VisualStimulus(VideoBaseClass):
     Create stimulus video and save
     """
 
-    def __init__(self, context, data_io, cones):
+    def __init__(self, context, data_io, cones, data_extractor):
         super().__init__()
 
         self._context = context.set_context(self)
         self._data_io = data_io
         self._cones = cones
+
+        self.data_extractor = data_extractor
 
     @property
     def context(self):
