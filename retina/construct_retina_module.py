@@ -1721,36 +1721,33 @@ class ConstructRetina(RetinaMath):
 
         bipo_pos_mm = ret.bipolar_optimized_pos_mm
         n_bipos = bipo_pos_mm.shape[0]
-        n_gcs = len(gc.df)
 
-        if gc.gc_type == "parasol":
-            sd_bipo = ret.bipolar_general_params["bipo2gc_parasol"] / 1000
-        elif gc.gc_type == "midget":
-            sd_bipo = ret.bipolar_general_params["bipo2gc_midget"] / 1000
-        cutoff_distance = ret.bipolar_general_params["bipo2gc_cutoff_SD"] * sd_bipo
+        rf_div = ret.bipolar_general_params["bipo2gc_div"]
+        sd_bipo = gc.df.den_diam_um / rf_div  # center diameter divided by 6
+        sd_bipo = sd_bipo / 1000  # um to mm
+        sd_bipo = sd_bipo.values[:, None, None]  # N, 1, 1
+        cutoff_SD = ret.bipolar_general_params["bipo2gc_cutoff_SD"] * sd_bipo
 
-        weights = np.zeros((n_bipos, n_gcs))
+        weights = np.zeros((n_bipos, gc.n_units))
 
         # Normalize center activation to probability distribution
         img_cen = gc.img * gc.img_mask  # N, H, W
         img_prob = img_cen / np.sum(img_cen, axis=(1, 2))[:, None, None]
-        for i in tqdm(
-            range(n_bipos),
-            desc=f"Calculating {n_bipos} x {n_gcs} connections",
-        ):
-            this_bipo_pos = bipo_pos_mm[i]
+        desc_str = f"Calculating {n_bipos} x {gc.n_units} connections"
+        for this_bipo in tqdm(range(n_bipos), desc=desc_str):
+            this_bipo_pos = bipo_pos_mm[this_bipo]
             dist_x_mtx = gc.X_grid_mm - this_bipo_pos[0]
             dist_y_mtx = gc.Y_grid_mm - this_bipo_pos[1]
             dist_mtx = np.sqrt(dist_x_mtx**2 + dist_y_mtx**2)
 
             # Drop weight as a Gaussian function of distance with sd = sd_bipo
-            probability = np.exp(-((dist_mtx / sd_bipo) ** 2))
-            probability[dist_mtx > cutoff_distance] = 0
+            probability = np.exp(-((dist_mtx**2) / (2 * sd_bipo**2)))
+            probability[dist_mtx > cutoff_SD] = 0
 
             weights_mtx = probability * img_prob
-            weights[i, :] = weights_mtx.sum(axis=(1, 2))
+            weights[this_bipo, :] = weights_mtx.sum(axis=(1, 2))
 
-        # Normalize axis 0 weights to 1.0
+        # Normalize axis 0 weights to 1.0 => input to each gc = 1.0
         weights = weights / weights.sum(axis=0)
         ret.bipolar_to_gcs_weights = weights
 
@@ -1770,8 +1767,8 @@ class ConstructRetina(RetinaMath):
         selected_bipolars_df = ret.selected_bipolars_df
 
         # div 1000 for um to mm transition
-        bipo_cen_sd_mm = ret.bipolar_general_params["bipo_sub_cen_sd"] / 1000
-        bipo_sur_sd_mm = ret.bipolar_general_params["bipo_sub_sur_sd"] / 1000
+        bipo_cen_sd_mm = ret.bipolar_general_params["cone2bipo_cen_sd"] / 1000
+        bipo_sur_sd_mm = ret.bipolar_general_params["cone2bipo_sur_sd"] / 1000
         bipo_sur2cen_amp_ratio = ret.bipolar_general_params["bipo_sub_sur2cen"]
 
         # count distances
