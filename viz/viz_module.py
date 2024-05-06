@@ -2728,13 +2728,13 @@ class Viz:
         video_dt = gc_responses_to_show["video_dt"]
         tvec_new = gc_responses_to_show["tvec_new"]
 
-        intermediate_responses_to_show = self.project_data.simulate_retina[
-            "intermediate_responses_to_show"
+        cone_responses_to_show = self.project_data.simulate_retina[
+            "cone_responses_to_show"
         ]
-
-        photodiode_response = intermediate_responses_to_show["photodiode_response"]
-        if "cone_signal" in intermediate_responses_to_show.keys():
-            cone_signal = intermediate_responses_to_show["cone_signal"]
+        if "cone_signal" in cone_responses_to_show.keys():
+            cone_signal = cone_responses_to_show["cone_signal"]
+        photodiode_to_show = self.project_data.simulate_retina["photodiode_to_show"]
+        photodiode_response = photodiode_to_show["photodiode_response"]
 
         # Prepare data for manual visualization
         for_eventplot = all_spiketrains.copy()  # list of different leght arrays
@@ -2787,7 +2787,7 @@ class Viz:
         ax[1].legend()
 
         photodiode_norm = photodiode_response / np.abs(photodiode_response).max()
-        if "cone_signal" in intermediate_responses_to_show.keys():
+        if "cone_signal" in cone_responses_to_show.keys():
             cone_signal_mean = cone_signal.mean(axis=0)
             cone_signal_mean_norm = (
                 cone_signal.mean(axis=0) / np.abs(cone_signal_mean).max()
@@ -2804,67 +2804,52 @@ class Viz:
             self._figsave(figurename=savefigname)
 
     def show_cone_responses(self, time_range=None, savefigname=None):
-        """ """
-        gc_responses_to_show = self.project_data.simulate_retina["gc_responses_to_show"]
-        duration = gc_responses_to_show["duration"]
+        # Load data
+        simulate_retina = self.project_data.simulate_retina
+        gc_responses = simulate_retina["gc_responses_to_show"]
+        photodiode = simulate_retina["photodiode_to_show"]
+        cone_responses = simulate_retina["cone_responses_to_show"]
 
-        intermediate_responses_to_show = self.project_data.simulate_retina[
-            "intermediate_responses_to_show"
-        ]
-        photodiode_response = intermediate_responses_to_show["photodiode_response"]
-        photodiode_Rstar_range = intermediate_responses_to_show[
-            "photodiode_Rstar_range"
-        ]
-        print(f"{photodiode_Rstar_range=}")
-        cone_signal = intermediate_responses_to_show["cone_signal"]
-
-        # Create subplots
-        fig, ax = plt.subplots(2, 1, sharex=True)
-
+        # Prepare data
+        duration = gc_responses["duration"]
+        photodiode_response = photodiode["photodiode_response"]
+        cone_signal = cone_responses["cone_signal"]
         tvec_mean = np.linspace(0, duration / b2u.second, len(photodiode_response))
-        cone_signal_mean = cone_signal.mean(axis=0)
-        ax[0].plot(tvec_mean, photodiode_response, label="photodiode_response")
-        ax[0].set_xlim([0, duration / b2u.second])
+
+        # Calculate baselines and adjust signals
+        bl_photodiode = np.mean(
+            photodiode_response[: int(0.01 * len(photodiode_response))]
+        )
+        bl_cone = np.mean(cone_signal[: int(0.01 * len(cone_signal))])
+        adjusted_photodiode = photodiode_response - bl_photodiode
+        adjusted_cone_signal = cone_signal.mean(axis=0) - bl_cone
+
+        # Plotting
+        fig, ax = plt.subplots(2, 1, sharex=True)
+        ax[0].plot(tvec_mean, photodiode_response, label="Photodiode Response")
+        ax[1].plot(tvec_mean, adjusted_cone_signal, label="Cone Signal")
+        ax[1].plot(
+            tvec_mean,
+            adjusted_photodiode,
+            label="Photodiode Response (Adjusted)",
+            linestyle="--",
+        )
+
+        # Set labels and legends
         ax[0].set_ylabel("Luminance (cd/m2)")
-        ax[0].set_xlabel("Time (s)")
-        ax[0].set_title("Luminance at center of the stimulus")
-
-        margins = ax[0].margins()
-        ax0_right = ax[0].twinx()
-        data_range = photodiode_Rstar_range[1] - photodiode_Rstar_range[0]
-        ax0_right.set_ylim(
-            photodiode_Rstar_range[0] - margins[0] * data_range,
-            photodiode_Rstar_range[1] + margins[1] * data_range,
-        )
-        ax0_right.set_ylabel("R*/s")
-
-        ax[1].plot(tvec_mean, cone_signal_mean, label="cone_signal")
-        # Draw a vertical line at the time of max cone signal
-        peak_idx = np.argmax(np.abs(cone_signal_mean))
-        max_cone_signal_time = tvec_mean[peak_idx]
-        # Get value at peak, wheter positive or negative
-        max_cone_signal = cone_signal_mean[peak_idx]
-        ax[1].axvline(max_cone_signal_time, color="r", linestyle="--")
-        # Annotated text showing max_cone_signal_time at left top
-        ax[1].text(
-            max_cone_signal_time,
-            max_cone_signal,
-            f"Max signal at {max_cone_signal_time:.3f} s  ",
-            verticalalignment="top",
-            horizontalalignment="right",
-        )
-
-        ax[1].set_xlim([0, duration / b2u.second])
-        ax[1].set_ylabel("Amplitude (mV)")
+        ax[1].set_ylabel("Cone Response (pA)")
         ax[1].set_xlabel("Time (s)")
-        ax[1].set_title("Cone signal mean")
+        for a in ax:
+            a.legend()
 
-        if time_range is not None:
+        # Handling optional save and time range
+        if time_range:
             ax[0].set_xlim(time_range)
             ax[1].set_xlim(time_range)
+        if savefigname:
+            plt.savefig(savefigname)
 
-        if savefigname is not None:
-            self._figsave(figurename=savefigname)
+        plt.show()
 
     def show_all_gc_histogram(self, start_time=None, end_time=None, savefigname=None):
         """
