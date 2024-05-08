@@ -222,6 +222,8 @@ class Cones(ReceptiveFieldsBase):
         n_z = p["n_z"]
         tau_r = p["tau_r"]  # Goes into Brian which uses seconds for timed arrays
         filter_limit_time = p["filter_limit_time"]
+        output_scaling = p["output_scaling"]
+        input_gain = p["input_gain"]
 
         def simple_filter(t, n, tau):
             norm_coef = gamma_function(n + 1) * np.power(tau, n + 1)
@@ -235,6 +237,7 @@ class Cones(ReceptiveFieldsBase):
         Ky = simple_filter(tvec_filter, n_y, tau_y)
         Kz_prime = simple_filter(tvec_filter, n_z, tau_z)
         Kz = gamma * Ky + (1 - gamma) * Kz_prime
+        # breakpoint()
 
         # Cut filters for computational efficiency
         Ky = Ky[tvec_idx]
@@ -253,6 +256,9 @@ class Cones(ReceptiveFieldsBase):
 
         assert all(cone_input[:, 0] == pad_value), "Padding failed..."
 
+        cone_input = cone_input * input_gain
+        pad_value = pad_value * input_gain
+
         # Pad cone input start with the initial value to avoid edge effects. Use filter limit time.
         cone_input_padded = np.pad(
             cone_input,
@@ -262,23 +268,37 @@ class Cones(ReceptiveFieldsBase):
         )
 
         print("\nConvolving cone signal matrices...")
-        y_mtx = convolve(cone_input_padded, Ky_2D_kernel, mode="full", method="direct")[
+        y_mtx = convolve(cone_input_padded, Ky_2D_kernel, mode="full", method="fft")[
             :, pad_length : pad_length + len(tvec)
         ]
-        z_mtx = convolve(cone_input_padded, Kz_2D_kernel, mode="full", method="direct")[
+        z_mtx = convolve(cone_input_padded, Kz_2D_kernel, mode="full", method="fft")[
             :, pad_length : pad_length + len(tvec)
         ]
+
+        # # plot y_mtx, z_mtx
+        # fig, ax = plt.subplots(2, 1)
+        # ax[0].plot(y_mtx[0, :])
+        # ax[0].plot(z_mtx[0, :])
+        # ax[1].plot(y_mtx[0, :] / z_mtx[0, :])
+        # # ax[1].plot((alpha * y_mtx[0, :]) / (1 + (beta * z_mtx[0, :])))
+        # plt.show()
+        # breakpoint()
 
         print("\nRunning Brian code for cones...")
         y_mtx_ta = b2.TimedArray(y_mtx.T, dt=dt)
         z_mtx_ta = b2.TimedArray(z_mtx.T, dt=dt)
-
-        # r(t) is the photoreceptor response = V(t) - Vrest, where
+        # r_dark = -130
+        # In original Clark model, the response is defined as r(t) = V(t) - Vrest
+        # r(t) is the photoreceptor response (mV), V(t) is the photoreceptor membrane potential
         # Vrest is the depolarized cone membrane potential in the dark.
         # Negative r means hyperpolarization from the resting potential in millivolts.
+        # In Angueyra_2022_JNeurosci model application of CLark model, the response is defined as
+        # photoreceptor current (pA) and the resting dark current is measured in pA. The response
+        # was scaled "so it matched the dark current for the naturalistic stimulus".
+
         eqs = b2.Equations(
             """
-            dr/dt = (alpha * y_mtx_ta(t,i)) / tau_r - ((1 + beta * z_mtx_ta(t,i)) * r) / tau_r : 1
+            dr/dt = ((alpha * y_mtx_ta(t,i)) - (1 + beta * z_mtx_ta(t,i)) * r) / tau_r : 1
             """
         )
         # Assuming dr/dt is zero at t=0, a.k.a. steady illumination
@@ -289,9 +309,12 @@ class Cones(ReceptiveFieldsBase):
         M = b2.StateMonitor(G, ("r"), record=True)
         b2.run(duration)
 
-        cone_output = M.r - r_initial_value  # Get zero baseline
+        if p["unit"] == "mV":
+            cone_output = M.r - r_initial_value
+        elif p["unit"] == "pA":
+            cone_output = M.r
 
-        return cone_output
+        return cone_output * output_scaling
 
     # Detached internal legacy functions
     def _optical_aberration(self):
@@ -389,8 +412,8 @@ class Cones(ReceptiveFieldsBase):
         # Neutral Density filtering factor to reduce or increase luminance
         ff = np.power(10.0, -self.ND_filter)
         cone_input = cone_input * ff
-        minp = np.min(cone_input).astype(int)
-        maxp = np.max(cone_input).astype(int)
+        minp = np.round(np.min(cone_input)).astype(int)
+        maxp = np.round(np.max(cone_input)).astype(int)
 
         print(f"\nLuminance range: {minl * ff:.2f} to {maxl * ff:.2f} cd/m²")
         print(f"\nR* range: {minp} to {maxp} photoisomerizations/cone/s")
@@ -416,8 +439,8 @@ class Cones(ReceptiveFieldsBase):
             cone_input, params_dict, dt, duration, tvec, background_R
         )
 
-        print(f"\nCone signal min:{cone_signal.min():.1f} mV")
-        print(f"Cone signal max:{cone_signal.max():.1f} mV")
+        print(f"\nCone signal min:{cone_signal.min():.1f} pA")
+        print(f"Cone signal max:{cone_signal.max():.1f} pA")
 
         vs.cone_signal = cone_signal
 
@@ -594,8 +617,10 @@ class Bipolars(ReceptiveFieldsBase):
         RI = self.parabola(vs.svecs_sur, *popt)
         neg_scaler = 1 - RI
         cones_to_bipolars_weights = self.ret_npz["cones_to_bipolars_weights"]
+
         cone_output = vs.cone_signal  # + vs.bipolar_synaptic_noise
         bipolar_input_sum = cones_to_bipolars_weights.T @ cone_output
+
         # Sign inversion for cones' glutamate release => ON bipolars
         if gcs.response_type == "on":
             bipolar_input_sum = -bipolar_input_sum
@@ -606,7 +631,9 @@ class Bipolars(ReceptiveFieldsBase):
         gc_synaptic_input = bipolar_output_sum.copy()
         gc_synaptic_input[neg_idx] = bipolar_output_sum[neg_idx] * neg_scaler[neg_idx]
         vs.generator_potentials = gc_synaptic_input
-
+        # plt.plot(cone_output.T - 100)
+        # plt.show()
+        # breakpoint()
         return vs
 
 
@@ -2339,9 +2366,13 @@ class SimulateRetina(RetinaMath):
             "stimulus_cropped": vs.stimulus_cropped,
         }
 
-        intermediate_responses_to_show = {
+        cone_responses_to_show = {
             "cone_noise": vs.bipolar_synaptic_noise,
+        }
+
+        photodiode_to_show = {
             "photodiode_response": vs.photodiode_response,
+            "photodiode_Rstar_range": vs.photodiode_Rstar_range,
         }
 
         gc_responses_to_show = {
@@ -2357,6 +2388,7 @@ class SimulateRetina(RetinaMath):
         # Attach data requested by other classes to project_data
         self.project_data.simulate_retina["stim_to_show"] = stim_to_show
         self.project_data.simulate_retina["gc_responses_to_show"] = gc_responses_to_show
+        self.project_data.simulate_retina["photodiode_to_show"] = photodiode_to_show
 
         if gcs.temporal_model == "fixed":
             spat_temp_filter_to_show = {
@@ -2374,13 +2406,13 @@ class SimulateRetina(RetinaMath):
             )
 
         if gcs.temporal_model == "subunit":
-            intermediate_responses_to_show["cone_signal"] = vs.cone_signal
-            intermediate_responses_to_show["photodiode_Rstar_range"] = (
-                vs.photodiode_Rstar_range,
-            )
+            cone_responses_to_show["cone_signal"] = vs.cone_signal
+            cone_responses_to_show["unit"] = self.context.my_retina[
+                "cone_signal_parameters"
+            ]["unit"]
 
-        self.project_data.simulate_retina["intermediate_responses_to_show"] = (
-            intermediate_responses_to_show
+        self.project_data.simulate_retina["cone_responses_to_show"] = (
+            cone_responses_to_show
         )
 
     def initialize_cones(self):

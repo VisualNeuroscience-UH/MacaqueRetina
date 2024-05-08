@@ -2814,33 +2814,33 @@ class Viz:
         duration = gc_responses["duration"]
         photodiode_response = photodiode["photodiode_response"]
         cone_signal = cone_responses["cone_signal"]
+        unit = cone_responses["unit"]
         tvec_mean = np.linspace(0, duration / b2u.second, len(photodiode_response))
 
         # Calculate baselines and adjust signals
-        bl_photodiode = np.mean(
-            photodiode_response[: int(0.01 * len(photodiode_response))]
-        )
-        bl_cone = np.mean(cone_signal[: int(0.01 * len(cone_signal))])
+        bl_photodiode = np.mean(photodiode_response[:10])
+        bl_cone = np.mean(cone_signal[:, :10])
         adjusted_photodiode = photodiode_response - bl_photodiode
         adjusted_cone_signal = cone_signal.mean(axis=0) - bl_cone
+        adjusted_cone_signal = adjusted_cone_signal / abs(adjusted_cone_signal).max()
+        adjusted_photodiode = adjusted_photodiode / abs(adjusted_photodiode).max()
+        # breakpoint()
 
         # Plotting
-        fig, ax = plt.subplots(2, 1, sharex=True)
+        fig, ax = plt.subplots(3, 1, sharex=True)
         ax[0].plot(tvec_mean, photodiode_response, label="Photodiode Response")
-        ax[1].plot(tvec_mean, adjusted_cone_signal, label="Cone Signal")
-        ax[1].plot(
-            tvec_mean,
-            adjusted_photodiode,
-            label="Photodiode Response (Adjusted)",
-            linestyle="--",
-        )
+        ax[1].plot(tvec_mean, adjusted_cone_signal)
+        ax[1].plot(tvec_mean, adjusted_photodiode, linestyle="--")
 
         # Set labels and legends
         ax[0].set_ylabel("Luminance (cd/m2)")
-        ax[1].set_ylabel("Cone Response (pA)")
         ax[1].set_xlabel("Time (s)")
-        for a in ax:
-            a.legend()
+        ax[1].grid(True)
+
+        # Plot unadjusted cone responses to ax[2]. Cone responses are averaged across all cones.
+        ax[2].plot(tvec_mean, cone_signal.mean(axis=0), label="Cone Signal")
+        ax[2].set_ylabel(f"Cone Response ({unit})")
+        ax[2].set_xlabel("Time (s)")
 
         # Handling optional save and time range
         if time_range:
@@ -2848,8 +2848,6 @@ class Viz:
             ax[1].set_xlim(time_range)
         if savefigname:
             plt.savefig(savefigname)
-
-        plt.show()
 
     def show_all_gc_histogram(self, start_time=None, end_time=None, savefigname=None):
         """

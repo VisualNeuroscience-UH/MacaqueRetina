@@ -195,7 +195,7 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 # is not the case in the VAE model, and not very physiological.
 
 gc_type = "parasol"  # "parasol" or "midget"
-response_type = "off"  # "on" or "off"
+response_type = "on"  # "on" or "off"
 
 # These values are used for building a new retina
 my_retina = {
@@ -213,7 +213,7 @@ my_retina = {
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
     "temporal_model": "subunit",  # fixed, dynamic, subunit
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
-    "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder
+    "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies to FIT only, scales sum(unit center areas) = retina area
     "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
@@ -283,19 +283,24 @@ my_stimulus_options = {
     "pix_per_deg": 60,
     "dtype_name": "float64",  # low contrast needs "float16", for performance, use "uint8",
     "fps": 350,  # 300 for good cg integration
-    "duration_seconds": 0.1,  # actual frames = floor(duration_seconds * fps)
+    "duration_seconds": 0.01,  # actual frames = floor(duration_seconds * fps)
+    # "duration_seconds": 9,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
     "pattern": "temporal_square_pattern",  # One of the StimulusPatterns
+    # "pattern": "temporal_digitized_pattern",  # One of the StimulusPatterns
     "stimulus_form": "rectangular",
     "size_inner": 0.1,  # deg, applies to annulus only
     "size_outer": 1,  # deg, applies to annulus only
     "stimulus_position": (0.0, 0.0),  # relative to stimuls center in retina
     "stimulus_size": 1,  # 0.04,  # 2,  # deg, radius for circle, sidelen/2 for rectangle.
-    "contrast": 0.99,  # mean +- (1 + contrast) * mean
+    "contrast": 0.99,  # mean +- contrast * mean
     "mean": 128,  # Consider this as cd/m2
-    "intensity": (0, 255),  # Overrides contrast and mean, comment this line for them
-    "background": 128,  # The "frame", around stimulus in time and space
+    "intensity": (
+        0.02,
+        0.4,
+    ),  # Overrides contrast and mean unless this line is commented out
+    "background": 0.001,  # The "frame", around stimulus in time and space
     "ND_filter": 0.0,  # 0.0, log10 Neutral Density filter factor, can be negative
     "temporal_frequency": 0.1,  # 0.01,  # 4.0,  # 40,  # Hz
     "spatial_frequency": 5.0,  # cpd
@@ -391,6 +396,7 @@ cone_general_params = {
 # # Parameters from Clark_2013_PLoSComputBiol model BHL
 # # Light intensity photons/microm^2/second
 # cone_signal_parameters = {
+#     "unit": "mV",
 #     "input_gain": 3.0,  # unitless
 #     "alpha": -1.1,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
 #     "beta": 0.0484,  # unitless
@@ -401,12 +407,13 @@ cone_general_params = {
 #     "n_z": 7.0,  # unitless
 #     "tau_r": 0.039 * b2u.second,
 #     "output_scaling": 1.0,  # unitless
-#     "filter_limit_time": 2.0 * b2u.second,
+#     "filter_limit_time": 3.0 * b2u.second,
 # }
 
 # # Parameters from Clark_2013_PLoSComputBiol model B
 # # Light intensity photons/microm^2/second
 # cone_signal_parameters = {
+#     "unit": "mV",
 #     "input_gain": 3.0,  # unitless
 #     "alpha": -2.1,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
 #     "beta": 0.1407,  # unitless
@@ -417,48 +424,53 @@ cone_general_params = {
 #     "n_z": 7.0,  # unitless
 #     "tau_r": 0.050 * b2u.second,
 #     "output_scaling": 1.0,  # unitless
-#     "filter_limit_time": 1.0 * b2u.second,
+#     "filter_limit_time": 3.0 * b2u.second,
 # }
 
-# Parameters from Clark_2013_PLoSComputBiol model DN
-# Light intensity photons/microm^2/second
-cone_signal_parameters = {
-    "input_gain": 3.0,  # unitless
-    "alpha": -1.4,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
-    "beta": 0.074,  # unitless
-    "gamma": 0.22,  # unitless
-    "tau_y": 0.018 * b2u.second,
-    "n_y": 3.7,  # unitless
-    "tau_z": 0.013 * b2u.second,
-    "n_z": 7.8,  # unitless
-    "tau_r": 0.066 * b2u.second,
-    "output_scaling": 1.0,  # unitless
-    "filter_limit_time": 1.0 * b2u.second,
-}
+# # Parameters from Clark_2013_PLoSComputBiol model DN
+# # Light intensity photons/microm^2/second
+# cone_signal_parameters = {
+#     "unit": "mV",
+#     "input_gain": 3.0,  # unitless
+#     "alpha": -1.4,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
+#     "beta": 0.074,  # unitless
+#     "gamma": 0.22,  # unitless
+#     "tau_y": 0.018 * b2u.second,
+#     "n_y": 3.7,  # unitless
+#     "tau_z": 0.013 * b2u.second,
+#     "n_z": 7.8,  # unitless
+#     "tau_r": 0.066 * b2u.second,
+#     "output_scaling": 1.0,  # unitless
+#     "filter_limit_time": 3.0 * b2u.second,
+# }
+
+# TÄHÄN JÄIT: LIIAN PIIKIKÄS RESPONSSI, LIIAN YLIPÄÄSTÖSUODATETTU. YMMÄRRÄ JA KORJAA.
 
 # # Parameters from Angueyra_2022_JNeurosci, model according to Clark_2013_PLoSComputBiol
 # # Light intensity photons/microm^2/second
-# cone_signal_parameters = {
-#     "input_gain": 3.0,  # unitless
-#     "alpha": -19.4,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
-#     "beta": 0.36,  # unitless
-#     "gamma": 0.448,  # unitless
-#     "tau_y": 0.00449 * b2u.second,
-#     "n_y": 4.33,  # unitless
-#     "tau_z": 0.166 * b2u.second,
-#     "n_z": 1.0,  # unitless
-#     "tau_r": 0.00478 * b2u.second,
-#     "output_scaling": 1.0,  # unitless
-#     "filter_limit_time": 0.5 * b2u.second,
-# }
+cone_signal_parameters = {
+    "unit": "pA",
+    "input_gain": 1.0,  # unitless
+    "alpha": 19.4,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
+    "beta": 0.36,  # unitless
+    # "gamma": 0.1,  # unitless
+    "gamma": 0.448,  # unitless
+    "tau_y": 0.00449 * b2u.second,
+    "n_y": 4.33,  # unitless
+    # "tau_z": 1.66 * b2u.second,
+    "tau_z": 0.166 * b2u.second,
+    "n_z": 1.0,  # unitless
+    "tau_r": 0.00478 * b2u.second,
+    "output_scaling": 1.0,  # unitless
+    "filter_limit_time": 3.0 * b2u.second,
+}
 
 bipolar_general_params = {
-    "bipo2gc_midget": 42,  # um, from pix center to pix corner
-    "bipo2gc_parasol": 42,
-    "bipo2gc_cutoff_SD": 1,  # Multiplier for above value
-    "bipo_sub_cen_sd": 10,  # um, Turner_2018_eLife
-    "bipo_sub_sur_sd": 150,
-    "bipo_sub_sur2cen": 1.0,  # Surround / Center amplitude ratio
+    "bipo2gc_div": 6,  # Divide GC dendritic diameter to get bipolar/subunit SD
+    "bipo2gc_cutoff_SD": 2,  # Multiplier for above value
+    "cone2bipo_cen_sd": 10,  # um, Turner_2018_eLife
+    "cone2bipo_sur_sd": 150,
+    "bipo_sub_sur2cen": 0.5,  # Surround / Center amplitude ratio
 }
 
 # Recovery function from Berry_1998_JNeurosci, Uzzell_2004_JNeurophysiol
@@ -646,6 +658,10 @@ parasol_off_RI_values_fullpath = (
     literature_data_folder / "Turner_2018_eLife_Fig5C_OFF_c.npz"
 )
 
+temporal_pattern_fullpath = (
+    literature_data_folder / "Angueyra_2022_JNeurosci_Fig2B_c.npz"
+)
+
 literature_data_files = {
     "gc_density_fullpath": gc_density_fullpath,
     "dendr_diam1_fullpath": dendr_diam1_fullpath,
@@ -661,6 +677,7 @@ literature_data_files = {
     "bipolar_table_fullpath": bipolar_table_fullpath,
     "parasol_on_RI_values_fullpath": parasol_on_RI_values_fullpath,
     "parasol_off_RI_values_fullpath": parasol_off_RI_values_fullpath,
+    "temporal_pattern_fullpath": temporal_pattern_fullpath,
 }
 
 
@@ -737,10 +754,10 @@ if __name__ == "__main__":
     # # # If possible, sample only temporal hemiretina
     # from project.project_utilities_module import DataSampler
 
-    # filename = "Turner_2018_eLife_Fig5C_OFF.jpg"
+    # filename = "Angueyra_2022_JNeurosci_Fig2B.jpg"
     # filename_full = git_repo_root.joinpath(r"retina/literature_data", filename)
     # # Fig lowest and highest tick values in the image, use these as calibration points
-    # min_X, max_X, min_Y, max_Y = (-5, 5, 0, 1.0)
+    # min_X, max_X, min_Y, max_Y = (0, 8, 0, 100000)
     # ds = DataSampler(filename_full, min_X, max_X, min_Y, max_Y, logX=False, logY=False)
     # ds.collect_and_save_points()
     # ds.quality_control(restore=True)
@@ -755,7 +772,7 @@ if __name__ == "__main__":
     Build and test your retina here, one gc type at a time. 
     """
 
-    PM.construct_retina.build()  # Main method for building the retina
+    # PM.construct_retina.build()  # Main method for building the retina
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # Thus, they are called after the retina is built.
@@ -845,15 +862,15 @@ if __name__ == "__main__":
     ################################################
 
     # Based on my_run_options above
-    PM.viz.show_all_gc_responses(savefigname=None)
+    # PM.viz.show_all_gc_responses(savefigname=None)
     # PM.viz.show_all_gc_histogram(savefigname=None)
     # PM.viz.show_cone_responses(time_range=[0.4, 1.1], savefigname=None)
-    # PM.viz.show_cone_responses(time_range=None, savefigname=None)
+    PM.viz.show_cone_responses(time_range=None, savefigname=None)
 
     # PM.viz.show_stimulus_with_gcs(
-    #     example_gc=my_run_options["unit_index"],  # [int,], my_run_options["unit_index"]
-    #     frame_number=301,  # depends on fps, and video and baseline lengths
-    #     show_rf_id=False,
+    #     example_gc=0,  # [int,], my_run_options["unit_index"]
+    #     frame_number=180,  # depends on fps, and video and baseline lengths
+    #     show_rf_id=True,
     #     savefigname=None,
     # )
 
