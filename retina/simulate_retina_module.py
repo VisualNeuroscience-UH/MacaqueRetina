@@ -415,7 +415,7 @@ class Cones(ReceptiveFieldsBase):
         minp = np.round(np.min(cone_input)).astype(int)
         maxp = np.round(np.max(cone_input)).astype(int)
 
-        print(f"\nLuminance range: {minl * ff:.2f} to {maxl * ff:.2f} cd/m²")
+        print(f"\nLuminance range: {minl * ff:.3f} to {maxl * ff:.3f} cd/m²")
         print(f"\nR* range: {minp} to {maxp} photoisomerizations/cone/s")
 
         # Update visual stimulus photodiode response
@@ -439,8 +439,8 @@ class Cones(ReceptiveFieldsBase):
             cone_input, params_dict, dt, duration, tvec, background_R
         )
 
-        print(f"\nCone signal min:{cone_signal.min():.1f} pA")
-        print(f"Cone signal max:{cone_signal.max():.1f} pA")
+        print(f"\nCone signal min:{cone_signal.min():.1f} {params_dict['unit']}")
+        print(f"Cone signal max:{cone_signal.max():.1f} {params_dict['unit']}")
 
         vs.cone_signal = cone_signal
 
