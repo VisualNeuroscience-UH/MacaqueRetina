@@ -406,14 +406,18 @@ class Cones(ReceptiveFieldsBase):
         cone_input = np.squeeze(cone_input_cropped).astype(np.float64)
         minl = np.min(cone_input)
         maxl = np.max(cone_input)
-
-        cone_input = self.get_photoisomerizations_from_luminance(cone_input)
+        # breakpoint()
+        params_dict = self.my_retina["cone_signal_parameters"]
+        lambda_nm = params_dict["lambda_nm"]
+        cone_input_R = self.get_photoisomerizations_from_luminance(
+            cone_input, lambda_nm=lambda_nm
+        )
 
         # Neutral Density filtering factor to reduce or increase luminance
         ff = np.power(10.0, -self.ND_filter)
-        cone_input = cone_input * ff
-        minp = np.round(np.min(cone_input)).astype(int)
-        maxp = np.round(np.max(cone_input)).astype(int)
+        cone_input_R = cone_input_R * ff
+        minp = np.round(np.min(cone_input_R)).astype(int)
+        maxp = np.round(np.max(cone_input_R)).astype(int)
 
         print(f"\nLuminance range: {minl * ff:.3f} to {maxl * ff:.3f} cd/m²")
         print(f"\nR* range: {minp} to {maxp} photoisomerizations/cone/s")
@@ -424,19 +428,19 @@ class Cones(ReceptiveFieldsBase):
 
         # Update mean value
         background = vs.options_from_file["background"]
-        background_R = self.get_photoisomerizations_from_luminance(background)
+        background_R = self.get_photoisomerizations_from_luminance(
+            background, lambda_nm=lambda_nm
+        )
         background_R = background_R * ff
 
         print(f"\nbackground_R* {background_R:.0f} photoisomerizations/cone/s")
-
-        params_dict = self.my_retina["cone_signal_parameters"]
 
         tvec = vs.tvec
         dt = vs.video_dt
         duration = vs.duration
 
         cone_signal = self._create_cone_signal_clark(
-            cone_input, params_dict, dt, duration, tvec, background_R
+            cone_input_R, params_dict, dt, duration, tvec, background_R
         )
 
         print(f"\nCone signal min:{cone_signal.min():.1f} {params_dict['unit']}")
@@ -507,7 +511,13 @@ class Cones(ReceptiveFieldsBase):
         return vs
 
     def get_luminance_from_photoisomerizations(
-        self, I_cone, A_pupil=9.3, A_retina=670, a_c_end_on=3.21e-5, tau_media=1.0
+        self,
+        I_cone,
+        A_pupil=9.3,
+        A_retina=670,
+        a_c_end_on=3.21e-5,
+        tau_media=1.0,
+        lambda_nm=555,
     ):
         """
         Calculate luminance from photoisomerizations.
@@ -534,13 +544,19 @@ class Cones(ReceptiveFieldsBase):
 
         # Get the luminance from the photon flux density
         luminance = self._cornea_photon_flux_density_to_luminance(
-            F_cornea, lambda_nm=555
+            F_cornea, lambda_nm=lambda_nm
         )
 
         return luminance
 
     def get_photoisomerizations_from_luminance(
-        self, L, A_pupil=9.3, A_retina=670, a_c_end_on=3.21e-5, tau_media=1.0
+        self,
+        L,
+        A_pupil=9.3,
+        A_retina=670,
+        a_c_end_on=3.21e-5,
+        tau_media=1.0,
+        lambda_nm=555,
     ):
         """
         Calculate the rate of photoisomerizations per cone per second from luminance.
@@ -564,7 +580,7 @@ class Cones(ReceptiveFieldsBase):
             The rate of photoisomerizations per cone per second (R* cone^-1 s^-1).
         """
         # Convert luminance to photon flux density
-        F_cornea = self._luminance_to_cornea_photon_flux_density(L, lambda_nm=555)
+        F_cornea = self._luminance_to_cornea_photon_flux_density(L, lambda_nm=lambda_nm)
 
         # Calculate the photon flux density at the retina (F_retina)
         F_retina = F_cornea * (A_pupil / A_retina) * tau_media

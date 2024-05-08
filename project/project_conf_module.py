@@ -283,9 +283,9 @@ my_stimulus_options = {
     "pix_per_deg": 60,
     "dtype_name": "float64",  # low contrast needs "float16", for performance, use "uint8",
     "fps": 350,  # 300 for good cg integration
-    "duration_seconds": 0.01,  # actual frames = floor(duration_seconds * fps)
+    "duration_seconds": 0.5,  # actual frames = floor(duration_seconds * fps)
     # "duration_seconds": 9,  # actual frames = floor(duration_seconds * fps)
-    "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
+    "baseline_start_seconds": 1.0,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
     "pattern": "temporal_square_pattern",  # One of the StimulusPatterns
     # "pattern": "temporal_digitized_pattern",  # One of the StimulusPatterns
@@ -296,11 +296,9 @@ my_stimulus_options = {
     "stimulus_size": 1,  # 0.04,  # 2,  # deg, radius for circle, sidelen/2 for rectangle.
     "contrast": 0.99,  # mean +- contrast * mean
     "mean": 128,  # Consider this as cd/m2
-    "intensity": (
-        0.02,
-        0.4,
-    ),  # Overrides contrast and mean unless this line is commented out
-    "background": 0.001,  # The "frame", around stimulus in time and space
+    # intensity (min, max) overrides contrast and mean unless this line is commented out
+    "intensity": (20, 40),
+    "background": 20,  # The "frame", around stimulus in time and space, incl baseline times
     "ND_filter": 0.0,  # 0.0, log10 Neutral Density filter factor, can be negative
     "temporal_frequency": 0.1,  # 0.01,  # 4.0,  # 40,  # Hz
     "spatial_frequency": 5.0,  # cpd
@@ -397,73 +395,74 @@ cone_general_params = {
 # # Light intensity photons/microm^2/second
 # cone_signal_parameters = {
 #     "unit": "mV",
-#     "input_gain": 3.0,  # unitless
+#     "input_gain": 1.0,  # unitless
 #     "alpha": -1.1,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
-#     "beta": 0.0484,  # unitless
+#     "beta": 0.0484,  # unitless 0.044 * 1.1
 #     "gamma": 0.93,  # unitless
-#     "tau_y": 0.038 * b2u.second,
+#     "tau_y": 38 * b2u.ms,
 #     "n_y": 1.5,  # unitless
-#     "tau_z": 0.020 * b2u.second,
+#     "tau_z": 20 * b2u.ms,
 #     "n_z": 7.0,  # unitless
-#     "tau_r": 0.039 * b2u.second,
+#     "tau_r": 39 * b2u.ms,
 #     "output_scaling": 1.0,  # unitless
 #     "filter_limit_time": 3.0 * b2u.second,
 # }
 
 # # Parameters from Clark_2013_PLoSComputBiol model B
+# Replicates Figs 5E
 # # Light intensity photons/microm^2/second
 # cone_signal_parameters = {
 #     "unit": "mV",
-#     "input_gain": 3.0,  # unitless
+#     "input_gain": 1.0,  # unitless
 #     "alpha": -2.1,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
-#     "beta": 0.1407,  # unitless
+#     "beta": 0.1407,  # unitless 0.067 * 2.1
 #     "gamma": 0.57,  # unitless
-#     "tau_y": 0.020 * b2u.second,
+#     "tau_y": 20 * b2u.ms,
 #     "n_y": 3.0,  # unitless
-#     "tau_z": 0.020 * b2u.second,
+#     "tau_z": 20 * b2u.ms,
 #     "n_z": 7.0,  # unitless
-#     "tau_r": 0.050 * b2u.second,
+#     "tau_r": 50 * b2u.ms,
 #     "output_scaling": 1.0,  # unitless
 #     "filter_limit_time": 3.0 * b2u.second,
 # }
 
-# # Parameters from Clark_2013_PLoSComputBiol model DN
-# # Light intensity photons/microm^2/second
-# cone_signal_parameters = {
-#     "unit": "mV",
-#     "input_gain": 3.0,  # unitless
-#     "alpha": -1.4,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
-#     "beta": 0.074,  # unitless
-#     "gamma": 0.22,  # unitless
-#     "tau_y": 0.018 * b2u.second,
-#     "n_y": 3.7,  # unitless
-#     "tau_z": 0.013 * b2u.second,
-#     "n_z": 7.8,  # unitless
-#     "tau_r": 0.066 * b2u.second,
-#     "output_scaling": 1.0,  # unitless
-#     "filter_limit_time": 3.0 * b2u.second,
-# }
-
-# TÄHÄN JÄIT: LIIAN PIIKIKÄS RESPONSSI, LIIAN YLIPÄÄSTÖSUODATETTU. YMMÄRRÄ JA KORJAA.
-
-# # Parameters from Angueyra_2022_JNeurosci, model according to Clark_2013_PLoSComputBiol
-# # Light intensity photons/microm^2/second
+# Parameters from Clark_2013_PLoSComputBiol model DN
+# Replicates Figs 5C
+# Light intensity photons/microm^2/second
 cone_signal_parameters = {
-    "unit": "pA",
+    "unit": "mV",
+    "lambda_nm": 650,  # nm 555 monkey Clark models: DN 650
     "input_gain": 1.0,  # unitless
-    "alpha": 19.4,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
-    "beta": 0.36,  # unitless
-    # "gamma": 0.1,  # unitless
-    "gamma": 0.448,  # unitless
-    "tau_y": 0.00449 * b2u.second,
-    "n_y": 4.33,  # unitless
-    # "tau_z": 1.66 * b2u.second,
-    "tau_z": 0.166 * b2u.second,
-    "n_z": 1.0,  # unitless
-    "tau_r": 0.00478 * b2u.second,
+    "alpha": -1.4,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
+    "beta": 0.074 * 1.4,  # unitless 0.074 * 1.4
+    "gamma": 0.22,  # unitless
+    "tau_y": 18 * b2u.ms,
+    "n_y": 3.7,  # unitless
+    "tau_z": 13 * b2u.ms,
+    "n_z": 7.8,  # unitless
+    "tau_r": 66 * b2u.ms,
     "output_scaling": 1.0,  # unitless
     "filter_limit_time": 3.0 * b2u.second,
 }
+
+# TÄHÄN JÄIT: LIIAN PIIKIKÄS RESPONSSI, LIIAN YLIPÄÄSTÖSUODATETTU. YMMÄRRÄ JA KORJAA.
+
+# # # Parameters from Angueyra_2022_JNeurosci, model according to Clark_2013_PLoSComputBiol
+# # # Light intensity photons/microm^2/second
+# cone_signal_parameters = {
+#     "unit": "pA",
+#     "input_gain": 1.0,  # unitless
+#     "alpha": 19.4,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
+#     "beta": 0.36,  # unitless
+#     "gamma": 0.448,  # unitless
+#     "tau_y": 4.49 * b2u.ms,
+#     "n_y": 4.33,  # unitless
+#     "tau_z": 166 * b2u.ms,
+#     "n_z": 1.0,  # unitless
+#     "tau_r": 4.78 * b2u.ms,
+#     "output_scaling": 1.0,  # unitless
+#     "filter_limit_time": 3.0 * b2u.second,
+# }
 
 bipolar_general_params = {
     "bipo2gc_div": 6,  # Divide GC dendritic diameter to get bipolar/subunit SD
@@ -836,7 +835,7 @@ if __name__ == "__main__":
     ########################
 
     # Based on my_stimulus_options above
-    # PM.stimulate.make_stimulus_video()
+    PM.stimulate.make_stimulus_video()
 
     ####################################
     ### Run multiple trials or units ###
