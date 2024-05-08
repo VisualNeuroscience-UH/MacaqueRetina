@@ -783,13 +783,7 @@ class VisualStimulus(VideoBaseClass):
         )  # Direct call to class.method() requires the self as argument
 
         # Now only the stimulus is scaled. The baseline and bg comes from options
-        # breakpoint()
-        print(self.frames.min())
-        print(self.frames.max())
         self._scale_intensity()
-        print(self.frames.min())
-        print(self.frames.max())
-        # breakpoint()
 
         # For natural images, set zero-masked pixels to background value
         if self.options["pattern"] == "natural_images":
@@ -816,9 +810,7 @@ class VisualStimulus(VideoBaseClass):
         self.frames = np.concatenate(
             (self.frames_baseline_start, self.frames, self.frames_baseline_end), axis=0
         )
-        print(self.frames.min())
-        print(self.frames.max())
-        breakpoint()
+
         self.frames = self.frames.astype(self.options["dtype"])
         self.video = self.frames
         self.fps = self.options["fps"]
