@@ -130,13 +130,9 @@ class VideoBaseClass(object):
         # Final offset
         frames = frames + Lmin
 
-        # Round result to avoid unnecessary errors
-        frames = np.round(frames, 1)
-
-        # # Check that the values are between 0 and 255 to get correct conversion to uint8
-        # assert np.all(0 <= frames.flatten()) and np.all(
-        #     frames.flatten() <= 255
-        # ), f"Cannot safely convert range {np.min(frames.flatten())}- {np.max(frames.flatten())}to uint8. Check intensity/dynamic range."
+        # Here was rounding "to avoid unnecessary errors" but the
+        # frames = np.round(frames, 1), was problematic with low intensity stimuli.
+        # In case of problems, consider rounding to 3 decimal places.
 
         # Return
         self.frames = frames.astype(self.options["dtype"])
@@ -787,7 +783,13 @@ class VisualStimulus(VideoBaseClass):
         )  # Direct call to class.method() requires the self as argument
 
         # Now only the stimulus is scaled. The baseline and bg comes from options
+        # breakpoint()
+        print(self.frames.min())
+        print(self.frames.max())
         self._scale_intensity()
+        print(self.frames.min())
+        print(self.frames.max())
+        # breakpoint()
 
         # For natural images, set zero-masked pixels to background value
         if self.options["pattern"] == "natural_images":
@@ -814,6 +816,9 @@ class VisualStimulus(VideoBaseClass):
         self.frames = np.concatenate(
             (self.frames_baseline_start, self.frames, self.frames_baseline_end), axis=0
         )
+        print(self.frames.min())
+        print(self.frames.max())
+        breakpoint()
         self.frames = self.frames.astype(self.options["dtype"])
         self.video = self.frames
         self.fps = self.options["fps"]
