@@ -124,7 +124,7 @@ class Cones(ReceptiveFieldsBase):
 
         # Convert photon flux density F to luminance L in cd/m²
         F_m2 = F * 1e6  # Convert photon flux density from mm² to m²
-        L = F_m2 * E_photon * kappa
+        L = F_m2 * E_photon * kappa / np.pi
 
         return L
 
@@ -148,13 +148,16 @@ class Cones(ReceptiveFieldsBase):
         h = 6.626e-34  # Planck's constant in J·s
         c = 3.00e8  # Speed of light in m/s
         lambda_m = lambda_nm * 1e-9  # Convert wavelength from nm to m
-        kappa = 683  # Luminous efficacy of monochromatic radiation in lm/W at 555 nm
+        kappa = 683  # Luminous efficacy of monochromatic radiation in lm/W
+        # at 555 nm (peak human photopic sensitivity)
+        # Luminous efficacy of typical sunlight is usually estimated to be around 93 lumens per watt
 
         # Energy of a photon at wavelength lambda in joules
-        E_photon = (h * c) / lambda_m
+        E_photon = (h * c) / lambda_m  # ok, see table1 Shapley_1984_ProgRetRes_chapter9
 
-        # Convert luminance L to photon flux density F in photons/mm²/s
-        F_m2 = L / (E_photon * kappa)
+        # Convert luminance L to photon flux density F in photons/mm²/s. The np.pi * L is the luminous flux in lumens
+        # approximated from the luminance L in cd/m². The kappa is the luminous efficacy of monochromatic radiation
+        F_m2 = np.pi * L / (E_photon * kappa)
         F = F_m2 / 1e6  # Convert from m² to mm²
 
         return F
@@ -277,10 +280,13 @@ class Cones(ReceptiveFieldsBase):
 
         # # plot y_mtx, z_mtx
         # fig, ax = plt.subplots(2, 1)
-        # ax[0].plot(y_mtx[0, :])
-        # ax[0].plot(z_mtx[0, :])
-        # ax[1].plot(y_mtx[0, :] / z_mtx[0, :])
-        # # ax[1].plot((alpha * y_mtx[0, :]) / (1 + (beta * z_mtx[0, :])))
+        # idx0 = range(100, 110)
+        # idx1 = range(500, 510)
+        # idx1 = range(0, len(tvec))
+        # ax[0].plot(y_mtx[0, idx1])
+        # ax[0].plot(z_mtx[0, idx1])
+        # ax[1].plot(alpha * y_mtx[0, idx1] / (1 + beta * z_mtx[0, idx1]))
+        # # ax[1].plot(y_mtx[0, :] / z_mtx[0, :])
         # plt.show()
         # breakpoint()
 
@@ -409,8 +415,9 @@ class Cones(ReceptiveFieldsBase):
         # breakpoint()
         params_dict = self.my_retina["cone_signal_parameters"]
         lambda_nm = params_dict["lambda_nm"]
+        A_pupil = params_dict["A_pupil"]
         cone_input_R = self.get_photoisomerizations_from_luminance(
-            cone_input, lambda_nm=lambda_nm
+            cone_input, lambda_nm=lambda_nm, A_pupil=A_pupil
         )
 
         # Neutral Density filtering factor to reduce or increase luminance
@@ -429,7 +436,7 @@ class Cones(ReceptiveFieldsBase):
         # Update mean value
         background = vs.options_from_file["background"]
         background_R = self.get_photoisomerizations_from_luminance(
-            background, lambda_nm=lambda_nm
+            background, lambda_nm=lambda_nm, A_pupil=A_pupil
         )
         background_R = background_R * ff
 
@@ -554,9 +561,9 @@ class Cones(ReceptiveFieldsBase):
         L,
         A_pupil=9.3,
         A_retina=670,
-        a_c_end_on=3.21e-5,
-        tau_media=1.0,
-        lambda_nm=555,
+        a_c_end_on=0.6e-6,
+        tau_media=0.87,
+        lambda_nm=560,  # 555
     ):
         """
         Calculate the rate of photoisomerizations per cone per second from luminance.
@@ -570,7 +577,7 @@ class Cones(ReceptiveFieldsBase):
         A_retina : float
             The area of the retina in mm^2.
         a_c_end_on : float
-            The end-on collecting area for the cones in mm^2.
+            The end-on collecting area for the cones in mm^2, 0.6 um^2 Schneeweis_1999_JNeurosci
         tau_media : float
             The transmittance of the ocular media at wavelength λ.
 
@@ -585,9 +592,25 @@ class Cones(ReceptiveFieldsBase):
         # Calculate the photon flux density at the retina (F_retina)
         F_retina = F_cornea * (A_pupil / A_retina) * tau_media
 
+        # Why absolute luminance values are not interesting. Other sources of light absorption include
+        # Optical point spread by diffraction
+        # Scatter: makes a long tail to point spread function
+        # Transmission by media:
+        # -varying macular pigment absorption (60%),
+        # -wavelength dependent filtering 50% of 450 nm, 80% of 650 nm.
+        # In optimal cases these result in Strehl ratio of about 0.2, but can go down to
+        # to 0.02 with old eyes having lot of scatter.
+        # ref: Westheimer_2006_ProgRetEyeRes
+        #
         # Calculate the rate of photoisomerizations per cone per second (I_cone)
+        # TÄHÄN JÄIT: KÄYTÄ TÄTÄ KUNNES LÖYDÄT PAREMMAN. MODAA FUNKTIOT VASTAAVASTI
+        # One troland should provide (Schnapf_1990_JPhysiol)
+        # I = 2.649 x 10^-2 photons um^-2 s^-1 nm^-1 * lambda t(lambda)/ V(lambda)
+        # For lambda = 560 nm light, t(lambda) = 0.87, V(lambda) = 0.995:
+        # 2.649e-2 * 560 * (0.87/0.995) = 12.9 R/cone/s
         I_cone = F_retina * a_c_end_on
-
+        # see also table1 Shapley_1984_ProgRetRes_chapter9: 1.2e6 quanta/deg^2/s
+        # breakpoint()
         return I_cone
 
 
