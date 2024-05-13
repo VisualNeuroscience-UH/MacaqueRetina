@@ -521,49 +521,51 @@ class Cones(ReceptiveFieldsBase):
         self,
         I_cone,
         A_pupil=9.3,
-        A_retina=670,
-        a_c_end_on=3.21e-5,
-        tau_media=1.0,
-        lambda_nm=555,
+        a_c_end_on=0.6,
+        tau_media=0.87,
+        lambda_nm=560,
+        V=0.995,
     ):
         """
-        Calculate luminance from photoisomerizations.
+        Calculate the luminance in cd/m² from the rate of photoisomerizations per cone per second.
 
         Parameters
         ----------
         I_cone : float
-            The number of photoisomerizations per second per cone.
+            The rate of photoisomerizations per cone per second (R* cone^-1 s^-1).
         A_pupil : float
-            The area of the pupil in mm^2.
-            Mean tonic pupil radiusis 3.44/2 mm in macaques, from Selezneva_2021_FrontPsychol
-        A_retina : float
-            The area of the retina in mm^2.
+            The area of the pupil in mm².
         a_c_end_on : float
-            Upper limit for the effective cross-sectional area of the total
-            pigment content of a photoreceptor for axially propagating light.
-            Default value is 3.21e-5 mm^2, derived from cone density at 5 deg ecc.
+            The end-on collecting area for the cones in mm², equating to 0.6 um² according to Schneeweis_1999_JNeurosci.
         tau_media : float
-            The transmittance of the media. Default value is 1.0.
+            The transmittance of the ocular media at wavelength λ.
+        lambda_nm : int, optional
+            Wavelength in nm, default is 560 nm.
+        V : float
+            The luminocity function value at given wavelength, default is 0.995 at 560 nm.
+
+        Returns
+        -------
+        float
+            Luminance in cd/m².
+
+        Notes
+        -----
+        The luminance (L) is derived by rearranging the photoisomerization rate formula from the function `get_photoisomerizations_from_luminance`.
+        This calculation involves reversing the photoisomerization formula to isolate luminance based on known properties of the visual system and given rates of photoisomerizations.
         """
-
-        # Calculate photon flux at cornea
-        F_cornea = I_cone / (a_c_end_on * (A_pupil / A_retina) * tau_media)
-
-        # Get the luminance from the photon flux density
-        luminance = self._cornea_photon_flux_density_to_luminance(
-            F_cornea, lambda_nm=lambda_nm
-        )
-
-        return luminance
+        I_retina = 2.649e-2 * lambda_nm * tau_media / V
+        L = I_cone / (A_pupil * I_retina * a_c_end_on)
+        return L
 
     def get_photoisomerizations_from_luminance(
         self,
         L,
         A_pupil=9.3,
-        A_retina=670,
-        a_c_end_on=0.6e-6,
+        a_c_end_on=0.6,
         tau_media=0.87,
-        lambda_nm=560,  # 555
+        lambda_nm=560,
+        V=0.995,
     ):
         """
         Calculate the rate of photoisomerizations per cone per second from luminance.
@@ -573,44 +575,45 @@ class Cones(ReceptiveFieldsBase):
         L : float
             Luminance in cd/m².
         A_pupil : float
-            The area of the pupil in mm^2.
-        A_retina : float
-            The area of the retina in mm^2.
+            The area of the pupil in mm².
         a_c_end_on : float
-            The end-on collecting area for the cones in mm^2, 0.6 um^2 Schneeweis_1999_JNeurosci
+            The end-on collecting area for the cones in mm², equating to 0.6 um² according to Schneeweis_1999_JNeurosci.
         tau_media : float
             The transmittance of the ocular media at wavelength λ.
+        lambda_nm : int, optional
+            Wavelength in nm, default is 560 nm.
+        V : float
+            The luminocity function value at given wavelength, default is 0.995 at 560 nm.
 
         Returns
         -------
-        I_cone : float
+        float
             The rate of photoisomerizations per cone per second (R* cone^-1 s^-1).
+
+        Notes
+        -----
+        The retinal illuminance (L_td) in Trolands is calculated by multiplying the luminance (L) with the pupil area (A_pupil).
+        Factors that affect the absorption of light by the retina include:
+        - Optical point spread by diffraction
+        - Scatter, which extends the point spread function
+        - Transmission by ocular media, influenced by varying macular pigment absorption (60%) and wavelength-dependent filtering (50% at 450 nm and 80% at 650 nm).
+
+        These factors combined can result in a Strehl ratio as low as 0.02 in aged eyes with significant scatter, though in optimal cases it can be about 0.2 (Westheimer_2006_ProgRetEyeRes).
+
+        Example calculation for the rate of photoisomerizations (I_cone):
+        - According to Schnapf_1990_JPhysiol, 1 troland contributes approximately 2.649 x 10^-2 photons µm^-2 s^-1 nm^-1, adjusted for wavelength and transmittance.
+        - For λ = 560 nm with transmittance τ(λ) = 0.87 and V(λ) = 0.995: 2.649e-2 * 560 * (0.87/0.995) results in about 12.9 R/um^2/s.
+
+        Additionally, Shapley_1984_ProgRetRes_chapter9 estimates about 1.2e6 quanta/deg²/s for a similar calculation.
         """
-        # Convert luminance to photon flux density
-        F_cornea = self._luminance_to_cornea_photon_flux_density(L, lambda_nm=lambda_nm)
+        # Calculate the retinal illuminance (L_td) in Trolands
+        L_td = L * A_pupil
 
-        # Calculate the photon flux density at the retina (F_retina)
-        F_retina = F_cornea * (A_pupil / A_retina) * tau_media
+        # Calculate the rate of photoisomerizations per um^2 per second at 1 td
+        I_retina = 2.649e-2 * lambda_nm * tau_media / 0.995
+        # Calcualte the rate of photoisomerizations per cone per second
+        I_cone = L_td * I_retina * a_c_end_on
 
-        # Why absolute luminance values are not interesting. Other sources of light absorption include
-        # Optical point spread by diffraction
-        # Scatter: makes a long tail to point spread function
-        # Transmission by media:
-        # -varying macular pigment absorption (60%),
-        # -wavelength dependent filtering 50% of 450 nm, 80% of 650 nm.
-        # In optimal cases these result in Strehl ratio of about 0.2, but can go down to
-        # to 0.02 with old eyes having lot of scatter.
-        # ref: Westheimer_2006_ProgRetEyeRes
-        #
-        # Calculate the rate of photoisomerizations per cone per second (I_cone)
-        # TÄHÄN JÄIT: KÄYTÄ TÄTÄ KUNNES LÖYDÄT PAREMMAN. MODAA FUNKTIOT VASTAAVASTI
-        # One troland should provide (Schnapf_1990_JPhysiol)
-        # I = 2.649 x 10^-2 photons um^-2 s^-1 nm^-1 * lambda t(lambda)/ V(lambda)
-        # For lambda = 560 nm light, t(lambda) = 0.87, V(lambda) = 0.995:
-        # 2.649e-2 * 560 * (0.87/0.995) = 12.9 R/cone/s
-        I_cone = F_retina * a_c_end_on
-        # see also table1 Shapley_1984_ProgRetRes_chapter9: 1.2e6 quanta/deg^2/s
-        # breakpoint()
         return I_cone
 
 
