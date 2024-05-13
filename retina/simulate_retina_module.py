@@ -536,7 +536,7 @@ class Cones(ReceptiveFieldsBase):
         A_pupil : float
             The area of the pupil in mm².
         a_c_end_on : float
-            The end-on collecting area for the cones in mm², equating to 0.6 um² according to Schneeweis_1999_JNeurosci.
+            The end-on collecting area for the cones in um², 0.6 according to Schneeweis_1999_JNeurosci.
         tau_media : float
             The transmittance of the ocular media at wavelength λ.
         lambda_nm : int, optional
@@ -577,7 +577,7 @@ class Cones(ReceptiveFieldsBase):
         A_pupil : float
             The area of the pupil in mm².
         a_c_end_on : float
-            The end-on collecting area for the cones in mm², equating to 0.6 um² according to Schneeweis_1999_JNeurosci.
+            The end-on collecting area for the cones in um², 0.6 according to Schneeweis_1999_JNeurosci.
         tau_media : float
             The transmittance of the ocular media at wavelength λ.
         lambda_nm : int, optional

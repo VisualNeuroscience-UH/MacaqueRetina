@@ -75,6 +75,8 @@ The firing rate gain (spikes/(second * unit contrast)), parameter "A" in the Vic
 The max amplitude the the center spatial DoG model in Victor_1987_JPhysiol is 1.0. 
 
 The cone photoreceptor sampling is approximated as achromatic (single) compressive cone response(Baylor_1987_JPhysiol).
+
+Most of the functions fitted have no theoretical significance but provide empirical expressions for interpolation.
 """
 
 """
@@ -431,10 +433,11 @@ cone_general_params = {
 # Light intensity photons/microm^2/second
 cone_signal_parameters = {
     "unit": "mV",
-    "lambda_nm": 650,  # nm 555 monkey Clark models: DN 650
+    "A_pupil": 9.0,  # mm^2
+    "lambda_nm": 560,  # nm 555 monkey Clark models: DN 650
     "input_gain": 1.0,  # unitless
     "alpha": -1.4,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
-    "beta": 0.074 * 1.4,  # unitless 0.074 * 1.4
+    "beta": 0.1036,  # unitless 0.074 * 1.4
     "gamma": 0.22,  # unitless
     "tau_y": 18 * b2u.ms,
     "n_y": 3.7,  # unitless
@@ -445,7 +448,7 @@ cone_signal_parameters = {
     "filter_limit_time": 3.0 * b2u.second,
 }
 
-# TÄHÄN JÄIT: LIIAN PIIKIKÄS RESPONSSI, LIIAN YLIPÄÄSTÖSUODATETTU. YMMÄRRÄ JA KORJAA.
+# TÄHÄN JÄIT: LIIAN PIIKIKÄS RESPONSSI, TARKISTA LUMINANSSI - rSTAR CONVERSIO
 
 # # # Parameters from Angueyra_2022_JNeurosci, model according to Clark_2013_PLoSComputBiol
 # # # Light intensity photons/microm^2/second
