@@ -279,6 +279,22 @@ class RetinaMath:
 
         return (radius, phi)
 
+    def deg2_to_steradian(self, deg2):
+        """
+        Convert square degrees to steradians.
+
+        Parameters
+        ----------
+        deg2 : float
+            Area in square degrees.
+
+        Returns
+        -------
+        float
+            Area in steradians.
+        """
+        return deg2 * (np.pi / 180) ** 2
+
     # General function fitting methods
     def hyperbolic_function(self, x, y_max, x_half):
         # Define the generalized hyperbolic function
