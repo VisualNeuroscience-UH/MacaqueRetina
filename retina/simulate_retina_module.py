@@ -214,6 +214,11 @@ class Cones(ReceptiveFieldsBase):
         -------
         ndarray
             The cone signal of shape (n_cones, n_timepoints).
+
+        Notes
+        -----
+        The Clark 2013 PLoSComputBiol model output is in mV, referring to photoreceptor membrane potential.
+        The Angueyra 2022 JNeurosci model output is in pA, referring to photoreceptor outer segment current.
         """
 
         alpha = p["alpha"]
@@ -282,7 +287,6 @@ class Cones(ReceptiveFieldsBase):
         print("\nRunning Brian code for cones...")
         y_mtx_ta = b2.TimedArray(y_mtx.T, dt=dt)
         z_mtx_ta = b2.TimedArray(z_mtx.T, dt=dt)
-        # r_dark = -130
         # In original Clark model, the response is defined as r(t) = V(t) - Vrest
         # r(t) is the photoreceptor response (mV), V(t) is the photoreceptor membrane potential
         # Vrest is the depolarized cone membrane potential in the dark.
@@ -316,10 +320,12 @@ class Cones(ReceptiveFieldsBase):
             cone_output = M.r - r_initial_value
             cone_output = cone_output / b2u.mV
         elif p["unit"] == "pA":
-            cone_output = M.r
-            cone_output = cone_output / b2u.pA
+            # Dark current in pA, accoring to Angueyra_2022_JNeurosci
+            r_dark = -136 * b2u.pA
+            # Synaptic vesicle release assumed linearly coupled to negative current.
+            # It reduces with light and increases with dark.
+            cone_output = (r_dark + M.r) / r_dark
 
-        # breakpoint()
         return cone_output * output_scaling
 
     # Detached internal legacy functions
@@ -682,7 +688,8 @@ class Bipolars(ReceptiveFieldsBase):
         gc_synaptic_input = bipolar_output_sum.copy()
         gc_synaptic_input[neg_idx] = bipolar_output_sum[neg_idx] * neg_scaler[neg_idx]
         vs.generator_potentials = gc_synaptic_input
-        # plt.plot(cone_output.T - 100)
+        # plt.plot(cone_output.T)
+        # plt.plot(gc_synaptic_input.T)
         # plt.show()
         # breakpoint()
         return vs
@@ -2423,7 +2430,6 @@ class SimulateRetina(RetinaMath):
 
         photodiode_to_show = {
             "photodiode_response": vs.photodiode_response,
-            "photodiode_Rstar_range": vs.photodiode_Rstar_range,
         }
 
         gc_responses_to_show = {
@@ -2461,6 +2467,9 @@ class SimulateRetina(RetinaMath):
             cone_responses_to_show["unit"] = self.context.my_retina[
                 "cone_signal_parameters"
             ]["unit"]
+            cone_responses_to_show["photodiode_Rstar_range"] = (
+                vs.photodiode_Rstar_range,
+            )
 
         self.project_data.simulate_retina["cone_responses_to_show"] = (
             cone_responses_to_show
