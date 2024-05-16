@@ -219,26 +219,31 @@ class Cones(ReceptiveFieldsBase):
         alpha = p["alpha"]
         beta = p["beta"]
         gamma = p["gamma"]
-        tau_y = p["tau_y"] / b2u.second
+        tau_y = p["tau_y"]
         n_y = p["n_y"]
-        tau_z = p["tau_z"] / b2u.second
+        tau_z = p["tau_z"]
         n_z = p["n_z"]
         tau_r = p["tau_r"]  # Goes into Brian which uses seconds for timed arrays
         filter_limit_time = p["filter_limit_time"]
         output_scaling = p["output_scaling"]
         input_gain = p["input_gain"]
 
+        # beta_base = (
+        #     1.0 * b2u.amp * b2u.second**3 * b2u.metre**-2 * b2u.kilogram**-1
+        # )  # m^-2 kg^-1 s^3 A
+        beta_base = 1.0
+
         def simple_filter(t, n, tau):
             norm_coef = gamma_function(n + 1) * np.power(tau, n + 1)
             values = (t**n / norm_coef) * np.exp(-t / tau)
-            # values = (t / tau) ** n * np.exp(-t / tau)
+            # values = (t**n / norm_coef) * np.exp(-t / tau)
             return values
 
         tvec_idx = tvec < filter_limit_time
-        tvec_filter = tvec / b2u.second
+        tvec_filter = tvec
 
-        Ky = simple_filter(tvec_filter, n_y, tau_y)
-        Kz_prime = simple_filter(tvec_filter, n_z, tau_z)
+        Ky = simple_filter(tvec_filter / b2u.second, n_y, tau_y / b2u.second)
+        Kz_prime = simple_filter(tvec_filter / b2u.second, n_z, tau_z / b2u.second)
         Kz = gamma * Ky + (1 - gamma) * Kz_prime
         # breakpoint()
 
@@ -259,9 +264,11 @@ class Cones(ReceptiveFieldsBase):
 
         assert all(cone_input[:, 0] == pad_value), "Padding failed..."
 
+        # Scale input from quanta / sec / micrometer^2 to quanta / sec / millimeter^2
+        # cone_input = cone_input * 1e-6
+
         cone_input = cone_input * input_gain
         pad_value = pad_value * input_gain
-
         # Pad cone input start with the initial value to avoid edge effects. Use filter limit time.
         cone_input_padded = np.pad(
             cone_input,
@@ -278,6 +285,10 @@ class Cones(ReceptiveFieldsBase):
             :, pad_length : pad_length + len(tvec)
         ]
 
+        # Add units to the matrices
+        y_mtx = y_mtx * b2u.second**-1 * b2u.umeter**-2
+        z_mtx = z_mtx * b2u.second**-1 * b2u.umeter**-2
+
         # # plot y_mtx, z_mtx
         # fig, ax = plt.subplots(2, 1)
         # idx0 = range(100, 110)
@@ -285,8 +296,8 @@ class Cones(ReceptiveFieldsBase):
         # idx1 = range(0, len(tvec))
         # ax[0].plot(y_mtx[0, idx1])
         # ax[0].plot(z_mtx[0, idx1])
-        # ax[1].plot(alpha * y_mtx[0, idx1] / (1 + beta * z_mtx[0, idx1]))
-        # # ax[1].plot(y_mtx[0, :] / z_mtx[0, :])
+        # ax[1].plot(alpha * y_mtx[0, idx1] / (beta_base + beta * z_mtx[0, idx1]))
+        # # ax[1].plot((1 / 1000) * y_mtx[0, idx1] / (1 + (1 / 1000) * z_mtx[0, idx1]))
         # plt.show()
         # breakpoint()
 
@@ -304,11 +315,12 @@ class Cones(ReceptiveFieldsBase):
 
         eqs = b2.Equations(
             """
-            dr/dt = ((alpha * y_mtx_ta(t,i)) - (1 + beta * z_mtx_ta(t,i)) * r) / tau_r : 1
+            dr/dt = (alpha * y_mtx_ta(t,i) - r - beta * z_mtx_ta(t,i) * r) / tau_r : volt
             """
         )
         # Assuming dr/dt is zero at t=0, a.k.a. steady illumination
-        r_initial_value = alpha * y_mtx[0, 0] / (1 + beta * z_mtx[0, 0])
+        r_initial_value = alpha * y_mtx[0, 0] / (beta_base + beta * z_mtx[0, 0])
+
         # print(f"Initial value of r: {r_initial_value}")
         G = b2.NeuronGroup(self.n_units, eqs, dt=dt, method="exact")
         G.r = r_initial_value
@@ -317,9 +329,12 @@ class Cones(ReceptiveFieldsBase):
 
         if p["unit"] == "mV":
             cone_output = M.r - r_initial_value
+            cone_output = cone_output / b2u.mV
         elif p["unit"] == "pA":
             cone_output = M.r
+            cone_output = cone_output / b2u.pA
 
+        # breakpoint()
         return cone_output * output_scaling
 
     # Detached internal legacy functions
