@@ -285,12 +285,12 @@ my_stimulus_options = {
     "pix_per_deg": 60,
     "dtype_name": "float64",  # low contrast needs "float16", for performance, use "uint8",
     "fps": 350,  # 300 for good cg integration
-    "duration_seconds": 0.5,  # actual frames = floor(duration_seconds * fps)
-    # "duration_seconds": 9,  # actual frames = floor(duration_seconds * fps)
+    # "duration_seconds": 0.5,  # actual frames = floor(duration_seconds * fps)
+    "duration_seconds": 9,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 1.0,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
-    "pattern": "temporal_square_pattern",  # One of the StimulusPatterns
-    # "pattern": "temporal_digitized_pattern",  # One of the StimulusPatterns
+    # "pattern": "temporal_square_pattern",  # One of the StimulusPatterns
+    "pattern": "temporal_digitized_pattern",  # One of the StimulusPatterns
     "stimulus_form": "rectangular",
     "size_inner": 0.1,  # deg, applies to annulus only
     "size_outer": 1,  # deg, applies to annulus only
@@ -299,8 +299,8 @@ my_stimulus_options = {
     "contrast": 0.99,  # mean +- contrast * mean
     "mean": 128,  # Consider this as cd/m2
     # intensity (min, max) overrides contrast and mean unless this line is commented out
-    "intensity": (20, 40),
-    "background": 20,  # The "frame", around stimulus in time and space, incl baseline times
+    "intensity": (40, 80),
+    "background": 40,  # The "frame", around stimulus in time and space, incl baseline times
     "ND_filter": 0.0,  # 0.0, log10 Neutral Density filter factor, can be negative
     "temporal_frequency": 0.1,  # 0.01,  # 4.0,  # 40,  # Hz
     "spatial_frequency": 5.0,  # cpd
@@ -431,41 +431,43 @@ cone_general_params = {
 # Parameters from Clark_2013_PLoSComputBiol model DN
 # Replicates Figs 5C
 # Light intensity photons/microm^2/second
-cone_signal_parameters = {
-    "unit": "mV",
-    "A_pupil": 9.0,  # mm^2
-    "lambda_nm": 560,  # nm 555 monkey Clark models: DN 650
-    "input_gain": 1.0,  # unitless
-    "alpha": -1.4,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
-    "beta": 0.1036,  # unitless 0.074 * 1.4
-    "gamma": 0.22,  # unitless
-    "tau_y": 18 * b2u.ms,
-    "n_y": 3.7,  # unitless
-    "tau_z": 13 * b2u.ms,
-    "n_z": 7.8,  # unitless
-    "tau_r": 66 * b2u.ms,
-    "output_scaling": 1.0,  # unitless
-    "filter_limit_time": 3.0 * b2u.second,
-}
-
-# TÄHÄN JÄIT: LIIAN PIIKIKÄS RESPONSSI, TARKISTA LUMINANSSI - rSTAR CONVERSIO
-
-# # # Parameters from Angueyra_2022_JNeurosci, model according to Clark_2013_PLoSComputBiol
-# # # Light intensity photons/microm^2/second
 # cone_signal_parameters = {
-#     "unit": "pA",
+#     "unit": "mV",
+#     "A_pupil": 9.0,  # * b2u.mm2,  # mm^2
+#     "lambda_nm": 560,  # nm 555 monkey Clark models: DN 650
 #     "input_gain": 1.0,  # unitless
-#     "alpha": 19.4,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
-#     "beta": 0.36,  # unitless
-#     "gamma": 0.448,  # unitless
-#     "tau_y": 4.49 * b2u.ms,
-#     "n_y": 4.33,  # unitless
-#     "tau_z": 166 * b2u.ms,
-#     "n_z": 1.0,  # unitless
-#     "tau_r": 4.78 * b2u.ms,
+#     # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
+#     "alpha": -1.4 * b2u.mV * b2u.um**2 * b2u.ms,
+#     "beta": 0.1036 * b2u.um**2 * b2u.ms,  # unitless 0.074 * 1.4
+#     "gamma": 0.22,  # unitless
+#     "tau_y": 18 * b2u.ms,
+#     "n_y": 3.7,  # unitless
+#     "tau_z": 13 * b2u.ms,
+#     "n_z": 7.8,  # unitless
+#     "tau_r": 66 * b2u.ms,
 #     "output_scaling": 1.0,  # unitless
 #     "filter_limit_time": 3.0 * b2u.second,
 # }
+
+# # Parameters from Angueyra_2022_JNeurosci, model according to Clark_2013_PLoSComputBiol
+# # Light intensity photons/microm^2/second
+cone_signal_parameters = {
+    "unit": "pA",
+    "A_pupil": 9.0,  # * b2u.mm2,  # mm^2
+    "lambda_nm": 560,  # nm 555 monkey Clark models: DN 650
+    "input_gain": 1.0,  # unitless
+    # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
+    "alpha": 19.4 * b2u.pA * b2u.um**2 * b2u.ms,
+    "beta": 0.36 * b2u.um**2 * b2u.ms,  # unitless
+    "gamma": 0.448,  # unitless
+    "tau_y": 4.49 * b2u.ms,
+    "n_y": 4.33,  # unitless
+    "tau_z": 166 * b2u.ms,
+    "n_z": 1.0,  # unitless
+    "tau_r": 4.78 * b2u.ms,
+    "output_scaling": 1.0,  # unitless
+    "filter_limit_time": 3.0 * b2u.second,
+}
 
 bipolar_general_params = {
     "bipo2gc_div": 6,  # Divide GC dendritic diameter to get bipolar/subunit SD

@@ -228,15 +228,9 @@ class Cones(ReceptiveFieldsBase):
         output_scaling = p["output_scaling"]
         input_gain = p["input_gain"]
 
-        # beta_base = (
-        #     1.0 * b2u.amp * b2u.second**3 * b2u.metre**-2 * b2u.kilogram**-1
-        # )  # m^-2 kg^-1 s^3 A
-        beta_base = 1.0
-
         def simple_filter(t, n, tau):
             norm_coef = gamma_function(n + 1) * np.power(tau, n + 1)
             values = (t**n / norm_coef) * np.exp(-t / tau)
-            # values = (t**n / norm_coef) * np.exp(-t / tau)
             return values
 
         tvec_idx = tvec < filter_limit_time
@@ -245,7 +239,6 @@ class Cones(ReceptiveFieldsBase):
         Ky = simple_filter(tvec_filter / b2u.second, n_y, tau_y / b2u.second)
         Kz_prime = simple_filter(tvec_filter / b2u.second, n_z, tau_z / b2u.second)
         Kz = gamma * Ky + (1 - gamma) * Kz_prime
-        # breakpoint()
 
         # Cut filters for computational efficiency
         Ky = Ky[tvec_idx]
@@ -263,9 +256,6 @@ class Cones(ReceptiveFieldsBase):
         pad_length = len(Ky) - 1
 
         assert all(cone_input[:, 0] == pad_value), "Padding failed..."
-
-        # Scale input from quanta / sec / micrometer^2 to quanta / sec / millimeter^2
-        # cone_input = cone_input * 1e-6
 
         cone_input = cone_input * input_gain
         pad_value = pad_value * input_gain
@@ -289,18 +279,6 @@ class Cones(ReceptiveFieldsBase):
         y_mtx = y_mtx * b2u.second**-1 * b2u.umeter**-2
         z_mtx = z_mtx * b2u.second**-1 * b2u.umeter**-2
 
-        # # plot y_mtx, z_mtx
-        # fig, ax = plt.subplots(2, 1)
-        # idx0 = range(100, 110)
-        # idx1 = range(500, 510)
-        # idx1 = range(0, len(tvec))
-        # ax[0].plot(y_mtx[0, idx1])
-        # ax[0].plot(z_mtx[0, idx1])
-        # ax[1].plot(alpha * y_mtx[0, idx1] / (beta_base + beta * z_mtx[0, idx1]))
-        # # ax[1].plot((1 / 1000) * y_mtx[0, idx1] / (1 + (1 / 1000) * z_mtx[0, idx1]))
-        # plt.show()
-        # breakpoint()
-
         print("\nRunning Brian code for cones...")
         y_mtx_ta = b2.TimedArray(y_mtx.T, dt=dt)
         z_mtx_ta = b2.TimedArray(z_mtx.T, dt=dt)
@@ -313,13 +291,20 @@ class Cones(ReceptiveFieldsBase):
         # photoreceptor current (pA) and the resting dark current is measured in pA. The response
         # was scaled "so it matched the dark current for the naturalistic stimulus".
 
-        eqs = b2.Equations(
-            """
-            dr/dt = (alpha * y_mtx_ta(t,i) - r - beta * z_mtx_ta(t,i) * r) / tau_r : volt
-            """
-        )
+        if p["unit"] == "mV":
+            eqs = b2.Equations(
+                """
+                dr/dt = (alpha * y_mtx_ta(t,i) - r - beta * z_mtx_ta(t,i) * r) / tau_r : volt
+                """
+            )
+        elif p["unit"] == "pA":
+            eqs = b2.Equations(
+                """
+                dr/dt = (alpha * y_mtx_ta(t,i) - r - beta * z_mtx_ta(t,i) * r) / tau_r : amp
+                """
+            )
         # Assuming dr/dt is zero at t=0, a.k.a. steady illumination
-        r_initial_value = alpha * y_mtx[0, 0] / (beta_base + beta * z_mtx[0, 0])
+        r_initial_value = alpha * y_mtx[0, 0] / (1 + beta * z_mtx[0, 0])
 
         # print(f"Initial value of r: {r_initial_value}")
         G = b2.NeuronGroup(self.n_units, eqs, dt=dt, method="exact")
@@ -580,7 +565,7 @@ class Cones(ReceptiveFieldsBase):
         a_c_end_on=0.6,
         tau_media=0.87,
         lambda_nm=560,
-        V=0.995,
+        V_lambda=0.995,
     ):
         """
         Calculate the rate of photoisomerizations per cone per second from luminance.
@@ -625,9 +610,18 @@ class Cones(ReceptiveFieldsBase):
         L_td = L * A_pupil
 
         # Calculate the rate of photoisomerizations per um^2 per second at 1 td
-        I_retina = 2.649e-2 * lambda_nm * tau_media / 0.995
+        I_per_td = 2.649e-2 * lambda_nm * tau_media / V_lambda
+
+        # Add units to the calculation. The lambda_nm above drops the nm**-1 unit
+        I_per_td = I_per_td * b2u.umeter**-2 * b2u.second**-1
+        a_c_end_on = a_c_end_on * b2u.umeter**2
+
         # Calcualte the rate of photoisomerizations per cone per second
-        I_cone = L_td * I_retina * a_c_end_on
+        I_cone = L_td * I_per_td * a_c_end_on
+
+        # Drop units for the return value
+        I_cone = I_cone / b2u.hertz
+        # breakpoint()
 
         return I_cone
 
