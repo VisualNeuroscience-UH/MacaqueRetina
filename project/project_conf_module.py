@@ -197,7 +197,7 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 # is not the case in the VAE model, and not very physiological.
 
 gc_type = "parasol"  # "parasol" or "midget"
-response_type = "off"  # "on" or "off"
+response_type = "on"  # "on" or "off"
 
 # These values are used for building a new retina
 my_retina = {
