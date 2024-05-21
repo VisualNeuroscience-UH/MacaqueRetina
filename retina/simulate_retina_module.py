@@ -230,7 +230,6 @@ class Cones(ReceptiveFieldsBase):
         n_z = p["n_z"]
         tau_r = p["tau_r"]  # Goes into Brian which uses seconds for timed arrays
         filter_limit_time = p["filter_limit_time"]
-        output_scaling = p["output_scaling"]
         input_gain = p["input_gain"]
 
         def simple_filter(t, n, tau):
@@ -262,14 +261,14 @@ class Cones(ReceptiveFieldsBase):
 
         assert all(cone_input[:, 0] == pad_value), "Padding failed..."
 
-        cone_input = cone_input * input_gain
-        pad_value = pad_value * input_gain
+        cone_input_u = cone_input * input_gain
+        pad_value_u = pad_value * input_gain
         # Pad cone input start with the initial value to avoid edge effects. Use filter limit time.
         cone_input_padded = np.pad(
-            cone_input,
+            cone_input_u,
             ((0, 0), (pad_length, 0)),
             mode="constant",
-            constant_values=((0, 0), (pad_value, 0)),
+            constant_values=((0, 0), (pad_value_u, 0)),
         )
 
         print("\nConvolving cone signal matrices...")
@@ -280,13 +279,25 @@ class Cones(ReceptiveFieldsBase):
             :, pad_length : pad_length + len(tvec)
         ]
 
-        # Add units to the matrices
-        y_mtx = y_mtx * b2u.second**-1 * b2u.umeter**-2
-        z_mtx = z_mtx * b2u.second**-1 * b2u.umeter**-2
+        # # Add units to the matrices. Photoisomerizations per sec per um2
+        y_mtx_u = y_mtx * b2u.second**-1
+        z_mtx_u = z_mtx * b2u.second**-1
+        # y_mtx_u = y_mtx * b2u.second**-1 * b2u.umeter**-2
+        # z_mtx_u = z_mtx * b2u.second**-1 * b2u.umeter**-2
+        # breakpoint()
+        # plot the first row of y and z
+        # fig, ax = plt.subplots(2, 1)
+        # ax[0].plot(y_mtx[0, :])
+        # ax[0].plot(z_mtx[0, :])
+        # # plt.show()
+
+        # ax[1].plot(y_mtx_u[0, :])
+        # ax[1].plot(z_mtx_u[0, :])
+        # plt.show()
 
         print("\nRunning Brian code for cones...")
-        y_mtx_ta = b2.TimedArray(y_mtx.T, dt=dt)
-        z_mtx_ta = b2.TimedArray(z_mtx.T, dt=dt)
+        y_mtx_ta = b2.TimedArray(y_mtx_u.T, dt=dt)
+        z_mtx_ta = b2.TimedArray(z_mtx_u.T, dt=dt)
         # In original Clark model, the response is defined as r(t) = V(t) - Vrest
         # r(t) is the photoreceptor response (mV), V(t) is the photoreceptor membrane potential
         # Vrest is the depolarized cone membrane potential in the dark.
@@ -308,7 +319,8 @@ class Cones(ReceptiveFieldsBase):
                 """
             )
         # Assuming dr/dt is zero at t=0, a.k.a. steady illumination
-        r_initial_value = alpha * y_mtx[0, 0] / (1 + beta * z_mtx[0, 0])
+        # breakpoint()
+        r_initial_value = alpha * y_mtx_u[0, 0] / (1 + beta * z_mtx_u[0, 0])
 
         # print(f"Initial value of r: {r_initial_value}")
         G = b2.NeuronGroup(self.n_units, eqs, dt=dt, method="exact")
@@ -316,17 +328,27 @@ class Cones(ReceptiveFieldsBase):
         M = b2.StateMonitor(G, ("r"), record=True)
         b2.run(duration)
 
+        # Synaptic vesicle release assumed linearly coupled to negative current.
+        # It reduces with light and increases with dark.
         if p["unit"] == "mV":
-            cone_output = M.r - r_initial_value
-            cone_output = cone_output / b2u.mV
-        elif p["unit"] == "pA":
-            # Dark current in pA, accoring to Angueyra_2022_JNeurosci
-            r_dark = -136 * b2u.pA
-            # Synaptic vesicle release assumed linearly coupled to negative current.
-            # It reduces with light and increases with dark.
-            cone_output = (r_dark + M.r) / r_dark
+            r_dark = -40  # btw [peak_response + r_dark (light), r_dark (dark)] mV
+            # Cone output in millivolts
+            response = M.r / b2u.mV
+            cone_output_u = r_dark + response
 
-        return cone_output * output_scaling
+            # Cone output in normalized units
+            peak_response = alpha / beta / b2u.mV
+            cone_output = (peak_response - response) / peak_response
+
+        elif p["unit"] == "pA":
+            r_dark = -136  # btw [-136 (dark), 0 (light)] pA
+            response = M.r / b2u.pA
+            cone_output_u = r_dark + response
+
+            # Cone output in normalized units
+            cone_output = (r_dark + response) / r_dark
+
+        return cone_output, cone_output_u
 
     # Detached internal legacy functions
     def _optical_aberration(self):
@@ -426,7 +448,7 @@ class Cones(ReceptiveFieldsBase):
             cone_input, lambda_nm=lambda_nm, A_pupil=A_pupil
         )
 
-        # Neutral Density filtering factor to reduce or increase luminance
+        # Neutral Density filtering factor (ff) to reduce or increase luminance
         ff = np.power(10.0, -self.ND_filter)
         cone_input_R = cone_input_R * ff
         minp = np.round(np.min(cone_input_R)).astype(int)
@@ -452,14 +474,15 @@ class Cones(ReceptiveFieldsBase):
         dt = vs.video_dt
         duration = vs.duration
 
-        cone_signal = self._create_cone_signal_clark(
+        cone_signal, cone_signal_u = self._create_cone_signal_clark(
             cone_input_R, params_dict, dt, duration, tvec, background_R
         )
 
-        print(f"\nCone signal min:{cone_signal.min():.1f} {params_dict['unit']}")
-        print(f"Cone signal max:{cone_signal.max():.1f} {params_dict['unit']}")
+        print(f"\nCone signal min:{cone_signal_u.min():.1f} {params_dict['unit']}")
+        print(f"Cone signal max:{cone_signal_u.max():.1f} {params_dict['unit']}")
 
         vs.cone_signal = cone_signal
+        vs.cone_signal_u = cone_signal_u
 
         return vs
 
@@ -679,17 +702,36 @@ class Bipolars(ReceptiveFieldsBase):
         bipolar_input_sum = cones_to_bipolars_weights.T @ cone_output
 
         # Sign inversion for cones' glutamate release => ON bipolars
+        # We invert [light = 0, dark = 1] to [light = 1, dark = 0]
         if gcs.response_type == "on":
-            bipolar_input_sum = -bipolar_input_sum
+            bipolar_input_sum = 1 - bipolar_input_sum
+
         bipolar_output_sum = bipolar_to_gcs_weights.T @ bipolar_input_sum
 
+        bg = np.mean(bipolar_output_sum[:, : vs.baseline_len_tp], axis=1)
+        bipolar_output_sum_weber = (bipolar_output_sum - bg[:, np.newaxis]) / bg[
+            :, np.newaxis
+        ]
+
         # Apply synaptic input scaling for negative responses (rectification/nonlinearity)
-        neg_idx = bipolar_output_sum < 0
-        gc_synaptic_input = bipolar_output_sum.copy()
-        gc_synaptic_input[neg_idx] = bipolar_output_sum[neg_idx] * neg_scaler[neg_idx]
+        neg_idx = bipolar_output_sum_weber < 0
+        gc_synaptic_input = bipolar_output_sum_weber.copy()
+        gc_synaptic_input[neg_idx] = (
+            bipolar_output_sum_weber[neg_idx] * neg_scaler[neg_idx]
+        )
+
         vs.generator_potentials = gc_synaptic_input
-        # plt.plot(cone_output.T)
-        # plt.plot(gc_synaptic_input.T)
+        # # # plt.plot(cone_output_weber.T)
+        # fig, ax = plt.subplots(4, 1)
+        # ax[0].plot(cone_output[0, :], label="cone_output")
+        # ax[1].plot(bipolar_input_sum[0, :], label="bipolar_input_sum")
+        # ax[2].plot(bipolar_output_sum_weber[0, :], label="bipolar_output_sum_weber")
+        # ax[3].plot(gc_synaptic_input[0, :], label="gc_synaptic_input")
+        # # # plt.plot(bipolar_output_sum.T)
+        # ax[0].legend()
+        # ax[1].legend()
+        # ax[2].legend()
+        # ax[3].legend()
         # plt.show()
         # breakpoint()
         return vs
@@ -997,6 +1039,7 @@ class VisualSignal(Printable):
         self.duration = self.stim_len_tp * self.video_dt
         self.simulation_dt = simulation_dt * b2u.second  # output
         self.tvec = range(self.stim_len_tp) * self.video_dt
+        self.baseline_len_tp = self.stimulus_video.baseline_len_tp
 
     def _vspace_to_pixspace(self, x, y):
         """
@@ -2463,7 +2506,7 @@ class SimulateRetina(RetinaMath):
             )
 
         if gcs.temporal_model == "subunit":
-            cone_responses_to_show["cone_signal"] = vs.cone_signal
+            cone_responses_to_show["cone_signal"] = vs.cone_signal_u
             cone_responses_to_show["unit"] = self.context.my_retina[
                 "cone_signal_parameters"
             ]["unit"]
