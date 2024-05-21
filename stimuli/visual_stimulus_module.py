@@ -799,22 +799,23 @@ class VisualStimulus(VideoBaseClass):
         # Not implemented yet
         # Natural images are filtered at the StimulusPattern method,
         # because they are typically not evolving over time
-        self.frames_baseline_start = self._create_frames(
+        frames_baseline_start = self._create_frames(
             self.options["baseline_start_seconds"]
         )  # background for baseline before stimulus
-        self.frames_baseline_end = self._create_frames(
+        frames_baseline_end = self._create_frames(
             self.options["baseline_end_seconds"]
         )  # background for baseline after stimulus
 
         # Concatenate baselines and stimulus, recycle to self.frames
         self.frames = np.concatenate(
-            (self.frames_baseline_start, self.frames, self.frames_baseline_end), axis=0
+            (frames_baseline_start, self.frames, frames_baseline_end), axis=0
         )
 
         self.frames = self.frames.astype(self.options["dtype"])
         self.video = self.frames
         self.fps = self.options["fps"]
         self.pix_per_deg = self.options["pix_per_deg"]
+        self.baseline_len_tp = frames_baseline_start.shape[0]
 
         self.video_n_frames = len(self.video)
         self.video_width = self.frames.shape[2]
