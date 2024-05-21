@@ -197,7 +197,7 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 # is not the case in the VAE model, and not very physiological.
 
 gc_type = "parasol"  # "parasol" or "midget"
-response_type = "on"  # "on" or "off"
+response_type = "off"  # "on" or "off"
 
 # These values are used for building a new retina
 my_retina = {
@@ -285,7 +285,6 @@ my_stimulus_options = {
     "pix_per_deg": 60,
     "dtype_name": "float64",  # low contrast needs "float16", for performance, use "uint8",
     "fps": 350,  # 300 for good cg integration
-    # "duration_seconds": 0.5,  # actual frames = floor(duration_seconds * fps)
     "duration_seconds": 9,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 1.0,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
@@ -299,8 +298,8 @@ my_stimulus_options = {
     "contrast": 0.99,  # mean +- contrast * mean
     "mean": 128,  # Consider this as cd/m2
     # intensity (min, max) overrides contrast and mean unless this line is commented out
-    "intensity": (40, 80),
-    "background": 40,  # The "frame", around stimulus in time and space, incl baseline times
+    "intensity": (4, 80),
+    "background": 4,  # The "frame", around stimulus in time and space, incl baseline times
     "ND_filter": 0.0,  # 0.0, log10 Neutral Density filter factor, can be negative
     "temporal_frequency": 0.1,  # 0.01,  # 4.0,  # 40,  # Hz
     "spatial_frequency": 5.0,  # cpd
@@ -406,7 +405,6 @@ cone_general_params = {
 #     "tau_z": 20 * b2u.ms,
 #     "n_z": 7.0,  # unitless
 #     "tau_r": 39 * b2u.ms,
-#     "output_scaling": 1.0,  # unitless
 #     "filter_limit_time": 3.0 * b2u.second,
 # }
 
@@ -424,48 +422,45 @@ cone_general_params = {
 #     "tau_z": 20 * b2u.ms,
 #     "n_z": 7.0,  # unitless
 #     "tau_r": 50 * b2u.ms,
-#     "output_scaling": 1.0,  # unitless
 #     "filter_limit_time": 3.0 * b2u.second,
 # }
 
-# Parameters from Clark_2013_PLoSComputBiol model DN
-# Replicates Figs 5C
-# Light intensity photons/microm^2/second
+# # Parameters from Clark_2013_PLoSComputBiol model DN
+# # Replicates Figs 5C
+# # Light intensity photons/microm^2/second
 # cone_signal_parameters = {
 #     "unit": "mV",
 #     "A_pupil": 9.0,  # * b2u.mm2,  # mm^2
 #     "lambda_nm": 560,  # nm 555 monkey Clark models: DN 650
 #     "input_gain": 1.0,  # unitless
 #     # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
-#     "alpha": -1.4 * b2u.mV * b2u.um**2 * b2u.ms,
-#     "beta": 0.1036 * b2u.um**2 * b2u.ms,  # unitless 0.074 * 1.4
+#     "alpha": -1.4 * b2u.mV * b2u.ms,
+#     "beta": 0.1036 * b2u.ms,  # 0.074 * 1.4
 #     "gamma": 0.22,  # unitless
 #     "tau_y": 18 * b2u.ms,
 #     "n_y": 3.7,  # unitless
 #     "tau_z": 13 * b2u.ms,
 #     "n_z": 7.8,  # unitless
 #     "tau_r": 66 * b2u.ms,
-#     "output_scaling": 1.0,  # unitless
 #     "filter_limit_time": 3.0 * b2u.second,
 # }
 
-# # Parameters from Angueyra_2022_JNeurosci, model according to Clark_2013_PLoSComputBiol
-# # Light intensity photons/microm^2/second
+# Parameters from Angueyra_2022_JNeurosci, model according to Clark_2013_PLoSComputBiol
+# Light intensity photons/microm^2/second
 cone_signal_parameters = {
     "unit": "pA",
     "A_pupil": 9.0,  # * b2u.mm2,  # mm^2
     "lambda_nm": 560,  # nm 555 monkey Clark models: DN 650
     "input_gain": 1.0,  # unitless
     # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
-    "alpha": 19.4 * b2u.pA * b2u.um**2 * b2u.ms,
-    "beta": 0.36 * b2u.um**2 * b2u.ms,  # unitless
+    "alpha": 19.4 * b2u.pA * b2u.ms,
+    "beta": 0.36 * b2u.ms,  # unitless
     "gamma": 0.448,  # unitless
     "tau_y": 4.49 * b2u.ms,
     "n_y": 4.33,  # unitless
     "tau_z": 166 * b2u.ms,
     "n_z": 1.0,  # unitless
     "tau_r": 4.78 * b2u.ms,
-    "output_scaling": 1.0,  # unitless
     "filter_limit_time": 3.0 * b2u.second,
 }
 
@@ -776,7 +771,7 @@ if __name__ == "__main__":
     Build and test your retina here, one gc type at a time. 
     """
 
-    # PM.construct_retina.build()  # Main method for building the retina
+    PM.construct_retina.build()  # Main method for building the retina
 
     # The following visualizations are dependent on the ConstructRetina instance.
     # Thus, they are called after the retina is built.
@@ -840,7 +835,7 @@ if __name__ == "__main__":
     ########################
 
     # Based on my_stimulus_options above
-    PM.stimulate.make_stimulus_video()
+    # PM.stimulate.make_stimulus_video()
 
     ####################################
     ### Run multiple trials or units ###
@@ -866,7 +861,7 @@ if __name__ == "__main__":
     ################################################
 
     # Based on my_run_options above
-    # PM.viz.show_all_gc_responses(savefigname=None)
+    PM.viz.show_all_gc_responses(savefigname=None)
     # PM.viz.show_all_gc_histogram(savefigname=None)
     # PM.viz.show_cone_responses(time_range=[0.4, 1.1], savefigname=None)
     PM.viz.show_cone_responses(time_range=None, savefigname=None)
