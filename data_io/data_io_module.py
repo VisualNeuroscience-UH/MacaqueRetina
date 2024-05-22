@@ -578,13 +578,14 @@ class DataIO(DataIOBase):
         self._write_frames_to_mp4_videofile(fullpath_filename, stimulus)
 
         # save all stimulus object attributes in the same format
-        # Delete injected attributes "context", "data_io" and cones from stimulus object before saving, because they cannot be saved in hdf5 format.
-        del stimulus._context
-        del stimulus._data_io
-        del stimulus._cones
+        stimulus_dict = {
+            key: value
+            for key, value in stimulus.__dict__.items()
+            if key not in ["_context", "_data_io", "_cones"]
+        }
 
         full_path_out = f"{fullpath_filename}.hdf5"
-        self.save_dict_to_hdf5(full_path_out, stimulus.__dict__)
+        self.save_dict_to_hdf5(full_path_out, stimulus_dict)
 
     def load_stimulus_from_videofile(self, filename):
         """
