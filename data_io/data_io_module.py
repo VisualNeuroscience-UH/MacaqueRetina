@@ -933,3 +933,14 @@ class DataIO(DataIOBase):
         )
         rgc_coords = rf.df[["x_deg", "y_deg"]].copy()
         self._save_structure_csv(rgc_coords, filename=filename)
+
+        data_dict = {}
+        for variable in ["cone_signal", "bipolar_signal", "generator_potentials"]:
+            if hasattr(vs, variable):
+                data = getattr(vs, variable)
+                data_dict[variable] = data
+                filename = f"{filename}_{variable[:3]}"
+
+        self.save_np_dict_to_npz(
+            data_dict, self.context.output_folder, filename_stem=filename
+        )
