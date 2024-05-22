@@ -2170,7 +2170,11 @@ class Viz:
 
         ret_npz = self.data_io.get_data(self.context.my_retina["ret_file"])
 
-        weights = ret_npz["cones_to_bipolars_weights"]
+        cones_to_bipolars_center_weights = ret_npz["cones_to_bipolars_center_weights"]
+        cones_to_bipolars_surround_weights = ret_npz[
+            "cones_to_bipolars_surround_weights"
+        ]
+        weights = cones_to_bipolars_center_weights - cones_to_bipolars_surround_weights
         cone_positions = ret_npz["cone_optimized_pos_mm"]
         bipolar_positions = ret_npz["bipolar_optimized_pos_mm"]
 
