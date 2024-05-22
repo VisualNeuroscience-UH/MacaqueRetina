@@ -101,6 +101,15 @@ class DataIO(DataIOBase):
             data_fullpath_filename = max(paths, key=os.path.getmtime)
             return data_fullpath_filename
 
+    def most_recent_pattern(self, path, pattern):
+        files = list(Path(path).glob(pattern))
+
+        if not files:
+            raise FileNotFoundError(f"\nNo {pattern} found in {path}")
+        else:
+            # Take most recent matching file
+            return max(files, key=os.path.getmtime)
+
     def parse_path(self, filename, substring=None, exclude_substring=None):
         """
         This function returns full path to either given filename or to most recently
