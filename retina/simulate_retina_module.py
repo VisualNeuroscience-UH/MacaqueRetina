@@ -696,22 +696,24 @@ class Bipolars(ReceptiveFieldsBase):
         # vs.svecs_sur.shape = (n_units, n_timepoints), RI is Rectification Index
         RI = self.parabola(vs.svecs_sur, *popt)
         neg_scaler = 1 - RI
-        cones_to_bipolars_weights = self.ret_npz["cones_to_bipolars_weights"]
+        cones_to_bipolars_cen_w = self.ret_npz["cones_to_bipolars_center_weights"]
+        cones_to_bipolars_sur_w = self.ret_npz["cones_to_bipolars_surround_weights"]
 
         cone_output = vs.cone_signal  # + vs.bipolar_synaptic_noise
-        bipolar_input_sum = cones_to_bipolars_weights.T @ cone_output
+        bipolar_cen_sum = cones_to_bipolars_cen_w.T @ cone_output
+        bipolar_sur_sum = cones_to_bipolars_sur_w.T @ cone_output
 
         # Sign inversion for cones' glutamate release => ON bipolars
         # We invert [light = 0, dark = 1] to [light = 1, dark = 0]
         if gcs.response_type == "on":
-            bipolar_input_sum = 1 - bipolar_input_sum
+            bipolar_cen_sum = 1 - bipolar_cen_sum
+            bipolar_sur_sum = 1 - bipolar_sur_sum
 
-        bipolar_output_sum = bipolar_to_gcs_weights.T @ bipolar_input_sum
-
-        bg = np.mean(bipolar_output_sum[:, : vs.baseline_len_tp], axis=1)
-        bipolar_output_sum_weber = (bipolar_output_sum - bg[:, np.newaxis]) / bg[
+        bg = np.mean(bipolar_sur_sum[:, : vs.baseline_len_tp], axis=1)
+        bipolar_input_sum_weber = (bipolar_cen_sum - bg[:, np.newaxis]) / bg[
             :, np.newaxis
         ]
+        bipolar_output_sum_weber = bipolar_to_gcs_weights.T @ bipolar_input_sum_weber
 
         # Apply synaptic input scaling for negative responses (rectification/nonlinearity)
         neg_idx = bipolar_output_sum_weber < 0
@@ -721,12 +723,21 @@ class Bipolars(ReceptiveFieldsBase):
         )
 
         vs.generator_potentials = gc_synaptic_input
+
+        # TÄHÄN JÄIT:
+        # -IMPLEMENTOI IMPUSSIRESPONSSINORMALISAATION VIZ.
+        # -IMPLEMENTOI KONTRASTIADAPTAATIO, KS DEMB 2008 J PHYSIOL
+        # -IMPLEMENTOI AUTOMAATTIADAPTAATIO, TAVOITTEENA 8 BIT RESPONSE FOR 1000-FOLD LUM/CONTRAST CHANGE
+        # -LOGiSTiC FITTING TO RELU MECHANISM TAI NIIN VAHVA ADAPTAATIO ETTEI TARVITSE.
+
         # # # plt.plot(cone_output_weber.T)
         # fig, ax = plt.subplots(4, 1)
-        # ax[0].plot(cone_output[0, :], label="cone_output")
-        # ax[1].plot(bipolar_input_sum[0, :], label="bipolar_input_sum")
-        # ax[2].plot(bipolar_output_sum_weber[0, :], label="bipolar_output_sum_weber")
-        # ax[3].plot(gc_synaptic_input[0, :], label="gc_synaptic_input")
+        # ax[0].hist(cone_output.flatten(), label="cone_output")
+        # ax[1].hist(bipolar_cen_sum.flatten(), label="bipolar_cen_sum")
+        # ax[2].hist(
+        #     bipolar_sur_sum[:, : vs.baseline_len_tp].flatten(), label="bipolar_sur_sum"
+        # )
+        # ax[3].hist(bipolar_output_sum_weber.flatten(), label="bipolar_output_sum_weber")
         # # # plt.plot(bipolar_output_sum.T)
         # ax[0].legend()
         # ax[1].legend()
@@ -1005,14 +1016,14 @@ class VisualSignal(Printable):
                 self.video_file_name
             )
 
-            self.options_from_file = self.stimulus_video.options
-            self.stimulus_width_pix = self.options_from_file["image_width"]
-            self.stimulus_height_pix = self.options_from_file["image_height"]
-            self.pix_per_deg = self.options_from_file["pix_per_deg"]
-            self.fps = self.options_from_file["fps"]
+        self.options_from_file = self.stimulus_video.options
+        self.stimulus_width_pix = self.options_from_file["image_width"]
+        self.stimulus_height_pix = self.options_from_file["image_height"]
+        self.pix_per_deg = self.options_from_file["pix_per_deg"]
+        self.fps = self.options_from_file["fps"]
 
-            self.stimulus_width_deg = self.stimulus_width_pix / self.pix_per_deg
-            self.stimulus_height_deg = self.stimulus_height_pix / self.pix_per_deg
+        self.stimulus_width_deg = self.stimulus_width_pix / self.pix_per_deg
+        self.stimulus_height_deg = self.stimulus_height_pix / self.pix_per_deg
 
         cen_x = self.options_from_file["center_pix"][0]
         cen_y = self.options_from_file["center_pix"][1]
@@ -1029,10 +1040,6 @@ class VisualSignal(Printable):
         assert (
             self.stimulus_video.pix_per_deg == self.pix_per_deg
         ), "Check that stimulus resolution matches that of the mosaic"
-        # assert (
-        #     np.min(self.stimulus_video.frames) >= 0
-        #     and np.max(self.stimulus_video.frames) <= 255
-        # ), "Stimulus pixel values must be between 0 and 255"
 
         self.video_dt = (1 / self.stimulus_video.fps) * b2u.second  # input
         self.stim_len_tp = self.stimulus_video.video_n_frames
