@@ -243,6 +243,7 @@ class Experiment(VideoBaseClass):
                 filename_prefix = f"Response_{gc_type}_{response_type}_"
                 filename = Path(data_folder) / (filename_prefix + cond_names[idx])
 
+                # Run simulation
                 self.simulate_retina.run_cells(
                     unit_index=example_gc,
                     n_trials=n_trials,
@@ -251,7 +252,7 @@ class Experiment(VideoBaseClass):
                     filename=filename,
                     simulation_dt=simulation_dt,
                     stimulus=stim,
-                )  # Run simulation
+                )
 
         # Write metadata to csv to log current experiment to its output folder
         self.options["n_trials"] = n_trials
