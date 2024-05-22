@@ -14,6 +14,8 @@ import matplotlib.pyplot as plt
 # Builtin
 from pathlib import Path
 
+# from copy import deepcopy
+
 plt.rcParams["image.cmap"] = "gray"
 
 """
@@ -766,6 +768,16 @@ class VisualStimulus(VideoBaseClass):
             ), f"The option '{this_option}' was not recognized"
 
         self.options.update(my_stimulus_options)
+        bg = self.options["background"]
+        if isinstance(bg, str):
+            match bg:
+                case "mean":
+                    self.options["background"] = self.options["mean"]
+                case "intensity_max":
+                    self.options["background"] = int(self.options["intensity"][1])
+                case "intensity_min":
+                    self.options["background"] = int(self.options["intensity"][0])
+
         self.options["dtype"] = getattr(np, self.options["dtype_name"])
 
         # background for stimulus
@@ -827,6 +839,7 @@ class VisualStimulus(VideoBaseClass):
 
         # Save video
         stimulus_video_name = Path(self.options["stimulus_video_name"])
+        # breakpoint()
         self.data_io.save_stimulus_to_videofile(stimulus_video_name, stimulus_video)
 
         return stimulus_video

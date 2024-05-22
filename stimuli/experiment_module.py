@@ -161,6 +161,16 @@ class Experiment(VideoBaseClass):
         df = pd.DataFrame(index=options.keys(), columns=cond_names)
         n_columns = len(cond_names)
 
+        bg = options["background"]
+        if isinstance(bg, str):
+            match bg:
+                case "mean":
+                    self.options["background"] = self.options["mean"]
+                case "intensity_max":
+                    self.options["background"] = int(self.options["intensity"][1])
+                case "intensity_min":
+                    self.options["background"] = int(self.options["intensity"][0])
+
         # Set all values equal to options.values()
         for key, value in options.items():
             if isinstance(value, tuple):
@@ -176,6 +186,12 @@ class Experiment(VideoBaseClass):
                     df.loc[key][idx] = repeated_tuple
                 else:
                     df.loc[key][idx] = value
+
+        if isinstance(bg, str):
+            for idx, this_dict in enumerate(cond_options):
+                for key, value in this_dict.items():
+                    if key == bg:
+                        df.loc["background"][idx] = value
 
         return df
 
@@ -260,6 +276,7 @@ class Experiment(VideoBaseClass):
             self.options["logaritmic"] = tuple(experiment_dict["logaritmic"])
         else:
             self.options["logaritmic"] = experiment_dict["logaritmic"]
+
         result_df = self._create_dataframe(cond_options, cond_names, self.options)
         cond_names_string = "_".join(experiment_dict["exp_variables"])
         filename_df = f"exp_metadata_{cond_names_string}.csv"

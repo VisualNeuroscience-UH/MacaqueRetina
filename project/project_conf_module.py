@@ -247,7 +247,7 @@ size_outer: in degrees
 
 stimulus_position: in degrees, (0,0) is the center.
 stimulus_size: In degrees. Radius for circle and annulus, half-width for rectangle. 0 for full image.
-background: intensity between 0, 256
+background: "mean", "intensity_min", "intensity_max" or value. The "frame", around stimulus in time and space, incl baseline times
 contrast: between 0 and 1
 mean: mean stimulus intensity between 0, 256
 
@@ -285,11 +285,11 @@ my_stimulus_options = {
     "pix_per_deg": 60,
     "dtype_name": "float64",  # low contrast needs "float16", for performance, use "uint8",
     "fps": 350,  # 300 for good cg integration
-    "duration_seconds": 9,  # actual frames = floor(duration_seconds * fps)
-    "baseline_start_seconds": 1.0,  # Total duration is duration + both baselines
+    "duration_seconds": 0.01,  # actual frames = floor(duration_seconds * fps)
+    "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
-    # "pattern": "temporal_square_pattern",  # One of the StimulusPatterns
-    "pattern": "temporal_digitized_pattern",  # One of the StimulusPatterns
+    "pattern": "temporal_square_pattern",  # One of the StimulusPatterns
+    # "pattern": "temporal_digitized_pattern",  # One of the StimulusPatterns
     "stimulus_form": "rectangular",
     "size_inner": 0.1,  # deg, applies to annulus only
     "size_outer": 1,  # deg, applies to annulus only
@@ -298,8 +298,8 @@ my_stimulus_options = {
     "contrast": 0.99,  # mean +- contrast * mean
     "mean": 128,  # Consider this as cd/m2
     # intensity (min, max) overrides contrast and mean unless this line is commented out
-    "intensity": (4, 80),
-    "background": 4,  # The "frame", around stimulus in time and space, incl baseline times
+    # "intensity": (200, 400),
+    "background": "mean",  # "mean", "intensity_min", "intensity_max" or value.
     "ND_filter": 0.0,  # 0.0, log10 Neutral Density filter factor, can be negative
     "temporal_frequency": 0.1,  # 0.01,  # 4.0,  # 40,  # Hz
     "spatial_frequency": 5.0,  # cpd
@@ -469,7 +469,7 @@ bipolar_general_params = {
     "bipo2gc_cutoff_SD": 2,  # Multiplier for above value
     "cone2bipo_cen_sd": 10,  # um, Turner_2018_eLife
     "cone2bipo_sur_sd": 150,
-    "bipo_sub_sur2cen": 0.5,  # Surround / Center amplitude ratio
+    "bipo_sub_sur2cen": 1.0,  # Surround / Center amplitude ratio
 }
 
 # Recovery function from Berry_1998_JNeurosci, Uzzell_2004_JNeurophysiol
@@ -771,9 +771,10 @@ if __name__ == "__main__":
     Build and test your retina here, one gc type at a time. 
     """
 
-    PM.construct_retina.build()  # Main method for building the retina
+    # PM.construct_retina.build()  # Main method for building the retina
 
-    # The following visualizations are dependent on the ConstructRetina instance.
+    # The following visualizations are
+    #  dependent on the ConstructRetina instance.
     # Thus, they are called after the retina is built.
 
     # The show_exp_build_process method visualizes the spatial and temporal filter responses, ganglion cell positions and density,
@@ -842,7 +843,7 @@ if __name__ == "__main__":
     ####################################
 
     # Load stimulus to get working retina, necessary for running units
-    PM.simulate_retina.run_with_my_run_options()
+    # PM.simulate_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
@@ -861,10 +862,10 @@ if __name__ == "__main__":
     ################################################
 
     # Based on my_run_options above
-    PM.viz.show_all_gc_responses(savefigname=None)
+    # PM.viz.show_all_gc_responses(savefigname=None)
     # PM.viz.show_all_gc_histogram(savefigname=None)
     # PM.viz.show_cone_responses(time_range=[0.4, 1.1], savefigname=None)
-    PM.viz.show_cone_responses(time_range=None, savefigname=None)
+    # PM.viz.show_cone_responses(time_range=None, savefigname=None)
 
     # PM.viz.show_stimulus_with_gcs(
     #     example_gc=0,  # [int,], my_run_options["unit_index"]
@@ -873,9 +874,9 @@ if __name__ == "__main__":
     #     savefigname=None,
     # )
 
-    ##########################################
-    ###       Show impulse response        ###
-    ##########################################
+    # ##########################################
+    # ###       Show impulse response        ###
+    # ##########################################
 
     # # Contrast applies only for parasol units with dynamic model, use [1.0] for others
     # contrasts_for_impulse = [0.01, 1.0]
@@ -913,45 +914,44 @@ if __name__ == "__main__":
     ### Build and run Experiment ###
     ################################
 
-    exp_variables = ["spatial_frequency"]  # from my_stimulus_options
+    exp_variables = ["mean"]  # from my_stimulus_options
     # # exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
     # # # Define experiment parameters. List lengths must be equal.
     # # # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logaritmic = [True]
     experiment_dict = {
         "exp_variables": exp_variables,
-        "min_max_values": [
-            [0.0625, 0.0625]
-        ],  # two vals for each exp_variable # frequency
-        "n_steps": [1],
-        "logaritmic": [False],
+        # two vals for each exp_variable
+        "min_max_values": [[0.1, 1000]],
+        "n_steps": [5],
+        "logaritmic": [True],
         # "min_max_values": [[0.5, 46], [0.01, 0.64]],  # temporal frequency, contrast
         # "n_steps": [14, 7],  # temporal frequency, contrast
         # "logaritmic": [False, True],  # temporal frequency, contrast
     }
 
-    # N trials or N units must be 1, and the other > 1. This is set above in my_run_options.
-    # PM.experiment.build_and_run(experiment_dict)
+    # # N trials or N units must be 1, and the other > 1. This is set above in my_run_options.
+    PM.experiment.build_and_run(experiment_dict)
 
     #########################
     ## Analyze Experiment ###
     #########################
 
-    # my_analysis_options = {
-    #     "exp_variables": exp_variables,
-    #     # "t_start_ana": 1.0,
-    #     # "t_end_ana": 31.0,
-    #     "t_start_ana": 1,
-    #     "t_end_ana": 7,
-    # }
+    my_analysis_options = {
+        "exp_variables": exp_variables,
+        "t_start_ana": 0.5,
+        "t_end_ana": 0.7,
+    }
 
     # PM.ana.analyze_experiment(my_analysis_options)
     # PM.ana.unit_correlation(my_analysis_options, gc_type, response_type, gc_units=None)
+    PM.ana.relative_gain(my_analysis_options)
 
     ############################
     ### Visualize Experiment ###
     ############################
 
-    # PM.viz.spike_raster_response(exp_variables, trial=0, savefigname=None)
+    PM.viz.spike_raster_response(exp_variables, trial=0, savefigname=None)
+    PM.viz.show_relative_gain(exp_variables, savefigname=None)
 
     # PM.viz.show_unit_correlation(
     #     exp_variables, time_window=[-0.2, 0.2], savefigname=None

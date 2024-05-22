@@ -3556,6 +3556,38 @@ class Viz:
         if savefigname:
             self._figsave(figurename=savefigname)
 
+    def show_relative_gain(self, exp_variables, savefigname=None):
+        """ """
+        cond_names_string = "_".join(exp_variables)
+        filename = f"exp_metadata_{cond_names_string}.csv"
+        experiment_df = self.data_io.get_data(filename=filename)
+        cond_names = experiment_df.columns.values
+        gc_type = self.context.my_retina["gc_type"]
+        response_type = self.context.my_retina["response_type"]
+        data_folder = self.context.output_folder
+
+        pattern = f"exp_results_{gc_type}_{response_type}_{cond_names_string}_*.csv"
+        data_fullpath = self.data_io.most_recent_pattern(data_folder, pattern)
+        df = pd.read_csv(data_fullpath, index_col=0)
+        available_data = df.columns.to_list()[3:]
+        n_data = len(available_data)
+        # Visualize the data with seaborn, one slineplot per available_data. x="time",
+        # y=data_name, hue = cond_names_string
+        fig, ax = plt.subplots(n_data, 1, figsize=(8, 4))
+        ax = np.array(ax, ndmin=1)  # make sure ax is subscriptable
+        for i, data_name in enumerate(available_data):
+            sns.lineplot(
+                data=df, x="time", y=data_name, hue=cond_names_string + "_R", ax=ax[i]
+            )
+
+            # Format legend to show integers only
+            handles, labels = ax[i].get_legend_handles_labels()
+            int_labels = [str(int(float(label))) for label in labels]
+            ax[i].legend(handles, int_labels, title=cond_names_string + "_R")
+
+        if savefigname:
+            self._figsave(figurename=savefigname)
+
     def show_unit_correlation(self, exp_variables, time_window=None, savefigname=None):
         """ """
 

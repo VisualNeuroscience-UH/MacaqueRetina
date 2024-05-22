@@ -691,6 +691,84 @@ class Analysis(AnalysisBase):
             csv_save_path = data_folder / filename_out
             F_unit_phase_df.to_csv(csv_save_path)
 
+    def relative_gain(self, my_analysis_options):
+        """ """
+
+        exp_variables = my_analysis_options["exp_variables"]
+        cond_names_string = "_".join(exp_variables)
+        filename = f"exp_metadata_{cond_names_string}.csv"
+        data_folder = self.context.output_folder
+        experiment_df = self.data_io.get_data(filename=filename)
+        cond_names = experiment_df.columns.values
+        n_trials_vec = pd.to_numeric(experiment_df.loc["n_trials", :].values)
+        gc_type = self.context.my_retina["gc_type"]
+        response_type = self.context.my_retina["response_type"]
+
+        t_start = my_analysis_options["t_start_ana"]
+        t_end = my_analysis_options["t_end_ana"]
+        fps_vec = pd.to_numeric(experiment_df.loc["fps", :].values)
+        assert np.all(fps_vec == fps_vec[0]), "Not equal fps, aborting..."
+        tp_idx = np.arange(t_start * fps_vec[0], t_end * fps_vec[0], dtype=int)
+        n_tp = len(tp_idx)
+
+        # Assert for equal number of trials
+        assert np.all(
+            n_trials_vec == n_trials_vec[0]
+        ), "Not equal number of trials, aborting..."
+        n_trials = n_trials_vec[0]
+
+        columns = cond_names.tolist()
+        scalers = {}
+        # Loop conditions
+        for idx, cond_name in enumerate(cond_names):
+            # Define the pattern for the filename
+            pattern = f"Response_{gc_type}_{response_type}_{cond_name}_*.npz"
+            data_fullpath = self.data_io.most_recent_pattern(data_folder, pattern)
+
+            df_index_start = idx * n_tp
+            df_index_end = (idx + 1) * n_tp
+
+            data_npz = self.data_io.get_data(data_fullpath)
+            available_data = [f for f in data_npz.files if "allow_pickle" not in f]
+            if idx == 0:
+                df = pd.DataFrame(
+                    index=range(n_tp * len(cond_names)),
+                    columns=["time", cond_names_string, cond_names_string + "_R"]
+                    + available_data,
+                )
+
+            df.iloc[df_index_start:df_index_end, 0] = np.arange(
+                t_start, t_end, 1 / fps_vec[0]
+            )
+
+            bg_lum = float(experiment_df.loc["background", cond_name])
+
+            bg_R = self.get_photoisomerizations_from_luminance(bg_lum)
+
+            df.iloc[df_index_start:df_index_end, 1] = bg_lum
+            df.iloc[df_index_start:df_index_end, 2] = bg_R
+
+            for data_idx, this_data in enumerate(available_data):
+                raw_values = data_npz[this_data].mean(axis=0)[tp_idx]
+                zeroed_values = raw_values - raw_values[0]
+                per_R_values = zeroed_values / bg_R
+                if idx == 0:
+                    max_response = per_R_values.max()
+                    min_response = per_R_values.min()
+                    scalers[this_data] = (max_response, min_response)
+                norm_values = (per_R_values - scalers[this_data][1]) / (
+                    scalers[this_data][0] - scalers[this_data][1]
+                )
+                df.iloc[df_index_start:df_index_end, 3 + data_idx] = norm_values
+
+        # Save results
+        suffix = "_".join(data[:3] for data in available_data)
+        filename_out = (
+            f"exp_results_{gc_type}_{response_type}_{cond_names_string}_{suffix}.csv"
+        )
+        csv_save_path = data_folder / filename_out
+        df.to_csv(csv_save_path)
+
     def _calc_dist_mtx(self, x_vec, y_vec, unit_vec):
         n_units = unit_vec.shape[0]
         dist_mtx = np.zeros((n_units, n_units))
