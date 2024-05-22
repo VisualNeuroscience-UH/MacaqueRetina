@@ -1773,6 +1773,7 @@ class ConstructRetina(RetinaMath):
         squared_distances = squared_diffs.sum(axis=2)
         distances = np.sqrt(squared_distances)
 
+        # Dimensions are [n_cones, n_bipos]
         G_cen = np.exp(-((distances / bipo_cen_sd_mm) ** 2))
         G_sur = np.exp(-((distances / bipo_sur_sd_mm) ** 2))
         G_cen_probability = G_cen / G_cen.sum(axis=0)[np.newaxis, :]
@@ -1781,9 +1782,8 @@ class ConstructRetina(RetinaMath):
         G_cen_weight = G_cen_probability
         G_sur_weight = G_sur_probability * bipo_sur2cen_amp_ratio
 
-        probability = G_cen_weight - G_sur_weight
-
-        ret.cones_to_bipolars_weights = probability
+        ret.cones_to_bipolars_center_weights = G_cen_weight
+        ret.cones_to_bipolars_surround_weights = G_sur_weight
 
         return ret
 
@@ -3465,7 +3465,8 @@ class ConstructRetina(RetinaMath):
             "cone_frequency_data": ret.cone_frequency_data,
             "cone_power_data": ret.cone_power_data,
             "cone_noise_power_fit": ret.cone_noise_power_fit,
-            "cones_to_bipolars_weights": ret.cones_to_bipolars_weights,
+            "cones_to_bipolars_center_weights": ret.cones_to_bipolars_center_weights,
+            "cones_to_bipolars_surround_weights": ret.cones_to_bipolars_surround_weights,
             "bipolar_to_gcs_weights": ret.bipolar_to_gcs_weights,
             "bipolar_optimized_pos_mm": ret.bipolar_optimized_pos_mm,
             "bipolar_nonlinearity_parameters": ret.bipolar_nonlinearity_parameters,
