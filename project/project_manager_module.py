@@ -77,6 +77,7 @@ class ProjectManager(ProjectBase, ProjectUtilities):
             data_io,
             # Methods which are needed also elsewhere
             pol2cart=retina_math.pol2cart,
+            get_photoisomerizations_from_luminance=retina_math.get_photoisomerizations_from_luminance,
         )
 
         self.ana = ana
