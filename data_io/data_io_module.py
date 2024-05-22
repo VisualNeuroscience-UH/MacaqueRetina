@@ -184,9 +184,8 @@ class DataIO(DataIOBase):
                     path, substring=substring, exclude_substring=exclude_substring
                 )
 
-        assert (
-            data_fullpath_filename is not None
-        ), f"I Could not find file {filename}, aborting..."
+        if data_fullpath_filename is None:
+            raise FileNotFoundError(f"I could not find file {filename}, aborting...")
 
         return data_fullpath_filename
 
@@ -215,9 +214,11 @@ class DataIO(DataIOBase):
         else:
             if isinstance(full_path, str):
                 full_path = Path(full_path)
-            assert (
-                full_path.is_file()
-            ), f"Full path: {full_path} given, but such file does not exist, aborting..."
+            if not full_path.is_file():
+                raise FileNotFoundError(
+                    f"Full path: {full_path} given, but such file does not exist, aborting..."
+                )
+
             data_fullpath_filename = full_path
 
         # Open file by extension type
