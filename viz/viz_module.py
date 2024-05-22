@@ -3513,9 +3513,13 @@ class Viz:
         # make sure ax is subscriptable
         ax = np.array(ax, ndmin=1)
 
+        gc_type = self.context.my_retina["gc_type"]
+        response_type = self.context.my_retina["response_type"]
+
         # Loop conditions
         for idx, cond_name in enumerate(cond_names):
-            filename = f"Response_{cond_name}.gz"
+            filename = f"Response_{gc_type}_{response_type}_{cond_name}.gz"
+
             data_dict = self.data_io.get_data(filename)
 
             cond_s = experiment_df[cond_name]
@@ -3534,9 +3538,10 @@ class Viz:
                 units,
                 ".",
             )
-            this_contrast = pd.to_numeric(experiment_df.loc["contrast", cond_name])
+
+            this_value = pd.to_numeric(experiment_df.loc[cond_names_string, cond_name])
             ax[idx].set_title(
-                f"{cond_name}, contrast {this_contrast:.2f}",
+                f"{cond_name}, {cond_names_string} {this_value:.2f}",
                 fontsize=10,
             )
 
