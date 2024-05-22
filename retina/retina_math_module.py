@@ -6,12 +6,13 @@ from scipy.special import gamma
 from scipy.optimize import curve_fit
 from scipy.interpolate import interp1d
 
+# Comput neurosci
+from brian2 import units as b2u
 
 # Viz
 import matplotlib.pyplot as plt
 
 # BUiltin
-import pdb
 
 
 class RetinaMath:
@@ -294,6 +295,123 @@ class RetinaMath:
             Area in steradians.
         """
         return deg2 * (np.pi / 180) ** 2
+
+    def get_luminance_from_photoisomerizations(
+        self,
+        I_cone,
+        A_pupil=9.3,
+        a_c_end_on=0.6,
+        tau_media=0.87,
+        lambda_nm=560,
+        V_lambda=0.995,
+    ):
+        """
+        Calculate the luminance from the rate of photoisomerizations per cone per second.
+
+        Parameters
+        ----------
+        I_cone : float
+            The rate of photoisomerizations per cone per second (R* cone^-1 s^-1).
+        A_pupil : float
+            The area of the pupil in mm².
+        a_c_end_on : float
+            The end-on collecting area for the cones in um², 0.6 according to Schneeweis_1999_JNeurosci.
+        tau_media : float
+            The transmittance of the ocular media at wavelength λ.
+        lambda_nm : int, optional
+            Wavelength in nm, default is 560 nm.
+        V_lambda : float
+            The luminosity function value at given wavelength, default is 0.995 at 560 nm.
+
+        Returns
+        -------
+        float
+            Luminance in cd/m².
+        """
+
+        # Calculate the rate of photoisomerizations per um^2 per second at 1 td
+        I_per_td = 2.649e-2 * lambda_nm * tau_media / V_lambda
+
+        # Add units to the calculation. The lambda_nm above drops the nm**-1 unit
+        I_per_td = I_per_td * b2u.umeter**-2 * b2u.second**-1
+        a_c_end_on = a_c_end_on * b2u.umeter**2
+
+        # Calculate the retinal illuminance (L_td) in Trolands
+        L_td = I_cone / (I_per_td * a_c_end_on)
+
+        # Calculate the luminance (L) in cd/m²
+        L = L_td / A_pupil
+
+        # Drop units for the return value
+        # L = L
+
+        return L
+
+    def get_photoisomerizations_from_luminance(
+        self,
+        L,
+        A_pupil=9.3,
+        a_c_end_on=0.6,
+        tau_media=0.87,
+        lambda_nm=560,
+        V_lambda=0.995,
+    ):
+        """
+        Calculate the rate of photoisomerizations per cone per second from luminance.
+
+        Parameters
+        ----------
+        L : float
+            Luminance in cd/m².
+        A_pupil : float
+            The area of the pupil in mm².
+        a_c_end_on : float
+            The end-on collecting area for the cones in um², 0.6 according to Schneeweis_1999_JNeurosci.
+        tau_media : float
+            The transmittance of the ocular media at wavelength λ.
+        lambda_nm : int, optional
+            Wavelength in nm, default is 560 nm.
+        V : float
+            The luminocity function value at given wavelength, default is 0.995 at 560 nm.
+
+        Returns
+        -------
+        float
+            The rate of photoisomerizations per cone per second (R* cone^-1 s^-1).
+
+        Notes
+        -----
+        The retinal illuminance (L_td) in Trolands is calculated by multiplying the luminance (L) with the pupil area (A_pupil).
+        Factors that affect the absorption of light by the retina include:
+        - Optical point spread by diffraction
+        - Scatter, which extends the point spread function
+        - Transmission by ocular media, influenced by varying macular pigment absorption (60%) and wavelength-dependent filtering (50% at 450 nm and 80% at 650 nm).
+
+        These factors combined can result in a Strehl ratio as low as 0.02 in aged eyes with significant scatter, though in optimal cases it can be about 0.2 (Westheimer_2006_ProgRetEyeRes).
+
+        Example calculation for the rate of photoisomerizations (I_cone):
+        - According to Schnapf_1990_JPhysiol, 1 troland contributes approximately 2.649 x 10^-2 photons µm^-2 s^-1 nm^-1, adjusted for wavelength and transmittance.
+        - For λ = 560 nm with transmittance τ(λ) = 0.87 and V(λ) = 0.995: 2.649e-2 * 560 * (0.87/0.995) results in about 12.9 R/um^2/s.
+
+        Additionally, Shapley_1984_ProgRetRes_chapter9 estimates about 1.2e6 quanta/deg²/s for a similar calculation.
+        """
+        # Calculate the retinal illuminance (L_td) in Trolands
+        L_td = L * A_pupil
+
+        # Calculate the rate of photoisomerizations per um^2 per second at 1 td
+        I_per_td = 2.649e-2 * lambda_nm * tau_media / V_lambda
+
+        # Add units to the calculation. The lambda_nm above drops the nm**-1 unit
+        I_per_td = I_per_td * b2u.umeter**-2 * b2u.second**-1
+        a_c_end_on = a_c_end_on * b2u.umeter**2
+
+        # Calcualte the rate of photoisomerizations per cone per second
+        I_cone = L_td * I_per_td * a_c_end_on
+
+        # Drop units for the return value
+        I_cone = I_cone / b2u.hertz
+
+        return I_cone
 
     # General function fitting methods
     def hyperbolic_function(self, x, y_max, x_half):
