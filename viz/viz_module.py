@@ -3557,7 +3557,18 @@ class Viz:
             self._figsave(figurename=savefigname)
 
     def show_relative_gain(self, exp_variables, savefigname=None):
-        """ """
+        """
+        Display the relative gain of the cone, bipolar, and ganglion cell responses.
+
+        The cone and bipolar responses are available with the subunit temporal model.
+
+        Parameters
+        ----------
+        exp_variables : list of str
+            List of experimental variable names to be used for fetching the data and plotting.
+        savefigname : str, optional
+            Filename to save the figure. If None, the figure will not be saved.
+        """
         cond_names_string = "_".join(exp_variables)
         filename = f"exp_metadata_{cond_names_string}.csv"
         experiment_df = self.data_io.get_data(filename=filename)
@@ -3571,13 +3582,27 @@ class Viz:
         df = pd.read_csv(data_fullpath, index_col=0)
         available_data = df.columns.to_list()[3:]
         n_data = len(available_data)
-        # Visualize the data with seaborn, one slineplot per available_data. x="time",
-        # y=data_name, hue = cond_names_string
+
         fig, ax = plt.subplots(n_data, 1, figsize=(8, 4))
-        ax = np.array(ax, ndmin=1)  # make sure ax is subscriptable
+
+        # Determine the unique values for the hue variable
+        hue_values = df[cond_names_string + "_R"].unique()
+
+        if "True" in experiment_df.loc["logaritmic"][0]:
+            # Use a logarithmic colormap
+            norm = colors.LogNorm(vmin=hue_values.min(), vmax=hue_values.max())
+        else:
+            norm = colors.Normalize(vmin=hue_values.min(), vmax=hue_values.max())
+        cmap = plt.get_cmap("viridis")
+
         for i, data_name in enumerate(available_data):
             sns.lineplot(
-                data=df, x="time", y=data_name, hue=cond_names_string + "_R", ax=ax[i]
+                data=df,
+                x="time",
+                y=data_name,
+                hue=cond_names_string + "_R",
+                ax=ax[i],
+                palette=sns.color_palette(cmap(norm(hue_values))),
             )
 
             # Format legend to show integers only
