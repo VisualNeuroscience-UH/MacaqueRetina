@@ -158,9 +158,29 @@ class Experiment(VideoBaseClass):
         pass
 
     def _create_dataframe(self, cond_options, cond_names, options):
+        """
+        Create a DataFrame with the varying independent stimulus parameters.
+
+        Parameters
+        ----------
+        cond_options : list of dict
+            A list of dictionaries, where each dictionary contains key-value pairs for the varying stimulus parameter.
+        cond_names : list of str
+            A list of condition names to be used as columns in the DataFrame.
+        options : dict
+            A dictionary containing all stimulus option settings. Keys are option names, and values are option values.
+            Special handling for the "background" key if it is a string.
+
+        Returns
+        -------
+        pd.DataFrame
+            A pandas DataFrame with the index set to the keys of `options` and columns set to `cond_names`.
+            Values are populated based on `options` and `cond_options`.
+        """
         df = pd.DataFrame(index=options.keys(), columns=cond_names)
         n_columns = len(cond_names)
 
+        # Capture string background and convert to appropriate numerical value
         bg = options["background"]
         if isinstance(bg, str):
             match bg:
@@ -179,6 +199,7 @@ class Experiment(VideoBaseClass):
             else:
                 df.loc[key] = value
 
+        # Set independent variable values
         for idx, this_dict in enumerate(cond_options):
             for key, value in this_dict.items():
                 if isinstance(value, tuple):
@@ -187,6 +208,8 @@ class Experiment(VideoBaseClass):
                 else:
                     df.loc[key][idx] = value
 
+        # In case background is a string, and the corresponding target value is the independent variable,
+        # replace the background with the updated numerical value
         if isinstance(bg, str):
             for idx, this_dict in enumerate(cond_options):
                 for key, value in this_dict.items():
