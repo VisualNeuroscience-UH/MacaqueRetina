@@ -574,12 +574,8 @@ class StimulusPattern:
         After this integration, the method performs additional filtering and updates
         the raw intensity values based on the new data.
         """
-        if self.context.my_stimulus_metadata["apply_cone_filter"] is True:
-            self.cones.natural_stimuli_cone_filter()
-            self.image = self.cones.cone_response
-        else:
-            image_file_name = self.context.my_stimulus_metadata["stimulus_file"]
-            self.image = self.data_io.get_data(image_file_name)
+        image_file_name = self.context.my_stimulus_metadata["stimulus_file"]
+        self.image = self.data_io.get_data(image_file_name)
 
         # resize image by specifying custom width and height
         resized_image = cv2.resize(self.image, self.frames.shape[1:])
@@ -689,12 +685,11 @@ class VisualStimulus(VideoBaseClass):
     Create stimulus video and save
     """
 
-    def __init__(self, context, data_io, cones, data_extractor):
+    def __init__(self, context, data_io, data_extractor):
         super().__init__()
 
         self._context = context.set_context(self)
         self._data_io = data_io
-        self._cones = cones
 
         self.data_extractor = data_extractor
 
@@ -705,10 +700,6 @@ class VisualStimulus(VideoBaseClass):
     @property
     def data_io(self):
         return self._data_io
-
-    @property
-    def cones(self):
-        return self._cones
 
     def make_stimulus_video(self, options=None):
         """
