@@ -249,11 +249,7 @@ stimulus_position: in degrees, (0,0) is the center.
 stimulus_size: In degrees. Radius for circle and annulus, half-width for rectangle. 0 for full image.
 background: "mean", "intensity_min", "intensity_max" or value. The "frame", around stimulus in time and space, incl baseline times
 contrast: between 0 and 1
-mean: mean stimulus intensity between 0, 256
-
-Note if mean + ((contrast * max(intensity)) / 2) exceed 255 or if
-        mean - ((contrast * max(intensity)) / 2) go below 0
-        the stimulus generation fails
+mean: mean stimulus intensity in cd/m2
 
 If intensity (min, max) is defined, it overrides contrast and mean becomes baseline.
 
@@ -285,27 +281,28 @@ my_stimulus_options = {
     "pix_per_deg": 60,
     "dtype_name": "float64",  # low contrast needs "float16", for performance, use "uint8",
     "fps": 350,  # 300 for good cg integration
-    "duration_seconds": 0.01,  # actual frames = floor(duration_seconds * fps)
+    "duration_seconds": 0.5,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
+    # "pattern": "sine_grating",  # One of the StimulusPatterns
     "pattern": "temporal_square_pattern",  # One of the StimulusPatterns
-    # "pattern": "temporal_digitized_pattern",  # One of the StimulusPatterns
     "stimulus_form": "rectangular",
     "size_inner": 0.1,  # deg, applies to annulus only
     "size_outer": 1,  # deg, applies to annulus only
     "stimulus_position": (0.0, 0.0),  # relative to stimuls center in retina
     "stimulus_size": 1,  # 0.04,  # 2,  # deg, radius for circle, sidelen/2 for rectangle.
-    "contrast": 0.99,  # mean +- contrast * mean
-    "mean": 128,  # Consider this as cd/m2
-    # intensity (min, max) overrides contrast and mean unless this line is commented out
-    # "intensity": (200, 400),
-    "background": "mean",  # "mean", "intensity_min", "intensity_max" or value.
-    "ND_filter": 0.0,  # 0.0, log10 Neutral Density filter factor, can be negative
     "temporal_frequency": 0.1,  # 0.01,  # 4.0,  # 40,  # Hz
     "spatial_frequency": 5.0,  # cpd
     "orientation": 0,  # degrees
     "phase_shift": 0,  # math.pi + 0.1,  # radians
     "stimulus_video_name": f"{stimulus_folder}.mp4",
+    # Interdependent intensity variables:
+    "contrast": 0.99,  # mean +- contrast * mean
+    "mean": 128,  # Consider this as cd/m2
+    # intensity (min, max) overrides contrast and mean unless the line is commented out
+    # "intensity": (128, 256),
+    "background": "mean",  # "mean", "intensity_min", "intensity_max" or value.
+    "ND_filter": 0.0,  # 0.0, log10 neutral density filter factor, can be negative
 }
 
 # For external video and image input. See visual_stimulus_module.VideoBaseClass for more options.
@@ -324,8 +321,6 @@ n_files = 1
 my_run_options = {
     "unit_index": None,  # list of ints or None for all units
     "n_trials": 1,  # For each of the response files
-    # "unit_index": 2,  # list of ints or None for all units
-    # "n_trials": 10,  # For each of the response files
     "spike_generator_model": "poisson",  # poisson or refractory
     "save_data": True,
     "gc_response_filenames": [f"gc_response_{x:02}" for x in range(n_files)],
@@ -408,22 +403,24 @@ cone_general_params = {
 #     "filter_limit_time": 3.0 * b2u.second,
 # }
 
-# # Parameters from Clark_2013_PLoSComputBiol model B
+# Parameters from Clark_2013_PLoSComputBiol model B
 # Replicates Figs 5E
-# # Light intensity photons/microm^2/second
-# cone_signal_parameters = {
-#     "unit": "mV",
-#     "input_gain": 1.0,  # unitless
-#     "alpha": -2.1,  # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
-#     "beta": 0.1407,  # unitless 0.067 * 2.1
-#     "gamma": 0.57,  # unitless
-#     "tau_y": 20 * b2u.ms,
-#     "n_y": 3.0,  # unitless
-#     "tau_z": 20 * b2u.ms,
-#     "n_z": 7.0,  # unitless
-#     "tau_r": 50 * b2u.ms,
-#     "filter_limit_time": 3.0 * b2u.second,
-# }
+# Light intensity photons/microm^2/second
+cone_signal_parameters = {
+    "unit": "mV",
+    "A_pupil": 9.0,  # * b2u.mm2,  # mm^2
+    "lambda_nm": 560,  # nm 555 monkey Clark models: DN 650
+    "input_gain": 1.0,  # unitless
+    "alpha": -2.1 * b2u.mV * b2u.ms,
+    "beta": 0.1407 * b2u.ms,  #  0.067 * 2.1
+    "gamma": 0.57,  # unitless
+    "tau_y": 20 * b2u.ms,
+    "n_y": 3.0,  # unitless
+    "tau_z": 20 * b2u.ms,
+    "n_z": 7.0,  # unitless
+    "tau_r": 50 * b2u.ms,
+    "filter_limit_time": 3.0 * b2u.second,
+}
 
 # # Parameters from Clark_2013_PLoSComputBiol model DN
 # # Replicates Figs 5C
@@ -445,31 +442,31 @@ cone_general_params = {
 #     "filter_limit_time": 3.0 * b2u.second,
 # }
 
-# Parameters from Angueyra_2022_JNeurosci, model according to Clark_2013_PLoSComputBiol
-# Light intensity photons/microm^2/second
-cone_signal_parameters = {
-    "unit": "pA",
-    "A_pupil": 9.0,  # * b2u.mm2,  # mm^2
-    "lambda_nm": 560,  # nm 555 monkey Clark models: DN 650
-    "input_gain": 1.0,  # unitless
-    # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
-    "alpha": 19.4 * b2u.pA * b2u.ms,
-    "beta": 0.36 * b2u.ms,  # unitless
-    "gamma": 0.448,  # unitless
-    "tau_y": 4.49 * b2u.ms,
-    "n_y": 4.33,  # unitless
-    "tau_z": 166 * b2u.ms,
-    "n_z": 1.0,  # unitless
-    "tau_r": 4.78 * b2u.ms,
-    "filter_limit_time": 3.0 * b2u.second,
-}
+# # Parameters from Angueyra_2022_JNeurosci, model according to Clark_2013_PLoSComputBiol
+# # Light intensity photons/microm^2/second
+# cone_signal_parameters = {
+#     "unit": "pA",
+#     "A_pupil": 9.0,  # * b2u.mm2,  # mm^2
+#     "lambda_nm": 560,  # nm 555 monkey Clark models: DN 650
+#     "input_gain": 1.0,  # unitless
+#     # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
+#     "alpha": 19.4 * b2u.pA * b2u.ms,
+#     "beta": 0.36 * b2u.ms,  # unitless
+#     "gamma": 0.448,  # unitless
+#     "tau_y": 4.49 * b2u.ms,
+#     "n_y": 4.33,  # unitless
+#     "tau_z": 166 * b2u.ms,
+#     "n_z": 1.0,  # unitless
+#     "tau_r": 4.78 * b2u.ms,
+#     "filter_limit_time": 3.0 * b2u.second,
+# }
 
 bipolar_general_params = {
     "bipo2gc_div": 6,  # Divide GC dendritic diameter to get bipolar/subunit SD
     "bipo2gc_cutoff_SD": 2,  # Multiplier for above value
     "cone2bipo_cen_sd": 10,  # um, Turner_2018_eLife
     "cone2bipo_sur_sd": 150,
-    "bipo_sub_sur2cen": 1.0,  # Surround / Center amplitude ratio
+    "bipo_sub_sur2cen": 1.5,  # Surround / Center amplitude ratio
 }
 
 # Recovery function from Berry_1998_JNeurosci, Uzzell_2004_JNeurophysiol
@@ -736,7 +733,7 @@ if __name__ == "__main__":
     ##   Luminance and Photoisomerizations   ##
     ###########################################
 
-    # I_cone = 400000  # photoisomerizations per second per cone
+    # I_cone = 4000  # photoisomerizations per second per cone
 
     # luminance = PM.cones.get_luminance_from_photoisomerizations(I_cone)
     # print(f"{luminance:.2f} cd/m2")
@@ -914,7 +911,11 @@ if __name__ == "__main__":
     ### Build and run Experiment ###
     ################################
 
-    exp_variables = ["mean"]  # from my_stimulus_options
+    # Retina needs to be built for this to work.
+    # my_stimulus_options above defines the stimulus. From that dictionary,
+    # defined keys' values are dynamically changed in the experiment.
+
+    exp_variables = ["mean"]  # key from my_stimulus_options
     # # exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
     # # # Define experiment parameters. List lengths must be equal.
     # # # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logaritmic = [True]
@@ -929,28 +930,28 @@ if __name__ == "__main__":
         # "logaritmic": [False, True],  # temporal frequency, contrast
     }
 
-    # # N trials or N units must be 1, and the other > 1. This is set above in my_run_options.
+    # # # N trials or N units must be 1, and the other > 1. This is set above in my_run_options.
     PM.experiment.build_and_run(experiment_dict)
 
-    #########################
-    ## Analyze Experiment ###
-    #########################
+    # #########################
+    # ## Analyze Experiment ###
+    # #########################
 
     my_analysis_options = {
         "exp_variables": exp_variables,
-        "t_start_ana": 0.5,
-        "t_end_ana": 0.7,
+        "t_start_ana": 0.0,
+        "t_end_ana": 1.5,
     }
 
-    # PM.ana.analyze_experiment(my_analysis_options)
-    # PM.ana.unit_correlation(my_analysis_options, gc_type, response_type, gc_units=None)
+    # # PM.ana.analyze_experiment(my_analysis_options)
+    # # PM.ana.unit_correlation(my_analysis_options, gc_type, response_type, gc_units=None)
     PM.ana.relative_gain(my_analysis_options)
 
-    ############################
-    ### Visualize Experiment ###
-    ############################
+    # ############################
+    # ### Visualize Experiment ###
+    # ############################
 
-    PM.viz.spike_raster_response(exp_variables, trial=0, savefigname=None)
+    # PM.viz.spike_raster_response(exp_variables, trial=0, savefigname=None)
     PM.viz.show_relative_gain(exp_variables, savefigname=None)
 
     # PM.viz.show_unit_correlation(
