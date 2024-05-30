@@ -3579,7 +3579,7 @@ class Viz:
 
         pattern = f"exp_results_{gc_type}_{response_type}_{cond_names_string}_*.csv"
         data_fullpath = self.data_io.most_recent_pattern(data_folder, pattern)
-        df = pd.read_csv(data_fullpath, index_col=0)
+        df = self.data_io.get_data(data_fullpath)
         available_data = df.columns.to_list()[3:]
         n_data = len(available_data)
 
@@ -3796,6 +3796,58 @@ class Viz:
             ax[1].set_xscale("log")
         if ylog:
             ax[1].set_yscale("log")
+
+        if savefigname:
+            self._figsave(figurename=savefigname)
+
+    def show_cone_response_vs_background_experiment(
+        self, exp_variables, savefigname=None
+    ):
+        """
+        Plots the cone response as a function of flash intensity for different background light levels.
+
+        Parameters:
+        """
+
+        cond_names_string = "_".join(exp_variables)
+        filename = f"exp_metadata_{cond_names_string}.csv"
+        experiment_df = self.data_io.get_data(filename=filename)
+        cond_names = experiment_df.columns.values
+        gc_type = self.context.my_retina["gc_type"]
+        response_type = self.context.my_retina["response_type"]
+
+        # TODO: the followng lines are mocked up, need to be implemented
+        df = self.data_io.get_data(
+            f"Response_{gc_type}_{response_type}_{cond_names_string}.csv"
+        )
+
+        # Melt the DataFrame for seaborn compatibility
+        df_melted = df.melt(
+            id_vars=["flash_intensity"],
+            var_name="Background Level",
+            value_name="Response Strength",
+        )
+
+        # Plot using seaborn
+        plt.figure(figsize=(10, 6))
+        sns.lineplot(
+            data=df_melted,
+            x="flash_intensity",
+            y="Response Strength",
+            hue="Background Level",
+            marker="o",
+        )
+
+        # Customize the plot
+        plt.xlabel("Log Flash Intensity (log sigma)")
+        plt.ylabel("ΔV/Vmax")
+        plt.title(
+            "Stimulus-response relations for flashes applied in the dark or on steady background illumination"
+        )
+        plt.axhline(0, color="black", linewidth=0.5)
+        plt.grid(True)
+        plt.ylim(-0.6, 1.1)
+        plt.xlim(-4.5, 8.5)
 
         if savefigname:
             self._figsave(figurename=savefigname)
