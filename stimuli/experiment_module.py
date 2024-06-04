@@ -90,6 +90,22 @@ class Experiment(VideoBaseClass):
             cond_names,
         )
 
+    def _get_cond_metadata_values(self, logarithmic, min_max_values, n_steps):
+        """
+        The values include n_steps between the corresponding min_max_values. The steps
+        can be linear or logarithmic
+        """
+        if logarithmic:
+            values = np.logspace(
+                np.log10(min_max_values[0]),
+                np.log10(min_max_values[1]),
+                n_steps,
+            )
+        else:
+            values = np.linspace(min_max_values[0], min_max_values[1], n_steps)
+
+        return values
+
     def _build(self, experiment_dict):
         """
         Setup
@@ -98,25 +114,45 @@ class Experiment(VideoBaseClass):
         exp_variables = experiment_dict["exp_variables"]
         min_max_values = experiment_dict["min_max_values"]
         n_steps = experiment_dict["n_steps"]
-        logaritmic = experiment_dict["logaritmic"]  # True or False
+        logarithmic = experiment_dict["logarithmic"]  # True or False
 
         # Create a dictionary with all options to vary. The keys are the options to vary,
         # the values include n_steps between the corresponding min_max_values. The steps
-        # can be linear or logaritmic
+        # can be linear or logarithmic
         cond_metadata_key = {}
         for idx, option in enumerate(exp_variables):
-            if logaritmic[idx]:
-                cond_metadata_key[option] = np.logspace(
-                    np.log10(min_max_values[idx][0]),
-                    np.log10(min_max_values[idx][1]),
-                    n_steps[idx],
-                )
+            if isinstance(self.context.my_stimulus_options[option], tuple):
+                assert all(
+                    isinstance(x, tuple)
+                    for x in [logarithmic[idx], min_max_values[idx], n_steps[idx]]
+                ), "If exp_variable in my_stimulus_options is tuple, min_max_values, n_steps, and logarithmic must be tuples, aborting..."
+                assert (
+                    len(
+                        set(
+                            map(
+                                len,
+                                [logarithmic[idx], min_max_values[idx], n_steps[idx]],
+                            )
+                        )
+                    )
+                    == 1
+                ), "If exp_variable in my_stimulus_options is tuple, min_max_values, n_steps, and logarithmic must have the same length, aborting..."
+
+                n_values = len(self.context.my_stimulus_options[option])
+                for value_idx in range(n_values):
+                    value = self._get_cond_metadata_values(
+                        logarithmic[idx][value_idx],
+                        min_max_values[idx][value_idx],
+                        n_steps[idx][value_idx],
+                    )
+                    # Expand options to cover each tuple value separately
+                    cond_metadata_key[f"{option}_{value_idx}"] = value
+
             else:
-                cond_metadata_key[option] = np.linspace(
-                    min_max_values[idx][0], min_max_values[idx][1], n_steps[idx]
+                cond_metadata_key[option] = self._get_cond_metadata_values(
+                    logarithmic[idx], min_max_values[idx], n_steps[idx]
                 )
 
-        # Calculate voltage values, assuming voltage is linearly associated with photopic Td
         # Return cond_options -- a dict with all keywords matching visual_stimulus_module.VisualStimulus
         # and values being a list of values to replace the corresponding keyword in the stimulus
         (
@@ -124,10 +160,28 @@ class Experiment(VideoBaseClass):
             cond_names,
         ) = self._meshgrid_conditions(cond_metadata_key)
 
+        # Collate expanded tuples back for each tuple option and condition
+        for idx, option in enumerate(exp_variables):
+            assert (
+                option in self.options.keys()
+            ), f"Missing {option} in my_stimulus_options, check exp_variables name..."
+
+            if isinstance(self.context.my_stimulus_options[option], tuple):
+                # values = []
+                for option_idx, this_option in enumerate(cond_options):
+                    names, values = zip(
+                        *[
+                            [name, value]
+                            for name, value in this_option.items()
+                            if option in name
+                        ]
+                    )
+
+                    cond_options[option_idx] = {option: values}
+
         # Return a nice list with all conditions to run
         conditions_dict = {
             "cond_options": cond_options,  # list of dicts
-            "cond_metadata_key": cond_metadata_key,  # dict
             "cond_names": cond_names,  # list of strings
         }
 
@@ -202,11 +256,7 @@ class Experiment(VideoBaseClass):
         # Set independent variable values
         for idx, this_dict in enumerate(cond_options):
             for key, value in this_dict.items():
-                if isinstance(value, tuple):
-                    repeated_tuple = tuple([value] * n_columns)
-                    df.loc[key][idx] = repeated_tuple
-                else:
-                    df.loc[key][idx] = value
+                df.loc[key][idx] = value
 
         # In case background is a string, and the corresponding target value is the independent variable,
         # replace the background with the updated numerical value
@@ -231,14 +281,7 @@ class Experiment(VideoBaseClass):
 
         # Get parameters to vary in this experiment
         cond_options = conditions_dict["cond_options"]
-        metadata = conditions_dict["cond_metadata_key"]
         cond_names = conditions_dict["cond_names"]
-
-        # First check that experiment metadata keys are valid stimulus options
-        for this_key in metadata.keys():
-            assert (
-                this_key in self.options.keys()
-            ), "Missing {this_key} in visual stimuli options, check stim param name"
 
         # Update options to match my_stimulus_options in conf file
         self._replace_options(self.context.my_stimulus_options)
@@ -296,9 +339,9 @@ class Experiment(VideoBaseClass):
         # Write metadata to csv to log current experiment to its output folder
         self.options["n_trials"] = n_trials
         if len(cond_options[0].keys()) > 1:
-            self.options["logaritmic"] = tuple(experiment_dict["logaritmic"])
+            self.options["logarithmic"] = tuple(experiment_dict["logarithmic"])
         else:
-            self.options["logaritmic"] = experiment_dict["logaritmic"]
+            self.options["logarithmic"] = experiment_dict["logarithmic"]
 
         result_df = self._create_dataframe(cond_options, cond_names, self.options)
         cond_names_string = "_".join(experiment_dict["exp_variables"])
@@ -307,7 +350,3 @@ class Experiment(VideoBaseClass):
         # Check if path exists, create parents if not
         save_path.parent.mkdir(parents=True, exist_ok=True)
         result_df.to_csv(save_path)
-
-
-if __name__ == "__main__":
-    pass
