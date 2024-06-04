@@ -331,21 +331,22 @@ class Cones(ReceptiveFieldsBase):
         # Synaptic vesicle release assumed linearly coupled to negative current.
         # It reduces with light and increases with dark.
         if p["unit"] == "mV":
-            r_dark = -40  # btw [peak_response + r_dark (light), r_dark (dark)] mV
             # Cone output in millivolts
             response = M.r / b2u.mV
-            cone_output_u = r_dark + response
 
             # Cone output in normalized units
+            r_dark = -40  # btw [peak_response + r_dark (light), r_dark (dark)] mV
+            cone_output_u = r_dark + response
             peak_response = alpha / beta / b2u.mV
             cone_output = (peak_response - response) / peak_response
 
         elif p["unit"] == "pA":
-            r_dark = -136  # btw [-136 (dark), 0 (light)] pA
             response = M.r / b2u.pA
-            cone_output_u = r_dark + response
 
             # Cone output in normalized units
+            r_dark = 0  # btw [-136 (dark), 0 (light)] pA
+            # r_dark = -136  # btw [-136 (dark), 0 (light)] pA
+            cone_output_u = r_dark + response
             cone_output = (r_dark + response) / r_dark
 
         return cone_output, cone_output_u
@@ -587,22 +588,28 @@ class Bipolars(ReceptiveFieldsBase):
         # Stimulus vector (svec) for both center and surround is between -1 and 1
         # vs.svecs_sur.shape = (n_units, n_timepoints), RI is Rectification Index
         RI = self.parabola(vs.svecs_sur, *popt)
+        # [n_gcs, n_timepoints]
         neg_scaler = 1 - RI
+
+        # Get constructed weights [n_cones, n_bipolars]
         cones_to_bipolars_cen_w = self.ret_npz["cones_to_bipolars_center_weights"]
         cones_to_bipolars_sur_w = self.ret_npz["cones_to_bipolars_surround_weights"]
 
-        cone_output = vs.cone_signal  # + vs.bipolar_synaptic_noise
+        # [n_cones, n_timepoints]
+        cone_output = vs.cone_signal_u  # + vs.bipolar_synaptic_noise
+        # [n_bipolars, n_timepoints]
         bipolar_cen_sum = cones_to_bipolars_cen_w.T @ cone_output
         bipolar_sur_sum = cones_to_bipolars_sur_w.T @ cone_output
 
         # Sign inversion for cones' glutamate release => ON bipolars
         # We invert [light = 0, dark = 1] to [light = 1, dark = 0]
         if gcs.response_type == "on":
-            bipolar_cen_sum = 1 - bipolar_cen_sum
-            bipolar_sur_sum = 1 - bipolar_sur_sum
+            bipolar_cen_sum_inv = 1 - bipolar_cen_sum
+            bipolar_sur_sum_inv = 1 - bipolar_sur_sum
 
-        bg = np.mean(bipolar_sur_sum[:, : vs.baseline_len_tp], axis=1)
-        bipolar_input_sum_weber = (bipolar_cen_sum - bg[:, np.newaxis]) / bg[
+        # TODO: Replace this with contrast adaptation / use it as an optional mechanism
+        bg = np.mean(bipolar_sur_sum_inv[:, : vs.baseline_len_tp], axis=1)
+        bipolar_input_sum_weber = (bipolar_cen_sum_inv - bg[:, np.newaxis]) / bg[
             :, np.newaxis
         ]
 
@@ -620,19 +627,20 @@ class Bipolars(ReceptiveFieldsBase):
         vs.generator_potentials = gc_synaptic_input
 
         # TÄHÄN JÄIT:
-        # -IMPLEMENTOI IMPUSSIRESPONSSINORMALISAATION VIZ.
-        # -IMPLEMENTOI KONTRASTIADAPTAATIO, KS DEMB 2008 J PHYSIOL
-        # -IMPLEMENTOI AUTOMAATTIADAPTAATIO, TAVOITTEENA 8 BIT RESPONSE FOR 1000-FOLD LUM/CONTRAST CHANGE
-        # -LOGiSTiC FITTING TO RELU MECHANISM TAI NIIN VAHVA ADAPTAATIO ETTEI TARVITSE.
+        # - Miten adaptoida tapit, eli vakioida output(bg). Clark kuvan 5D/Burkhardt 7&8 replikointi
+        # - Miten muutetaan tappien vakioitu output bipolaarien lineaariseksi responssiksi
+        # - Miten kontrastivakioidaan bipolaarisolujen lineaarinen output
+        # - Miten vakioidaan generaattoripotentiaali eri temporal mallien välillä
+        # - gen => fr transformaatio, Turner malli?
 
-        # # # plt.plot(cone_output_weber.T)
-        # fig, ax = plt.subplots(4, 1)
-        # ax[0].hist(cone_output.flatten(), label="cone_output")
-        # ax[1].hist(bipolar_cen_sum.flatten(), label="bipolar_cen_sum")
-        # ax[2].hist(
-        #     bipolar_sur_sum[:, : vs.baseline_len_tp].flatten(), label="bipolar_sur_sum"
-        # )
-        # ax[3].hist(bipolar_output_sum_weber.flatten(), label="bipolar_output_sum_weber")
+        # -BENARDETE INPUT [-1,1], VICTOR [0,1], CHICHI [-2,2], TURNER [-5, 5] & CDF NONLIN
+
+        # # # # plt.plot(cone_output_weber.T)
+        # fig, ax = plt.subplots(4, 1, figsize=(12, 4))
+        # ax[0].plot(cone_output[0, :], label="cone_output")
+        # ax[1].plot(bipolar_cen_sum[0, :], label="bipolar_cen_sum")
+        # ax[2].plot(bipolar_cen_sum_inv[0, :], label="bipolar_cen_sum_inv")
+        # ax[3].plot(gc_synaptic_input[0, :], label="gc_synaptic_input")
         # # # plt.plot(bipolar_output_sum.T)
         # ax[0].legend()
         # ax[1].legend()
@@ -1513,7 +1521,14 @@ class SimulateRetina(RetinaMath):
 
         gc_gain = params_all.A.values
         firing_rates_light = vs.generator_potentials * gc_gain[:, np.newaxis]
-
+        # fig, ax = plt.subplots(3, 1)
+        # ax[0].plot(firing_rates_light[0, :], label="Light")
+        # ax[1].plot(firing_rates_cone_noise[0, :], label="Noise")
+        # ax[2].plot(vs.generator_potentials[0, :], label="Generator")
+        # ax[0].legend()
+        # ax[1].legend()
+        # ax[2].legend()
+        # plt.show()
         # Truncating nonlinearity
         firing_rates = np.maximum(firing_rates_light + firing_rates_cone_noise, 0)
 
