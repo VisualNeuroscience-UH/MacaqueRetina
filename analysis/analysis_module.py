@@ -28,6 +28,7 @@ import pdb
 import os
 from pathlib import Path
 import time
+import ast
 
 
 class Analysis(AnalysisBase):
@@ -544,6 +545,202 @@ class Analysis(AnalysisBase):
 
         return ccf, ccoef
 
+    def _calc_dist_mtx(self, x_vec, y_vec, unit_vec):
+        n_units = unit_vec.shape[0]
+        dist_mtx = np.zeros((n_units, n_units))
+        for i in range(n_units):
+            for j in range(n_units):
+                dist_mtx[i, j] = np.sqrt(
+                    (x_vec[i] - x_vec[j]) ** 2 + (y_vec[i] - y_vec[j]) ** 2
+                )
+        return dist_mtx
+
+    def _create_dist_ccoef_df(self, dist_mtx, ccoef_mtx_mean, unit_vec):
+        # Initialize an empty list to store the tuples
+        data_list = []
+
+        # Iterate over the upper triangle of dist_mtx to avoid duplicates
+        for i in range(dist_mtx.shape[0]):
+            for j in range(i + 1, dist_mtx.shape[1]):
+                yx_name = f"unit pair {unit_vec[i]}-{unit_vec[j]}"
+                yx_idx = np.array([i, j])
+                distance = dist_mtx[i, j]
+                ccoef = ccoef_mtx_mean[i, j]
+                data_list.append((yx_name, yx_idx, distance, ccoef))
+
+        # Sort the list by distance
+        sorted_data_list = sorted(data_list, key=lambda x: x[2])
+
+        # Convert the list to a DataFrame
+        distance_df = pd.DataFrame(
+            sorted_data_list, columns=["yx_name", "yx_idx", "distance_mm", "ccoef"]
+        )
+
+        return distance_df
+
+    def _create_neighbors_df(self, distance_df, unit_vec):
+        # Initialize an empty list to store the nearest neighbor tuples
+        nearest_neighbors = []
+
+        # Iterate over each unit in unit_vec.
+        for idx, unit in enumerate(unit_vec):
+            # Filter distance_df to find the rows where the unit index is either yx_idx[0] or yx_idx[1]
+            # Note that we are looking at index, not the unit number
+            filtered_df = distance_df[distance_df["yx_idx"].apply(lambda x: idx in x)]
+
+            # If the filtered_df is not empty, find the nearest neighbor
+            if not filtered_df.empty:
+                nearest_neighbor = filtered_df.iloc[
+                    0
+                ]  # the first row is the nearest neighbor
+                nearest_neighbors.append(nearest_neighbor)
+
+        # Convert the list to a DataFrame
+        neighbors_df = pd.DataFrame(nearest_neighbors).reset_index(drop=True)
+
+        return neighbors_df
+
+    def unit_correlation(self, my_analysis_options, gc_type, response_type, gc_units):
+        """
+        Analyze noise correlation in neural responses based on experimental variables.
+
+        This method computes cross-correlation, normalized to correlation coefficient
+        as a function of time lag, and correlation coefficients for neural responses.
+        It uses experimental conditions and ganglion cell (GC) data to analyze correlations and
+        saves the results to files.
+
+        Parameters
+        ----------
+        my_analysis_options : dict
+            A dictionary containing experimental variables and analysis parameters.
+        gc_type : str, midget or parasol
+            The type of ganglion cell under analysis.
+        response_type : str, on or off
+            The type of response being analyzed.
+        gc_units : list or None
+            A list of ganglion cell unit indexes for analysis. If None, all units are analyzed.
+
+        Raises
+        ------
+        ValueError
+            If `gc_units` is neither None nor a list.
+        AssertionError
+            If the number of trials is not equal across conditions.
+        """
+
+        exp_variables = my_analysis_options["exp_variables"]
+        cond_names_string = "_".join(exp_variables)
+        filename = f"exp_metadata_{cond_names_string}.csv"
+        data_folder = self.context.output_folder
+        experiment_df = self.data_io.get_data(filename=filename)
+        cond_names = experiment_df.columns.values
+        t_start = my_analysis_options["t_start_ana"]
+        t_end = my_analysis_options["t_end_ana"]
+        n_trials_vec = pd.to_numeric(experiment_df.loc["n_trials", :].values)
+
+        # Assert for equal number of trials
+        assert np.all(
+            n_trials_vec == n_trials_vec[0]
+        ), "Not equal number of trials, aborting..."
+        n_trials = n_trials_vec[0]
+
+        bin_width = 0.01  # seconds
+
+        bins = np.linspace(t_start, t_end, int((t_end - t_start) / bin_width))
+        lags = self._correlation_lags(len(bins) - 1, len(bins) - 1)
+        # Convert lags to seconds
+        lags = lags * bin_width
+
+        cond_name = cond_names[0]
+        filename_prefix = f"Response_{gc_type}_{response_type}_"
+        filename = Path(data_folder) / (filename_prefix + cond_name + ".gz")
+        data_dict = self.data_io.get_data(filename)
+
+        if gc_units is None:
+            n_units = data_dict["n_units"]
+            unit_vec = np.arange(n_units)
+        elif isinstance(gc_units, list):
+            n_units = len(gc_units)
+            unit_vec = np.array(gc_units)
+        else:
+            raise ValueError("gc_units must be None or a list")
+
+        # Cross-correlation matrix [trial, unit_y, unit_x, lags]
+        ccf_mtx = np.zeros((n_trials, n_units, n_units, len(lags)))
+        # Correlation coefficient matrix [trial, unit_y, unit_x]
+        ccoef_mtx = np.zeros((n_trials, n_units, n_units))
+
+        # Loop conditions
+        for this_trial in range(n_trials):
+            # Cross correlation, normalized to correlation coefficient
+            ccf, ccoef = self._get_cross_correlation_trial(
+                data_dict, this_trial, t_start, t_end, bins, lags, unit_vec
+            )
+            ccf_mtx[this_trial, ...] = ccf
+            ccoef_mtx[this_trial, ...] = ccoef
+
+        ccf_mtx_mean = np.mean(ccf_mtx, axis=0)
+        ccf_mtx_SEM = np.std(ccf_mtx, axis=0) / np.sqrt(ccf_mtx.shape[0])
+        ccoef_mtx_mean = np.mean(ccoef_mtx, axis=0)
+
+        # Load mosaic
+        gc_dataframe = self.data_io.get_data(
+            filename=self.context.my_retina["mosaic_file"]
+        )
+        # Get xy coords from dataframe
+        pos_ecc_mm = gc_dataframe["pos_ecc_mm"]
+        pos_polar_deg = gc_dataframe["pos_polar_deg"]
+        x_vec, y_vec = self.pol2cart(pos_ecc_mm, pos_polar_deg)
+
+        # Calculate distances between unit_vec units
+        dist_mtx = self._calc_dist_mtx(x_vec, y_vec, unit_vec)
+        dist_df = self._create_dist_ccoef_df(dist_mtx, ccoef_mtx_mean, unit_vec)
+        neigbor_df = self._create_neighbors_df(dist_df, unit_vec)
+        neighbor_unique_df = neigbor_df.drop_duplicates(subset=["yx_name"])
+
+        # Save results
+        filename_out = f"{cond_names_string}_correlation.npz"
+        npy_save_path = data_folder / filename_out
+        np.savez(
+            npy_save_path,
+            ccf_mtx_mean=ccf_mtx_mean,
+            ccf_mtx_SEM=ccf_mtx_SEM,
+            lags=lags,
+            unit_vec=unit_vec,
+        )
+
+        filename_out = f"{cond_names_string}_correlation_neighbors.csv"
+        csv_save_path = data_folder / filename_out
+        neighbor_unique_df.to_csv(csv_save_path, index=False)
+
+        filename_out = f"{cond_names_string}_correlation_distances.csv"
+        csv_save_path = data_folder / filename_out
+        dist_df.to_csv(csv_save_path, index=False)
+
+    def amplitude_sensitivity(self):
+        """ """
+        pass
+
+    def receptive_field(self):
+        """ """
+        pass
+
+    def fano_factor(self):
+        """ """
+        pass
+
+    def isi_analysis(self):
+        """ """
+        pass
+
+    def temporal_correlation(self):
+        """ """
+        pass
+
+    def spatial_correlation(self):
+        """ """
+        pass
+
     def analyze_experiment(self, my_analysis_options):
         """
         R for firing rate
@@ -769,198 +966,83 @@ class Analysis(AnalysisBase):
         csv_save_path = data_folder / filename_out
         df.to_csv(csv_save_path)
 
-    def _calc_dist_mtx(self, x_vec, y_vec, unit_vec):
-        n_units = unit_vec.shape[0]
-        dist_mtx = np.zeros((n_units, n_units))
-        for i in range(n_units):
-            for j in range(n_units):
-                dist_mtx[i, j] = np.sqrt(
-                    (x_vec[i] - x_vec[j]) ** 2 + (y_vec[i] - y_vec[j]) ** 2
-                )
-        return dist_mtx
-
-    def _create_dist_ccoef_df(self, dist_mtx, ccoef_mtx_mean, unit_vec):
-        # Initialize an empty list to store the tuples
-        data_list = []
-
-        # Iterate over the upper triangle of dist_mtx to avoid duplicates
-        for i in range(dist_mtx.shape[0]):
-            for j in range(i + 1, dist_mtx.shape[1]):
-                yx_name = f"unit pair {unit_vec[i]}-{unit_vec[j]}"
-                yx_idx = np.array([i, j])
-                distance = dist_mtx[i, j]
-                ccoef = ccoef_mtx_mean[i, j]
-                data_list.append((yx_name, yx_idx, distance, ccoef))
-
-        # Sort the list by distance
-        sorted_data_list = sorted(data_list, key=lambda x: x[2])
-
-        # Convert the list to a DataFrame
-        distance_df = pd.DataFrame(
-            sorted_data_list, columns=["yx_name", "yx_idx", "distance_mm", "ccoef"]
-        )
-
-        return distance_df
-
-    def _create_neighbors_df(self, distance_df, unit_vec):
-        # Initialize an empty list to store the nearest neighbor tuples
-        nearest_neighbors = []
-
-        # Iterate over each unit in unit_vec.
-        for idx, unit in enumerate(unit_vec):
-            # Filter distance_df to find the rows where the unit index is either yx_idx[0] or yx_idx[1]
-            # Note that we are looking at index, not the unit number
-            filtered_df = distance_df[distance_df["yx_idx"].apply(lambda x: idx in x)]
-
-            # If the filtered_df is not empty, find the nearest neighbor
-            if not filtered_df.empty:
-                nearest_neighbor = filtered_df.iloc[
-                    0
-                ]  # the first row is the nearest neighbor
-                nearest_neighbors.append(nearest_neighbor)
-
-        # Convert the list to a DataFrame
-        neighbors_df = pd.DataFrame(nearest_neighbors).reset_index(drop=True)
-
-        return neighbors_df
-
-    def unit_correlation(self, my_analysis_options, gc_type, response_type, gc_units):
-        """
-        Analyze noise correlation in neural responses based on experimental variables.
-
-        This method computes cross-correlation, normalized to correlation coefficient
-        as a function of time lag, and correlation coefficients for neural responses.
-        It uses experimental conditions and ganglion cell (GC) data to analyze correlations and
-        saves the results to files.
-
-        Parameters
-        ----------
-        my_analysis_options : dict
-            A dictionary containing experimental variables and analysis parameters.
-        gc_type : str, midget or parasol
-            The type of ganglion cell under analysis.
-        response_type : str, on or off
-            The type of response being analyzed.
-        gc_units : list or None
-            A list of ganglion cell unit indexes for analysis. If None, all units are analyzed.
-
-        Raises
-        ------
-        ValueError
-            If `gc_units` is neither None nor a list.
-        AssertionError
-            If the number of trials is not equal across conditions.
-        """
-
+    def response_vs_background(self, my_analysis_options):
+        """ """
         exp_variables = my_analysis_options["exp_variables"]
         cond_names_string = "_".join(exp_variables)
         filename = f"exp_metadata_{cond_names_string}.csv"
         data_folder = self.context.output_folder
         experiment_df = self.data_io.get_data(filename=filename)
         cond_names = experiment_df.columns.values
-        t_start = my_analysis_options["t_start_ana"]
-        t_end = my_analysis_options["t_end_ana"]
-        n_trials_vec = pd.to_numeric(experiment_df.loc["n_trials", :].values)
+        gc_type = self.context.my_retina["gc_type"]
+        response_type = self.context.my_retina["response_type"]
 
-        # Assert for equal number of trials
-        assert np.all(
-            n_trials_vec == n_trials_vec[0]
-        ), "Not equal number of trials, aborting..."
-        n_trials = n_trials_vec[0]
+        fps_vec = pd.to_numeric(experiment_df.loc["fps", :].values)
+        assert np.all(fps_vec == fps_vec[0]), "Not equal fps, aborting..."
 
-        bin_width = 0.01  # seconds
+        # Prepare columns for the dataframe
+        background_str = np.unique(
+            experiment_df.loc[["background"], :].values.flatten()
+        ).tolist()
+        unique_background = [float(s) for s in background_str]
 
-        bins = np.linspace(t_start, t_end, int((t_end - t_start) / bin_width))
-        lags = self._correlation_lags(len(bins) - 1, len(bins) - 1)
-        # Convert lags to seconds
-        lags = lags * bin_width
+        # Prepare rows for the dataframe
+        intensities_str = experiment_df.loc[["intensity"], :].values.flatten()
+        intensities = [ast.literal_eval(s) for s in intensities_str]
+        # Assuming that the index 1 in each tuple is the flash intensity
+        unique_intensity = np.unique([x[1] for x in intensities]).tolist()
 
-        cond_name = cond_names[0]
-        filename_prefix = f"Response_{gc_type}_{response_type}_"
-        filename = Path(data_folder) / (filename_prefix + cond_name + ".gz")
-        data_dict = self.data_io.get_data(filename)
+        # Define the pattern for the filename
+        pattern = f"Response_{gc_type}_{response_type}_{cond_names[0]}_*.npz"
+        data_fullpath = self.data_io.most_recent_pattern(data_folder, pattern)
 
-        if gc_units is None:
-            n_units = data_dict["n_units"]
-            unit_vec = np.arange(n_units)
-        elif isinstance(gc_units, list):
-            n_units = len(gc_units)
-            unit_vec = np.array(gc_units)
-        else:
-            raise ValueError("gc_units must be None or a list")
-
-        # Cross-correlation matrix [trial, unit_y, unit_x, lags]
-        ccf_mtx = np.zeros((n_trials, n_units, n_units, len(lags)))
-        # Correlation coefficient matrix [trial, unit_y, unit_x]
-        ccoef_mtx = np.zeros((n_trials, n_units, n_units))
+        data_npz = self.data_io.get_data(data_fullpath)
+        available_data = [f for f in data_npz.files if "allow_pickle" not in f]
+        df = pd.DataFrame(
+            index=range(len(unique_intensity) * len(unique_background)),
+            columns=[
+                "background",
+                "background_R",
+                "flash",
+                "flash_R",
+            ]
+            + available_data,
+        )
 
         # Loop conditions
-        for this_trial in range(n_trials):
-            # Cross correlation, normalized to correlation coefficient
-            ccf, ccoef = self._get_cross_correlation_trial(
-                data_dict, this_trial, t_start, t_end, bins, lags, unit_vec
+        for idx, cond_name in enumerate(cond_names):
+            # Define the pattern for the filename
+            pattern = f"Response_{gc_type}_{response_type}_{cond_name}_*.npz"
+            data_fullpath = self.data_io.most_recent_pattern(data_folder, pattern)
+            data_npz = self.data_io.get_data(data_fullpath)
+
+            background = float(experiment_df.loc["background", cond_name])
+            flash = ast.literal_eval(experiment_df.loc["intensity", cond_name])[1]
+            baseline_start_seconds = float(
+                experiment_df.loc["baseline_start_seconds", cond_name]
             )
-            ccf_mtx[this_trial, ...] = ccf
-            ccoef_mtx[this_trial, ...] = ccoef
+            baseline_start_tp = int(baseline_start_seconds * fps_vec[0])
+            baseline_ixd = np.arange(baseline_start_tp)
 
-        ccf_mtx_mean = np.mean(ccf_mtx, axis=0)
-        ccf_mtx_SEM = np.std(ccf_mtx, axis=0) / np.sqrt(ccf_mtx.shape[0])
-        ccoef_mtx_mean = np.mean(ccoef_mtx, axis=0)
+            df.iloc[idx, 0] = background
+            df.iloc[idx, 1] = int(
+                self.get_photoisomerizations_from_luminance(background)
+            )
+            df.iloc[idx, 2] = flash
+            df.iloc[idx, 3] = int(self.get_photoisomerizations_from_luminance(flash))
+            for this_data in available_data:
+                r = data_npz[this_data]
+                bl_mean = r[:, baseline_ixd].mean(axis=1)[:, np.newaxis]
+                r_after_flash = r[:, baseline_start_tp:]
+                r_after_flash_abs = np.abs(r_after_flash - bl_mean)
+                r_after_flash_argmax = r_after_flash_abs.argmax(axis=1)
+                r_after_flash_max = r_after_flash[:, r_after_flash_argmax]
 
-        # Load mosaic
-        gc_dataframe = self.data_io.get_data(
-            filename=self.context.my_retina["mosaic_file"]
-        )
-        # Get xy coords from dataframe
-        pos_ecc_mm = gc_dataframe["pos_ecc_mm"]
-        pos_polar_deg = gc_dataframe["pos_polar_deg"]
-        x_vec, y_vec = self.pol2cart(pos_ecc_mm, pos_polar_deg)
-
-        # Calculate distances between unit_vec units
-        dist_mtx = self._calc_dist_mtx(x_vec, y_vec, unit_vec)
-        dist_df = self._create_dist_ccoef_df(dist_mtx, ccoef_mtx_mean, unit_vec)
-        neigbor_df = self._create_neighbors_df(dist_df, unit_vec)
-        neighbor_unique_df = neigbor_df.drop_duplicates(subset=["yx_name"])
+                df[this_data][idx] = r_after_flash_max.mean()
 
         # Save results
-        filename_out = f"{cond_names_string}_correlation.npz"
-        npy_save_path = data_folder / filename_out
-        np.savez(
-            npy_save_path,
-            ccf_mtx_mean=ccf_mtx_mean,
-            ccf_mtx_SEM=ccf_mtx_SEM,
-            lags=lags,
-            unit_vec=unit_vec,
+        filename_out = (
+            f"exp_results_{gc_type}_{response_type}_response_vs_background.csv"
         )
-
-        filename_out = f"{cond_names_string}_correlation_neighbors.csv"
         csv_save_path = data_folder / filename_out
-        neighbor_unique_df.to_csv(csv_save_path, index=False)
-
-        filename_out = f"{cond_names_string}_correlation_distances.csv"
-        csv_save_path = data_folder / filename_out
-        dist_df.to_csv(csv_save_path, index=False)
-
-    def amplitude_sensitivity(self):
-        """ """
-        pass
-
-    def receptive_field(self):
-        """ """
-        pass
-
-    def fano_factor(self):
-        """ """
-        pass
-
-    def isi_analysis(self):
-        """ """
-        pass
-
-    def temporal_correlation(self):
-        """ """
-        pass
-
-    def spatial_correlation(self):
-        """ """
-        pass
+        df.to_csv(csv_save_path)

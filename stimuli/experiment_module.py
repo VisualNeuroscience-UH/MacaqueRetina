@@ -161,27 +161,29 @@ class Experiment(VideoBaseClass):
         ) = self._meshgrid_conditions(cond_metadata_key)
 
         # Collate expanded tuples back for each tuple option and condition
+        cond_options_collated = [{} for _ in range(len(cond_options))]
         for idx, option in enumerate(exp_variables):
             assert (
                 option in self.options.keys()
             ), f"Missing {option} in my_stimulus_options, check exp_variables name..."
 
-            if isinstance(self.context.my_stimulus_options[option], tuple):
-                # values = []
-                for option_idx, this_option in enumerate(cond_options):
+            for cond_idx, this_cond in enumerate(cond_options):
+                if isinstance(self.context.my_stimulus_options[option], tuple):
                     names, values = zip(
                         *[
                             [name, value]
-                            for name, value in this_option.items()
+                            for name, value in this_cond.items()
                             if option in name
                         ]
                     )
 
-                    cond_options[option_idx] = {option: values}
+                    cond_options_collated[cond_idx][option] = values
+                else:
+                    cond_options_collated[cond_idx][option] = this_cond[option]
 
         # Return a nice list with all conditions to run
         conditions_dict = {
-            "cond_options": cond_options,  # list of dicts
+            "cond_options": cond_options_collated,  # list of dicts
             "cond_names": cond_names,  # list of strings
         }
 

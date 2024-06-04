@@ -3800,9 +3800,7 @@ class Viz:
         if savefigname:
             self._figsave(figurename=savefigname)
 
-    def show_cone_response_vs_background_experiment(
-        self, exp_variables, savefigname=None
-    ):
+    def show_response_vs_background_experiment(self, exp_variables, savefigname=None):
         """
         Plots the cone response as a function of flash intensity for different background light levels.
 
@@ -3816,25 +3814,25 @@ class Viz:
         gc_type = self.context.my_retina["gc_type"]
         response_type = self.context.my_retina["response_type"]
 
-        # TODO: the followng lines are mocked up, need to be implemented
-        df = self.data_io.get_data(
-            f"Response_{gc_type}_{response_type}_{cond_names_string}.csv"
-        )
+        # Load results
+        filename = f"exp_results_{gc_type}_{response_type}_response_vs_background.csv"
+        df = self.data_io.get_data(filename=filename)
+        # breakpoint()
 
-        # Melt the DataFrame for seaborn compatibility
-        df_melted = df.melt(
-            id_vars=["flash_intensity"],
-            var_name="Background Level",
-            value_name="Response Strength",
-        )
+        # # Melt the DataFrame for seaborn compatibility
+        # df_melted = df.melt(
+        #     id_vars=["flash"],
+        #     var_name="background",
+        #     value_name="cone_signal",
+        # )
 
         # Plot using seaborn
         plt.figure(figsize=(10, 6))
         sns.lineplot(
-            data=df_melted,
-            x="flash_intensity",
-            y="Response Strength",
-            hue="Background Level",
+            data=df,
+            x="flash",
+            y="cone_signal",
+            hue="background",
             marker="o",
         )
 
@@ -3846,8 +3844,10 @@ class Viz:
         )
         plt.axhline(0, color="black", linewidth=0.5)
         plt.grid(True)
-        plt.ylim(-0.6, 1.1)
-        plt.xlim(-4.5, 8.5)
+        # plt.ylim(-0.6, 1.1)
+        # plt.xlim(-4.5, 8.5)
+        # Set x_axis log
+        plt.xscale("log")
 
         if savefigname:
             self._figsave(figurename=savefigname)

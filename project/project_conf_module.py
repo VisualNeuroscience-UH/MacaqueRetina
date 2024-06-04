@@ -835,14 +835,14 @@ if __name__ == "__main__":
     ########################
 
     # Based on my_stimulus_options above
-    PM.stimulate.make_stimulus_video()
+    # PM.stimulate.make_stimulus_video()
 
     ####################################
     ### Run multiple trials or units ###
     ####################################
 
     # Load stimulus to get working retina, necessary for running units
-    PM.simulate_retina.run_with_my_run_options()
+    # PM.simulate_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
@@ -861,7 +861,7 @@ if __name__ == "__main__":
     ################################################
 
     # Based on my_run_options above
-    PM.viz.show_all_gc_responses(savefigname=None)
+    # PM.viz.show_all_gc_responses(savefigname=None)
     # PM.viz.show_all_gc_histogram(savefigname=None)
     # PM.viz.show_cone_responses(time_range=[0.4, 1.1], savefigname=None)
     # PM.viz.show_cone_responses(time_range=None, savefigname=None)
@@ -918,38 +918,41 @@ if __name__ == "__main__":
     # defined keys' values are dynamically changed in the experiment.
     # Note that tuple values from my_stimulus_options are captured for varying each tuple value separately.
 
-    # exp_variables = ["intensity"]  # key from my_stimulus_options
-    # # # exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
-    # # # # Define experiment parameters. List lengths must be equal.
-    # # # # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logarithmic = [True]
-    # experiment_dict = {
-    #     "exp_variables": exp_variables,
-    #     # two vals for each exp_variable
-    #     "min_max_values": [([0, 1000], [0, 1000])],  # background, intensity
-    #     "n_steps": [(2, 3)],
-    #     "logarithmic": [(False, False)],
-    #     # "min_max_values": [[0.5, 46], [0.01, 0.64]],  # temporal frequency, contrast
-    #     # "n_steps": [14, 7],  # temporal frequency, contrast
-    #     # "logarithmic": [False, True],  # temporal frequency, contrast
-    # }
+    exp_variables = ["background", "intensity"]  # key from my_stimulus_options
+    # # exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
+    # # Define experiment parameters. List lengths must be equal.
+    # # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logarithmic = [True]
+    experiment_dict = {
+        "exp_variables": exp_variables,
+        # two vals for each exp_variable, even is it is not changing
+        "min_max_values": [
+            [0.001, 1000],
+            ([0, 0], [0.001, 1000000]),
+        ],  # background, intensity
+        "n_steps": [2, (1, 6)],
+        "logarithmic": [True, (False, True)],
+        # "min_max_values": [[0.5, 46], [0.01, 0.64]],  # temporal frequency, contrast
+        # "n_steps": [14, 7],  # temporal frequency, contrast
+        # "logarithmic": [False, True],  # temporal frequency, contrast
+    }
 
-    # # # # N trials or N units must be 1, and the other > 1. This is set above in my_run_options.
-    # PM.experiment.build_and_run(experiment_dict)
+    # # # N trials or N units must be 1, and the other > 1. This is set above in my_run_options.
+    PM.experiment.build_and_run(experiment_dict)
 
-    # # #########################
-    # # ## Analyze Experiment ###
-    # # #########################
+    # #########################
+    # ## Analyze Experiment ###
+    # #########################
 
-    # my_analysis_options = {
-    #     "exp_variables": exp_variables,
-    #     "t_start_ana": 0.0,
-    #     "t_end_ana": 1.5,
-    # }
+    my_analysis_options = {
+        "exp_variables": exp_variables,
+        "t_start_ana": 0.0,
+        "t_end_ana": 1.5,
+    }
 
-    # # # PM.ana.analyze_experiment(my_analysis_options)
-    # # # PM.ana.unit_correlation(my_analysis_options, gc_type, response_type, gc_units=None)
-    # # PM.ana.relative_gain(my_analysis_options)
-    # PM.ana.cone_response_vs_background(my_analysis_options)
+    # # PM.ana.analyze_experiment(my_analysis_options)
+    # # PM.ana.unit_correlation(my_analysis_options, gc_type, response_type, gc_units=None)
+    # PM.ana.relative_gain(my_analysis_options)
+    PM.ana.response_vs_background(my_analysis_options)
 
     # # ############################
     # # ### Visualize Experiment ###
@@ -957,6 +960,7 @@ if __name__ == "__main__":
 
     # # PM.viz.spike_raster_response(exp_variables, trial=0, savefigname=None)
     # PM.viz.show_relative_gain(exp_variables, savefigname=None)
+    PM.viz.show_response_vs_background_experiment(exp_variables, savefigname=None)
 
     # PM.viz.show_unit_correlation(
     #     exp_variables, time_window=[-0.2, 0.2], savefigname=None
