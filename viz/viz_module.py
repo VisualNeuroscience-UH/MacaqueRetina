@@ -3588,7 +3588,7 @@ class Viz:
         # Determine the unique values for the hue variable
         hue_values = df[cond_names_string + "_R"].unique()
 
-        if "True" in experiment_df.loc["logaritmic"][0]:
+        if "True" in experiment_df.loc["logarithmic"][0]:
             # Use a logarithmic colormap
             norm = colors.LogNorm(vmin=hue_values.min(), vmax=hue_values.max())
         else:
