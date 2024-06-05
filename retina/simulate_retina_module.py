@@ -626,15 +626,6 @@ class Bipolars(ReceptiveFieldsBase):
 
         vs.generator_potentials = gc_synaptic_input
 
-        # TÄHÄN JÄIT:
-        # - Miten adaptoida tapit, eli vakioida output(bg). Clark kuvan 5D/Burkhardt 7&8 replikointi
-        # - Miten muutetaan tappien vakioitu output bipolaarien lineaariseksi responssiksi
-        # - Miten kontrastivakioidaan bipolaarisolujen lineaarinen output
-        # - Miten vakioidaan generaattoripotentiaali eri temporal mallien välillä
-        # - gen => fr transformaatio, Turner malli?
-
-        # -BENARDETE INPUT [-1,1], VICTOR [0,1], CHICHI [-2,2], TURNER [-5, 5] & CDF NONLIN
-
         # # # # plt.plot(cone_output_weber.T)
         # fig, ax = plt.subplots(4, 1, figsize=(12, 4))
         # ax[0].plot(cone_output[0, :], label="cone_output")
