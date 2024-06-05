@@ -2828,7 +2828,7 @@ class Viz:
         adjusted_cone_signal = cone_signal.mean(axis=0) - bl_cone
         adjusted_cone_signal = adjusted_cone_signal / abs(adjusted_cone_signal).max()
         adjusted_photodiode = adjusted_photodiode / abs(adjusted_photodiode).max()
-        # breakpoint()
+        r_argmax = np.abs(adjusted_cone_signal).argmax()
 
         # Plotting
         fig, ax = plt.subplots(3, 1, sharex=True)
@@ -2845,6 +2845,10 @@ class Viz:
         ax[2].plot(tvec_mean, cone_signal.mean(axis=0), label="Cone Signal")
         ax[2].set_ylabel(f"Cone Response ({unit})")
         ax[2].set_xlabel("Time (s)")
+
+        # Add vertical line to r_argmax position for plots ax[1] and ax[2]
+        ax[1].axvline(tvec_mean[r_argmax], color="r", linestyle="--")
+        ax[2].axvline(tvec_mean[r_argmax], color="r", linestyle="--")
 
         # Handling optional save and time range
         if time_range:
@@ -3839,7 +3843,7 @@ class Viz:
             height=3,
             aspect=1.5,
         )
-        g.axes[0, 0].invert_yaxis()
+        # g.axes[0, 0].invert_yaxis()
         g.map(sns.lineplot, "flash", "value")
         [i[0].set_xscale("log") for i in g.axes]
 

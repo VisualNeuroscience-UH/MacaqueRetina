@@ -236,6 +236,7 @@ class Cones(ReceptiveFieldsBase):
         tau_r = p["tau_r"]  # Goes into Brian which uses seconds for timed arrays
         filter_limit_time = p["filter_limit_time"]
         input_gain = p["input_gain"]
+        max_response = p["max_response"]
 
         def simple_filter(t, n, tau):
             norm_coef = gamma_function(n + 1) * np.power(tau, n + 1)
@@ -287,18 +288,6 @@ class Cones(ReceptiveFieldsBase):
         # # Add units to the matrices. Photoisomerizations per sec per um2
         y_mtx_u = y_mtx * b2u.second**-1
         z_mtx_u = z_mtx * b2u.second**-1
-        # y_mtx_u = y_mtx * b2u.second**-1 * b2u.umeter**-2
-        # z_mtx_u = z_mtx * b2u.second**-1 * b2u.umeter**-2
-        # breakpoint()
-        # plot the first row of y and z
-        # fig, ax = plt.subplots(2, 1)
-        # ax[0].plot(y_mtx[0, :])
-        # ax[0].plot(z_mtx[0, :])
-        # # plt.show()
-
-        # ax[1].plot(y_mtx_u[0, :])
-        # ax[1].plot(z_mtx_u[0, :])
-        # plt.show()
 
         print("\nRunning Brian code for cones...")
         y_mtx_ta = b2.TimedArray(y_mtx_u.T, dt=dt)
@@ -324,8 +313,8 @@ class Cones(ReceptiveFieldsBase):
                 """
             )
         # Assuming dr/dt is zero at t=0, a.k.a. steady illumination
-        # breakpoint()
         r_initial_value = alpha * y_mtx_u[0, 0] / (1 + beta * z_mtx_u[0, 0])
+        print(f"Initial value of r: {r_initial_value}")
 
         # print(f"Initial value of r: {r_initial_value}")
         G = b2.NeuronGroup(self.n_units, eqs, dt=dt, method="exact")
@@ -337,14 +326,13 @@ class Cones(ReceptiveFieldsBase):
         # It reduces with light and increases with dark.
         if p["unit"] == "mV":
             # Cone output in millivolts
-            response = M.r / b2u.mV
-
+            response = M.r
+            r0 = r_initial_value
+            r0 = np.array(r0)[np.newaxis, np.newaxis] * b2u.mV
             # Cone output in normalized units
-            r_dark = -40  # btw [peak_response + r_dark (light), r_dark (dark)] mV
-            cone_output_u = r_dark + response
-            peak_response = alpha / beta / b2u.mV
-            cone_output = (peak_response - response) / peak_response
-
+            r_dark = -40 * b2u.mV
+            cone_output_u = (r_dark + response) / b2u.mV
+            cone_output = (response - r0) / max_response
         elif p["unit"] == "pA":
             response = M.r / b2u.pA
 
@@ -2564,7 +2552,13 @@ class SimulateRetina(RetinaMath):
         vs = cones.create_noise(vs, n_trials)
 
         # Get generator potentials
-        if gcs.temporal_model == "dynamic":
+        if gcs.temporal_model == "fixed":  # Linear model
+
+            gcs = self._get_linear_temporal_filters(gcs)
+            gcs = self._get_linear_spatiotemporal_filters(gcs)
+            vs = self._create_fixed_generator_potential(vs, gcs)
+
+        elif gcs.temporal_model == "dynamic":
 
             vs = self._create_dynamic_contrast(vs, gcs)
             vs = self._create_dynamic_generator_potentials(vs, gcs)
@@ -2575,18 +2569,12 @@ class SimulateRetina(RetinaMath):
             vs = cones.create_signal(vs)
             vs = bipolars.create_signal(vs)  # Creates generator potentials
 
-        elif gcs.temporal_model == "fixed":  # Linear model
-
-            gcs = self._get_linear_temporal_filters(gcs)
-            gcs = self._get_linear_spatiotemporal_filters(gcs)
-            vs = self._create_fixed_generator_potential(vs, gcs)
-
         # From generator potential to spikes
         vs = self._generator_to_firing_rate_noise(vs, gcs, n_trials)
         vs = self._firing_rates2brian_timed_arrays(vs)
         vs = self._brian_spike_generation(vs, gcs, n_trials)
 
-        # Save retina spikes
+        # Save retina output
         if save_data is True:
             vs.w_coord, vs.z_coord = self.get_w_z_coords(gcs)
             self.data_io.save_retina_output(vs, gcs, filename)

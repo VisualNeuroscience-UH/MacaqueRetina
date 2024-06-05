@@ -977,8 +977,11 @@ class Analysis(AnalysisBase):
         gc_type = self.context.my_retina["gc_type"]
         response_type = self.context.my_retina["response_type"]
 
+        t_start = my_analysis_options["t_start_ana"]
+        t_end = my_analysis_options["t_end_ana"]
         fps_vec = pd.to_numeric(experiment_df.loc["fps", :].values)
         assert np.all(fps_vec == fps_vec[0]), "Not equal fps, aborting..."
+        tp_idx = np.arange(t_start * fps_vec[0], t_end * fps_vec[0], dtype=int)
 
         # Prepare columns for the dataframe
         background_str = np.unique(
@@ -1031,14 +1034,26 @@ class Analysis(AnalysisBase):
             df.iloc[idx, 2] = flash
             df.iloc[idx, 3] = int(self.get_photoisomerizations_from_luminance(flash))
             for this_data in available_data:
-                r = data_npz[this_data]
-                bl_mean = r[:, baseline_ixd].mean(axis=1)[:, np.newaxis]
-                r_after_flash = r[:, baseline_start_tp:]
-                r_after_flash_abs = np.abs(r_after_flash - bl_mean)
-                r_after_flash_argmax = r_after_flash_abs.argmax(axis=1)
-                r_after_flash_max = r_after_flash[:, r_after_flash_argmax]
+                response = data_npz[this_data]
+                r = response[:, tp_idx]
+                bl_mean = response[:, baseline_ixd].mean(axis=1)[:, np.newaxis]
+                r_abs = np.abs(r - bl_mean)
+                r_argmax = r_abs.argmax(axis=1)
+                r_max = r[:, r_argmax]
+                df[this_data][idx] = r_max.mean()
 
-                df[this_data][idx] = r_after_flash_max.mean()
+                # # tmp quality control
+                # plt.subplot(2, 1, 1)
+                # plt.plot(r[0, :])
+                # plt.vlines(r_argmax, r.min(), r.max(), colors="r", linestyles="dashed")
+                # plt.title(this_data)
+                # plt.subplot(2, 1, 2)
+                # plt.plot(r_abs[0, :])
+                # plt.vlines(
+                #     r_argmax, r_abs.min(), r_abs.max(), colors="r", linestyles="dashed"
+                # )
+                # plt.show()
+                # breakpoint()
 
         # Save results
         filename_out = (

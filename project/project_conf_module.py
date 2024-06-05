@@ -285,7 +285,7 @@ my_stimulus_options = {
     "fps": 350,  # 300 for good cg integration
     "duration_seconds": 0.5,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
-    "baseline_end_seconds": 0.5,
+    "baseline_end_seconds": 0.0,
     # "pattern": "sine_grating",  # One of the StimulusPatterns
     "pattern": "temporal_square_pattern",  # One of the StimulusPatterns
     "stimulus_form": "rectangular",
@@ -302,8 +302,9 @@ my_stimulus_options = {
     "contrast": 0.99,  # mean +- contrast * mean
     "mean": 128,  # Consider this as cd/m2
     # intensity (min, max) overrides contrast and mean unless the line is commented out
-    "intensity": (0, 256),
-    "background": 128,  # "mean", "intensity_min", "intensity_max" or value.
+    "intensity": (0, 1000000000),
+    # "intensity": (0, 1000000),
+    "background": 0,  # "mean", "intensity_min", "intensity_max" or value.
     "ND_filter": 0.0,  # 0.0, log10 neutral density filter factor, can be negative
 }
 
@@ -413,6 +414,7 @@ cone_signal_parameters = {
     "A_pupil": 9.0,  # * b2u.mm2,  # mm^2
     "lambda_nm": 560,  # nm 555 monkey Clark models: DN 650
     "input_gain": 1.0,  # unitless
+    "max_response": -26.2 * b2u.mV,  # "mV", measured for a strong flash
     "alpha": -2.1 * b2u.mV * b2u.ms,
     "beta": 0.1407 * b2u.ms,  #  0.067 * 2.1
     "gamma": 0.57,  # unitless
@@ -432,6 +434,7 @@ cone_signal_parameters = {
 #     "A_pupil": 9.0,  # * b2u.mm2,  # mm^2
 #     "lambda_nm": 560,  # nm 555 monkey Clark models: DN 650
 #     "input_gain": 1.0,  # unitless
+#     "max_response": 26,  # "mV", measured for a strong flash
 #     # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
 #     "alpha": -1.4 * b2u.mV * b2u.ms,
 #     "beta": 0.1036 * b2u.ms,  # 0.074 * 1.4
@@ -451,6 +454,7 @@ cone_signal_parameters = {
 #     "A_pupil": 9.0,  # * b2u.mm2,  # mm^2
 #     "lambda_nm": 560,  # nm 555 monkey Clark models: DN 650
 #     "input_gain": 1.0,  # unitless
+#     "max_response": 80,  # "pA", measured for a strong flash
 #     # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
 #     "alpha": 19.4 * b2u.pA * b2u.ms,
 #     "beta": 0.36 * b2u.ms,  # unitless
@@ -835,14 +839,14 @@ if __name__ == "__main__":
     ########################
 
     # Based on my_stimulus_options above
-    # PM.stimulate.make_stimulus_video()
+    PM.stimulate.make_stimulus_video()
 
     ####################################
     ### Run multiple trials or units ###
     ####################################
 
     # Load stimulus to get working retina, necessary for running units
-    # PM.simulate_retina.run_with_my_run_options()
+    PM.simulate_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
@@ -864,7 +868,7 @@ if __name__ == "__main__":
     # PM.viz.show_all_gc_responses(savefigname=None)
     # PM.viz.show_all_gc_histogram(savefigname=None)
     # PM.viz.show_cone_responses(time_range=[0.4, 1.1], savefigname=None)
-    # PM.viz.show_cone_responses(time_range=None, savefigname=None)
+    PM.viz.show_cone_responses(time_range=None, savefigname=None)
 
     # PM.viz.show_stimulus_with_gcs(
     #     example_gc=0,  # [int,], my_run_options["unit_index"]
@@ -913,54 +917,63 @@ if __name__ == "__main__":
     ### Build and run Experiment ###
     ################################
 
+    # TÄHÄN JÄIT:
+    # - Miten adaptoida tapit, eli vakioida output(bg). Clark kuvan 5D/Burkhardt 7&8 replikointi
+    # - Miten muutetaan tappien vakioitu output bipolaarien lineaariseksi responssiksi
+    # - Miten kontrastivakioidaan bipolaarisolujen lineaarinen output
+    # - Miten vakioidaan generaattoripotentiaali eri temporal mallien välillä
+    # - gen => fr transformaatio, Turner malli?
+
+    # -BENARDETE INPUT [-1,1], VICTOR [0,1], CHICHI [-2,2], TURNER [-5, 5] & CDF NONLIN
+
     # Retina needs to be built for this to work.
     # my_stimulus_options above defines the stimulus. From that dictionary,
     # defined keys' values are dynamically changed in the experiment.
     # Note that tuple values from my_stimulus_options are captured for varying each tuple value separately.
 
     exp_variables = ["background", "intensity"]  # key from my_stimulus_options
-    # # exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
-    # # Define experiment parameters. List lengths must be equal.
-    # # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logarithmic = [True]
-    experiment_dict = {
-        "exp_variables": exp_variables,
-        # two vals for each exp_variable, even is it is not changing
-        "min_max_values": [
-            [0.001, 1000],
-            ([0, 0], [0.001, 1000000]),
-        ],  # background, intensity
-        "n_steps": [2, (1, 6)],
-        "logarithmic": [True, (False, True)],
-        # "min_max_values": [[0.5, 46], [0.01, 0.64]],  # temporal frequency, contrast
-        # "n_steps": [14, 7],  # temporal frequency, contrast
-        # "logarithmic": [False, True],  # temporal frequency, contrast
-    }
+    # # # exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
+    # # # Define experiment parameters. List lengths must be equal.
+    # # # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logarithmic = [True]
+    # experiment_dict = {
+    #     "exp_variables": exp_variables,
+    #     # two vals for each exp_variable, even is it is not changing
+    #     "min_max_values": [
+    #         [1e-2, 1e5],
+    #         ([0, 0], [1e-2, 1e8]),
+    #     ],  # background, intensity
+    #     "n_steps": [8, (1, 10)],
+    #     "logarithmic": [True, (False, True)],
+    #     # "min_max_values": [[0.5, 46], [0.01, 0.64]],  # temporal frequency, contrast
+    #     # "n_steps": [14, 7],  # temporal frequency, contrast
+    #     # "logarithmic": [False, True],  # temporal frequency, contrast
+    # }
 
-    # # # N trials or N units must be 1, and the other > 1. This is set above in my_run_options.
-    PM.experiment.build_and_run(experiment_dict)
+    # # # # N trials or N units must be 1, and the other > 1. This is set above in my_run_options.
+    # PM.experiment.build_and_run(experiment_dict)
 
     # #########################
     # ## Analyze Experiment ###
     # #########################
 
-    my_analysis_options = {
-        "exp_variables": exp_variables,
-        "t_start_ana": 0.0,
-        "t_end_ana": 1.5,
-    }
+    # my_analysis_options = {
+    #     "exp_variables": exp_variables,
+    #     "t_start_ana": 0.0,
+    #     "t_end_ana": 1.0,
+    # }
 
-    # # PM.ana.analyze_experiment(my_analysis_options)
-    # # PM.ana.unit_correlation(my_analysis_options, gc_type, response_type, gc_units=None)
-    # PM.ana.relative_gain(my_analysis_options)
-    PM.ana.response_vs_background(my_analysis_options)
+    # # # PM.ana.analyze_experiment(my_analysis_options)
+    # # # PM.ana.unit_correlation(my_analysis_options, gc_type, response_type, gc_units=None)
+    # # PM.ana.relative_gain(my_analysis_options)
+    # PM.ana.response_vs_background(my_analysis_options)
 
-    # # ############################
-    # # ### Visualize Experiment ###
-    # # ############################
+    # ############################
+    # ### Visualize Experiment ###
+    # ############################
 
     # # PM.viz.spike_raster_response(exp_variables, trial=0, savefigname=None)
-    # PM.viz.show_relative_gain(exp_variables, savefigname=None)
-    PM.viz.show_response_vs_background_experiment(exp_variables, savefigname=None)
+    # # PM.viz.show_relative_gain(exp_variables, savefigname=None)
+    # PM.viz.show_response_vs_background_experiment(exp_variables, savefigname=None)
 
     # PM.viz.show_unit_correlation(
     #     exp_variables, time_window=[-0.2, 0.2], savefigname=None
