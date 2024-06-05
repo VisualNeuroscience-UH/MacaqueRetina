@@ -3802,9 +3802,12 @@ class Viz:
 
     def show_response_vs_background_experiment(self, exp_variables, savefigname=None):
         """
-        Plots the cone response as a function of flash intensity for different background light levels.
+        Plots the unit responses as a function of flash intensity for different background light levels.
+        If a savefigname is provided, the figure is saved.
 
         Parameters:
+        exp_variables (list): List of experimental variables to plot.
+        savefigname (str, optional): Name of the figure to save. Defaults to None.
         """
 
         cond_names_string = "_".join(exp_variables)
@@ -3817,37 +3820,30 @@ class Viz:
         # Load results
         filename = f"exp_results_{gc_type}_{response_type}_response_vs_background.csv"
         df = self.data_io.get_data(filename=filename)
-        # breakpoint()
 
-        # # Melt the DataFrame for seaborn compatibility
-        # df_melted = df.melt(
-        #     id_vars=["flash"],
-        #     var_name="background",
-        #     value_name="cone_signal",
-        # )
+        df_melted = pd.melt(
+            df,
+            id_vars=["background", "flash"],
+            value_vars=["cone_signal_u", "bipolar_signal", "generator_potentials"],
+        )
 
-        # Plot using seaborn
-        plt.figure(figsize=(10, 6))
-        sns.lineplot(
-            data=df,
-            x="flash",
-            y="cone_signal",
+        g = sns.FacetGrid(
+            df_melted,
+            row="variable",
             hue="background",
-            marker="o",
+            margin_titles=True,
+            sharex=True,
+            sharey=False,
+            height=3,
+            aspect=1.5,
         )
+        g.axes[0, 0].invert_yaxis()
+        g.map(sns.lineplot, "flash", "value")
+        [i[0].set_xscale("log") for i in g.axes]
 
-        # Customize the plot
-        plt.xlabel("Log Flash Intensity (log sigma)")
-        plt.ylabel("ΔV/Vmax")
-        plt.title(
-            "Stimulus-response relations for flashes applied in the dark or on steady background illumination"
-        )
-        plt.axhline(0, color="black", linewidth=0.5)
-        plt.grid(True)
-        # plt.ylim(-0.6, 1.1)
-        # plt.xlim(-4.5, 8.5)
-        # Set x_axis log
-        plt.xscale("log")
+        plt.xlabel("Log Flash Intensity (R*)")
+        plt.ylabel("Response")
+        plt.suptitle("Onset-response vs background illumination")
 
         if savefigname:
             self._figsave(figurename=savefigname)
