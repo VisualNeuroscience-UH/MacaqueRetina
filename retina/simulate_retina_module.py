@@ -31,6 +31,7 @@ from project.project_utilities_module import Printable
 from copy import deepcopy
 import sys
 import time
+from abc import ABC, abstractmethod
 
 b2.prefs["logging.display_brian_error_message"] = False
 
@@ -57,6 +58,10 @@ class ReceptiveFieldsBase(Printable, RetinaMath):
         self.DoG_model = self.my_retina["DoG_model"]
         self.spatial_model = self.my_retina["spatial_model"]
         self.temporal_model = self.my_retina["temporal_model"]
+
+    @abstractmethod
+    def create_signal():
+        pass
 
 
 class Cones(ReceptiveFieldsBase):
@@ -398,7 +403,7 @@ class Cones(ReceptiveFieldsBase):
         self.data_io.save_cone_response_to_hdf5(filename, cone_response)
 
     # Public functions
-    def create_signal(self, vs, n_trials):
+    def create_signal(self, vs):
         """
         Generates cone signal.
 
@@ -407,8 +412,6 @@ class Cones(ReceptiveFieldsBase):
         vs : VisualSignal
             The visual signal object containing the transduction cascade from stimulus video
             to RGC unit spike response.
-        n_trials : int
-            The number of trials to simulate.
 
         Returns
         -------
@@ -555,7 +558,7 @@ class Bipolars(ReceptiveFieldsBase):
         self.ret_npz = ret_npz
         self.n_units = self.ret_npz["bipolar_to_gcs_weights"].shape[0]
 
-    def create_signal(self, vs, gcs):
+    def create_signal(self, vs):
         """
         Apply a bipolar nonlinearity function.
 
@@ -603,7 +606,8 @@ class Bipolars(ReceptiveFieldsBase):
 
         # Sign inversion for cones' glutamate release => ON bipolars
         # We invert [light = 0, dark = 1] to [light = 1, dark = 0]
-        if gcs.response_type == "on":
+        # breakpoint()
+        if self.my_retina["response_type"] == "on":
             bipolar_cen_sum_inv = 1 - bipolar_cen_sum
             bipolar_sur_sum_inv = 1 - bipolar_sur_sum
 
@@ -2564,8 +2568,8 @@ class SimulateRetina(RetinaMath):
         elif gcs.temporal_model == "subunit":
 
             vs = self._create_dynamic_contrast(vs, gcs)
-            vs = cones.create_signal(vs, n_trials)
-            vs = bipolars.create_signal(vs, gcs)  # Creates generator potentials
+            vs = cones.create_signal(vs)
+            vs = bipolars.create_signal(vs)  # Creates generator potentials
 
         elif gcs.temporal_model == "fixed":  # Linear model
 
