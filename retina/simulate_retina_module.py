@@ -36,7 +36,7 @@ from abc import ABC, abstractmethod
 b2.prefs["logging.display_brian_error_message"] = False
 
 
-class ReceptiveFieldsBase(Printable, RetinaMath):
+class ReceptiveFieldsBase(ABC, Printable, RetinaMath):
     """
     Class containing information associated with receptive fields, including
     retina parameters, the spatial and temporal filters.
@@ -880,6 +880,10 @@ class GanglionCells(ReceptiveFieldsBase):
 
         self.microm_per_pix = (1 / self.deg_per_mm) / vs.pix_per_deg * 1000
         self.temporal_filter_len = int(self.data_filter_duration / (1000 / vs.fps))
+
+    def create_signal(self):
+        # TODO move gcs signal generation logic here
+        pass
 
 
 class VisualSignal(Printable):
