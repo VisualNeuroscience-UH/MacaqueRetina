@@ -3821,10 +3821,12 @@ class Viz:
         filename = f"exp_results_{gc_type}_{response_type}_response_vs_background.csv"
         df = self.data_io.get_data(filename=filename)
 
+        # from df.columns, select column names which do not include substrings "flash" or "background"
+        data_columns = df.loc[:, ~df.columns.str.contains("flash|background")].columns
         df_melted = pd.melt(
             df,
             id_vars=["background", "flash"],
-            value_vars=["cone_signal_u", "bipolar_signal", "generator_potentials"],
+            value_vars=data_columns,
         )
 
         g = sns.FacetGrid(
