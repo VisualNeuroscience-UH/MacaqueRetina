@@ -3841,6 +3841,10 @@ class Viz:
         g.map(sns.lineplot, "flash", "value")
         [i[0].set_xscale("log") for i in g.axes]
 
+        # Add legend
+        handles, labels = g.axes[0, 0].get_legend_handles_labels()
+        plt.legend(handles, labels, loc="upper left")
+
         plt.xlabel("Log Flash Intensity (R*)")
         plt.ylabel("Response")
         plt.suptitle("Onset-response vs background illumination")
