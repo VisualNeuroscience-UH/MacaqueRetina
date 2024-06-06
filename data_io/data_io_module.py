@@ -945,7 +945,13 @@ class DataIO(DataIOBase):
         self._save_structure_csv(rgc_coords, filename=filename)
 
         data_dict = {}
-        for variable in ["cone_signal", "bipolar_signal", "generator_potentials"]:
+        for variable in [
+            "cone_signal",
+            "bipolar_signal",
+            "generator_potentials",
+            "A_pupil",
+            "lambda_nm",
+        ]:
             # for variable in ["cone_signal_u", "bipolar_signal", "generator_potentials"]:
             if hasattr(vs, variable):
                 data = getattr(vs, variable)
