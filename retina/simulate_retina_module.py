@@ -330,14 +330,15 @@ class Cones(ReceptiveFieldsBase):
         if p["unit"] == "mV":
             # np drops unit and interprets value as float, eg 7 mV -> 0.007 V
             r0 = np.array(r0)[np.newaxis, np.newaxis] * b2u.volt
+            # Shifted raw response
             cone_output_u = (r_dark + response) / b2u.mV
         elif p["unit"] == "pA":
             r0 = np.array(r0)[np.newaxis, np.newaxis] * b2u.amp
             cone_output_u = (r_dark + response) / b2u.pA
 
         # Burkhardt 1994 and Clark 2013 response scaling
-        cone_output = (response - r0) / max_response
-
+        cone_output = (response - r0) / np.abs(max_response)
+        # breakpoint()
         return cone_output, cone_output_u
 
     # Detached internal legacy functions
@@ -524,11 +525,16 @@ class Cones(ReceptiveFieldsBase):
         # Normalize noise to have one mean and unit sd at the noise data frequencies
         cone_noise_norm = (cone_noise - cone_noise.mean()) / np.std(cone_noise, axis=0)
 
+        magn = self.cone_general_params["cone_noise_magnitude"]
+
         # invert cone_noise_norm for shape (n_cones, n_timepoints)
-        vs.bipolar_synaptic_noise = cone_noise_norm.T
+        params_dict = self.my_retina["cone_signal_parameters"]
+        max_response = params_dict["max_response"]
+        vs.cone_noise = cone_noise_norm.T * magn
+        vs.cone_noise_u = cone_noise_norm.T * magn * max_response
+        # breakpoint()
 
         # if model is dynamic or fixed
-        magn = self.cone_general_params["cone_noise_magnitude"]
         cones_to_gcs_weights = self.cones_to_gcs_weights
         weights_norm = cones_to_gcs_weights / np.sum(cones_to_gcs_weights, axis=0)
         gc_synaptic_noise = cone_noise_norm @ weights_norm * magn
@@ -585,7 +591,8 @@ class Bipolars(ReceptiveFieldsBase):
         cones_to_bipolars_sur_w = self.ret_npz["cones_to_bipolars_surround_weights"]
 
         # [n_cones, n_timepoints]
-        cone_output = vs.cone_signal_u  # + vs.bipolar_synaptic_noise
+        cone_output = vs.cone_signal + vs.cone_noise
+        # cone_output = vs.cone_signal_u  # + vs.bipolar_synaptic_noise
         # [n_bipolars, n_timepoints]
         bipolar_cen_sum = cones_to_bipolars_cen_w.T @ cone_output
         bipolar_sur_sum = cones_to_bipolars_sur_w.T @ cone_output
@@ -594,18 +601,16 @@ class Bipolars(ReceptiveFieldsBase):
         # We invert [light = 0, dark = 1] to [light = 1, dark = 0]
         # breakpoint()
         if self.my_retina["response_type"] == "on":
-            bipolar_cen_sum_inv = 1 - bipolar_cen_sum
-            bipolar_sur_sum_inv = 1 - bipolar_sur_sum
+            bipolar_cen_sum_inv = -bipolar_cen_sum
+            bipolar_sur_sum_inv = -bipolar_sur_sum
 
         # TODO: Replace this with contrast adaptation / use it as an optional mechanism
         bg = np.mean(bipolar_sur_sum_inv[:, : vs.baseline_len_tp], axis=1)
-        bipolar_input_sum_weber = (bipolar_cen_sum_inv - bg[:, np.newaxis]) / bg[
-            :, np.newaxis
-        ]
+        bipolar_input_sum = bipolar_cen_sum_inv - bg[:, np.newaxis]
 
-        vs.bipolar_signal = bipolar_input_sum_weber
+        vs.bipolar_signal = bipolar_input_sum
 
-        bipolar_output_sum_weber = bipolar_to_gcs_weights.T @ bipolar_input_sum_weber
+        bipolar_output_sum_weber = bipolar_to_gcs_weights.T @ bipolar_input_sum
 
         # Apply synaptic input scaling for negative responses (rectification/nonlinearity)
         neg_idx = bipolar_output_sum_weber < 0
@@ -616,17 +621,28 @@ class Bipolars(ReceptiveFieldsBase):
 
         vs.generator_potentials = gc_synaptic_input
 
-        # # # # plt.plot(cone_output_weber.T)
-        # fig, ax = plt.subplots(4, 1, figsize=(12, 4))
+        # r = bipolar_input_sum
+        # # bl_mean = response[:, vs.baseline_len_tp].mean(axis=1)[:, np.newaxis]
+        # r_abs = np.abs(r - bg[:, np.newaxis])
+        # r_argmax = r_abs.argmax(axis=1)
+        # r_max = r[:, r_argmax]
+        # print(f"Max bipolar_signal: {r_max.mean()}")
+
+        # # # # # plt.plot(cone_output_weber.T)
+        # fig, ax = plt.subplots(6, 1, figsize=(12, 4))
         # ax[0].plot(cone_output[0, :], label="cone_output")
         # ax[1].plot(bipolar_cen_sum[0, :], label="bipolar_cen_sum")
         # ax[2].plot(bipolar_cen_sum_inv[0, :], label="bipolar_cen_sum_inv")
-        # ax[3].plot(gc_synaptic_input[0, :], label="gc_synaptic_input")
+        # ax[3].plot(bipolar_input_sum[0, :], label="bipolar_input_sum")
+        # ax[4].plot(bipolar_output_sum_weber[0, :], label="bipolar_output_sum_weber")
+        # ax[5].plot(gc_synaptic_input[0, :], label="gc_synaptic_input")
         # # # plt.plot(bipolar_output_sum.T)
-        # ax[0].legend()
-        # ax[1].legend()
-        # ax[2].legend()
-        # ax[3].legend()
+        # [i.legend() for i in ax]
+        # # ax[0].legend()
+        # # ax[1].legend()
+        # # ax[2].legend()
+        # # ax[3].legend()
+        # # ax[4].legend()
         # plt.show()
         # breakpoint()
         return vs
@@ -2370,7 +2386,7 @@ class SimulateRetina(RetinaMath):
         }
 
         cone_responses_to_show = {
-            "cone_noise": vs.bipolar_synaptic_noise,
+            "cone_noise": vs.cone_noise,
         }
 
         photodiode_to_show = {
