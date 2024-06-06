@@ -237,6 +237,7 @@ class Cones(ReceptiveFieldsBase):
         filter_limit_time = p["filter_limit_time"]
         input_gain = p["input_gain"]
         max_response = p["max_response"]
+        r_dark = p["r_dark"]
 
         def simple_filter(t, n, tau):
             norm_coef = gamma_function(n + 1) * np.power(tau, n + 1)
@@ -324,23 +325,18 @@ class Cones(ReceptiveFieldsBase):
 
         # Synaptic vesicle release assumed linearly coupled to negative current.
         # It reduces with light and increases with dark.
+        response = M.r
+        r0 = r_initial_value
         if p["unit"] == "mV":
-            # Cone output in millivolts
-            response = M.r
-            r0 = r_initial_value
-            r0 = np.array(r0)[np.newaxis, np.newaxis] * b2u.mV
-            # Cone output in normalized units
-            r_dark = -40 * b2u.mV
+            # np drops unit and interprets value as float, eg 7 mV -> 0.007 V
+            r0 = np.array(r0)[np.newaxis, np.newaxis] * b2u.volt
             cone_output_u = (r_dark + response) / b2u.mV
-            cone_output = (response - r0) / max_response
         elif p["unit"] == "pA":
-            response = M.r / b2u.pA
+            r0 = np.array(r0)[np.newaxis, np.newaxis] * b2u.amp
+            cone_output_u = (r_dark + response) / b2u.pA
 
-            # Cone output in normalized units
-            r_dark = 0  # btw [-136 (dark), 0 (light)] pA
-            # r_dark = -136  # btw [-136 (dark), 0 (light)] pA
-            cone_output_u = r_dark + response
-            cone_output = (r_dark + response) / r_dark
+        # Burkhardt 1994 and Clark 2013 response scaling
+        cone_output = (response - r0) / max_response
 
         return cone_output, cone_output_u
 
@@ -439,6 +435,8 @@ class Cones(ReceptiveFieldsBase):
         cone_input_R = self.get_photoisomerizations_from_luminance(
             cone_input, lambda_nm=lambda_nm, A_pupil=A_pupil
         )
+        vs.lambda_nm = lambda_nm
+        vs.A_pupil = A_pupil
 
         # Neutral Density filtering factor (ff) to reduce or increase luminance
         ff = np.power(10.0, -self.ND_filter)

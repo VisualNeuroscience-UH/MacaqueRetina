@@ -952,7 +952,6 @@ class DataIO(DataIOBase):
             "A_pupil",
             "lambda_nm",
         ]:
-            # for variable in ["cone_signal_u", "bipolar_signal", "generator_potentials"]:
             if hasattr(vs, variable):
                 data = getattr(vs, variable)
                 data_dict[variable] = data
