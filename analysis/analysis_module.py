@@ -1000,7 +1000,13 @@ class Analysis(AnalysisBase):
         data_fullpath = self.data_io.most_recent_pattern(data_folder, pattern)
 
         data_npz = self.data_io.get_data(data_fullpath)
-        available_data = [f for f in data_npz.files if "allow_pickle" not in f]
+        A_pupil = data_npz["A_pupil"]
+        lambda_nm = data_npz["lambda_nm"]
+        available_data = [
+            f
+            for f in data_npz.files
+            if f not in ["A_pupil", "lambda_nm", "allow_pickle"]
+        ]
         df = pd.DataFrame(
             index=range(len(unique_intensity) * len(unique_background)),
             columns=[
@@ -1016,9 +1022,8 @@ class Analysis(AnalysisBase):
         for idx, cond_name in enumerate(cond_names):
             # Define the pattern for the filename
             pattern = f"Response_{gc_type}_{response_type}_{cond_name}_*.npz"
-            data_fullpath = self.data_io.most_recent_pattern(data_folder, pattern)
-            data_npz = self.data_io.get_data(data_fullpath)
 
+            # Indeendent variables
             background = float(experiment_df.loc["background", cond_name])
             flash = ast.literal_eval(experiment_df.loc["intensity", cond_name])[1]
             baseline_start_seconds = float(
@@ -1027,12 +1032,23 @@ class Analysis(AnalysisBase):
             baseline_start_tp = int(baseline_start_seconds * fps_vec[0])
             baseline_ixd = np.arange(baseline_start_tp)
 
+            # Dependent variables
+            data_fullpath = self.data_io.most_recent_pattern(data_folder, pattern)
+            data_npz = self.data_io.get_data(data_fullpath)
+
             df.iloc[idx, 0] = background
             df.iloc[idx, 1] = int(
-                self.get_photoisomerizations_from_luminance(background)
+                self.get_photoisomerizations_from_luminance(
+                    background, A_pupil=A_pupil, lambda_nm=lambda_nm
+                )
             )
             df.iloc[idx, 2] = flash
-            df.iloc[idx, 3] = int(self.get_photoisomerizations_from_luminance(flash))
+            df.iloc[idx, 3] = int(
+                self.get_photoisomerizations_from_luminance(
+                    flash, A_pupil=A_pupil, lambda_nm=lambda_nm
+                )
+            )
+
             for this_data in available_data:
                 response = data_npz[this_data]
                 r = response[:, tp_idx]

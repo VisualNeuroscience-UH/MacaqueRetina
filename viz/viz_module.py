@@ -3826,7 +3826,9 @@ class Viz:
         if savefigname:
             self._figsave(figurename=savefigname)
 
-    def show_response_vs_background_experiment(self, exp_variables, savefigname=None):
+    def show_response_vs_background_experiment(
+        self, exp_variables, unit="cd/m2", savefigname=None
+    ):
         """
         Plots the unit responses as a function of flash intensity for different background light levels.
         If a savefigname is provided, the figure is saved.
@@ -3847,18 +3849,28 @@ class Viz:
         filename = f"exp_results_{gc_type}_{response_type}_response_vs_background.csv"
         df = self.data_io.get_data(filename=filename)
 
+        match unit:
+            case "R*":
+                bg_str = "background_R"
+                flash_str = "flash_R"
+            case "cd/m2":
+                bg_str = "background"
+                flash_str = "flash"
+
+        # breakpoint()
         # from df.columns, select column names which do not include substrings "flash" or "background"
         data_columns = df.loc[:, ~df.columns.str.contains("flash|background")].columns
         df_melted = pd.melt(
             df,
-            id_vars=["background", "flash"],
+            id_vars=[bg_str, flash_str],
+            # id_vars=["background", "flash"],
             value_vars=data_columns,
         )
 
         g = sns.FacetGrid(
             df_melted,
             row="variable",
-            hue="background",
+            hue=bg_str,
             margin_titles=True,
             sharex=True,
             sharey=False,
@@ -3866,14 +3878,14 @@ class Viz:
             aspect=1.5,
         )
         # g.axes[0, 0].invert_yaxis()
-        g.map(sns.lineplot, "flash", "value")
+        g.map(sns.lineplot, flash_str, "value")
         [i[0].set_xscale("log") for i in g.axes]
 
         # Add legend
         handles, labels = g.axes[0, 0].get_legend_handles_labels()
         plt.legend(handles, labels, loc="upper left")
 
-        plt.xlabel("Log Flash Intensity (R*)")
+        plt.xlabel(f"Log Flash Intensity ({unit})")
         plt.ylabel("Response")
         plt.suptitle("Onset-response vs background illumination")
 
