@@ -824,6 +824,9 @@ class ConstructRetina(RetinaMath):
 
         fitted_function = self.parabola
 
+        # Turner 2018 surround activation is in the range [-5, 5]
+        # Scale g_sur_values to [-1, 1] before fitting. This allows calculating
+        # the rectification index directly from bipolar surround inputs.
         g_sur_min = np.min(g_sur_values)
         g_sur_max = np.max(g_sur_values)
         g_sur_scaled = 2 * (g_sur_values - g_sur_min) / (g_sur_max - g_sur_min) - 1
