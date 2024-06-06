@@ -594,18 +594,17 @@ class Bipolars(ReceptiveFieldsBase):
         # Sign inversion for cones' glutamate release => ON bipolars
         # We invert [light = 0, dark = 1] to [light = 1, dark = 0]
         if self.my_retina["response_type"] == "on":
-            bipolar_cen_sum_inv = -bipolar_cen_sum
-            bipolar_sur_sum_inv = -bipolar_sur_sum
+            bipolar_cen_sum = -bipolar_cen_sum
+            bipolar_sur_sum = -bipolar_sur_sum
 
         # TODO: Replace this with contrast adaptation / use it as an optional mechanism
-        bg = np.mean(bipolar_sur_sum_inv[:, : vs.baseline_len_tp], axis=1)
-        bipolar_input_sum = bipolar_cen_sum_inv - bg[:, np.newaxis]
+        bg = np.mean(bipolar_sur_sum[:, : vs.baseline_len_tp], axis=1)
+        bipolar_input_sum = bipolar_cen_sum - bg[:, np.newaxis]
 
         vs.bipolar_signal = bipolar_input_sum
 
         bipolar_output_sum = bipolar_to_gcs_weights.T @ bipolar_input_sum
-        # The 5 is Turner_2018_eLife_Fig5C x-scaler; sur generation potential => Turner +-5 sur activation
-        bipolar_scaler_sum = 5 * bipolar_to_gcs_weights.T @ bipolar_sur_sum_inv
+        bipolar_scaler_sum = bipolar_to_gcs_weights.T @ bipolar_sur_sum
         # RI is Rectification Index
         RI = self.parabola(bipolar_scaler_sum, *popt)
         # [n_gcs, n_timepoints]
@@ -618,21 +617,14 @@ class Bipolars(ReceptiveFieldsBase):
 
         vs.generator_potentials = gc_synaptic_input
 
-        # # # # plt.plot(cone_output_weber.T)
-        # fig, ax = plt.subplots(6, 1, figsize=(12, 4))
+        # fig, ax = plt.subplots(5, 1, figsize=(12, 4))
         # ax[0].plot(cone_output[0, :], label="cone_output")
-        # ax[1].plot(bipolar_cen_sum[0, :], label="bipolar_cen_sum")
-        # ax[2].plot(bipolar_cen_sum_inv[0, :], label="bipolar_cen_sum_inv")
-        # ax[3].plot(bipolar_input_sum[0, :], label="bipolar_input_sum")
-        # ax[4].plot(bipolar_output_sum[0, :], label="bipolar_output_sum")
-        # ax[5].plot(gc_synaptic_input[0, :], label="gc_synaptic_input")
-        # # # plt.plot(bipolar_output_sum.T)
+        # ax[1].plot(bipolar_output_sum[0, :], label="bipolar_output_sum")
+        # ax[2].plot(gc_synaptic_input[0, :], label="gc_synaptic_input")
+        # ax[3].plot(bipolar_scaler_sum[0, :], label="bipolar_scaler_sum")
+        # ax[4].plot(RI[0, :], label="RI")
         # [i.legend() for i in ax]
-        # # ax[0].legend()
-        # # ax[1].legend()
-        # # ax[2].legend()
-        # # ax[3].legend()
-        # # ax[4].legend()
+
         # plt.show()
         # breakpoint()
         return vs
