@@ -282,7 +282,7 @@ my_stimulus_options = {
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
     "dtype_name": "float64",  # low contrast needs "float16", for performance, use "uint8",
-    "fps": 350,  # 300 for good cg integration
+    "fps": 90,  # 300 for good cg integration
     "duration_seconds": 0.5,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.0,
@@ -302,9 +302,9 @@ my_stimulus_options = {
     "contrast": 0.99,  # mean +- contrast * mean
     "mean": 128,  # Consider this as cd/m2
     # intensity (min, max) overrides contrast and mean unless the line is commented out
-    "intensity": (0, 100000),
+    "intensity": (0, 1e5),
     # "intensity": (0, 1000000),
-    "background": 0.01,  # "mean", "intensity_min", "intensity_max" or value.
+    "background": 1e-1,  # "mean", "intensity_min", "intensity_max" or value.
     "ND_filter": 0.0,  # 0.0, log10 neutral density filter factor, can be negative
 }
 
@@ -386,7 +386,7 @@ cone_general_params = {
     "cone2gc_midget": 9,  # um, 1 SD of Gaussian
     "cone2gc_parasol": 27,  # um 27
     "cone2gc_cutoff_SD": 1,  # 3 SD is 99.7% of Gaussian
-    "cone_noise_magnitude": 1.0,  # 0.2  # firing rate relative to Benardete mean values, 0 for no noise
+    "cone_noise_magnitude": 0.0,  # 0.2  # firing rate relative to Benardete mean values, 0 for no noise
     "cone_noise_wc": [14, 160],  # lorenzian freqs, Angueyra_2013_NatNeurosci Fig1
 }
 
@@ -481,7 +481,6 @@ bipolar_general_params = {
     "cone2bipo_sur_sd": 150,
     "bipo_sub_sur2cen": 1.0,  # Surround / Center amplitude ratio
 }
-
 # Recovery function from Berry_1998_JNeurosci, Uzzell_2004_JNeurophysiol
 # abs and rel refractory estimated from Uzzell_2004_JNeurophysiol,
 # Fig 7B, bottom row, inset. Parasol ON unit.
@@ -763,12 +762,12 @@ if __name__ == "__main__":
     # # # If possible, sample only temporal hemiretina
     # from project.project_utilities_module import DataSampler
 
-    # filename = "Angueyra_2022_JNeurosci_Fig2B.jpg"
+    # filename = "Turner_2018_eLife_Fig5C_ON.jpg"
     # filename_full = git_repo_root.joinpath(r"retina/literature_data", filename)
-    # # Fig lowest and highest tick values in the image, use these as calibration points
-    # min_X, max_X, min_Y, max_Y = (0, 8, 0, 100000)
+    # # # Fig lowest and highest tick values in the image, use these as calibration points
+    # min_X, max_X, min_Y, max_Y = (-5, 5, 0, 1)
     # ds = DataSampler(filename_full, min_X, max_X, min_Y, max_Y, logX=False, logY=False)
-    # ds.collect_and_save_points()
+    # # ds.collect_and_save_points()
     # ds.quality_control(restore=True)
 
     #################################
@@ -925,8 +924,6 @@ if __name__ == "__main__":
     ################################
 
     # TÄHÄN JÄIT:
-    # - Miten adaptoida tapit, eli vakioida output(bg). Clark kuvan 5D/Burkhardt 7&8 replikointi
-    # - Miten muutetaan tappien vakioitu output bipolaarien lineaariseksi responssiksi
     # - Miten kontrastivakioidaan bipolaarisolujen lineaarinen output
     # - Miten vakioidaan generaattoripotentiaali eri temporal mallien välillä
     # - gen => fr transformaatio, Turner malli?
@@ -939,9 +936,9 @@ if __name__ == "__main__":
     # Note that tuple values from my_stimulus_options are captured for varying each tuple value separately.
 
     exp_variables = ["background", "intensity"]  # key from my_stimulus_options
-    # # # exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
-    # # # Define experiment parameters. List lengths must be equal.
-    # # # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logarithmic = [True]
+    # # exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
+    # # Define experiment parameters. List lengths must be equal.
+    # # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logarithmic = [True]
     # experiment_dict = {
     #     "exp_variables": exp_variables,
     #     # two vals for each exp_variable, even is it is not changing
@@ -982,10 +979,7 @@ if __name__ == "__main__":
     # # PM.viz.spike_raster_response(exp_variables, trial=0, savefigname=None)
     # # PM.viz.show_relative_gain(exp_variables, savefigname=None)
     # PM.viz.show_response_vs_background_experiment(
-    #     exp_variables,
-    #     unit="cd/m2",
-    #     savefigname=None,
-    #     # exp_variables, unit="R*", savefigname=None
+    #     exp_variables, unit="cd/m2", savefigname=None
     # )
 
     # PM.viz.show_unit_correlation(
