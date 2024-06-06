@@ -580,26 +580,19 @@ class Bipolars(ReceptiveFieldsBase):
         popt = self.ret_npz["bipolar_nonlinearity_parameters"]
         bipolar_to_gcs_weights = self.ret_npz["bipolar_to_gcs_weights"]
 
-        # Stimulus vector (svec) for both center and surround is between -1 and 1
-        # vs.svecs_sur.shape = (n_units, n_timepoints), RI is Rectification Index
-        RI = self.parabola(vs.svecs_sur, *popt)
-        # [n_gcs, n_timepoints]
-        neg_scaler = 1 - RI
-
         # Get constructed weights [n_cones, n_bipolars]
         cones_to_bipolars_cen_w = self.ret_npz["cones_to_bipolars_center_weights"]
         cones_to_bipolars_sur_w = self.ret_npz["cones_to_bipolars_surround_weights"]
 
         # [n_cones, n_timepoints]
         cone_output = vs.cone_signal + vs.cone_noise
-        # cone_output = vs.cone_signal_u  # + vs.bipolar_synaptic_noise
+
         # [n_bipolars, n_timepoints]
         bipolar_cen_sum = cones_to_bipolars_cen_w.T @ cone_output
         bipolar_sur_sum = cones_to_bipolars_sur_w.T @ cone_output
 
         # Sign inversion for cones' glutamate release => ON bipolars
         # We invert [light = 0, dark = 1] to [light = 1, dark = 0]
-        # breakpoint()
         if self.my_retina["response_type"] == "on":
             bipolar_cen_sum_inv = -bipolar_cen_sum
             bipolar_sur_sum_inv = -bipolar_sur_sum
@@ -610,31 +603,28 @@ class Bipolars(ReceptiveFieldsBase):
 
         vs.bipolar_signal = bipolar_input_sum
 
-        bipolar_output_sum_weber = bipolar_to_gcs_weights.T @ bipolar_input_sum
+        bipolar_output_sum = bipolar_to_gcs_weights.T @ bipolar_input_sum
+        # The 5 is Turner_2018_eLife_Fig5C x-scaler; sur generation potential => Turner +-5 sur activation
+        bipolar_scaler_sum = 5 * bipolar_to_gcs_weights.T @ bipolar_sur_sum_inv
+        # RI is Rectification Index
+        RI = self.parabola(bipolar_scaler_sum, *popt)
+        # [n_gcs, n_timepoints]
+        neg_scaler = 1 - RI
 
         # Apply synaptic input scaling for negative responses (rectification/nonlinearity)
-        neg_idx = bipolar_output_sum_weber < 0
-        gc_synaptic_input = bipolar_output_sum_weber.copy()
-        gc_synaptic_input[neg_idx] = (
-            bipolar_output_sum_weber[neg_idx] * neg_scaler[neg_idx]
-        )
+        neg_idx = bipolar_output_sum < 0
+        gc_synaptic_input = bipolar_output_sum.copy()
+        gc_synaptic_input[neg_idx] = bipolar_output_sum[neg_idx] * neg_scaler[neg_idx]
 
         vs.generator_potentials = gc_synaptic_input
 
-        # r = bipolar_input_sum
-        # # bl_mean = response[:, vs.baseline_len_tp].mean(axis=1)[:, np.newaxis]
-        # r_abs = np.abs(r - bg[:, np.newaxis])
-        # r_argmax = r_abs.argmax(axis=1)
-        # r_max = r[:, r_argmax]
-        # print(f"Max bipolar_signal: {r_max.mean()}")
-
-        # # # # # plt.plot(cone_output_weber.T)
+        # # # # plt.plot(cone_output_weber.T)
         # fig, ax = plt.subplots(6, 1, figsize=(12, 4))
         # ax[0].plot(cone_output[0, :], label="cone_output")
         # ax[1].plot(bipolar_cen_sum[0, :], label="bipolar_cen_sum")
         # ax[2].plot(bipolar_cen_sum_inv[0, :], label="bipolar_cen_sum_inv")
         # ax[3].plot(bipolar_input_sum[0, :], label="bipolar_input_sum")
-        # ax[4].plot(bipolar_output_sum_weber[0, :], label="bipolar_output_sum_weber")
+        # ax[4].plot(bipolar_output_sum[0, :], label="bipolar_output_sum")
         # ax[5].plot(gc_synaptic_input[0, :], label="gc_synaptic_input")
         # # # plt.plot(bipolar_output_sum.T)
         # [i.legend() for i in ax]

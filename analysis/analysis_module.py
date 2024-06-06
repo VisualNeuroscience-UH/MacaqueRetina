@@ -1051,25 +1051,17 @@ class Analysis(AnalysisBase):
 
             for this_data in available_data:
                 response = data_npz[this_data]
-                r = response[:, tp_idx]
+                try:
+                    r = response[:, tp_idx]
+                except IndexError:
+                    raise IndexError(
+                        "Response data does not match time points, did you forget to redo the stimuli? Aborting..."
+                    )
                 bl_mean = response[:, baseline_ixd].mean(axis=1)[:, np.newaxis]
                 r_abs = np.abs(r - bl_mean)
                 r_argmax = r_abs.argmax(axis=1)
                 r_max = r[:, r_argmax]
                 df[this_data][idx] = r_max.mean()
-
-                # # tmp quality control
-                # plt.subplot(2, 1, 1)
-                # plt.plot(r[0, :])
-                # plt.vlines(r_argmax, r.min(), r.max(), colors="r", linestyles="dashed")
-                # plt.title(this_data)
-                # plt.subplot(2, 1, 2)
-                # plt.plot(r_abs[0, :])
-                # plt.vlines(
-                #     r_argmax, r_abs.min(), r_abs.max(), colors="r", linestyles="dashed"
-                # )
-                # plt.show()
-                # breakpoint()
 
         # Save results
         filename_out = (
