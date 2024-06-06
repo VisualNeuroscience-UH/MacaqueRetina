@@ -3841,7 +3841,6 @@ class Viz:
         cond_names_string = "_".join(exp_variables)
         filename = f"exp_metadata_{cond_names_string}.csv"
         experiment_df = self.data_io.get_data(filename=filename)
-        cond_names = experiment_df.columns.values
         gc_type = self.context.my_retina["gc_type"]
         response_type = self.context.my_retina["response_type"]
 
@@ -3857,13 +3856,11 @@ class Viz:
                 bg_str = "background"
                 flash_str = "flash"
 
-        # breakpoint()
         # from df.columns, select column names which do not include substrings "flash" or "background"
         data_columns = df.loc[:, ~df.columns.str.contains("flash|background")].columns
         df_melted = pd.melt(
             df,
             id_vars=[bg_str, flash_str],
-            # id_vars=["background", "flash"],
             value_vars=data_columns,
         )
 
@@ -3877,11 +3874,10 @@ class Viz:
             height=3,
             aspect=1.5,
         )
-        # g.axes[0, 0].invert_yaxis()
+
         g.map(sns.lineplot, flash_str, "value")
         [i[0].set_xscale("log") for i in g.axes]
 
-        # Add legend
         handles, labels = g.axes[0, 0].get_legend_handles_labels()
         plt.legend(handles, labels, loc="upper left")
 
