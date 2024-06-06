@@ -2846,7 +2846,6 @@ class Viz:
 
         # Set labels and legends
         ax[0].set_ylabel("Luminance (cd/m2)")
-        ax[1].set_xlabel("Time (s)")
         ax[1].grid(True)
 
         # Plot unadjusted cone responses to ax[2]. Cone responses are averaged across all cones.
@@ -3242,7 +3241,7 @@ class Viz:
         axs[1].set_title("RF adjusted values")
         axs[1].grid(True)
 
-    # Results visualization
+    # Experiment visualization
     def _string_on_plot(
         self, ax, variable_name=None, variable_value=None, variable_unit=None
     ):
