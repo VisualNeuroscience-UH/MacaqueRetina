@@ -2813,6 +2813,7 @@ class Viz:
         gc_responses = simulate_retina["gc_responses_to_show"]
         photodiode = simulate_retina["photodiode_to_show"]
         cone_responses = simulate_retina["cone_responses_to_show"]
+        my_stimulus_options = self.context.my_stimulus_options
 
         # Prepare data
         duration = gc_responses["duration"]
@@ -2820,15 +2821,22 @@ class Viz:
         cone_signal = cone_responses["cone_signal"]
         unit = cone_responses["unit"]
         tvec_mean = np.linspace(0, duration / b2u.second, len(photodiode_response))
+        fps = my_stimulus_options["fps"]
+        baseline_start_seconds = my_stimulus_options["baseline_start_seconds"]
+        baseline_start_tp = int(baseline_start_seconds * fps)
 
         # Calculate baselines and adjust signals
-        bl_photodiode = np.mean(photodiode_response[:10])
+        bl_photodiode = np.mean(photodiode_response[:baseline_start_tp])
         bl_cone = np.mean(cone_signal[:, :10])
         adjusted_photodiode = photodiode_response - bl_photodiode
-        adjusted_cone_signal = cone_signal.mean(axis=0) - bl_cone
+        mean_cone_signal = cone_signal.mean(axis=0)
+        adjusted_cone_signal = mean_cone_signal - bl_cone
         adjusted_cone_signal = adjusted_cone_signal / abs(adjusted_cone_signal).max()
         adjusted_photodiode = adjusted_photodiode / abs(adjusted_photodiode).max()
         r_argmax = np.abs(adjusted_cone_signal).argmax()
+        # get value at argmax
+        cone_signal_peak = mean_cone_signal[r_argmax]
+        delta_val = cone_signal_peak - bl_cone
 
         # Plotting
         fig, ax = plt.subplots(3, 1, sharex=True)
@@ -2849,6 +2857,21 @@ class Viz:
         # Add vertical line to r_argmax position for plots ax[1] and ax[2]
         ax[1].axvline(tvec_mean[r_argmax], color="r", linestyle="--")
         ax[2].axvline(tvec_mean[r_argmax], color="r", linestyle="--")
+
+        # Annotate the delta value
+        # breakpoint()
+        match unit:
+            case "mV":
+                anno_text = r"$\Delta Vm$: {:.2f} mV".format(delta_val)
+            case "pA":
+                anno_text = r"$\Delta I$: {:.2f} pA".format(delta_val)
+        ax[2].annotate(
+            anno_text,
+            xy=(tvec_mean[r_argmax], cone_signal_peak),
+            xytext=(tvec_mean[r_argmax] - 0.05, cone_signal_peak),
+            ha="right",  # Align text to the right
+            arrowprops=dict(facecolor="black", arrowstyle="->"),
+        )
 
         # Handling optional save and time range
         if time_range:
