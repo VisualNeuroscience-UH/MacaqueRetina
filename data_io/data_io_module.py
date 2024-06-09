@@ -474,8 +474,14 @@ class DataIO(DataIOBase):
 
         # Convert frames to uint8
         frames = stimulus.frames.copy()
-        frames = np.around(frames).astype(np.uint8)
-        print("The mp4 videofile for viewing is saved as uint8 type.")
+
+        if frames.dtype != np.uint8:
+            # Scale the frames to 8-bit depth
+            frames = (frames / frames.max()) * 255
+
+            frames = np.around(frames).astype(np.uint8)
+
+            print("The mp4 videofile for viewing is saved as uint8 type.")
 
         # Init openCV VideoWriter
         fourcc = cv2.VideoWriter_fourcc(*stimulus.options["codec"])
