@@ -287,7 +287,8 @@ my_stimulus_options = {
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.0,
     # "pattern": "sine_grating",  # One of the StimulusPatterns
-    "pattern": "temporal_square_pattern",  # One of the StimulusPatterns
+    "pattern": "natural_images",  # One of the StimulusPatterns
+    # "pattern": "temporal_square_pattern",  # One of the StimulusPatterns
     "stimulus_form": "rectangular",
     "size_inner": 0.1,  # deg, applies to annulus only
     "size_outer": 1,  # deg, applies to annulus only
@@ -302,15 +303,15 @@ my_stimulus_options = {
     "contrast": 0.99,  # mean +- contrast * mean
     "mean": 128,  # Consider this as cd/m2
     # intensity (min, max) overrides contrast and mean unless the line is commented out
-    "intensity": (0, 1e5),
+    "intensity": (10, 100),
     # "intensity": (0, 1000000),
-    "background": 1e-1,  # "mean", "intensity_min", "intensity_max" or value.
+    "background": 10,  # "mean", "intensity_min", "intensity_max" or value.
     "ND_filter": 0.0,  # 0.0, log10 neutral density filter factor, can be negative
 }
 
 # For external video and image input. See visual_stimulus_module.VideoBaseClass for more options.
 my_stimulus_metadata = {
-    "stimulus_file": "testi2.jpg",  # nature1.avi, testi.jpg
+    "stimulus_file": "testi.jpg",  # nature1.avi, testi.jpg
     "pix_per_deg": 30,  # VanHateren_1998_ProcRSocLondB 2 arcmin per pixel
     "apply_cone_filter": False,
     "fps": 25,
@@ -386,7 +387,7 @@ cone_general_params = {
     "cone2gc_midget": 9,  # um, 1 SD of Gaussian
     "cone2gc_parasol": 27,  # um 27
     "cone2gc_cutoff_SD": 1,  # 3 SD is 99.7% of Gaussian
-    "cone_noise_magnitude": 0.0,  # 0.2  # firing rate relative to Benardete mean values, 0 for no noise
+    "cone_noise_magnitude": 0.1,  # 0.2  # firing rate relative to Benardete mean values, 0 for no noise
     "cone_noise_wc": [14, 160],  # lorenzian freqs, Angueyra_2013_NatNeurosci Fig1
 }
 
@@ -461,7 +462,7 @@ cone_signal_parameters = {
 #     "lambda_nm": 555,  # nm 555 monkey Clark models: DN 650
 #     "input_gain": 1.0,  # unitless
 #     "r_dark": -136 * b2u.pA,  # dark current
-#     "max_response": 116.8,  # "pA", measured for a strong flash
+#     "max_response": 116.8 * b2u.pA,  # "pA", measured for a strong flash
 #     # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
 #     "alpha": 19.4 * b2u.pA * b2u.ms,
 #     "beta": 0.36 * b2u.ms,  # unitless
@@ -876,12 +877,12 @@ if __name__ == "__main__":
     # PM.viz.show_cone_responses(time_range=[0.4, 1.1], savefigname=None)
     PM.viz.show_cone_responses(time_range=None, savefigname=None)
 
-    # PM.viz.show_stimulus_with_gcs(
-    #     example_gc=0,  # [int,], my_run_options["unit_index"]
-    #     frame_number=180,  # depends on fps, and video and baseline lengths
-    #     show_rf_id=True,
-    #     savefigname=None,
-    # )
+    PM.viz.show_stimulus_with_gcs(
+        example_gc=0,  # [int,], my_run_options["unit_index"]
+        frame_number=46,  # depends on fps, and video and baseline lengths
+        show_rf_id=True,
+        savefigname=None,
+    )
 
     # ##########################################
     # ###       Show impulse response        ###
@@ -924,9 +925,9 @@ if __name__ == "__main__":
     ################################
 
     # TÄHÄN JÄIT:
-    # - Miten kontrastivakioidaan bipolaarisolujen lineaarinen output
-    # - Miten vakioidaan generaattoripotentiaali eri temporal mallien välillä
+    # - Miten vakioidaan generaattoripotentiaali eri temporal mallien välillä -- ALOITA TÄSTÄ
     # - gen => fr transformaatio, Turner malli?
+    # - SUBUNIT MALLIN VALIDOINTI vs Turner 2018
 
     # -BENARDETE INPUT [-1,1], VICTOR [0,1], CHICHI [-2,2], TURNER [-5, 5] & CDF NONLIN
 
