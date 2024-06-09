@@ -781,9 +781,8 @@ class VisualStimulus(VideoBaseClass):
 
         # Call StimulusPattern class method to get patterns (numpy array)
         # self.frames updated according to the pattern
-        eval(
-            f'StimulusPattern.{self.options["pattern"]}(self)'
-        )  # Direct call to class.method() requires the self as argument
+        # Direct call to class.method() requires the self as argument
+        eval(f'StimulusPattern.{self.options["pattern"]}(self)')
 
         # Now only the stimulus is scaled. The baseline and bg comes from options
         self._scale_intensity()
@@ -830,7 +829,6 @@ class VisualStimulus(VideoBaseClass):
 
         # Save video
         stimulus_video_name = Path(self.options["stimulus_video_name"])
-        # breakpoint()
         self.data_io.save_stimulus_to_videofile(stimulus_video_name, stimulus_video)
 
         return stimulus_video
