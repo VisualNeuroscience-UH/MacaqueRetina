@@ -2421,7 +2421,7 @@ class Viz:
 
         fig = plt.figure()
         ax = ax or plt.gca()
-        ax.imshow(stimulus_video.frames[frame_number, :, :], vmin=0, vmax=255)
+        ax.imshow(stimulus_video.frames[frame_number, :, :])
         ax = plt.gca()
 
         gc_rot_deg = df_stimpix["orient_cen_rad"] * (-1) * 180 / np.pi
