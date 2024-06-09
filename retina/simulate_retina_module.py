@@ -325,19 +325,33 @@ class Cones(ReceptiveFieldsBase):
 
         # Synaptic vesicle release assumed linearly coupled to negative current.
         # It reduces with light and increases with dark.
+        # Burkhardt 1994 and Clark 2013 response scaling is 0-1, but
+        # vesicle release is 1-0. So, we invert the response to keep vesicle release
+        # as the cone_output.
         response = M.r
         r0 = r_initial_value
+        r0 = np.array(r0)[np.newaxis, np.newaxis]
         if p["unit"] == "mV":
             # np drops unit and interprets value as float, eg 7 mV -> 0.007 V
-            r0 = np.array(r0)[np.newaxis, np.newaxis] * b2u.volt
+            r0 = r0 * b2u.volt
             # Shifted raw response
             cone_output_u = (r_dark + response) / b2u.mV
+            cone_output = 1 + response / np.abs(max_response)
+            # cone_output = 1 + (response - r0) / np.abs(max_response)
         elif p["unit"] == "pA":
-            r0 = np.array(r0)[np.newaxis, np.newaxis] * b2u.amp
+            r0 = r0 * b2u.amp
             cone_output_u = (r_dark + response) / b2u.pA
+            cone_output = 1 - response / np.abs(max_response)
+            # cone_output = 1 - (response - r0) / np.abs(max_response)
 
-        # Burkhardt 1994 and Clark 2013 response scaling
-        cone_output = (response - r0) / np.abs(max_response)
+        # print(f"{r0=}")
+        # print(f"{max_response=}")
+        # fig, ax = plt.subplots(3, 1, figsize=(12, 4))
+        # ax[0].plot(tvec, response[0, :], label="response")
+        # ax[1].plot(tvec, cone_output_u[0, :], label="cone_output_u")
+        # ax[2].plot(tvec, cone_output[0, :], label="cone_output")
+        # [i.legend() for i in ax]
+        # plt.show()
         # breakpoint()
         return cone_output, cone_output_u
 
@@ -592,25 +606,27 @@ class Bipolars(ReceptiveFieldsBase):
         bipolar_sur_sum = cones_to_bipolars_sur_w.T @ cone_output
 
         # Sign inversion for cones' glutamate release => ON bipolars
-        # We invert [light = 0, dark = 1] to [light = 1, dark = 0]
         if self.my_retina["response_type"] == "on":
-            bipolar_cen_sum = -bipolar_cen_sum
-            bipolar_sur_sum = -bipolar_sur_sum
-
+            bipolar_cen_sum = 1 - bipolar_cen_sum
+            bipolar_sur_sum = 1 - bipolar_sur_sum
+        elif self.my_retina["response_type"] == "off":
+            bipolar_cen_sum = bipolar_cen_sum - 1
+            bipolar_sur_sum = bipolar_sur_sum - 1
+        # breakpoint()
         # TODO: Replace this with contrast adaptation / use it as an optional mechanism
         bg = np.mean(bipolar_sur_sum[:, : vs.baseline_len_tp], axis=1)
         bipolar_input_sum = bipolar_cen_sum - bg[:, np.newaxis]
-
+        # breakpoint()
         vs.bipolar_signal = bipolar_input_sum
 
+        # Apply synaptic input scaling for negative responses (rectification/nonlinearity)
+        # See Turner_2018_eLife for the model and parabola data in their Fig 5C
         bipolar_output_sum = bipolar_to_gcs_weights.T @ bipolar_input_sum
         bipolar_scaler_sum = bipolar_to_gcs_weights.T @ bipolar_sur_sum
         # RI is Rectification Index
         RI = self.parabola(bipolar_scaler_sum, *popt)
         # [n_gcs, n_timepoints]
         neg_scaler = 1 - RI
-
-        # Apply synaptic input scaling for negative responses (rectification/nonlinearity)
         neg_idx = bipolar_output_sum < 0
         gc_synaptic_input = bipolar_output_sum.copy()
         gc_synaptic_input[neg_idx] = bipolar_output_sum[neg_idx] * neg_scaler[neg_idx]
@@ -621,8 +637,8 @@ class Bipolars(ReceptiveFieldsBase):
         # ax[0].plot(cone_output[0, :], label="cone_output")
         # ax[1].plot(bipolar_output_sum[0, :], label="bipolar_output_sum")
         # ax[2].plot(gc_synaptic_input[0, :], label="gc_synaptic_input")
-        # ax[3].plot(bipolar_scaler_sum[0, :], label="bipolar_scaler_sum")
-        # ax[4].plot(RI[0, :], label="RI")
+        # # ax[3].plot(bipolar_scaler_sum[0, :], label="bipolar_scaler_sum")
+        # # ax[4].plot(RI[0, :], label="RI")
         # [i.legend() for i in ax]
 
         # plt.show()
