@@ -3277,6 +3277,8 @@ class ConstructRetina(RetinaMath, Printable):
                 gc.img_mask = gc.img_mask[final_good_idx]
                 gc.img_lu_pix = gc.img_lu_pix[final_good_idx]
                 gc.df = gc.df.iloc[final_good_idx]
+                # Reset gc.df index
+                gc.df.reset_index(drop=True, inplace=True)
                 gc.n_units = len(gc.df)
 
             # 8) Get final center masks for the generated spatial rfs
@@ -3524,4 +3526,5 @@ class ConstructRetina(RetinaMath, Printable):
             filepath = output_folder.joinpath(filename)
 
         print("Saving model mosaic to %s" % filepath)
+
         gc.df.to_csv(filepath)
