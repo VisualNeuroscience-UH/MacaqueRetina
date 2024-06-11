@@ -334,7 +334,7 @@ class GanglionCellData(Printable):
         self.df = pd.DataFrame(columns=columns)
 
 
-class ConstructRetina(RetinaMath):
+class ConstructRetina(RetinaMath, Printable):
     """
     Create the ganglion cell mosaic.
     All spatial parameters are saved to the dataframe *gc_df*
@@ -810,18 +810,20 @@ class ConstructRetina(RetinaMath):
         """
         unit_type = self.context.my_retina["gc_type"]
 
-        if unit_type == "midget":
-            return ret
-
         response_type = self.context.my_retina["response_type"]
-        # Interpolate cone response at 400 k photoisomerization background
+
+        # Here we always load the parasol data, but set target_RI_values to 0
+        # (always linear) for midgets. No midget data exists.
         RI_values_npz = self.data_io.get_data(
             self.context.literature_data_files[
-                f"{unit_type}_{response_type}_RI_values_fullpath"
+                f"parasol_{response_type}_RI_values_fullpath"
             ]
         )
         g_sur_values, target_RI_values = self.data_extractor(RI_values_npz)
 
+        if unit_type == "midget":
+            target_RI_values = target_RI_values * 0
+            # return ret
         fitted_function = self.parabola
 
         # Turner 2018 surround activation is in the range [-5, 5]
@@ -834,7 +836,7 @@ class ConstructRetina(RetinaMath):
         # We treat the first value as an outlier and remove it
         popt, _ = opt.curve_fit(fitted_function, g_sur_scaled[1:], target_RI_values[1:])
 
-        ret.bipolar_nonlinearity_parameters = popt  # Convert params to linear space
+        ret.bipolar_nonlinearity_parameters = popt
         ret.g_sur_scaled = g_sur_scaled
         ret.target_RI_values = target_RI_values
         ret.bipolar_nonlinearity_fit = fitted_function(g_sur_scaled, *popt)
@@ -2259,10 +2261,8 @@ class ConstructRetina(RetinaMath):
         gc_df_in,
     ):
         """
-        Update gc_vae_df to have the same columns as gc_df with corresponding values.
-        Update the remaining pixel values to mm, unless unit in is in the column name
-        After repulsion have shifted the rfs, the eccentricity and polar angle of the receptive field center
-        are calculated from the new_gc_img_lu_pix and whole_ret_lu_mm.
+        Update gc_df_in to have the same columns as gc.df.
+        Update gc.df values to gc_df_in values in mm units, unless unit in is in the column name
         """
 
         _df = gc_df_in.reindex(columns=gc.df.columns)
@@ -2453,7 +2453,8 @@ class ConstructRetina(RetinaMath):
 
         round_err_y = np.zeros(len(df))
         round_err_x = np.zeros(len(df))
-        for i, row in df.iterrows():
+
+        for i in range(len(df)):
             # Get the position of the rf upper left corner in pixels
             # The xoc and yoc are the center of the rf in the rf image in the resampled data scale.
 
@@ -2865,6 +2866,11 @@ class ConstructRetina(RetinaMath):
         com_x_local = com_x - new_gc_img_lu_pix[:, 0]
         com_y_local = com_y - new_gc_img_lu_pix[:, 1]
 
+        print(f"\ncom_y.shape: {com_y.shape}")
+        print(f"com_x.shape: {com_x.shape}")
+        print(f"com_x_local.shape: {com_x_local.shape}")
+        print(f"new_gc_img_lu_pix.shape: {new_gc_img_lu_pix.shape}\n")
+
         new_retina = np.zeros(img_ret_shape)
         final_retina = np.zeros(img_ret_shape)
         for i in range(n_units):
@@ -3164,7 +3170,7 @@ class ConstructRetina(RetinaMath):
 
         # Endow units with spatial elliptical receptive fields.
         # Units become mm unless specified in column names.
-        # self.gc_df and self.gc_vae_df may be updated silently below
+        # gc.df may be updated silently below
 
         gc = self._get_gc_img_params(ret, gc, ecc2dd_params)
 
@@ -3202,7 +3208,7 @@ class ConstructRetina(RetinaMath):
             )
             gc = self._get_img_grid_mm(ret, gc)
 
-            # Add center mask area (mm^2) to gc_vae_df for visualization
+            # Add center mask area (mm^2) to gc.df for visualization
             gc = self._add_center_mask_area_to_df(gc)
 
         elif gc.spatial_model == "VAE":
@@ -3227,8 +3233,8 @@ class ConstructRetina(RetinaMath):
                 gc.img, mask_threshold=gc.mask_threshold
             )
 
-            viz_gc_vae_img = gc.img
-            viz_gc_vae_img_mask = gc.img_mask
+            viz_gc_vae_img = gc.img.copy()
+            viz_gc_vae_img_mask = gc.img_mask.copy()
 
             # 4) Sum separate rf images onto one retina pixel matrix.
             # In the retina pixel matrix, for each rf get the upper left corner
@@ -3260,20 +3266,23 @@ class ConstructRetina(RetinaMath):
                 self.gen_spat_cen_sd,
                 self.gen_spat_sur_sd,
                 _gc_vae_df,
-                _,
+                final_good_idx,
             ) = self.fit.get_generated_spatial_fits(gc.DoG_model)
 
-            # 7) Update self.gc_vae_df to include new positions and DoG fits after repulsion
+            # 7) Update gc.df to include new positions and DoG fits after repulsion
             # and convert units to to mm, where applicable
             print("\nUpdating ganglion cell dataframe...")
             gc = self._update_vae_gc_df(ret, gc, _gc_vae_df)
 
-            # Check that all fits are good. If this starts creating problems, probably
-            # the best solution is to remove the bad fit units totally from the self.gc_vae_df, self.gc_df,
-            # final_gc_vae_img, new_gc_img_lu_pix, final_whole_ret_img, com_x, com_y, and update self.n_units
-            assert gc.n_units == np.sum(
-                _gc_vae_df["good_filter_data"]
-            ), "Some final VAE fits are bad, aborting..."
+            # Check that all fits are good after repulsion. If not,
+            # remove the units where ellipses could not be fitted.
+            if gc.n_units != np.sum(final_good_idx):
+                print("Removing bad fits from final generated data...")
+                gc.img = gc.img[final_good_idx]
+                gc.img_mask = gc.img_mask[final_good_idx]
+                gc.img_lu_pix = gc.img_lu_pix[final_good_idx]
+                gc.df = gc.df.iloc[final_good_idx]
+                gc.n_units = len(gc.df)
 
             # 8) Get final center masks for the generated spatial rfs
             print("\nGetting final masked rfs and retina...")

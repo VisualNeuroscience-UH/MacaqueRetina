@@ -25,6 +25,6 @@ VAE model: Bad fits after 2) are marked bad and values set to zero
 		
 		2) After optimizing positions
 			- at build => _create_spatial_rfs 
-		- fit_module
-			- _fit_spatial_filters
-				- if DoG fit fails at scipy.optimize.curve_fit
+			- fit_module
+				- _fit_spatial_filters
+					- if DoG fit fails at scipy.optimize.curve_fit
