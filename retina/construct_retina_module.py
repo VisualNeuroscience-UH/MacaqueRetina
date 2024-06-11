@@ -2866,11 +2866,6 @@ class ConstructRetina(RetinaMath, Printable):
         com_x_local = com_x - new_gc_img_lu_pix[:, 0]
         com_y_local = com_y - new_gc_img_lu_pix[:, 1]
 
-        print(f"\ncom_y.shape: {com_y.shape}")
-        print(f"com_x.shape: {com_x.shape}")
-        print(f"com_x_local.shape: {com_x_local.shape}")
-        print(f"new_gc_img_lu_pix.shape: {new_gc_img_lu_pix.shape}\n")
-
         new_retina = np.zeros(img_ret_shape)
         final_retina = np.zeros(img_ret_shape)
         for i in range(n_units):
