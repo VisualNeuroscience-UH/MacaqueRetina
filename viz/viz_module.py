@@ -2728,7 +2728,8 @@ class Viz:
         n_units = gc_responses_to_show["n_units"]
         all_spiketrains = gc_responses_to_show["all_spiketrains"]
         duration = gc_responses_to_show["duration"]
-        generator_potential = gc_responses_to_show["generator_potential"]
+        # requested firing_rate before spike generation.
+        firing_rate = gc_responses_to_show["firing_rate"]
         video_dt = gc_responses_to_show["video_dt"]
         tvec_new = gc_responses_to_show["tvec_new"]
 
@@ -2743,7 +2744,7 @@ class Viz:
         # Prepare data for manual visualization
         for_eventplot = all_spiketrains.copy()  # list of different leght arrays
         for_histogram = np.concatenate(all_spiketrains)
-        for_generatorplot = np.nanmean(generator_potential, axis=0)
+        firing_rate_mean = np.nanmean(firing_rate, axis=0)
         if n_trials > 1 and n_units == 1:
             n_samples = n_trials
             sample_name = "Trials"
@@ -2765,8 +2766,8 @@ class Viz:
         ax[0].set_ylabel(sample_name)
 
         # Generator potential and average firing rate on second subplot
-        tvec = np.arange(0, generator_potential.shape[-1], 1) * video_dt
-        ax[1].plot(tvec, for_generatorplot, label="Generator")
+        tvec = np.arange(0, firing_rate.shape[-1], 1) * video_dt
+        ax[1].plot(tvec, firing_rate_mean, label="Generator")
         ax[1].set_xlim([0, duration / b2u.second])
 
         # Given bin_width in ms, convert it to the correct unit
@@ -2803,6 +2804,56 @@ class Viz:
         ax[2].set_ylabel("a.u.")
         ax[2].set_xlabel("Time (s)")
         ax[2].legend()
+
+        if savefigname is not None:
+            self._figsave(figurename=savefigname)
+
+    def show_generator_potential_histogram(self, savefigname=None):
+        """ """
+        gc_responses_to_show = self.project_data.simulate_retina["gc_responses_to_show"]
+        duration = gc_responses_to_show["duration"]
+        generator_potentials = gc_responses_to_show["generator_potentials"]
+        video_dt = gc_responses_to_show["video_dt"]
+
+        # Prepare data for manual visualization
+        generator_potential_mean = np.nanmean(generator_potentials, axis=0)
+        my_stimulus_options = self.context.my_stimulus_options
+        fps = my_stimulus_options["fps"]
+        baseline_start_seconds = my_stimulus_options["baseline_start_seconds"]
+        baseline_start_tp = int(baseline_start_seconds * fps)
+
+        photodiode_to_show = self.project_data.simulate_retina["photodiode_to_show"]
+        photodiode_response = photodiode_to_show["photodiode_response"]
+
+        temporal_model = self.context.my_retina["temporal_model"]
+
+        # Create subplots
+        fig, ax = plt.subplots(3, 1, sharex=False)
+
+        # Generator potential and average firing rate on second subplot
+        ax[0].hist(
+            generator_potentials[:, baseline_start_tp:].flatten(),
+            bins=100,
+        )
+        ax[0].set_ylabel("Count")
+
+        tvec = np.arange(0, generator_potentials.shape[-1], 1) * video_dt
+        ax[1].plot(
+            tvec[baseline_start_tp:],
+            generator_potential_mean[baseline_start_tp:],
+        )
+        ax[1].set_ylabel("Generator mean")
+        ax[1].set_xlabel("Time (s)")
+
+        ax[2].plot(
+            tvec[baseline_start_tp:],
+            photodiode_response[baseline_start_tp:],
+        )
+        ax[2].set_ylabel("Photodiode")
+        ax[2].set_xlabel("Time (s)")
+
+        # Set suptitle to temporal_model
+        fig.suptitle(f"Generator potentials for {temporal_model} temporal model")
 
         if savefigname is not None:
             self._figsave(figurename=savefigname)
