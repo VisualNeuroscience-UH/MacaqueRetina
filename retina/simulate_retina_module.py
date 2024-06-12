@@ -1152,8 +1152,12 @@ class SimulateRetina(RetinaMath):
             Temporal filter for the given unit
         """
 
-        filter_params = gcs.df.iloc[unit_index][["n", "p1", "p2", "tau1", "tau2"]]
-
+        try:
+            filter_params = gcs.df.iloc[unit_index][["n", "p1", "p2", "tau1", "tau2"]]
+        except KeyError:
+            raise KeyError(
+                "Missing temporal filter parameters in the dataframe, did you forget to build? Aborting..."
+            )
         tvec = np.linspace(0, gcs.data_filter_duration, gcs.temporal_filter_len)
         temporal_filter = self.diff_of_lowpass_filters(tvec, *filter_params)
 
@@ -2437,7 +2441,8 @@ class SimulateRetina(RetinaMath):
             "n_units": gcs.n_units,
             "all_spiketrains": vs.all_spiketrains,
             "duration": vs.duration,
-            "generator_potential": vs.firing_rates,
+            "firing_rates": vs.firing_rates,
+            "generator_potentials": vs.generator_potentials,
             "video_dt": vs.video_dt,
             "tvec_new": vs.tvec_new,
         }

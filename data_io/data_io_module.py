@@ -955,6 +955,7 @@ class DataIO(DataIOBase):
             "cone_signal",
             "bipolar_signal",
             "generator_potentials",
+            "firing_rates",
             "A_pupil",
             "lambda_nm",
         ]:

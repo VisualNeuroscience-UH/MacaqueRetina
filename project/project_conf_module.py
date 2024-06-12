@@ -213,7 +213,7 @@ my_retina = {
     "dd_regr_model": "quadratic",  # linear, quadratic, cubic, loglog. For midget < 20 deg, use quadratic; for parasol use loglog
     "ecc_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
-    "temporal_model": "subunit",  # fixed, dynamic, subunit
+    "temporal_model": "dynamic",  # fixed, dynamic, subunit
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
     "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
@@ -283,21 +283,21 @@ my_stimulus_options = {
     "pix_per_deg": 60,
     "dtype_name": "float64",  # low contrast needs "float16", for performance, use "uint8",
     "fps": 350,  # 300 for good cg integration
-    "duration_seconds": 2.0,  # actual frames = floor(duration_seconds * fps)
-    "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
-    "baseline_end_seconds": 0.5,
+    "duration_seconds": 1.0,  # actual frames = floor(duration_seconds * fps)
+    "baseline_start_seconds": 10,  # Total duration is duration + both baselines
+    "baseline_end_seconds": 0.0,
     # "pattern": "sine_grating",  # One of the StimulusPatterns
     # "pattern": "natural_images",  # One of the StimulusPatterns
     # "pattern": "temporal_sine_pattern",  # One of the StimulusPatterns
-    # "pattern": "temporal_chirp_pattern",  # One of the StimulusPatterns
-    "pattern": "contrast_chirp_pattern",  # One of the StimulusPatterns
+    "pattern": "temporal_chirp_pattern",  # One of the StimulusPatterns
+    # "pattern": "contrast_chirp_pattern",  # One of the StimulusPatterns
     "stimulus_form": "rectangular",
     "size_inner": 0.1,  # deg, applies to annulus only
     "size_outer": 1,  # deg, applies to annulus only
     "stimulus_position": (0.0, 0.0),  # relative to stimuls center in retina
     "stimulus_size": 1,  # 0.04,  # 2,  # deg, radius for circle, sidelen/2 for rectangle.
     "temporal_frequency": 10,  # 0.01,  # 4.0,  # 40,  # Hz
-    "temporal_frequency_range": (1, 100),  # Hz, applies to temporal chirp only
+    "temporal_frequency_range": (0.5, 50),  # Hz, applies to temporal chirp only
     "spatial_frequency": 5.0,  # cpd
     "orientation": 0,  # degrees
     "phase_shift": 0,  # math.pi + 0.1,  # radians
@@ -307,8 +307,8 @@ my_stimulus_options = {
     "mean": 128,  # Consider this as cd/m2
     # intensity (min, max) overrides contrast and mean unless the line is commented out
     # "intensity": (0, 100),
-    # "intensity": (0, 255),
-    "background": 128,  # "mean", "intensity_min", "intensity_max" or value.
+    "intensity": (0, 10000),
+    "background": 5000,  # "mean", "intensity_min", "intensity_max" or value.
     "ND_filter": 0.0,  # 0.0, log10 neutral density filter factor, can be negative
 }
 
@@ -784,7 +784,7 @@ if __name__ == "__main__":
     Build and test your retina here, one gc type at a time. 
     """
 
-    # PM.construct_retina.build()  # Main method for building the retina
+    PM.construct_retina.build()  # Main method for building the retina
 
     # The following visualizations are
     #  dependent on the ConstructRetina instance.
@@ -875,8 +875,8 @@ if __name__ == "__main__":
     ################################################
 
     # Based on my_run_options above
-    PM.viz.show_all_gc_responses(savefigname=None)
-    # PM.viz.show_all_gc_histogram(savefigname=None)
+    # PM.viz.show_all_gc_responses(savefigname=None)
+    PM.viz.show_generator_potential_histogram(savefigname=None)
     # PM.viz.show_cone_responses(time_range=[0.4, 1.1], savefigname=None)
     # PM.viz.show_cone_responses(time_range=None, savefigname=None)
 
