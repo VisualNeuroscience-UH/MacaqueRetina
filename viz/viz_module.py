@@ -2814,12 +2814,14 @@ class Viz:
         duration = gc_responses_to_show["duration"]
         generator_potentials = gc_responses_to_show["generator_potentials"]
         video_dt = gc_responses_to_show["video_dt"]
-
-        # Prepare data for manual visualization
-        generator_potential_mean = np.nanmean(generator_potentials, axis=0)
+        firing_rate = gc_responses_to_show["firing_rates"]
         my_stimulus_options = self.context.my_stimulus_options
         fps = my_stimulus_options["fps"]
         baseline_start_seconds = my_stimulus_options["baseline_start_seconds"]
+
+        # Prepare data for manual visualization
+        generator_potential_mean = np.nanmean(generator_potentials, axis=0)
+        firing_rate_mean = np.nanmean(firing_rate, axis=0)
         baseline_start_tp = int(baseline_start_seconds * fps)
 
         photodiode_to_show = self.project_data.simulate_retina["photodiode_to_show"]
@@ -2828,7 +2830,7 @@ class Viz:
         temporal_model = self.context.my_retina["temporal_model"]
 
         # Create subplots
-        fig, ax = plt.subplots(3, 1, sharex=False)
+        fig, ax = plt.subplots(4, 1, sharex=False, figsize=(12, 8))
 
         # Generator potential and average firing rate on second subplot
         ax[0].hist(
@@ -2847,10 +2849,17 @@ class Viz:
 
         ax[2].plot(
             tvec[baseline_start_tp:],
+            firing_rate_mean[baseline_start_tp:],
+        )
+        ax[2].set_ylabel("Firing rate")
+        ax[2].set_xlabel("Time (s)")
+
+        ax[3].plot(
+            tvec[baseline_start_tp:],
             photodiode_response[baseline_start_tp:],
         )
-        ax[2].set_ylabel("Photodiode")
-        ax[2].set_xlabel("Time (s)")
+        ax[3].set_ylabel("Photodiode")
+        ax[3].set_xlabel("Time (s)")
 
         # Set suptitle to temporal_model
         fig.suptitle(f"Generator potentials for {temporal_model} temporal model")

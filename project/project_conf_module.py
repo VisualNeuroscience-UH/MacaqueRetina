@@ -283,8 +283,8 @@ my_stimulus_options = {
     "pix_per_deg": 60,
     "dtype_name": "float64",  # low contrast needs "float16", for performance, use "uint8",
     "fps": 350,  # 300 for good cg integration
-    "duration_seconds": 1.0,  # actual frames = floor(duration_seconds * fps)
-    "baseline_start_seconds": 10,  # Total duration is duration + both baselines
+    "duration_seconds": 10,  # actual frames = floor(duration_seconds * fps)
+    "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.0,
     # "pattern": "sine_grating",  # One of the StimulusPatterns
     # "pattern": "natural_images",  # One of the StimulusPatterns
@@ -307,8 +307,8 @@ my_stimulus_options = {
     "mean": 128,  # Consider this as cd/m2
     # intensity (min, max) overrides contrast and mean unless the line is commented out
     # "intensity": (0, 100),
-    "intensity": (0, 10000),
-    "background": 5000,  # "mean", "intensity_min", "intensity_max" or value.
+    "intensity": (0, 1000),
+    "background": 500,  # "mean", "intensity_min", "intensity_max" or value.
     "ND_filter": 0.0,  # 0.0, log10 neutral density filter factor, can be negative
 }
 
