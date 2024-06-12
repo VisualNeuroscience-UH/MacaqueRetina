@@ -282,13 +282,13 @@ my_stimulus_options = {
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
     "dtype_name": "float64",  # low contrast needs "float16", for performance, use "uint8",
-    "fps": 90,  # 300 for good cg integration
-    "duration_seconds": 0.5,  # actual frames = floor(duration_seconds * fps)
+    "fps": 350,  # 300 for good cg integration
+    "duration_seconds": 30.0,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
-    "baseline_end_seconds": 0.0,
+    "baseline_end_seconds": 0.5,
     # "pattern": "sine_grating",  # One of the StimulusPatterns
-    "pattern": "natural_images",  # One of the StimulusPatterns
-    # "pattern": "temporal_square_pattern",  # One of the StimulusPatterns
+    # "pattern": "natural_images",  # One of the StimulusPatterns
+    "pattern": "temporal_sine_pattern",  # One of the StimulusPatterns
     "stimulus_form": "rectangular",
     "size_inner": 0.1,  # deg, applies to annulus only
     "size_outer": 1,  # deg, applies to annulus only
@@ -303,9 +303,9 @@ my_stimulus_options = {
     "contrast": 0.99,  # mean +- contrast * mean
     "mean": 128,  # Consider this as cd/m2
     # intensity (min, max) overrides contrast and mean unless the line is commented out
-    "intensity": (10, 100),
-    # "intensity": (0, 1000000),
-    "background": 10,  # "mean", "intensity_min", "intensity_max" or value.
+    # "intensity": (0, 100),
+    # "intensity": (0, 255),
+    "background": 128,  # "mean", "intensity_min", "intensity_max" or value.
     "ND_filter": 0.0,  # 0.0, log10 neutral density filter factor, can be negative
 }
 
@@ -387,7 +387,7 @@ cone_general_params = {
     "cone2gc_midget": 9,  # um, 1 SD of Gaussian
     "cone2gc_parasol": 27,  # um 27
     "cone2gc_cutoff_SD": 1,  # 3 SD is 99.7% of Gaussian
-    "cone_noise_magnitude": 0.1,  # 0.2  # firing rate relative to Benardete mean values, 0 for no noise
+    "cone_noise_magnitude": 1.0,  # 0.2  # firing rate relative to Benardete mean values, 0 for no noise
     "cone_noise_wc": [14, 160],  # lorenzian freqs, Angueyra_2013_NatNeurosci Fig1
 }
 
@@ -411,26 +411,26 @@ cone_general_params = {
 #     "filter_limit_time": 3.0 * b2u.second,
 # }
 
-# Parameters from Clark_2013_PLoSComputBiol model B
-# Replicates Figs 5E
-# Light intensity photons/microm^2/second
-cone_signal_parameters = {
-    "unit": "mV",
-    "A_pupil": 9.3,  # * b2u.mm2,  # mm^2
-    "lambda_nm": 560,  # nm 555 monkey Clark models: DN 650
-    "input_gain": 1.0,  # unitless
-    "r_dark": -40 * b2u.mV,  # dark potential
-    "max_response": -26.2 * b2u.mV,  # "mV", measured for a strong flash
-    "alpha": -2.1 * b2u.mV * b2u.ms,
-    "beta": 0.1407 * b2u.ms,  #  0.067 * 2.1
-    "gamma": 0.57,  # unitless
-    "tau_y": 20 * b2u.ms,
-    "n_y": 3.0,  # unitless
-    "tau_z": 20 * b2u.ms,
-    "n_z": 7.0,  # unitless
-    "tau_r": 50 * b2u.ms,
-    "filter_limit_time": 3.0 * b2u.second,
-}
+# # Parameters from Clark_2013_PLoSComputBiol model B
+# # Replicates Figs 5E
+# # Light intensity photons/microm^2/second
+# cone_signal_parameters = {
+#     "unit": "mV",
+#     "A_pupil": 9.3,  # * b2u.mm2,  # mm^2
+#     "lambda_nm": 560,  # nm 555 monkey Clark models: DN 650
+#     "input_gain": 1.0,  # unitless
+#     "r_dark": -40 * b2u.mV,  # dark potential
+#     "max_response": -26.2 * b2u.mV,  # "mV", measured for a strong flash
+#     "alpha": -2.1 * b2u.mV * b2u.ms,
+#     "beta": 0.1407 * b2u.ms,  #  0.067 * 2.1
+#     "gamma": 0.57,  # unitless
+#     "tau_y": 20 * b2u.ms,
+#     "n_y": 3.0,  # unitless
+#     "tau_z": 20 * b2u.ms,
+#     "n_z": 7.0,  # unitless
+#     "tau_r": 50 * b2u.ms,
+#     "filter_limit_time": 3.0 * b2u.second,
+# }
 
 # # Parameters from Clark_2013_PLoSComputBiol model DN
 # # Replicates Figs 5C
@@ -454,26 +454,26 @@ cone_signal_parameters = {
 #     "filter_limit_time": 3.0 * b2u.second,
 # }
 
-# # Parameters from Angueyra_2022_JNeurosci, model according to Clark_2013_PLoSComputBiol
-# # Light intensity photons/microm^2/second
-# cone_signal_parameters = {
-#     "unit": "pA",
-#     "A_pupil": 9.0,  # * b2u.mm2,  # mm^2
-#     "lambda_nm": 555,  # nm 555 monkey Clark models: DN 650
-#     "input_gain": 1.0,  # unitless
-#     "r_dark": -136 * b2u.pA,  # dark current
-#     "max_response": 116.8 * b2u.pA,  # "pA", measured for a strong flash
-#     # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
-#     "alpha": 19.4 * b2u.pA * b2u.ms,
-#     "beta": 0.36 * b2u.ms,  # unitless
-#     "gamma": 0.448,  # unitless
-#     "tau_y": 4.49 * b2u.ms,
-#     "n_y": 4.33,  # unitless
-#     "tau_z": 166 * b2u.ms,
-#     "n_z": 1.0,  # unitless
-#     "tau_r": 4.78 * b2u.ms,
-#     "filter_limit_time": 3.0 * b2u.second,
-# }
+# Parameters from Angueyra_2022_JNeurosci, model according to Clark_2013_PLoSComputBiol
+# Light intensity photons/microm^2/second
+cone_signal_parameters = {
+    "unit": "pA",
+    "A_pupil": 9.0,  # * b2u.mm2,  # mm^2
+    "lambda_nm": 555,  # nm 555 monkey Clark models: DN 650
+    "input_gain": 1.0,  # unitless
+    "r_dark": -136 * b2u.pA,  # dark current
+    "max_response": 116.8 * b2u.pA,  # "pA", measured for a strong flash
+    # Angueyra: unitless; Clark: mV * microm^2 * ms / photon
+    "alpha": 19.4 * b2u.pA * b2u.ms,
+    "beta": 0.36 * b2u.ms,  # unitless
+    "gamma": 0.448,  # unitless
+    "tau_y": 4.49 * b2u.ms,
+    "n_y": 4.33,  # unitless
+    "tau_z": 166 * b2u.ms,
+    "n_z": 1.0,  # unitless
+    "tau_r": 4.78 * b2u.ms,
+    "filter_limit_time": 3.0 * b2u.second,
+}
 
 bipolar_general_params = {
     "bipo2gc_div": 6,  # Divide GC dendritic diameter to get bipolar/subunit SD
@@ -846,14 +846,14 @@ if __name__ == "__main__":
     ########################
 
     # Based on my_stimulus_options above
-    PM.stimulate.make_stimulus_video()
+    # PM.stimulate.make_stimulus_video()
 
     ####################################
     ### Run multiple trials or units ###
     ####################################
 
     # Load stimulus to get working retina, necessary for running units
-    PM.simulate_retina.run_with_my_run_options()
+    # PM.simulate_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
@@ -872,17 +872,17 @@ if __name__ == "__main__":
     ################################################
 
     # Based on my_run_options above
-    PM.viz.show_all_gc_responses(savefigname=None)
+    # PM.viz.show_all_gc_responses(savefigname=None)
     # PM.viz.show_all_gc_histogram(savefigname=None)
     # PM.viz.show_cone_responses(time_range=[0.4, 1.1], savefigname=None)
-    PM.viz.show_cone_responses(time_range=None, savefigname=None)
+    # PM.viz.show_cone_responses(time_range=None, savefigname=None)
 
-    PM.viz.show_stimulus_with_gcs(
-        example_gc=0,  # [int,], my_run_options["unit_index"]
-        frame_number=46,  # depends on fps, and video and baseline lengths
-        show_rf_id=True,
-        savefigname=None,
-    )
+    # PM.viz.show_stimulus_with_gcs(
+    #     example_gc=0,  # [int,], my_run_options["unit_index"]
+    #     frame_number=46,  # depends on fps, and video and baseline lengths
+    #     show_rf_id=True,
+    #     savefigname=None,
+    # )
 
     # ##########################################
     # ###       Show impulse response        ###
@@ -926,6 +926,8 @@ if __name__ == "__main__":
 
     # TÄHÄN JÄIT:
     # - Miten vakioidaan generaattoripotentiaali eri temporal mallien välillä -- ALOITA TÄSTÄ
+    # - TEE ZIRPPI
+    # -MISTÄ TULEE SUBUNIT MALLIN Y-TYYPIN EPÄLINEAARISUUS? EI MISTÄÄN
     # - gen => fr transformaatio, Turner malli?
     # - SUBUNIT MALLIN VALIDOINTI vs Turner 2018
 
@@ -936,26 +938,26 @@ if __name__ == "__main__":
     # defined keys' values are dynamically changed in the experiment.
     # Note that tuple values from my_stimulus_options are captured for varying each tuple value separately.
 
-    exp_variables = ["background", "intensity"]  # key from my_stimulus_options
-    # # exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
+    # exp_variables = ["background", "intensity"]  # key from my_stimulus_options
+    exp_variables = ["temporal_frequency", "contrast"]  # from my_stimulus_options
     # # Define experiment parameters. List lengths must be equal.
     # # Examples: exp_variables = ["contrast"], min_max_values = [[0.015, 0.98]], n_steps = [30], logarithmic = [True]
     # experiment_dict = {
     #     "exp_variables": exp_variables,
     #     # two vals for each exp_variable, even is it is not changing
-    #     "min_max_values": [
-    #         [1e-2, 1e5],
-    #         ([0, 0], [1e-2, 1e8]),
-    #     ],  # background, intensity
+    #     # "min_max_values": [
+    #     #     [1e-2, 1e5],
+    #     #     ([0, 0], [1e-2, 1e8]),
+    #     # ],  # background, intensity
     #     # "n_steps": [2, (1, 2)],
-    #     "n_steps": [8, (1, 10)],
-    #     "logarithmic": [True, (False, True)],
-    #     # "min_max_values": [[0.5, 46], [0.01, 0.64]],  # temporal frequency, contrast
-    #     # "n_steps": [14, 7],  # temporal frequency, contrast
-    #     # "logarithmic": [False, True],  # temporal frequency, contrast
+    #     # "n_steps": [8, (1, 10)], # background, intensity
+    #     # "logarithmic": [True, (False, True)], # background, intensity
+    #     "min_max_values": [[0.5, 30], [0.01, 0.64]],  # temporal frequency, contrast
+    #     "n_steps": [14, 7],  # temporal frequency, contrast
+    #     "logarithmic": [True, True],  # temporal frequency, contrast
     # }
 
-    # # # # N trials or N units must be 1, and the other > 1. This is set above in my_run_options.
+    # # # # # N trials or N units must be 1, and the other > 1. This is set above in my_run_options.
     # PM.experiment.build_and_run(experiment_dict)
 
     # #########################
@@ -964,21 +966,21 @@ if __name__ == "__main__":
 
     # my_analysis_options = {
     #     "exp_variables": exp_variables,
-    #     "t_start_ana": 0.0,
-    #     "t_end_ana": 1.0,
+    #     "t_start_ana": 0.5,
+    #     "t_end_ana": 30.5,
     # }
 
-    # # # PM.ana.analyze_experiment(my_analysis_options)
+    # PM.ana.analyze_experiment(my_analysis_options)
     # # # PM.ana.unit_correlation(my_analysis_options, gc_type, response_type, gc_units=None)
     # # PM.ana.relative_gain(my_analysis_options)
-    # PM.ana.response_vs_background(my_analysis_options)
+    # # PM.ana.response_vs_background(my_analysis_options)
 
-    # ############################
-    # ### Visualize Experiment ###
-    # ############################
+    ############################
+    ### Visualize Experiment ###
+    ############################
 
-    # # PM.viz.spike_raster_response(exp_variables, trial=0, savefigname=None)
-    # # PM.viz.show_relative_gain(exp_variables, savefigname=None)
+    # PM.viz.spike_raster_response(exp_variables, trial=0, savefigname=None)
+    # PM.viz.show_relative_gain(exp_variables, savefigname=None)
     # PM.viz.show_response_vs_background_experiment(
     #     exp_variables, unit="cd/m2", savefigname=None
     # )
@@ -988,16 +990,16 @@ if __name__ == "__main__":
     # )
 
     # PM.viz.F1F2_popul_response(exp_variables, xlog=False, savefigname=None)
-    # PM.viz.F1F2_unit_response(exp_variables, xlog=True, savefigname=None)
+    PM.viz.F1F2_unit_response(exp_variables, xlog=False, savefigname=None)
     # PM.viz.ptp_response(exp_variables, x_of_interest=None, savefigname=None)
     # PM.viz.fr_response(exp_variables, xlog=True, savefigname=None)
-    # PM.viz.tf_vs_fr_cg(
-    #     exp_variables,
-    #     n_contrasts=3,
-    #     xlog=True,
-    #     ylog=False,
-    #     savefigname="tf_vs_fr_cg_sine_grating.eps",
-    # )
+    PM.viz.tf_vs_fr_cg(
+        exp_variables,
+        n_contrasts=7,
+        xlog=True,
+        ylog=True,
+        savefigname=None,
+    )
 
     #################################################################################
     ######              Categorical plot of parametric data              ############
