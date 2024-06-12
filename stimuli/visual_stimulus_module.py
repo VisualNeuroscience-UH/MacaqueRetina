@@ -67,6 +67,7 @@ class VideoBaseClass(object):
         # Init optional arguments
         options["spatial_frequency"] = None
         options["temporal_frequency"] = None
+        options["temporal_frequency_range"] = None
         options["temporal_band_pass"] = None
         options["orientation"] = 0.0  # No rotation or vertical
         options["size_inner"] = None
@@ -278,9 +279,6 @@ class VideoBaseClass(object):
             temporal_frequency = 1
 
         # Create sine wave
-        one_cycle = 2 * np.pi
-        cycles_per_second = temporal_frequency
-
         n_frames = self.frames.shape[0]
         image_width = self.options["image_width"]
         image_height = self.options["image_height"]
@@ -293,6 +291,57 @@ class VideoBaseClass(object):
         temporal_modulation = np.sin(time_vec)
 
         # Set the frames to sin values
+        frames = (
+            np.ones(self.frames.shape) * temporal_modulation[:, np.newaxis, np.newaxis]
+        )
+
+        # Set raw_intensity to [-1 1]
+        self.options["raw_intensity"] = (-1, 1)
+
+        assert temporal_modulation.shape[0] == n_frames, "Unequal N frames, aborting..."
+        assert (
+            image_width != n_frames
+        ), "Errors in 3D broadcasting, change image width/height NOT to match n frames "
+        assert (
+            image_height != n_frames
+        ), "Errors in 3D broadcasting, change image width/height NOT to match n frames "
+
+        self.frames = frames
+
+    def _prepare_temporal_chirp_pattern(self):
+        """Prepare temporal chirp pattern"""
+
+        temporal_frequency_range = self.options["temporal_frequency_range"]
+        fps = self.options["fps"]
+        duration_seconds = self.options["duration_seconds"]
+        phase_shift = self.options["phase_shift"]
+
+        if not temporal_frequency_range:
+            print("Temporal_frequency_range missing, setting to (1, 10)")
+            start_frequency, end_frequency = (1, 10)
+        else:
+            start_frequency, end_frequency = temporal_frequency_range
+
+        # Create chirp signal
+        n_frames = self.frames.shape[0]
+        image_width = self.options["image_width"]
+        image_height = self.options["image_height"]
+
+        # Time vector in seconds
+        time_vec = np.linspace(0, duration_seconds, int(fps * duration_seconds))
+
+        # Linearly increasing frequency over time
+        k = (end_frequency - start_frequency) / duration_seconds
+        instantaneous_frequency = start_frequency + k * time_vec
+
+        # Creating the chirp signal
+        phase = (
+            2 * np.pi * (start_frequency * time_vec + (k / 2) * time_vec**2)
+            + phase_shift
+        )
+        temporal_modulation = np.sin(phase)
+
+        # Set the frames to chirp values
         frames = (
             np.ones(self.frames.shape) * temporal_modulation[:, np.newaxis, np.newaxis]
         )
@@ -406,6 +455,29 @@ class StimulusPattern:
         implementation of this pattern.
         """
         self._prepare_temporal_sine_pattern()
+
+    def temporal_chirp_pattern(self):
+        """
+        Create a temporal chirp pattern.
+
+        This method prepares a temporal sine wave pattern by invoking the
+        `_prepare_temporal_chirp_pattern` method, which handles the detailed
+        implementation of this pattern.
+        """
+        self._prepare_temporal_chirp_pattern()
+
+    def contrast_chirp_pattern(self):
+        """
+        Create a contrast chirp pattern.
+
+        This method prepares a contrast chirp pattern by invoking the
+        '_prepare_temporal_sine_pattern' method, and then creates a linear
+        ramp for amplitude.
+        """
+        self._prepare_temporal_sine_pattern()
+        # Create linear ramp for amplitude from 0 to 1
+        amplitude_ramp = np.linspace(0, 1, self.n_stim_tp)
+        self.frames = self.frames * amplitude_ramp[:, np.newaxis, np.newaxis]
 
     def temporal_square_pattern(self):
         """
@@ -771,6 +843,7 @@ class VisualStimulus(VideoBaseClass):
 
         self.options["dtype"] = getattr(np, self.options["dtype_name"])
 
+        self.n_stim_tp = int(self.options["duration_seconds"] * self.options["fps"])
         # background for stimulus
         self.frames = self._create_frames(self.options["duration_seconds"])
 

@@ -238,7 +238,7 @@ baseline_end_seconds: midgray at the end
 pattern:
     'sine_grating'; 'square_grating'; 'colored_temporal_noise'; 'white_gaussian_noise';
     'natural_images'; 'natural_video'; 'temporal_sine_pattern'; 'temporal_square_pattern';
-    'spatially_uniform_binary_noise'
+    'temporal_chirp_pattern'; contrast_chirp_pattern; 'spatially_uniform_binary_noise'
 stimulus_form: 'circular'; 'rectangular'; 'annulus'
 
 For stimulus_form annulus, additional arguments are:
@@ -283,18 +283,21 @@ my_stimulus_options = {
     "pix_per_deg": 60,
     "dtype_name": "float64",  # low contrast needs "float16", for performance, use "uint8",
     "fps": 350,  # 300 for good cg integration
-    "duration_seconds": 30.0,  # actual frames = floor(duration_seconds * fps)
+    "duration_seconds": 2.0,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
     # "pattern": "sine_grating",  # One of the StimulusPatterns
     # "pattern": "natural_images",  # One of the StimulusPatterns
-    "pattern": "temporal_sine_pattern",  # One of the StimulusPatterns
+    # "pattern": "temporal_sine_pattern",  # One of the StimulusPatterns
+    # "pattern": "temporal_chirp_pattern",  # One of the StimulusPatterns
+    "pattern": "contrast_chirp_pattern",  # One of the StimulusPatterns
     "stimulus_form": "rectangular",
     "size_inner": 0.1,  # deg, applies to annulus only
     "size_outer": 1,  # deg, applies to annulus only
     "stimulus_position": (0.0, 0.0),  # relative to stimuls center in retina
     "stimulus_size": 1,  # 0.04,  # 2,  # deg, radius for circle, sidelen/2 for rectangle.
-    "temporal_frequency": 0.1,  # 0.01,  # 4.0,  # 40,  # Hz
+    "temporal_frequency": 10,  # 0.01,  # 4.0,  # 40,  # Hz
+    "temporal_frequency_range": (1, 100),  # Hz, applies to temporal chirp only
     "spatial_frequency": 5.0,  # cpd
     "orientation": 0,  # degrees
     "phase_shift": 0,  # math.pi + 0.1,  # radians
@@ -846,14 +849,14 @@ if __name__ == "__main__":
     ########################
 
     # Based on my_stimulus_options above
-    # PM.stimulate.make_stimulus_video()
+    PM.stimulate.make_stimulus_video()
 
     ####################################
     ### Run multiple trials or units ###
     ####################################
 
     # Load stimulus to get working retina, necessary for running units
-    # PM.simulate_retina.run_with_my_run_options()
+    PM.simulate_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
@@ -872,7 +875,7 @@ if __name__ == "__main__":
     ################################################
 
     # Based on my_run_options above
-    # PM.viz.show_all_gc_responses(savefigname=None)
+    PM.viz.show_all_gc_responses(savefigname=None)
     # PM.viz.show_all_gc_histogram(savefigname=None)
     # PM.viz.show_cone_responses(time_range=[0.4, 1.1], savefigname=None)
     # PM.viz.show_cone_responses(time_range=None, savefigname=None)
@@ -990,16 +993,16 @@ if __name__ == "__main__":
     # )
 
     # PM.viz.F1F2_popul_response(exp_variables, xlog=False, savefigname=None)
-    PM.viz.F1F2_unit_response(exp_variables, xlog=False, savefigname=None)
+    # PM.viz.F1F2_unit_response(exp_variables, xlog=False, savefigname=None)
     # PM.viz.ptp_response(exp_variables, x_of_interest=None, savefigname=None)
     # PM.viz.fr_response(exp_variables, xlog=True, savefigname=None)
-    PM.viz.tf_vs_fr_cg(
-        exp_variables,
-        n_contrasts=7,
-        xlog=True,
-        ylog=True,
-        savefigname=None,
-    )
+    # PM.viz.tf_vs_fr_cg(
+    #     exp_variables,
+    #     n_contrasts=7,
+    #     xlog=True,
+    #     ylog=True,
+    #     savefigname=None,
+    # )
 
     #################################################################################
     ######              Categorical plot of parametric data              ############
