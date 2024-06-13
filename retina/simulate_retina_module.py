@@ -628,6 +628,9 @@ class Bipolars(ReceptiveFieldsBase):
         # [n_gcs, n_timepoints]
         neg_scaler = 1 - RI
         neg_idx = bipolar_output_sum < 0
+        # Make a dummy empty neg_idx for testing
+        # neg_idx = np.zeros_like(bipolar_output_sum, dtype=bool)
+
         gc_synaptic_input = bipolar_output_sum.copy()
         gc_synaptic_input[neg_idx] = bipolar_output_sum[neg_idx] * neg_scaler[neg_idx]
 
