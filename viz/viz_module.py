@@ -2809,9 +2809,30 @@ class Viz:
             self._figsave(figurename=savefigname)
 
     def show_generator_potential_histogram(self, savefigname=None):
-        """ """
+        """
+        Display a histogram of generator potentials and related plots.
+
+        Parameters
+        ----------
+        savefigname : str, optional
+            Filename to save the figure. If None, the figure is not saved.
+
+        Notes
+        -----
+        This method creates a figure with four subplots:
+        1. Histogram of generator potentials after the baseline start time.
+        2. Plot of the mean generator potential over time.
+        3. Plot of the mean requested firing rate over time (before spike generation)
+        4. Plot of the photodiode response over time.
+
+        The figure is titled with the temporal model being used, and the
+        histogram subplot includes a vertical dashed line to indicate the
+        median generator potential value. If NaNs are present in the
+        generator potentials, their count and percentage are annotated on the
+        histogram.
+        """
+
         gc_responses_to_show = self.project_data.simulate_retina["gc_responses_to_show"]
-        duration = gc_responses_to_show["duration"]
         generator_potentials = gc_responses_to_show["generator_potentials"]
         video_dt = gc_responses_to_show["video_dt"]
         firing_rate = gc_responses_to_show["firing_rates"]
@@ -2837,32 +2858,51 @@ class Viz:
             generator_potentials[:, baseline_start_tp:].flatten(),
             bins=100,
         )
-        ax[0].set_ylabel("Count")
+        ax[0].set_ylabel("Count", fontsize=14)
+        # Mark the median value with vertical dashed line
+        ax[0].axvline(
+            np.nanmedian(generator_potentials[:, baseline_start_tp:]),
+            color="r",
+            linestyle="--",
+        )
+        n_nans = np.isnan(generator_potentials[:, baseline_start_tp:]).sum()
+        if n_nans > 0:
+            ax[0].annotate(
+                f"{n_nans} nans ({100 * n_nans / generator_potentials.size:.2f}%)",
+                xy=(0.8, 0.8),
+                xycoords="axes fraction",
+                fontsize=12,
+                ha="center",
+            )
 
         tvec = np.arange(0, generator_potentials.shape[-1], 1) * video_dt
         ax[1].plot(
             tvec[baseline_start_tp:],
             generator_potential_mean[baseline_start_tp:],
         )
-        ax[1].set_ylabel("Generator mean")
-        ax[1].set_xlabel("Time (s)")
+        ax[1].set_ylabel("Generator mean", fontsize=14)
 
         ax[2].plot(
             tvec[baseline_start_tp:],
             firing_rate_mean[baseline_start_tp:],
         )
-        ax[2].set_ylabel("Firing rate")
-        ax[2].set_xlabel("Time (s)")
+        ax[2].set_ylabel("Firing rate", fontsize=14)
 
         ax[3].plot(
             tvec[baseline_start_tp:],
             photodiode_response[baseline_start_tp:],
         )
-        ax[3].set_ylabel("Photodiode")
-        ax[3].set_xlabel("Time (s)")
+        ax[3].set_ylabel("Photodiode", fontsize=14)
+        ax[3].set_xlabel("Time (s)", fontsize=14)
 
         # Set suptitle to temporal_model
-        fig.suptitle(f"Generator potentials for {temporal_model} temporal model")
+        fig.suptitle(
+            f"Generator potentials for {temporal_model} temporal model", fontsize=16
+        )
+
+        # Adjust tick parameters for all subplots
+        for axis in ax:
+            axis.tick_params(axis="both", which="major", labelsize=12)
 
         if savefigname is not None:
             self._figsave(figurename=savefigname)
