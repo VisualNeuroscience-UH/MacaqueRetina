@@ -1131,9 +1131,11 @@ class ConstructRetina(RetinaMath, Printable):
             gc_units = math.ceil(
                 sector_surface_area * gc_density_group * ret.gc_proportion
             )
-            gc_positions = self._random_positions_group(
+            gc_positions = self._hexagonal_positions_group(
                 min_ecc, max_ecc, gc_units, ret.polar_lim_deg
             )
+            # After hexagonal positions, we know the number of units
+            gc_units = gc_positions.shape[0]
             eccentricity_groups.append(np.full(gc_units, group_idx))
             gc_density_all.append(
                 np.full(gc_units, gc_density_group * ret.gc_proportion)
@@ -1621,9 +1623,12 @@ class ConstructRetina(RetinaMath, Printable):
         eccs_grid, angles_grid = np.meshgrid(eccs, angles, indexing="ij")
 
         # Offset every other row by half the distance between columns
+        delta_angle = np.diff(angles).mean()
         for i in range(n_ecc):
             if i % 2 == 1:  # Check if the row is odd
-                angles_grid[i, :] += (angles[1] - angles[0]) / 2
+                angles_grid[i, :] += delta_angle / 2
+        # Finally turn every row 1/4 delta_angle more to get grid centered within borders
+        angles_grid += delta_angle / 4
 
         # Reshape the grids and combine them into a single array
         positions = np.column_stack((eccs_grid.ravel(), angles_grid.ravel()))
@@ -1746,8 +1751,10 @@ class ConstructRetina(RetinaMath, Printable):
             weights[this_bipo, :] = weights_mtx.sum(axis=(1, 2))
 
         # Normalize axis 0 weights to 1.0 => input to each gc = 1.0
-        weights = weights / weights.sum(axis=0)
-        ret.bipolar_to_gcs_weights = weights
+        weights_out = weights / weights.sum(axis=0)
+
+        # breakpoint()
+        ret.bipolar_to_gcs_weights = weights_out
 
         return ret
 
