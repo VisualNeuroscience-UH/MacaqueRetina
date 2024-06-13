@@ -196,8 +196,8 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 # Note: FIT model ellipse independent does not correlate the center and surround parameters. Thus they are independent, which
 # is not the case in the VAE model, and not very physiological.
 
-gc_type = "parasol"  # "parasol" or "midget"
-response_type = "on"  # "on" or "off"
+gc_type = "midget"  # "parasol" or "midget"
+response_type = "off"  # "on" or "off"
 
 # These values are used for building a new retina
 my_retina = {
@@ -213,7 +213,7 @@ my_retina = {
     "dd_regr_model": "quadratic",  # linear, quadratic, cubic, loglog. For midget < 20 deg, use quadratic; for parasol use loglog
     "ecc_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
-    "temporal_model": "dynamic",  # fixed, dynamic, subunit
+    "temporal_model": "subunit",  # fixed, dynamic, subunit
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
     "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
@@ -307,8 +307,8 @@ my_stimulus_options = {
     "mean": 128,  # Consider this as cd/m2
     # intensity (min, max) overrides contrast and mean unless the line is commented out
     # "intensity": (0, 100),
-    "intensity": (0, 1000),
-    "background": 500,  # "mean", "intensity_min", "intensity_max" or value.
+    "intensity": (0, 255),
+    "background": 128,  # "mean", "intensity_min", "intensity_max" or value.
     "ND_filter": 0.0,  # 0.0, log10 neutral density filter factor, can be negative
 }
 
@@ -508,40 +508,40 @@ refractory_params = {
 # None : initial random placement. Nonvarying with fixed seed above. Good for testing and speed.
 gc_placement_params = {
     "algorithm": None,  # "voronoi" or "force" or None
-    "n_iterations": 20,  # v 20, f 5000
-    "change_rate": 0.5,  # f 0.001, v 0.5
-    "unit_repulsion_stregth": 5,  # 10 f only
-    "unit_distance_threshold": 0.02,  # f only, adjusted with ecc
-    "diffusion_speed": 0.0001,  # f only, adjusted with ecc
-    "border_repulsion_stength": 10,  # f only
-    "border_distance_threshold": 0.01,  # f only
-    "show_placing_progress": False,  # True False
+    "n_iterations": 30,  # v 20, f 5000
+    "change_rate": 0.0005,  # f 0.001, v 0.5
+    "unit_repulsion_stregth": 7,  # 10 f only
+    "unit_distance_threshold": 0.1,  # f only, adjusted with ecc
+    "diffusion_speed": 0.001,  # f only, adjusted with ecc
+    "border_repulsion_stength": 0.2,  # f only
+    "border_distance_threshold": 0.001,  # f only
+    "show_placing_progress": True,  # True False
     "show_skip_steps": 1,  # v 1, f 100
 }
 
 cone_placement_params = {
     "algorithm": None,  # "voronoi" or "force" or None
-    "n_iterations": 300,  # v 20, f 300
-    "change_rate": 0.0004,  # f 0.0005, v 0.5
+    "n_iterations": 15,  # v 20, f 300
+    "change_rate": 0.0005,  # f 0.0005, v 0.5
     "unit_repulsion_stregth": 2,  # 10 f only
     "unit_distance_threshold": 0.1,  # f only, adjusted with ecc
     "diffusion_speed": 0.001,  # f only, adjusted with ecc
     "border_repulsion_stength": 5,  # f only
     "border_distance_threshold": 0.0001,  # f only
-    "show_placing_progress": False,  # True False
-    "show_skip_steps": 10,  # v 1, f 100
+    "show_placing_progress": True,  # True False
+    "show_skip_steps": 1,  # v 1, f 100
 }
 
 bipolar_placement_params = {
-    "algorithm": "force",  # "voronoi" or "force" or None
-    "n_iterations": 5,  # v 20, f 300
-    "change_rate": 0.0001,  # f 0.0005, v 0.5
+    "algorithm": None,  # "voronoi" or "force" or None
+    "n_iterations": 15,  # v 20, f 300
+    "change_rate": 0.0005,  # f 0.0005, v 0.5
     "unit_repulsion_stregth": 2,  # 10 f only
     "unit_distance_threshold": 0.1,  # f only, adjusted with ecc
     "diffusion_speed": 0.005,  # f only, adjusted with ecc
     "border_repulsion_stength": 5,  # f only
     "border_distance_threshold": 0.0001,  # f only
-    "show_placing_progress": False,  # True False
+    "show_placing_progress": True,  # True False
     "show_skip_steps": 1,  # v 1, f 100
 }
 
@@ -796,7 +796,7 @@ if __name__ == "__main__":
 
     # For FIT and VAE
     # PM.viz.show_cones_linked_to_bipolars(n_samples=4, savefigname=None)
-    # PM.viz.show_bipolars_linked_to_gc(gc_list=[10, 17], savefigname=None)
+    PM.viz.show_bipolars_linked_to_gc(gc_list=[10, 17], savefigname=None)
     # PM.viz.show_bipolars_linked_to_gc(n_samples=4, savefigname=None)
     # PM.viz.show_cones_linked_to_gc(gc_list=[10, 17], savefigname=None)
     # PM.viz.show_cones_linked_to_gc(n_samples=4, savefigname=None)
@@ -849,14 +849,14 @@ if __name__ == "__main__":
     ########################
 
     # Based on my_stimulus_options above
-    PM.stimulate.make_stimulus_video()
+    # PM.stimulate.make_stimulus_video()
 
     ####################################
     ### Run multiple trials or units ###
     ####################################
 
     # Load stimulus to get working retina, necessary for running units
-    PM.simulate_retina.run_with_my_run_options()
+    # PM.simulate_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
@@ -876,7 +876,10 @@ if __name__ == "__main__":
 
     # Based on my_run_options above
     # PM.viz.show_all_gc_responses(savefigname=None)
-    PM.viz.show_generator_potential_histogram(savefigname=None)
+    # PM.viz.show_generator_potential_histogram(savefigname=None)
+    # PM.viz.show_generator_potential_histogram(
+    #     savefigname="Chirp_subunit_midOFF_256.eps"
+    # )
     # PM.viz.show_cone_responses(time_range=[0.4, 1.1], savefigname=None)
     # PM.viz.show_cone_responses(time_range=None, savefigname=None)
 
@@ -928,8 +931,7 @@ if __name__ == "__main__":
     ################################
 
     # TÄHÄN JÄIT:
-    # - Miten vakioidaan generaattoripotentiaali eri temporal mallien välillä -- ALOITA TÄSTÄ
-    # - TEE ZIRPPI
+    # - Vakioi generaattoripotentiaali eri temporal mallien välillä käyttäen temporal chirp ärsykettä
     # -MISTÄ TULEE SUBUNIT MALLIN Y-TYYPIN EPÄLINEAARISUUS? EI MISTÄÄN
     # - gen => fr transformaatio, Turner malli?
     # - SUBUNIT MALLIN VALIDOINTI vs Turner 2018
