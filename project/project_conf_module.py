@@ -196,8 +196,8 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 # Note: FIT model ellipse independent does not correlate the center and surround parameters. Thus they are independent, which
 # is not the case in the VAE model, and not very physiological.
 
-gc_type = "midget"  # "parasol" or "midget"
-response_type = "off"  # "on" or "off"
+gc_type = "parasol"  # "parasol" or "midget"
+response_type = "on"  # "on" or "off"
 
 # These values are used for building a new retina
 my_retina = {
@@ -796,7 +796,7 @@ if __name__ == "__main__":
 
     # For FIT and VAE
     # PM.viz.show_cones_linked_to_bipolars(n_samples=4, savefigname=None)
-    PM.viz.show_bipolars_linked_to_gc(gc_list=[10, 17], savefigname=None)
+    # PM.viz.show_bipolars_linked_to_gc(gc_list=[10, 17], savefigname=None)
     # PM.viz.show_bipolars_linked_to_gc(n_samples=4, savefigname=None)
     # PM.viz.show_cones_linked_to_gc(gc_list=[10, 17], savefigname=None)
     # PM.viz.show_cones_linked_to_gc(n_samples=4, savefigname=None)
@@ -805,6 +805,8 @@ if __name__ == "__main__":
     # PM.viz.show_cell_density_vs_ecc(unit_type="cone", savefigname=None)  # gc or cone
     # PM.viz.show_cell_density_vs_ecc(unit_type="gc", savefigname=None)  # gc or cone
     # PM.viz.show_cell_density_vs_ecc(unit_type="bipolar", savefigname=None)  # gc or cone
+    # PM.viz.show_connection_histograms(savefigname=None)
+    PM.viz.show_fan_in_out_distributions(savefigname=None)
 
     # PM.viz.show_DoG_model_fit(sample_list=[10], savefigname=None)
     # PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)
@@ -931,8 +933,11 @@ if __name__ == "__main__":
     ################################
 
     # TÄHÄN JÄIT:
+    # - Montako yhteyttä tulee kuhunkin gc:uun? histogrammit voimakkuuksista ja määristä
+    #   - tarkista tästä kirjallisuus, mikä on järkevä määrä kullekin bipo ja gc tyypille
+    # - joutuuko pakottamaan yhteyksiä / tappamaan ganglionsoluja?
+    # - Onko yhteyspainojen pakottamisella 1:een sivuvaikutuksia? Suuria painoja?
     # - Vakioi generaattoripotentiaali eri temporal mallien välillä käyttäen temporal chirp ärsykettä
-    # -MISTÄ TULEE SUBUNIT MALLIN Y-TYYPIN EPÄLINEAARISUUS? EI MISTÄÄN
     # - gen => fr transformaatio, Turner malli?
     # - SUBUNIT MALLIN VALIDOINTI vs Turner 2018
 
