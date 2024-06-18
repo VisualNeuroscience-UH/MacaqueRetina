@@ -2095,7 +2095,7 @@ class Viz:
 
         weights = ret_npz["bipolar_to_gcs_weights"]
         bipolar_positions = ret_npz["bipolar_optimized_pos_mm"]
-
+        # breakpoint()
         if isinstance(gc_list, list):
             pass  # gc_list supercedes n_samples
         elif isinstance(n_samples, int):
@@ -2166,6 +2166,15 @@ class Viz:
     ):
         """
         Visualize a ganglion cell and its connected bipolars.
+
+        Parameters
+        ----------
+        bipo_list : list, optional
+            List of bipolar indices to show. This supercedes n_samples.
+        n_samples : int, optional
+            Number of bipolar cells to show.
+        savefigname : str, optional
+            If provided, the figure will be saved with this filename.
         """
 
         ret_npz = self.data_io.get_data(self.context.my_retina["ret_file"])
@@ -2222,6 +2231,54 @@ class Viz:
         cbar = fig.colorbar(sc, ax=ax, extend="both")
         cbar.set_ticks([weights.min(), 0, weights.max()])
         cbar.set_ticklabels([f"{weights.min():.2f}", "0", f"{weights.max():.2f}"])
+
+        if savefigname:
+            self._figsave(figurename=savefigname)
+
+    def show_connection_histograms(self, savefigname=None):
+        """
+        Display histograms and heatmaps of retinal connection weights.
+
+        Parameters
+        ----------
+        savefigname : str, optional
+            If provided, the figure will be saved with this filename.
+        """
+
+        ret_npz = self.data_io.get_data(self.context.my_retina["ret_file"])
+
+        # [n_cones, n_bipolars]
+        cones_to_bipolars_center_weights = ret_npz["cones_to_bipolars_center_weights"]
+        cones_to_bipolars_surround_weights = ret_npz[
+            "cones_to_bipolars_surround_weights"
+        ]
+        # [n_bipolars, n_gcs]
+        bipolar_to_gcs_weights = ret_npz["bipolar_to_gcs_weights"]
+        # [n_cones, n_gcs]
+        cones_to_gcs_weights = ret_npz["cones_to_gcs_weights"]
+        # breakpoint()
+
+        fig, ax = plt.subplots(2, 4, figsize=(8, 12))
+        cmap = cm.coolwarm
+        # Upper row for histograms
+        ax[0, 0].hist(cones_to_bipolars_center_weights.flatten(), bins=100)
+        ax[0, 0].set_title("cones_to_bipolars_center_weights")
+        ax[0, 1].hist(cones_to_bipolars_surround_weights.flatten(), bins=100)
+        ax[0, 1].set_title("cones_to_bipolars_surround_weights")
+        ax[0, 2].hist(bipolar_to_gcs_weights.flatten(), bins=100)
+        ax[0, 2].set_title("bipolar_to_gcs_weights")
+        ax[0, 3].hist(cones_to_gcs_weights.flatten(), bins=100)
+        ax[0, 3].set_title("cones_to_gcs_weights")
+
+        # Lower row for imshow
+        ax[1, 0].imshow(cones_to_bipolars_center_weights, cmap=cmap)
+        ax[1, 0].set_title("cones_to_bipolars_center_weights")
+        ax[1, 1].imshow(cones_to_bipolars_surround_weights, cmap=cmap)
+        ax[1, 1].set_title("cones_to_bipolars_surround_weights")
+        ax[1, 2].imshow(bipolar_to_gcs_weights, cmap=cmap)
+        ax[1, 2].set_title("bipolar_to_gcs_weights")
+        ax[1, 3].imshow(cones_to_gcs_weights, cmap=cmap)
+        ax[1, 3].set_title("cones_to_gcs_weights")
 
         if savefigname:
             self._figsave(figurename=savefigname)
