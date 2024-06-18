@@ -2235,50 +2235,51 @@ class Viz:
         if savefigname:
             self._figsave(figurename=savefigname)
 
-    def show_connection_histograms(self, savefigname=None):
+    def show_connection_histograms(self, weight_cutoff=0.001, savefigname=None):
         """
         Display histograms and heatmaps of retinal connection weights.
 
         Parameters
         ----------
+        weight_cutoff : float, optional
+            Weights below this value will be considered zero.
         savefigname : str, optional
             If provided, the figure will be saved with this filename.
         """
+        ret_data = self.data_io.get_data(self.context.my_retina["ret_file"])
 
-        ret_npz = self.data_io.get_data(self.context.my_retina["ret_file"])
+        weights = {
+            "cones_to_bipolars_center": ret_data["cones_to_bipolars_center_weights"],
+            "cones_to_bipolars_surround": ret_data[
+                "cones_to_bipolars_surround_weights"
+            ],
+            "bipolar_to_gcs": ret_data["bipolar_to_gcs_weights"],
+            "cones_to_gcs": ret_data["cones_to_gcs_weights"],
+        }
 
-        # [n_cones, n_bipolars]
-        cones_to_bipolars_center_weights = ret_npz["cones_to_bipolars_center_weights"]
-        cones_to_bipolars_surround_weights = ret_npz[
-            "cones_to_bipolars_surround_weights"
-        ]
-        # [n_bipolars, n_gcs]
-        bipolar_to_gcs_weights = ret_npz["bipolar_to_gcs_weights"]
-        # [n_cones, n_gcs]
-        cones_to_gcs_weights = ret_npz["cones_to_gcs_weights"]
-        # breakpoint()
+        flat_weights = {key: w.flatten() for key, w in weights.items()}
+        non_zero_idxs = {
+            key: np.where(w > weight_cutoff)[0] for key, w in flat_weights.items()
+        }
+        zero_counts = {
+            key: len(w) - len(non_zero_idxs[key]) for key, w in flat_weights.items()
+        }
+        zero_annots = {
+            key: f"Weights < {weight_cutoff} ({zero_counts[key]/len(flat_weights[key])*100:.1f}%) not shown"
+            for key in flat_weights
+        }
 
-        fig, ax = plt.subplots(2, 4, figsize=(8, 12))
-        cmap = cm.coolwarm
-        # Upper row for histograms
-        ax[0, 0].hist(cones_to_bipolars_center_weights.flatten(), bins=100)
-        ax[0, 0].set_title("cones_to_bipolars_center_weights")
-        ax[0, 1].hist(cones_to_bipolars_surround_weights.flatten(), bins=100)
-        ax[0, 1].set_title("cones_to_bipolars_surround_weights")
-        ax[0, 2].hist(bipolar_to_gcs_weights.flatten(), bins=100)
-        ax[0, 2].set_title("bipolar_to_gcs_weights")
-        ax[0, 3].hist(cones_to_gcs_weights.flatten(), bins=100)
-        ax[0, 3].set_title("cones_to_gcs_weights")
+        fig, ax = plt.subplots(2, 4, figsize=(20, 10))
 
-        # Lower row for imshow
-        ax[1, 0].imshow(cones_to_bipolars_center_weights, cmap=cmap)
-        ax[1, 0].set_title("cones_to_bipolars_center_weights")
-        ax[1, 1].imshow(cones_to_bipolars_surround_weights, cmap=cmap)
-        ax[1, 1].set_title("cones_to_bipolars_surround_weights")
-        ax[1, 2].imshow(bipolar_to_gcs_weights, cmap=cmap)
-        ax[1, 2].set_title("bipolar_to_gcs_weights")
-        ax[1, 3].imshow(cones_to_gcs_weights, cmap=cmap)
-        ax[1, 3].set_title("cones_to_gcs_weights")
+        for i, (key, w) in enumerate(flat_weights.items()):
+            ax[0, i].hist(w[non_zero_idxs[key]], bins=100)
+            ax[0, i].set_title(key.replace("_", " "))
+            ax[0, i].text(
+                0.1, 0.9, zero_annots[key], transform=ax[0, i].transAxes, fontsize=10
+            )
+
+        for i, (key, w) in enumerate(weights.items()):
+            ax[1, i].imshow(w, aspect="auto", interpolation="none")
 
         if savefigname:
             self._figsave(figurename=savefigname)
