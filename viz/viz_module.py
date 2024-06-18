@@ -2284,6 +2284,51 @@ class Viz:
         if savefigname:
             self._figsave(figurename=savefigname)
 
+    def show_fan_in_out_distributions(self, weight_cutoff=0.0, savefigname=None):
+        """
+        Display fan-in and fan-out distributions for retinal connection weights.
+
+        Parameters
+        ----------
+        weight_cutoff : float, optional
+            Weights below this value will be considered zero.
+        savefigname : str, optional
+            If provided, the figure will be saved with this filename.
+        """
+        ret_data = self.data_io.get_data(self.context.my_retina["ret_file"])
+
+        weights = {
+            "cones_to_bipolars_center": ret_data["cones_to_bipolars_center_weights"],
+            "cones_to_bipolars_surround": ret_data[
+                "cones_to_bipolars_surround_weights"
+            ],
+            "bipolar_to_gcs": ret_data["bipolar_to_gcs_weights"],
+            "cones_to_gcs": ret_data["cones_to_gcs_weights"],
+        }
+
+        fan_in = {key: np.sum(w > weight_cutoff, axis=0) for key, w in weights.items()}
+        fan_out = {key: np.sum(w > weight_cutoff, axis=1) for key, w in weights.items()}
+
+        fig, axes = plt.subplots(4, 4, figsize=(12, 12))
+
+        for i, (key, w) in enumerate(weights.items()):
+            # Fan-In histograms and violin plots
+            sns.histplot(fan_in[key], bins=30, kde=False, ax=axes[i, 0])
+            axes[i, 0].set_title(f"{key.replace('_', ' ')} Fan-In Histogram")
+            sns.violinplot(y=fan_in[key], ax=axes[i, 1])
+            axes[i, 1].set_title(f"{key.replace('_', ' ')} Fan-In Violin Plot")
+
+            # Fan-Out histograms and violin plots
+            sns.histplot(fan_out[key], bins=30, kde=False, ax=axes[i, 2])
+            axes[i, 2].set_title(f"{key.replace('_', ' ')} Fan-Out Histogram")
+            sns.violinplot(y=fan_out[key], ax=axes[i, 3])
+            axes[i, 3].set_title(f"{key.replace('_', ' ')} Fan-Out Violin Plot")
+
+        plt.tight_layout()
+
+        if savefigname:
+            self._figsave(figurename=savefigname)
+
     def show_DoG_img_grid(self, gc_list=None, n_samples=None, savefigname=None):
         """
         Visualize a ganglion cell image, DoG fit and center grid points.
