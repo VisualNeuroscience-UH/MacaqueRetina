@@ -559,9 +559,9 @@ class ConstructRetina(RetinaMath, Printable):
         b2c_ratio_str = b2c_ratio_s[bipolar_types].values
         b2c_ratios = np.array([float(x) for x in b2c_ratio_str])
 
-        # Take only one bipolar value despite parasols getting input from two types.
+        # Take the sum of relevant bipolar values.
         # If we later learn that the two types are not equal, we need to change this.
-        b2c_ratio = np.mean(b2c_ratios)
+        b2c_ratio = np.sum(b2c_ratios)
         # The bipolar mock density follows cone density, assuming constant ratio
         bipolar_mock_density = cone_density * b2c_ratio
         bipolar_fit_parameters = _fit_density_data(
@@ -1119,7 +1119,9 @@ class ConstructRetina(RetinaMath, Printable):
             bipolar_density_group = self.bipolar_fit_function(
                 avg_ecc, *bipolar_density_params
             )
-
+            # print(
+            #     f"Group {group_idx} ecc {avg_ecc} gc {gc_density_group} cone {cone_density_group} bipolar {bipolar_density_group}"
+            # )
             # Calculate area for this eccentricity group
             sector_area_remove = self.sector2area_mm2(min_ecc, angle_deg)
             sector_area_full = self.sector2area_mm2(max_ecc, angle_deg)
@@ -1607,15 +1609,21 @@ class ConstructRetina(RetinaMath, Printable):
         x0, y0 = self.pol2cart(mean_ecc, polar_lim_deg[0])
         x1, y1 = self.pol2cart(mean_ecc, polar_lim_deg[1])
         delta_pol = np.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2)
-
-        mean_dist = np.sqrt((delta_ecc * delta_pol) / n_units)
-        _delta_ecc = delta_ecc - mean_dist
-        n_ecc = int(np.round(_delta_ecc / mean_dist))
+        mean_dist_between_units = np.sqrt((delta_ecc * delta_pol) / n_units)
+        _delta_ecc = delta_ecc - mean_dist_between_units
+        n_ecc = int(np.round(_delta_ecc / mean_dist_between_units))
         n_pol = int(np.round(n_units / n_ecc))
+        # try:
+        #     n_pol = int(np.round(n_units / n_ecc))
+        # except:
+        #     breakpoint()
 
         # Generate evenly spaced values for eccentricity and angle
         eccs = np.linspace(
-            min_ecc + mean_dist / 2, max_ecc - mean_dist / 2, n_ecc, endpoint=True
+            min_ecc + mean_dist_between_units / 2,
+            max_ecc - mean_dist_between_units / 2,
+            n_ecc,
+            endpoint=True,
         )
         angles = np.linspace(polar_lim_deg[0], polar_lim_deg[1], n_pol, endpoint=False)
 
@@ -1766,9 +1774,9 @@ class ConstructRetina(RetinaMath, Printable):
         print("Connecting cones to bipolar cells...")
 
         cone_pos_mm = ret.cone_optimized_pos_mm
-        n_cones = cone_pos_mm.shape[0]
+        # n_cones = cone_pos_mm.shape[0]
         bipo_pos_mm = ret.bipolar_optimized_pos_mm
-        n_bipos = bipo_pos_mm.shape[0]
+        # n_bipos = bipo_pos_mm.shape[0]
         selected_bipolars_df = ret.selected_bipolars_df
 
         # div 1000 for um to mm transition
@@ -1803,7 +1811,7 @@ class ConstructRetina(RetinaMath, Printable):
 
         ret.cones_to_bipolars_center_weights = G_cen_weight
         ret.cones_to_bipolars_surround_weights = G_sur_weight
-
+        # breakpoint()
         return ret
 
     def _place_units(self, ret, gc):
