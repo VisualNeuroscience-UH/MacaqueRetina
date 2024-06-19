@@ -2315,12 +2315,24 @@ class Viz:
             # Fan-In histograms and violin plots
             sns.histplot(fan_in[key], bins=30, kde=False, ax=axes[i, 0])
             axes[i, 0].set_title(f"{key.replace('_', ' ')} Fan-In Histogram")
+            mean_fan_in = np.mean(fan_in[key])
+            range_fan_in = (np.min(fan_in[key]), np.max(fan_in[key]))
+            axes[i, 0].annotate(f"Mean: {mean_fan_in:.2f}\nRange: {range_fan_in[0]} - {range_fan_in[1]}",
+                                xy=(0.95, 0.95), xycoords='axes fraction', 
+                                fontsize=10, ha='right', va='top', 
+                                bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5))
             sns.violinplot(y=fan_in[key], ax=axes[i, 1])
             axes[i, 1].set_title(f"{key.replace('_', ' ')} Fan-In Violin Plot")
 
             # Fan-Out histograms and violin plots
             sns.histplot(fan_out[key], bins=30, kde=False, ax=axes[i, 2])
             axes[i, 2].set_title(f"{key.replace('_', ' ')} Fan-Out Histogram")
+            mean_fan_out = np.mean(fan_out[key])
+            range_fan_out = (np.min(fan_out[key]), np.max(fan_out[key]))
+            axes[i, 2].annotate(f"Mean: {mean_fan_out:.2f}\nRange: {range_fan_out[0]} - {range_fan_out[1]}",
+                                xy=(0.95, 0.95), xycoords='axes fraction', 
+                                fontsize=10, ha='right', va='top', 
+                                bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5))
             sns.violinplot(y=fan_out[key], ax=axes[i, 3])
             axes[i, 3].set_title(f"{key.replace('_', ' ')} Fan-Out Violin Plot")
 
