@@ -390,6 +390,7 @@ cone_general_params = {
     "cone2gc_midget": 9,  # um, 1 SD of Gaussian
     "cone2gc_parasol": 27,  # um 27
     "cone2gc_cutoff_SD": 1,  # 3 SD is 99.7% of Gaussian
+    "cone2bipo_cutoff_SD": 1,
     "cone_noise_magnitude": 1.0,  # 0.2  # firing rate relative to Benardete mean values, 0 for no noise
     "cone_noise_wc": [14, 160],  # lorenzian freqs, Angueyra_2013_NatNeurosci Fig1
 }

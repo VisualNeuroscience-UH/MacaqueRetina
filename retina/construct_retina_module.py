@@ -1775,6 +1775,8 @@ class ConstructRetina(RetinaMath, Printable):
         bipo_cen_sd_mm = ret.bipolar_general_params["cone2bipo_cen_sd"] / 1000
         bipo_sur_sd_mm = ret.bipolar_general_params["cone2bipo_sur_sd"] / 1000
         bipo_sur2cen_amp_ratio = ret.bipolar_general_params["bipo_sub_sur2cen"]
+        cutoff_SD_cen = ret.cone_general_params["cone2bipo_cutoff_SD"] * bipo_cen_sd_mm
+        cutoff_SD_sur = ret.cone_general_params["cone2bipo_cutoff_SD"] * bipo_sur_sd_mm
 
         # count distances
         cone_reshaped = cone_pos_mm[:, np.newaxis, :]  # Shape becomes (n_cones, 1, 2)
@@ -1788,8 +1790,13 @@ class ConstructRetina(RetinaMath, Printable):
         # Dimensions are [n_cones, n_bipos]
         G_cen = np.exp(-((distances / bipo_cen_sd_mm) ** 2))
         G_sur = np.exp(-((distances / bipo_sur_sd_mm) ** 2))
+
         G_cen_probability = G_cen / G_cen.sum(axis=0)[np.newaxis, :]
         G_sur_probability = G_sur / G_sur.sum(axis=0)[np.newaxis, :]
+
+        # Set distances over cutoff to zero
+        G_cen_probability[distances > cutoff_SD_cen] = 0
+        G_sur_probability[distances > cutoff_SD_sur] = 0
 
         G_cen_weight = G_cen_probability
         G_sur_weight = G_sur_probability * bipo_sur2cen_amp_ratio
