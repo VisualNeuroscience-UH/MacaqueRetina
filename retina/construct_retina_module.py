@@ -1113,15 +1113,13 @@ class ConstructRetina(RetinaMath, Printable):
             avg_ecc = (min_ecc + max_ecc) / 2
 
             gc_density_group = self.gc_fit_function(avg_ecc, *gc_density_params)
-
+            # breakpoint()
             cone_density_group = self.cone_fit_function(avg_ecc, *cone_density_params)
 
             bipolar_density_group = self.bipolar_fit_function(
                 avg_ecc, *bipolar_density_params
             )
-            # print(
-            #     f"Group {group_idx} ecc {avg_ecc} gc {gc_density_group} cone {cone_density_group} bipolar {bipolar_density_group}"
-            # )
+
             # Calculate area for this eccentricity group
             sector_area_remove = self.sector2area_mm2(min_ecc, angle_deg)
             sector_area_full = self.sector2area_mm2(max_ecc, angle_deg)
@@ -1162,19 +1160,19 @@ class ConstructRetina(RetinaMath, Printable):
             bipolar_density_all.append(np.full(bipolar_units, bipolar_density_group))
             bipolar_initial_pos.append(bipolar_positions)
 
-        gc_density = np.concatenate(gc_density_all)
-        cone_density = np.concatenate(cone_density_all)
-        bipolar_density = np.concatenate(bipolar_density_all)
+        gc_density_per_unit = np.concatenate(gc_density_all)
+        cone_density_per_unit = np.concatenate(cone_density_all)
+        bipolar_density_per_unit = np.concatenate(bipolar_density_all)
 
         return (
             eccentricity_groups,
             areas_all_mm2,
             gc_initial_pos,
-            gc_density,
+            gc_density_per_unit,
             cone_initial_pos,
-            cone_density,
+            cone_density_per_unit,
             bipolar_initial_pos,
-            bipolar_density,
+            bipolar_density_per_unit,
         )
 
     def _boundary_force(self, positions, rep, dist_th, ecc_lim_mm, polar_lim_deg):
@@ -1364,6 +1362,7 @@ class ConstructRetina(RetinaMath, Printable):
         -----
         This method applies a force-based layout to optimize node positions.
         It visualizes the progress of the layout optimization.
+        For memory issues, you might need to batch this method.
         """
 
         n_iterations = unit_placement_params["n_iterations"]
@@ -1385,24 +1384,27 @@ class ConstructRetina(RetinaMath, Printable):
                 init=True,
             )
 
-        unit_distance_threshold = torch.tensor(unit_distance_threshold).to(self.device)
-        unit_repulsion_stregth = torch.tensor(unit_repulsion_stregth).to(self.device)
-        diffusion_speed = torch.tensor(diffusion_speed).to(self.device)
-        n_iterations = torch.tensor(n_iterations).to(self.device)
-        cell_density = torch.tensor(cell_density).to(self.device)
+        device = self.device
+        dtype = torch.float32
 
-        rep = torch.tensor(border_repulsion_stength).to(self.device)
-        dist_th = torch.tensor(border_distance_threshold).to(self.device)
+        unit_distance_threshold = torch.tensor(unit_distance_threshold, device=device, dtype=dtype)
+        unit_repulsion_stregth = torch.tensor(unit_repulsion_stregth, device=device, dtype=dtype)
+        diffusion_speed = torch.tensor(diffusion_speed, device=device, dtype=dtype)
+        n_iterations = torch.tensor(n_iterations, device=device, dtype=torch.int32)
+        cell_density = torch.tensor(cell_density, device=device, dtype=dtype)
+
+        rep = torch.tensor(border_repulsion_stength, device=device, dtype=dtype)
+        dist_th = torch.tensor(border_distance_threshold, device=device, dtype=dtype)
 
         original_positions = deepcopy(all_positions)
         positions = torch.tensor(
-            all_positions, requires_grad=True, dtype=torch.float64, device=self.device
+            all_positions, requires_grad=True, dtype=dtype, device=device
         )
-        change_rate = torch.tensor(change_rate).to(self.device)
-        optimizer = torch.optim.Adam([positions], lr=change_rate, betas=(0.95, 0.999))
+        change_rate = torch.tensor(change_rate, device=device, dtype=dtype)
+        optimizer = torch.optim.Adam([positions], lr=change_rate.item(), betas=(0.95, 0.999))
 
-        ecc_lim_mm = torch.tensor(ret.ecc_lim_mm).to(self.device)
-        polar_lim_deg = torch.tensor(ret.polar_lim_deg).to(self.device)
+        ecc_lim_mm = torch.tensor(ret.ecc_lim_mm, device=device, dtype=dtype)
+        polar_lim_deg = torch.tensor(ret.polar_lim_deg, device=device, dtype=dtype)
         boundary_polygon = self.viz.boundary_polygon(
             ecc_lim_mm.cpu().numpy(), polar_lim_deg.cpu().numpy()
         )
@@ -1413,7 +1415,7 @@ class ConstructRetina(RetinaMath, Printable):
         adjusted_distance_threshold = unit_distance_threshold * (952 / cell_density)
         adjusted_diffusion_speed = diffusion_speed * (952 / cell_density)
 
-        for iteration in torch.range(0, n_iterations):
+        for iteration in range(n_iterations.item()):
             optimizer.zero_grad()
             # Repulsive force between nodes
             diff = positions[None, :, :] - positions[:, None, :]
@@ -1610,13 +1612,9 @@ class ConstructRetina(RetinaMath, Printable):
         x1, y1 = self.pol2cart(mean_ecc, polar_lim_deg[1])
         delta_pol = np.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2)
         mean_dist_between_units = np.sqrt((delta_ecc * delta_pol) / n_units)
-        _delta_ecc = delta_ecc - mean_dist_between_units
-        n_ecc = int(np.round(_delta_ecc / mean_dist_between_units))
+        n_ecc = int(np.round(delta_ecc / mean_dist_between_units))
+        n_ecc = max(n_ecc, 1)
         n_pol = int(np.round(n_units / n_ecc))
-        # try:
-        #     n_pol = int(np.round(n_units / n_ecc))
-        # except:
-        #     breakpoint()
 
         # Generate evenly spaced values for eccentricity and angle
         eccs = np.linspace(
@@ -1641,10 +1639,6 @@ class ConstructRetina(RetinaMath, Printable):
         # Reshape the grids and combine them into a single array
         positions = np.column_stack((eccs_grid.ravel(), angles_grid.ravel()))
 
-        # print(
-        #     f"Error in n units due to hexagonal grid {((len(positions) - n_units) / n_units) * 100:.2f}%"
-        # )
-
         return positions
 
     def _optimize_positions(
@@ -1657,6 +1651,7 @@ class ConstructRetina(RetinaMath, Printable):
 
         # Optimize positions for ganglion cells
         optim_algorithm = unit_placement_params["algorithm"]
+        # breakpoint()
         if optim_algorithm == None:
             # Initial random placement.
             # Use this for testing/speed/nonvarying placements.
@@ -1678,6 +1673,7 @@ class ConstructRetina(RetinaMath, Printable):
             )
             optimized_positions = np.column_stack(optimized_positions_tuple)
 
+        # breakpoint()
         return optimized_positions, optimized_positions_mm
 
     def _link_cone_noise_units_to_gcs(self, ret, gc):
@@ -1811,7 +1807,7 @@ class ConstructRetina(RetinaMath, Printable):
 
         ret.cones_to_bipolars_center_weights = G_cen_weight
         ret.cones_to_bipolars_surround_weights = G_sur_weight
-        # breakpoint()
+
         return ret
 
     def _place_units(self, ret, gc):
