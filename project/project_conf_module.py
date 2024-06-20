@@ -197,18 +197,16 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 # is not the case in the VAE model, and not very physiological.
 
 gc_type = "parasol"  # "parasol" or "midget"
-response_type = "on"  # "on" or "off"
+response_type = "off"  # "on" or "off"
 
 # These values are used for building a new retina
 my_retina = {
     "gc_type": gc_type,
     "response_type": response_type,
-    # "ecc_limits_deg": [36, 39.4],  # eccentricity in degrees
+    # "ecc_limits_deg": [30, 36],  # eccentricity in degrees
     # "pol_limits_deg": [-4, 4],  # polar angle in degrees
     "ecc_limits_deg": [4.5, 5.5],  # eccentricity in degrees
     "pol_limits_deg": [-3, 3],  # polar angle in degrees
-    # "ecc_limits_deg": [4.0, 6.0],  # eccentricity in degrees
-    # "pol_limits_deg": [-15.0, 15.0],  # polar angle in degrees
     "model_density": 1.0,  # 1.0 for 100% of the literature density of ganglion cells
     "dd_regr_model": "quadratic",  # linear, quadratic, cubic, loglog. For midget < 20 deg, use quadratic; for parasol use loglog
     "ecc_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
@@ -505,13 +503,14 @@ refractory_params = {
 # Voronoi-based Layout with Loyd's Relaxation
 # "voronoi" (v) : better for big retinas, fast
 # Force Based Layout Algorithm with Boundary Repulsion
-# "force" (f) : better for small retinas, slow
-# None : initial random placement. Nonvarying with fixed seed above. Good for testing and speed.
+# "force" (f) : better for small retinas, slow with cpu -- fast with cuda
+# None : initial random placement. Nonvarying with fixed seed above. Good for testing and speed
+# and necessary for large retinas due to memory constraints.
 gc_placement_params = {
-    "algorithm": None,  # "voronoi" or "force" or None
+    "algorithm": "force",  # "voronoi" or "force" or None
     "n_iterations": 30,  # v 20, f 5000
     "change_rate": 0.0005,  # f 0.001, v 0.5
-    "unit_repulsion_stregth": 7,  # 10 f only
+    "unit_repulsion_stregth": 10,  # 10 f only
     "unit_distance_threshold": 0.1,  # f only, adjusted with ecc
     "diffusion_speed": 0.001,  # f only, adjusted with ecc
     "border_repulsion_stength": 0.2,  # f only
@@ -521,7 +520,7 @@ gc_placement_params = {
 }
 
 cone_placement_params = {
-    "algorithm": None,  # "voronoi" or "force" or None
+    "algorithm": "force",  # "voronoi" or "force" or None
     "n_iterations": 15,  # v 20, f 300
     "change_rate": 0.0005,  # f 0.0005, v 0.5
     "unit_repulsion_stregth": 2,  # 10 f only
@@ -534,7 +533,7 @@ cone_placement_params = {
 }
 
 bipolar_placement_params = {
-    "algorithm": None,  # "voronoi" or "force" or None
+    "algorithm": "force",  # "voronoi" or "force" or None
     "n_iterations": 15,  # v 20, f 300
     "change_rate": 0.0005,  # f 0.0005, v 0.5
     "unit_repulsion_stregth": 2,  # 10 f only
@@ -934,10 +933,8 @@ if __name__ == "__main__":
     ################################
 
     # TÄHÄN JÄIT:
-    # - Montako yhteyttä tulee kuhunkin gc:uun? histogrammit voimakkuuksista ja määristä
-    #   - tarkista tästä kirjallisuus, mikä on järkevä määrä kullekin bipo ja gc tyypille
-    # - joutuuko pakottamaan yhteyksiä / tappamaan ganglionsoluja?
-    # - Onko yhteyspainojen pakottamisella 1:een sivuvaikutuksia? Suuria painoja?
+    # -Parasolien bipolaarit ovat ok. Korjaa midgetit fan in ja out ykköseen / solu
+    # Esim lähin tappi bipolaariin ja lähin bipolaari gc:uun
     # - Vakioi generaattoripotentiaali eri temporal mallien välillä käyttäen temporal chirp ärsykettä
     # - gen => fr transformaatio, Turner malli?
     # - SUBUNIT MALLIN VALIDOINTI vs Turner 2018

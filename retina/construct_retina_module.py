@@ -1113,7 +1113,7 @@ class ConstructRetina(RetinaMath, Printable):
             avg_ecc = (min_ecc + max_ecc) / 2
 
             gc_density_group = self.gc_fit_function(avg_ecc, *gc_density_params)
-            # breakpoint()
+
             cone_density_group = self.cone_fit_function(avg_ecc, *cone_density_params)
 
             bipolar_density_group = self.bipolar_fit_function(
@@ -1387,8 +1387,12 @@ class ConstructRetina(RetinaMath, Printable):
         device = self.device
         dtype = torch.float32
 
-        unit_distance_threshold = torch.tensor(unit_distance_threshold, device=device, dtype=dtype)
-        unit_repulsion_stregth = torch.tensor(unit_repulsion_stregth, device=device, dtype=dtype)
+        unit_distance_threshold = torch.tensor(
+            unit_distance_threshold, device=device, dtype=dtype
+        )
+        unit_repulsion_stregth = torch.tensor(
+            unit_repulsion_stregth, device=device, dtype=dtype
+        )
         diffusion_speed = torch.tensor(diffusion_speed, device=device, dtype=dtype)
         n_iterations = torch.tensor(n_iterations, device=device, dtype=torch.int32)
         cell_density = torch.tensor(cell_density, device=device, dtype=dtype)
@@ -1401,7 +1405,9 @@ class ConstructRetina(RetinaMath, Printable):
             all_positions, requires_grad=True, dtype=dtype, device=device
         )
         change_rate = torch.tensor(change_rate, device=device, dtype=dtype)
-        optimizer = torch.optim.Adam([positions], lr=change_rate.item(), betas=(0.95, 0.999))
+        optimizer = torch.optim.Adam(
+            [positions], lr=change_rate.item(), betas=(0.95, 0.999)
+        )
 
         ecc_lim_mm = torch.tensor(ret.ecc_lim_mm, device=device, dtype=dtype)
         polar_lim_deg = torch.tensor(ret.polar_lim_deg, device=device, dtype=dtype)
@@ -1651,7 +1657,7 @@ class ConstructRetina(RetinaMath, Printable):
 
         # Optimize positions for ganglion cells
         optim_algorithm = unit_placement_params["algorithm"]
-        # breakpoint()
+
         if optim_algorithm == None:
             # Initial random placement.
             # Use this for testing/speed/nonvarying placements.
@@ -1673,7 +1679,6 @@ class ConstructRetina(RetinaMath, Printable):
             )
             optimized_positions = np.column_stack(optimized_positions_tuple)
 
-        # breakpoint()
         return optimized_positions, optimized_positions_mm
 
     def _link_cone_noise_units_to_gcs(self, ret, gc):
@@ -1757,7 +1762,6 @@ class ConstructRetina(RetinaMath, Printable):
         # Normalize axis 0 weights to 1.0 => input to each gc = 1.0
         weights_out = weights / weights.sum(axis=0)
 
-        # breakpoint()
         ret.bipolar_to_gcs_weights = weights_out
 
         return ret
