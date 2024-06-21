@@ -1771,39 +1771,68 @@ class ConstructRetina(RetinaMath, Printable):
         Connect cones to bipolar cells.
         """
 
+        def _extract_range_and_average_from(df):
+            range_strings = df.loc["Cone_contacts_Range", :].values
+            average_strings = df.loc["Cone_contacts_Average", :].values
+            density_strings = df.loc["Estimated_density_mm^-2", :].values
+            # Get range min and max
+            min_range = np.array(
+                [float(x.split("-")[0]) for x in range_strings], dtype=float
+            )
+            max_range = np.array(
+                [float(x.split("-")[1]) for x in range_strings], dtype=float
+            )
+            means = np.array([float(x) for x in average_strings], dtype=float)
+            sizes = np.array([float(x) for x in density_strings], dtype=float)
+            average = self.weighted_average(means, sizes)
+
+            return min(min_range), max(max_range), average
+
         print("Connecting cones to bipolar cells...")
 
         cone_pos_mm = ret.cone_optimized_pos_mm
-        # n_cones = cone_pos_mm.shape[0]
         bipo_pos_mm = ret.bipolar_optimized_pos_mm
-        # n_bipos = bipo_pos_mm.shape[0]
         selected_bipolars_df = ret.selected_bipolars_df
-
-        # div 1000 for um to mm transition
         bipo_cen_sd_mm = ret.bipolar_general_params["cone2bipo_cen_sd"] / 1000
         bipo_sur_sd_mm = ret.bipolar_general_params["cone2bipo_sur_sd"] / 1000
         bipo_sur2cen_amp_ratio = ret.bipolar_general_params["bipo_sub_sur2cen"]
-        cutoff_SD_cen = ret.cone_general_params["cone2bipo_cutoff_SD"] * bipo_cen_sd_mm
         cutoff_SD_sur = ret.cone_general_params["cone2bipo_cutoff_SD"] * bipo_sur_sd_mm
 
-        # count distances
-        cone_reshaped = cone_pos_mm[:, np.newaxis, :]  # Shape becomes (n_cones, 1, 2)
-        bipo_reshaped = bipo_pos_mm[np.newaxis, :, :]  # Shape becomes (1, n_bipos, 2)
+        cone_reshaped = cone_pos_mm[:, np.newaxis, :]
+        bipo_reshaped = bipo_pos_mm[np.newaxis, :, :]
 
-        # This may cause memory issues with large retinas
         squared_diffs = (cone_reshaped - bipo_reshaped) ** 2
         squared_distances = squared_diffs.sum(axis=2)
-        distances = np.sqrt(squared_distances)
+        distances = np.sqrt(squared_distances).astype(np.float64)
 
-        # Dimensions are [n_cones, n_bipos]
+        min_range, max_range, average = _extract_range_and_average_from(
+            selected_bipolars_df
+        )
+        print(f"min_range: {min_range}, max_range: {max_range}, average: {average}")
+        n_bipolar_dendritic_contacts = self.get_sample_from_range_and_average(
+            min_range, max_range, average, len(bipo_pos_mm)
+        )
+
+        # Get indices of ascending distances for each bipolar cell
+        ascending_distances_from_bipolars = np.argsort(distances, axis=0)
+
+        # Initialize null_idx with True (i.e., exclude all initially)
+        null_idx = np.ones_like(distances, dtype=bool)
+
+        # Mark the top n_bipolar_dendritic_contacts shortest distances as False (i.e., include them)
+        for j in range(ascending_distances_from_bipolars.shape[1]):
+            null_column = ascending_distances_from_bipolars[
+                : n_bipolar_dendritic_contacts[j], j
+            ]
+            null_idx[null_column, j] = False
+
         G_cen = np.exp(-((distances / bipo_cen_sd_mm) ** 2))
         G_sur = np.exp(-((distances / bipo_sur_sd_mm) ** 2))
 
         G_cen_probability = G_cen / G_cen.sum(axis=0)[np.newaxis, :]
         G_sur_probability = G_sur / G_sur.sum(axis=0)[np.newaxis, :]
 
-        # Set distances over cutoff to zero
-        G_cen_probability[distances > cutoff_SD_cen] = 0
+        G_cen_probability[null_idx] = 0
         G_sur_probability[distances > cutoff_SD_sur] = 0
 
         G_cen_weight = G_cen_probability
