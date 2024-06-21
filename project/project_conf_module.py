@@ -515,7 +515,7 @@ gc_placement_params = {
     "diffusion_speed": 0.001,  # f only, adjusted with ecc
     "border_repulsion_stength": 0.2,  # f only
     "border_distance_threshold": 0.001,  # f only
-    "show_placing_progress": True,  # True False
+    "show_placing_progress": False,  # True False
     "show_skip_steps": 1,  # v 1, f 100
 }
 
@@ -528,7 +528,7 @@ cone_placement_params = {
     "diffusion_speed": 0.001,  # f only, adjusted with ecc
     "border_repulsion_stength": 5,  # f only
     "border_distance_threshold": 0.0001,  # f only
-    "show_placing_progress": True,  # True False
+    "show_placing_progress": False,  # True False
     "show_skip_steps": 1,  # v 1, f 100
 }
 
@@ -541,7 +541,7 @@ bipolar_placement_params = {
     "diffusion_speed": 0.005,  # f only, adjusted with ecc
     "border_repulsion_stength": 5,  # f only
     "border_distance_threshold": 0.0001,  # f only
-    "show_placing_progress": True,  # True False
+    "show_placing_progress": False,  # True False
     "show_skip_steps": 1,  # v 1, f 100
 }
 
