@@ -99,6 +99,53 @@ class RetinaMath:
 
         return diameters
 
+    def get_sample_from_range_and_average(
+        self, min_range, max_range, average, sample_size
+    ):
+        """Function to generate a sample with a target average, given range."""
+        sample = np.random.randint(min_range, max_range + 1, sample_size)
+        current_mean = np.mean(sample)
+        adjustment_needed = average - current_mean
+        total_adjustment = int(round(adjustment_needed * sample_size))
+
+        for i in range(abs(total_adjustment)):
+            if total_adjustment > 0:
+                idx = np.argmin(sample)
+                if sample[idx] < max_range:
+                    sample[idx] += 1
+            elif total_adjustment < 0:
+                idx = np.argmax(sample)
+                if sample[idx] > min_range:
+                    sample[idx] -= 1
+
+        # Suffle sample to adjust for the order of the adjustments
+        np.random.shuffle(sample)
+
+        return sample
+
+    def weighted_average(self, means, sizes):
+        """
+        Calculate the weighted average of a set of values.
+
+        Parameters
+        ----------
+        means : array-like
+            The values to be averaged.
+        sizes : array-like
+            The weights for each value.
+
+        Returns
+        -------
+        weighted_mean : float
+            The weighted average of the input values.
+        """
+
+        total_weight = sum(sizes)
+        weighted_mean = (
+            sum(mean * size for mean, size in zip(means, sizes)) / total_weight
+        )
+        return weighted_mean
+
     # RetinaConstruction & SimulateRetina methods
     def pol2cart_df(self, df):
         """
@@ -624,7 +671,7 @@ class RetinaMath:
             and np.abs(expected_sd - sd) < tolerance
         ):
             raise ValueError(
-                f"The provided mean ({mean}) and SD ({sd}) don't match the expected values for a triangular distribution with the given min, max, and median. Expected mean: {expected_mean}, Expected SD: {expected_sd}"
+                f"The provided mean ({mean}) and SD ({sd}) don't match the expected values for a triangular distribution with the given min, max, and median. Expected mean: {expected_mean}, Expected SD: {expected_sd}. Aborting..."
             )
 
         return c, loc, scale
