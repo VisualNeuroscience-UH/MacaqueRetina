@@ -147,14 +147,14 @@ input_folder = "../in"  # input figs, videos, models
 Stimulus context
 Stimulus images and videos
 """
-stimulus_folder = "stim"  # stim_sine_grating_sf2p0_crf_14_7"  # "stim_luminance_onset"
+stimulus_folder = "stim2"  # stim_sine_grating_sf2p0_crf_14_7"  # "stim_luminance_onset"
 
 
 """
 Data context for output. 
 """
 
-output_folder = "testi_stim"  # "parasol_on_stim_sine_grating_sf2p0_crf_14_7"  # "parasol_on_luminance_onset"
+output_folder = "testi_stim2"  # "parasol_on_stim_sine_grating_sf2p0_crf_14_7"  # "parasol_on_luminance_onset"
 
 
 """
@@ -197,7 +197,7 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 # is not the case in the VAE model, and not very physiological.
 
 gc_type = "parasol"  # "parasol" or "midget"
-response_type = "off"  # "on" or "off"
+response_type = "on"  # "on" or "off"
 
 # These values are used for building a new retina
 my_retina = {
@@ -211,12 +211,12 @@ my_retina = {
     "dd_regr_model": "quadratic",  # linear, quadratic, cubic, loglog. For midget < 20 deg, use quadratic; for parasol use loglog
     "ecc_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
-    "temporal_model": "subunit",  # fixed, dynamic, subunit
+    "temporal_model": "dynamic",  # fixed, dynamic, subunit
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
-    "spatial_model": "VAE",  # "FIT" or "VAE" for variational autoencoder
+    "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
     "rf_coverage_adjusted_to_1": False,  # False or True. Applies to FIT only, scales sum(unit center areas) = retina area
-    "training_mode": "load_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
+    "training_mode": "train_model",  # "train_model" or "tune_model" or "load_model" for loading trained or tuned. Applies to VAE only
     "model_file_name": None,  # None for most recent or "model_[GC TYPE]_[RESPONSE TYPE]_[DEVICE]_[TIME_STAMP].pt" at input_folder. Applies to VAE "load_model" only
     "ray_tune_trial_id": None,  # Trial_id for tune, None for loading single run after "train_model". Applies to VAE "load_model" only
 }
@@ -281,20 +281,20 @@ my_stimulus_options = {
     "pix_per_deg": 60,
     "dtype_name": "float64",  # low contrast needs "float16", for performance, use "uint8",
     "fps": 350,  # 300 for good cg integration
-    "duration_seconds": 10,  # actual frames = floor(duration_seconds * fps)
+    "duration_seconds": 1,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
-    "baseline_end_seconds": 0.0,
+    "baseline_end_seconds": 0.5,
     # "pattern": "sine_grating",  # One of the StimulusPatterns
-    # "pattern": "natural_images",  # One of the StimulusPatterns
+    "pattern": "temporal_square_pattern",  # One of the StimulusPatterns
     # "pattern": "temporal_sine_pattern",  # One of the StimulusPatterns
-    "pattern": "temporal_chirp_pattern",  # One of the StimulusPatterns
+    # "pattern": "temporal_chirp_pattern",  # One of the StimulusPatterns
     # "pattern": "contrast_chirp_pattern",  # One of the StimulusPatterns
     "stimulus_form": "rectangular",
     "size_inner": 0.1,  # deg, applies to annulus only
     "size_outer": 1,  # deg, applies to annulus only
     "stimulus_position": (0.0, 0.0),  # relative to stimuls center in retina
     "stimulus_size": 1,  # 0.04,  # 2,  # deg, radius for circle, sidelen/2 for rectangle.
-    "temporal_frequency": 10,  # 0.01,  # 4.0,  # 40,  # Hz
+    "temporal_frequency": 0.1,  # 0.01,  # 4.0,  # 40,  # Hz
     "temporal_frequency_range": (0.5, 50),  # Hz, applies to temporal chirp only
     "spatial_frequency": 5.0,  # cpd
     "orientation": 0,  # degrees
@@ -806,7 +806,7 @@ if __name__ == "__main__":
     # PM.viz.show_cell_density_vs_ecc(unit_type="gc", savefigname=None)  # gc or cone
     # PM.viz.show_cell_density_vs_ecc(unit_type="bipolar", savefigname=None)  # gc or cone
     # PM.viz.show_connection_histograms(savefigname=None)
-    PM.viz.show_fan_in_out_distributions(savefigname=None)
+    # PM.viz.show_fan_in_out_distributions(savefigname=None)
 
     # PM.viz.show_DoG_model_fit(sample_list=[10], savefigname=None)
     # PM.viz.show_DoG_model_fit(n_samples=6, savefigname=None)
@@ -851,14 +851,14 @@ if __name__ == "__main__":
     ########################
 
     # Based on my_stimulus_options above
-    # PM.stimulate.make_stimulus_video()
+    PM.stimulate.make_stimulus_video()
 
     ####################################
     ### Run multiple trials or units ###
     ####################################
 
     # Load stimulus to get working retina, necessary for running units
-    # PM.simulate_retina.run_with_my_run_options()
+    PM.simulate_retina.run_with_my_run_options()
 
     ##########################################
     ### Show single ganglion cell features ###
@@ -877,7 +877,7 @@ if __name__ == "__main__":
     ################################################
 
     # Based on my_run_options above
-    # PM.viz.show_all_gc_responses(savefigname=None)
+    PM.viz.show_all_gc_responses(savefigname=None)
     # PM.viz.show_generator_potential_histogram(savefigname=None)
     # PM.viz.show_generator_potential_histogram(
     #     savefigname="Chirp_subunit_midOFF_256.eps"
@@ -933,8 +933,6 @@ if __name__ == "__main__":
     ################################
 
     # TÄHÄN JÄIT:
-    # -Parasolien bipolaarit ovat ok. Korjaa midgetit fan in ja out ykköseen / solu
-    # Esim lähin tappi bipolaariin ja lähin bipolaari gc:uun
     # - Vakioi generaattoripotentiaali eri temporal mallien välillä käyttäen temporal chirp ärsykettä
     # - gen => fr transformaatio, Turner malli?
     # - SUBUNIT MALLIN VALIDOINTI vs Turner 2018
