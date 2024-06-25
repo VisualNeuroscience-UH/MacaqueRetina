@@ -147,14 +147,16 @@ input_folder = "../in"  # input figs, videos, models
 Stimulus context
 Stimulus images and videos
 """
-stimulus_folder = "stim2"  # stim_sine_grating_sf2p0_crf_14_7"  # "stim_luminance_onset"
+stimulus_folder = (
+    "stim_refactor"  # stim_sine_grating_sf2p0_crf_14_7"  # "stim_luminance_onset"
+)
 
 
 """
 Data context for output. 
 """
 
-output_folder = "testi_stim2"  # "parasol_on_stim_sine_grating_sf2p0_crf_14_7"  # "parasol_on_luminance_onset"
+output_folder = "testi_stim_refactor"  # "parasol_on_stim_sine_grating_sf2p0_crf_14_7"  # "parasol_on_luminance_onset"
 
 
 """
