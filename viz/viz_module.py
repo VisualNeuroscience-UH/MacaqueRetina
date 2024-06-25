@@ -2317,10 +2317,15 @@ class Viz:
             axes[i, 0].set_title(f"{key.replace('_', ' ')} Fan-In Histogram")
             mean_fan_in = np.mean(fan_in[key])
             range_fan_in = (np.min(fan_in[key]), np.max(fan_in[key]))
-            axes[i, 0].annotate(f"Mean: {mean_fan_in:.2f}\nRange: {range_fan_in[0]} - {range_fan_in[1]}",
-                                xy=(0.95, 0.95), xycoords='axes fraction', 
-                                fontsize=10, ha='right', va='top', 
-                                bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5))
+            axes[i, 0].annotate(
+                f"Mean: {mean_fan_in:.2f}\nRange: {range_fan_in[0]} - {range_fan_in[1]}",
+                xy=(0.95, 0.95),
+                xycoords="axes fraction",
+                fontsize=10,
+                ha="right",
+                va="top",
+                bbox=dict(boxstyle="round,pad=0.5", fc="yellow", alpha=0.5),
+            )
             sns.violinplot(y=fan_in[key], ax=axes[i, 1])
             axes[i, 1].set_title(f"{key.replace('_', ' ')} Fan-In Violin Plot")
 
@@ -2329,10 +2334,15 @@ class Viz:
             axes[i, 2].set_title(f"{key.replace('_', ' ')} Fan-Out Histogram")
             mean_fan_out = np.mean(fan_out[key])
             range_fan_out = (np.min(fan_out[key]), np.max(fan_out[key]))
-            axes[i, 2].annotate(f"Mean: {mean_fan_out:.2f}\nRange: {range_fan_out[0]} - {range_fan_out[1]}",
-                                xy=(0.95, 0.95), xycoords='axes fraction', 
-                                fontsize=10, ha='right', va='top', 
-                                bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5))
+            axes[i, 2].annotate(
+                f"Mean: {mean_fan_out:.2f}\nRange: {range_fan_out[0]} - {range_fan_out[1]}",
+                xy=(0.95, 0.95),
+                xycoords="axes fraction",
+                fontsize=10,
+                ha="right",
+                va="top",
+                bbox=dict(boxstyle="round,pad=0.5", fc="yellow", alpha=0.5),
+            )
             sns.violinplot(y=fan_out[key], ax=axes[i, 3])
             axes[i, 3].set_title(f"{key.replace('_', ' ')} Fan-Out Violin Plot")
 
@@ -2843,8 +2853,8 @@ class Viz:
         n_units = gc_responses_to_show["n_units"]
         all_spiketrains = gc_responses_to_show["all_spiketrains"]
         duration = gc_responses_to_show["duration"]
-        # requested firing_rate before spike generation.
-        firing_rate = gc_responses_to_show["firing_rate"]
+        # requested firing_rates before spike generation.
+        firing_rates = gc_responses_to_show["firing_rates"]
         video_dt = gc_responses_to_show["video_dt"]
         tvec_new = gc_responses_to_show["tvec_new"]
 
@@ -2859,7 +2869,7 @@ class Viz:
         # Prepare data for manual visualization
         for_eventplot = all_spiketrains.copy()  # list of different leght arrays
         for_histogram = np.concatenate(all_spiketrains)
-        firing_rate_mean = np.nanmean(firing_rate, axis=0)
+        firing_rate_mean = np.nanmean(firing_rates, axis=0)
         if n_trials > 1 and n_units == 1:
             n_samples = n_trials
             sample_name = "Trials"
@@ -2881,7 +2891,7 @@ class Viz:
         ax[0].set_ylabel(sample_name)
 
         # Generator potential and average firing rate on second subplot
-        tvec = np.arange(0, firing_rate.shape[-1], 1) * video_dt
+        tvec = np.arange(0, firing_rates.shape[-1], 1) * video_dt
         ax[1].plot(tvec, firing_rate_mean, label="Generator")
         ax[1].set_xlim([0, duration / b2u.second])
 
@@ -2950,14 +2960,14 @@ class Viz:
         gc_responses_to_show = self.project_data.simulate_retina["gc_responses_to_show"]
         generator_potentials = gc_responses_to_show["generator_potentials"]
         video_dt = gc_responses_to_show["video_dt"]
-        firing_rate = gc_responses_to_show["firing_rates"]
+        firing_rates = gc_responses_to_show["firing_rates"]
         my_stimulus_options = self.context.my_stimulus_options
         fps = my_stimulus_options["fps"]
         baseline_start_seconds = my_stimulus_options["baseline_start_seconds"]
 
         # Prepare data for manual visualization
         generator_potential_mean = np.nanmean(generator_potentials, axis=0)
-        firing_rate_mean = np.nanmean(firing_rate, axis=0)
+        firing_rate_mean = np.nanmean(firing_rates, axis=0)
         baseline_start_tp = int(baseline_start_seconds * fps)
 
         photodiode_to_show = self.project_data.simulate_retina["photodiode_to_show"]
