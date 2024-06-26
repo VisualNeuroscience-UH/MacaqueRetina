@@ -3,6 +3,11 @@ import pdb
 from pathlib import Path
 from typing import Type
 from copy import deepcopy
+import hashlib
+import json
+import datetime
+
+import numpy as np
 
 from context.context_base_module import ContextBase
 
@@ -128,3 +133,74 @@ class Context(ContextBase):
                 validated_properties[attr] = val
 
         return validated_properties
+
+    def generate_hash(self, my_dict):
+        """
+        Generate a hash from the input dictionary with all values converted to a format suitable for JSON serialization and
+        return a hash string trimmed to the necessary length as determined by internal logic.
+
+        Parameters
+        ----------
+        my_dict : dict
+            A dictionary containing parameters to be hashed. This dictionary can include complex data types such as complex numbers,
+            datetime objects, numpy arrays, sets, and tuples.
+
+        Returns
+        -------
+        str
+            A portion of the SHA-256 hash of the serialized input dictionary as a hexadecimal string, with the length based on
+            the calculated necessary hash length.
+
+        Raises
+        ------
+        TypeError
+            If an object in the dictionary cannot be serialized to JSON and does not match any of the specified types in the helper
+            function.
+
+        Notes
+        -----
+        Uses helper functions `_serialize_nonhashable_object` to convert non-serializable objects and `_calculate_hash_length` to
+        determine the length of the hash to return based on the content of the dictionary.
+        """
+
+        def _serialize_nonhashable_object(obj):
+            if isinstance(obj, complex):
+                return {"real": obj.real, "imag": obj.imag}
+            elif isinstance(obj, datetime.datetime):
+                return obj.isoformat()
+            elif isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif isinstance(obj, set):
+                return list(obj)
+            elif isinstance(obj, tuple):
+                return list(obj)
+            else:
+                try:
+                    return obj.__dict__
+                except AttributeError:
+                    raise TypeError(
+                        f"Object of type {obj.__class__.__name__} is not JSON serializable"
+                    )
+
+        def _calculate_hash_length(data):
+            """Calculate the necessary hash length based on the complexity and diversity of the data."""
+            # Example complexity measure: count of keys times average string length of values
+            avg_value_length = sum(len(str(value)) for value in data.values()) / len(
+                data
+            )
+            return int(
+                min(64, max(12, avg_value_length / 2))
+            )  # Return between 12 and 64 characters
+
+        # Serialize the parameters and encode them to bytes
+        params_str = json.dumps(
+            my_dict, default=_serialize_nonhashable_object, sort_keys=True
+        ).encode()
+
+        # Generate the hash
+        hash_object = hashlib.sha256(params_str)
+        hash_digest = hash_object.hexdigest()
+
+        # Calculate the necessary hash length and return the required portion of the hash
+        necessary_length = _calculate_hash_length(my_dict)
+        return hash_digest[:necessary_length]
