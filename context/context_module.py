@@ -21,47 +21,19 @@ class Context(ContextBase):
     """
 
     def __init__(self, all_properties) -> None:
+
         self.validated_properties = self._validate_properties(all_properties)
 
-    def set_context(self, class_instance):
-        """
-        Each module orders class_instance.context.property name from context by calling set_context().
-        Empty list provides all properties.
-
-        The context object is separate for each processed class_instance, but the class_instance.context.attribute
-        is always the same as context.attribute. Thus it will always point to the project manager context
-        (input arguments to the project manager init).
-
-        Parameters
-        ----------
-        class_instance : object
-            Class instance that calls set_context().
-        """
-
-        if hasattr(class_instance, "_properties_list"):
-            _properties_list = class_instance._properties_list
-        else:
-            _properties_list = []
-
-        if isinstance(_properties_list, list):
-            pass
-        elif isinstance(_properties_list, str):
-            _properties_list = [_properties_list]
-        else:
-            raise TypeError("properties list must be a list or a string, aborting...")
-
-        # Make a copy of the context object, so that you do not always return the same object
-        _context = deepcopy(self)
-
         for attr, val in self.validated_properties.items():
-            if len(_properties_list) > 0 and attr in _properties_list:
-                setattr(_context, attr, val)
-            elif len(_properties_list) > 0 and attr not in _properties_list:
-                pass
-            else:
-                setattr(_context, attr, val)
+            setattr(self, attr, val)
 
-        return _context
+    def set_context(self):
+        """
+        Return context for the project. This includes all properties set in the
+        ProjectManager constructor.
+        """
+
+        return self
 
     def _validate_properties(self, all_properties):
         validated_properties = {}

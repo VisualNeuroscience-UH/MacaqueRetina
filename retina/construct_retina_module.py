@@ -361,13 +361,11 @@ class ConstructRetina(RetinaMath, Printable):
         Dataframe containing the ganglion cell mosaic
     """
 
-    _properties_list = []
-
     def __init__(
         self, context, data_io, viz, fit, project_data, data_extractor
     ) -> None:
         # Dependency injection at ProjectManager construction
-        self._context = context.set_context(self)
+        self._context = context.set_context()
         self._data_io = data_io
         self._viz = viz
         self._fit = fit
