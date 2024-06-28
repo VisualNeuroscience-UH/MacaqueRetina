@@ -63,16 +63,8 @@ class ProjectManager(ProjectBase, ProjectUtilities):
 
         # Set context attributes for project manager
         self.context = context.set_context()
-        my_retina_hash_substring = context.generate_hash(self.context.my_retina)
-        # Append my_retina_hash_substring to my_retina_append
-        self.context.my_retina_append["my_retina_hash_substring"] = (
-            my_retina_hash_substring
-        )
-        self.context.my_retina.update(self.context.my_retina_append)
-        # Delete my_retina_append from context
-        del self.context.my_retina_append
-        # breakpoint()
-        # TÄHÄN JÄIT: APPLIKOI HASH NIMI FILE NIMEEN
+        self._get_unique_my_retina_hash()
+        self._set_and_drop_my_retina_append()
 
         data_io = DataIO(context)
         self.data_io = data_io
@@ -221,5 +213,13 @@ class ProjectManager(ProjectBase, ProjectUtilities):
                 "Trying to set improper analog_input. analog_input must be a AnalogInput instance."
             )
 
+    def _get_unique_my_retina_hash(self):
 
-# if __name__=='__main__':
+        self.context.my_retina_append["my_retina_hash"] = self.context.generate_hash(
+            self.context.my_retina
+        )
+
+    def _set_and_drop_my_retina_append(self):
+
+        self.context.my_retina.update(self.context.my_retina_append)
+        del self.context.my_retina_append
