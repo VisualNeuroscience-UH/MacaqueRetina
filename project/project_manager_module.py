@@ -65,6 +65,7 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         self.context = context.set_context()
         self._get_unique_my_retina_hash()
         self._set_and_drop_my_retina_append()
+        self._set_retina_savenames()
 
         data_io = DataIO(context)
         self.data_io = data_io
@@ -223,3 +224,17 @@ class ProjectManager(ProjectBase, ProjectUtilities):
 
         self.context.my_retina.update(self.context.my_retina_append)
         del self.context.my_retina_append
+
+    def _set_retina_savenames(self):
+        hashstr = self.context.my_retina["my_retina_hash"]
+        gc_type = self.context.my_retina["gc_type"]
+        response_type = self.context.my_retina["response_type"]
+        self.context.my_retina["mosaic_file"] = (
+            gc_type + "_" + response_type + "_" + hashstr + "_mosaic.csv"
+        )
+        self.context.my_retina["spatial_rfs_file"] = (
+            gc_type + "_" + response_type + "_" + hashstr + "_spatial_rfs.npz"
+        )
+        self.context.my_retina["ret_file"] = (
+            gc_type + "_" + response_type + "_" + hashstr + "_ret.npz"
+        )
