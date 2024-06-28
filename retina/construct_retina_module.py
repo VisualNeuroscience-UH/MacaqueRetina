@@ -3451,6 +3451,10 @@ class ConstructRetina(RetinaMath, Printable):
         """
         Builds the receptive field mosaic. This is the main method to call.
         """
+        if self._build_exists():
+            return
+        breakpoint()
+
         ret, gc = self._initialize_build()
 
         # -- First, place the ganglion cell midpoints (units mm)
@@ -3487,6 +3491,27 @@ class ConstructRetina(RetinaMath, Printable):
 
         # Save the receptive field mosaic
         self.save_gc_df2csv(gc)
+
+    def _build_exists(self):
+        """
+        Check if the build exists by checking if the hash exists in project directories.
+        """
+
+        my_retina = self.context.my_retina
+        string_keys = [k for k, i in my_retina.items() if isinstance(i, str)]
+        my_retina_hash = my_retina["my_retina_hash"]
+        requested_file_name_keys = [
+            n for n in string_keys if "file" in n and my_retina_hash in my_retina[n]
+        ]
+
+        try:
+            for this_file in requested_file_name_keys:
+                self.data_io.parse_path(my_retina[this_file])
+            print("Hash exists. Continuing without building the retina.")
+            return True
+        except FileNotFoundError:
+            print("Hash does not exist. Building the retina.")
+            return False
 
     def save_gc_data(self, gc):
         # Save the generated receptive field pix images, pix masks, and pixel locations in mm
