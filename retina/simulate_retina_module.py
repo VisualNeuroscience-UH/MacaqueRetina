@@ -988,7 +988,7 @@ class VisualSignal(Printable):
 
 class SimulateRetina(RetinaMath):
     def __init__(self, context, data_io, viz, project_data) -> None:
-        self._context = context.set_context(self)
+        self._context = context.set_context()
         self._data_io = data_io
         self._viz = viz
         self._project_data = project_data

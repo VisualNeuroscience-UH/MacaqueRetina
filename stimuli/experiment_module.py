@@ -22,7 +22,7 @@ class Experiment(VideoBaseClass):
     def __init__(self, context, data_io):
         super().__init__()
 
-        self._context = context.set_context(self)
+        self._context = context.set_context()
         self._data_io = data_io
 
     @property

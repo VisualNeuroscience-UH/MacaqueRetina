@@ -62,7 +62,17 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         context.validated_properties["device"] = device
 
         # Set context attributes for project manager
-        self.context = context.set_context(self)
+        self.context = context.set_context()
+        my_retina_hash_substring = context.generate_hash(self.context.my_retina)
+        # Append my_retina_hash_substring to my_retina_append
+        self.context.my_retina_append["my_retina_hash_substring"] = (
+            my_retina_hash_substring
+        )
+        self.context.my_retina.update(self.context.my_retina_append)
+        # Delete my_retina_append from context
+        del self.context.my_retina_append
+        # breakpoint()
+        # TÄHÄN JÄIT: APPLIKOI HASH NIMI FILE NIMEEN
 
         data_io = DataIO(context)
         self.data_io = data_io

@@ -33,7 +33,7 @@ import ast
 
 class Analysis(AnalysisBase):
     def __init__(self, context, data_io, **kwargs) -> None:
-        self._context = context.set_context(self)
+        self._context = context.set_context()
         self._data_io = data_io
 
         for attr, value in kwargs.items():

@@ -760,7 +760,7 @@ class VisualStimulus(VideoBaseClass):
     def __init__(self, context, data_io, data_extractor):
         super().__init__()
 
-        self._context = context.set_context(self)
+        self._context = context.set_context()
         self._data_io = data_io
 
         self.data_extractor = data_extractor
@@ -926,7 +926,7 @@ class AnalogInput:
     def __init__(self, context, data_io, viz, **kwargs):
         super().__init__()
 
-        self._context = context.set_context(self)
+        self._context = context.set_context()
         self._data_io = data_io
         self._viz = viz
 

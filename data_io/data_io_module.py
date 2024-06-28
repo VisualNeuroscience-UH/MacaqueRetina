@@ -36,7 +36,7 @@ from context.context_module import Context
 
 class DataIO(DataIOBase):
     def __init__(self, context) -> None:
-        self.context = context.set_context(self)
+        self.context = context.set_context()
 
         # Attach cxsystem2 methods
         self.write_to_file = write_to_file

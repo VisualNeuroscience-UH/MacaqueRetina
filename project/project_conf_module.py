@@ -133,7 +133,7 @@ project = "Retina"
 """
 Current experiment. Use distinct folders fo distinct stimuli.
 """
-experiment = "test_experiment"
+experiment = "strategy"
 
 
 """
@@ -147,16 +147,14 @@ input_folder = "../in"  # input figs, videos, models
 Stimulus context
 Stimulus images and videos
 """
-stimulus_folder = (
-    "stim_refactor"  # stim_sine_grating_sf2p0_crf_14_7"  # "stim_luminance_onset"
-)
+stimulus_folder = "stim"
 
 
 """
 Data context for output. 
 """
 
-output_folder = "testi_stim_refactor"  # "parasol_on_stim_sine_grating_sf2p0_crf_14_7"  # "parasol_on_luminance_onset"
+output_folder = "testi_stim"
 
 
 """
@@ -201,7 +199,9 @@ path = Path.joinpath(model_root_path, Path(project), experiment)
 gc_type = "parasol"  # "parasol" or "midget"
 response_type = "on"  # "on" or "off"
 
-# These values are used for building a new retina
+# These values are used for building a new retina.
+# Rebuilding is avoided by serializing and hashing these into save names.
+# Less mutable values, not included into the hash, are set in my_retina_append below.
 my_retina = {
     "gc_type": gc_type,
     "response_type": response_type,
@@ -594,8 +594,6 @@ my_retina_append = {
     "bipolar2gc_dict": bipolar2gc_dict,
 }
 
-my_retina.update(my_retina_append)
-
 literature_data_folder = git_repo_root.joinpath(r"retina/literature_data")
 
 # Define digitized literature data files for gc density and dendritic diameters.
@@ -727,6 +725,7 @@ if __name__ == "__main__":
         ray_root_path=ray_root_path,
         device=device,
         my_retina=my_retina,
+        my_retina_append=my_retina_append,
         my_stimulus_metadata=my_stimulus_metadata,
         my_stimulus_options=my_stimulus_options,
         my_run_options=my_run_options,

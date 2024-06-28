@@ -46,7 +46,7 @@ class Viz:
     cmap = "gist_earth"  # viridis or cividis would be best for color-blind
 
     def __init__(self, context, data_io, project_data, ana, **kwargs) -> None:
-        self._context = context.set_context(self)
+        self._context = context.set_context()
         self._data_io = data_io
         self._project_data = project_data
         self._ana = ana

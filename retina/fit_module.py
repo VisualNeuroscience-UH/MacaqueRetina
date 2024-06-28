@@ -34,7 +34,7 @@ class Fit(RetinaMath):
 
     def __init__(self, context, data_io, project_data):
         # Dependency injection at ProjectManager construction
-        self._context = context.set_context(self)
+        self._context = context.set_context()
         self._data_io = data_io
         self._project_data = project_data
 
