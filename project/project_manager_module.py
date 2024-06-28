@@ -61,11 +61,10 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         print(f"Using device: {device}")
         context.validated_properties["device"] = device
 
-        # Set context attributes for project manager
         self.context = context.set_context()
         self._get_unique_my_retina_hash()
         self._set_and_drop_my_retina_append()
-        self._set_retina_savenames()
+        self._set_retina_filenames()
 
         data_io = DataIO(context)
         self.data_io = data_io
@@ -225,7 +224,7 @@ class ProjectManager(ProjectBase, ProjectUtilities):
         self.context.my_retina.update(self.context.my_retina_append)
         del self.context.my_retina_append
 
-    def _set_retina_savenames(self):
+    def _set_retina_filenames(self):
         hashstr = self.context.my_retina["my_retina_hash"]
         gc_type = self.context.my_retina["gc_type"]
         response_type = self.context.my_retina["response_type"]
