@@ -42,6 +42,7 @@ from tqdm import tqdm
 from retina.retina_math_module import RetinaMath
 from retina.vae_module import RetinaVAE
 from project.project_utilities_module import Printable
+from abc import ABC, abstractmethod
 
 
 # Builtin
@@ -114,10 +115,23 @@ class Retina(Printable):
     """
 
     def __init__(self, my_retina):
+
+        self.gc = GanglionCellData(
+            my_retina["gc_type"],
+            my_retina["response_type"],
+            my_retina["spatial_model"],
+            my_retina["temporal_model"],
+            my_retina["DoG_model"],
+            my_retina["center_mask_threshold"],
+        )
+
         # Computed downstream
         self.whole_ret_img = None
         self.whole_ret_lu_mm = None
         self.cones_to_gcs_weights = None
+
+        # Attributes
+        self.temporal_model = my_retina["temporal_model"]
 
         self.gc_placement_params = my_retina["gc_placement_params"]
         self.cone_placement_params = my_retina["cone_placement_params"]
@@ -184,6 +198,303 @@ class Retina(Printable):
             )
         else:
             raise ValueError("Unknown ganglion cell type, aborting")
+
+    def get_initial_fit_to_experimental_data(self, fit, my_retina):
+        """ """
+        if my_retina["spatial_model"] == "VAE":
+            DoG_model = "ellipse_fixed"
+        elif my_retina["spatial_model"] == "FIT":
+            DoG_model = my_retina["DoG_model"]
+
+        fit.initialize(
+            my_retina["gc_type"],
+            my_retina["response_type"],
+            fit_type="experimental",
+            DoG_model=DoG_model,
+        )
+        (
+            self.exp_stat_df,
+            self.exp_cen_radius_mm,
+            self.exp_sur_radius_mm,
+        ) = fit.get_experimental_fits(DoG_model)
+
+    def create_cones(self):
+        """
+        Select and run cone creation strategy based on the temporal model.
+        """
+        if self.temporal_model == "fixed":
+            cone_strategy = ConeStrategyFixed()
+        elif self.temporal_model == "dynamic":
+            cone_strategy = ConeStrategyDynamic()
+        elif self.temporal_model == "subunit":
+            cone_strategy = ConeStrategySubunit()
+
+        cone_strategy.create_cones()
+        breakpoint()
+
+
+class GanglionCellBuilderBase(ABC):
+    """
+    Abstract base class for building ganglion cells.
+
+    Attributes
+    ----------
+    gc : GanglionCellData
+        Ganglion cell data.
+    ret : Retina
+        Retina data.
+    """
+
+    def __init__(self, gc, ret):
+        self.gc = gc
+        self.ret = ret
+
+    @abstractmethod
+    def create_ganglion_cells(self):
+        """
+        Create ganglion cells.
+        """
+        pass
+
+
+class GanglionCellBuilderParasol(GanglionCellBuilderBase):
+    """
+    A class to build parasol ganglion cells.
+    """
+
+    def create_ganglion_cells(self):
+        """
+        Create parasol ganglion cells.
+        """
+        pass
+
+
+class GanglionCellBuilderMidget(GanglionCellBuilderBase):
+    """
+    A class to build midget ganglion cells.
+    """
+
+    def create_ganglion_cells(self):
+        """
+        Create midget ganglion cells.
+        """
+        pass
+
+
+class ResponseBuilderBase(ABC):
+    """
+    Abstract base class for building responses.
+
+    Attributes
+    ----------
+    gc : GanglionCellData
+        Ganglion cell data.
+    ret : Retina
+        Retina data.
+    """
+
+    def __init__(self, gc, ret):
+        self.gc = gc
+        self.ret = ret
+
+    @abstractmethod
+    def create_responses(self):
+        """
+        Create responses.
+        """
+        pass
+
+
+class ResponseBuilderON(ResponseBuilderBase):
+    """
+    A class to build ON
+    """
+
+    def create_responses(self):
+        """
+        Create ON responses.
+        """
+        pass
+
+
+class ResponseBuilderOFF(ResponseBuilderBase):
+    """
+    A class to build OFF
+    """
+
+    def create_responses(self):
+        """
+        Create OFF responses.
+        """
+        pass
+
+
+class SpatialRFBuilderBase(ABC):
+    """
+    Abstract base class for building spatial receptive fields.
+
+    Attributes
+    ----------
+    gc : GanglionCellData
+        Ganglion cell data.
+    ret : Retina
+        Retina data.
+    """
+
+    def __init__(self, gc, ret):
+        self.gc = gc
+        self.ret = ret
+
+    @abstractmethod
+    def create_spatial_rfs(self):
+        """
+        Create spatial receptive fields.
+        """
+        pass
+
+
+class SpatialRFBuilderFIT(SpatialRFBuilderBase):
+    """
+    A class to build spatial receptive fields using the FIT model.
+    """
+
+    def create_spatial_rfs(self):
+        """
+        Create spatial receptive fields using the FIT model.
+        """
+        pass
+
+
+class SpatialRFBuilderVAE(SpatialRFBuilderBase):
+    """
+    A class to build spatial receptive fields using the VAE model.
+    """
+
+    def create_spatial_rfs(self):
+        """
+        Create spatial receptive fields using the VAE model.
+        """
+        pass
+
+
+class DoGModelBuilderBase(ABC):
+    """
+    Abstract base class for building Difference of Gaussian (DoG) models.
+
+    Attributes
+    ----------
+    gc : GanglionCellData
+        Ganglion cell data.
+    ret : Retina
+        Retina data.
+    """
+
+    def __init__(self, gc, ret):
+        self.gc = gc
+        self.ret = ret
+
+    @abstractmethod
+    def create_dog_models(self):
+        """
+        Create Difference of Gaussian (DoG) models.
+        """
+        pass
+
+
+class DoGModelBuilderEllipseFixed(DoGModelBuilderBase):
+    """
+    A class to build Difference of Gaussian (DoG) models with fixed ellipses.
+    """
+
+    def create_dog_models(self):
+        """
+        Create Difference of Gaussian (DoG) models with fixed ellipses.
+        """
+        pass
+
+
+class DoGModelBuilderEllipseIndependent(DoGModelBuilderBase):
+    """
+    A class to build Difference of Gaussian (DoG) models with independent ellipses.
+    """
+
+    def create_dog_models(self):
+        """
+        Create Difference of Gaussian (DoG) models with independent ellipses.
+        """
+        pass
+
+
+class DoGModelBuilderCircular(DoGModelBuilderBase):
+    """
+    A class to build Difference of Gaussian (DoG) models with circular shapes.
+    """
+
+    def create_dog_models(self):
+        """
+        Create Difference of Gaussian (DoG) models with circular shapes.
+        """
+        pass
+
+
+class TemporalModelBuilderBase(ABC):
+    """
+    Abstract base class for building temporal models.
+
+    Attributes
+    ----------
+    gc : GanglionCellData
+        Ganglion cell data.
+    ret : Retina
+        Retina data.
+    """
+
+    def __init__(self, gc, ret):
+        self.gc = gc
+        self.ret = ret
+
+    @abstractmethod
+    def create_temporal_models(self):
+        """
+        Create temporal models.
+        """
+        pass
+
+
+class TemporalModelBuilderFixed(TemporalModelBuilderBase):
+    """
+    A class to build fixed temporal models.
+    """
+
+    def create_temporal_models(self):
+        """
+        Create fixed temporal models.
+        """
+        pass
+
+
+class TemporalModelBuilderDynamic(TemporalModelBuilderBase):
+    """
+    A class to build dynamic temporal models.
+    """
+
+    def create_temporal_models(self):
+        """
+        Create dynamic temporal models.
+        """
+        pass
+
+
+class TemporalModelBuilderSubunit(TemporalModelBuilderBase):
+    """
+    A class to build subunit temporal models.
+    """
+
+    def create_temporal_models(self):
+        """
+        Create subunit temporal models.
+        """
+        pass
 
 
 @dataclass
@@ -3411,93 +3722,132 @@ class ConstructRetina(RetinaMath, Printable):
 
         return gc
 
-    def _initialize_build(self):
+    def _get_concrete_builders(self, my_retina):
         """
-        Inject dependencies to helper classes here
+        Get the concrete builders for gc type, response type,
+        spatial model, temporal model and DoG model.
+
+        Parameters
+        ----------
+        my_retina : dict
+            Dictionary containing the retina parameters.
         """
+        builders = []
 
-        my_retina = self.context.my_retina
-        ret = Retina(my_retina)
-        gc = GanglionCellData(
-            my_retina["gc_type"],
-            my_retina["response_type"],
-            my_retina["spatial_model"],
-            my_retina["temporal_model"],
-            my_retina["DoG_model"],
-            my_retina["center_mask_threshold"],
-        )
+        match my_retina["gc_type"]:
+            case "parasol":
+                builders.append(GanglionCellBuilderParasol())
+            case "midget":
+                builders.append(GanglionCellBuilderMidget())
 
-        spatial_model = my_retina["spatial_model"]
+        match my_retina["response_type"]:
+            case "on":
+                builders.append(ResponseBuilderON())
+            case "off":
+                builders.append(ResponseBuilderOFF())
 
-        if spatial_model == "VAE":
-            DoG_model = "ellipse_fixed"
-        elif spatial_model == "FIT":
-            DoG_model = my_retina["DoG_model"]
+        match my_retina["spatial_model"]:
+            case "FIT":
+                builders.append(SpatialRFBuilderFIT())
+            case "VAE":
+                builders.append(SpatialRFBuilderVAE())
 
-        gc_type = my_retina["gc_type"]
-        response_type = my_retina["response_type"]
-        self.fit.initialize(
-            gc_type, response_type, fit_type="experimental", DoG_model=DoG_model
-        )
-        (
-            self.exp_stat_df,
-            self.exp_cen_radius_mm,
-            self.exp_sur_radius_mm,
-        ) = self.fit.get_experimental_fits(DoG_model)
+        match my_retina["temporal_model"]:
+            case "fixed":
+                builders.append(TemporalModelBuilderFixed())
+            case "dynamic":
+                builders.append(TemporalModelBuilderDynamic())
+            case "subunit":
+                builders.append(TemporalModelBuilderSubunit())
 
-        return ret, gc
+        match my_retina["DoG_model"]:
+            case "circular":
+                builders.append(DoGModelBuilderCircular())
+            case "ellipse_independent":
+                builders.append(DoGModelBuilderEllipseIndependent())
+            case "ellipse_fixed":
+                builders.append(DoGModelBuilderEllipseFixed())
 
-    def build(self):
+        return builders
+
+    def builder_director(self):
         """
         Builds the receptive field mosaic. This is the main method to call.
         """
-        if self._build_exists():
-            return
+        my_retina = self.context.my_retina
+
+        # if self._build_exists(my_retina):
+        #     return
+
+        builders = self._get_concrete_builders(my_retina)
+        retina = Retina(my_retina)
+        retina.get_initial_fit_to_experimental_data(self.fit, my_retina)
+        # Strategy patterns
+        # TÄHÄN JÄIT:
+        # Retina  VOISI OLLA PRODUCT JA TÄMÄ VOISI OLLA DIRECTOR + CLIENT
+        # RETINA RESETOITAISIIN ALKUTILAAN AINA KUN UUSI BUILD, MUTTA USEA BUILD
+        # VOISI OLLA MAHDOLLINEN PERÄKKÄIN
+
         breakpoint()
+        retina.create_cones()
+        retina.create_bipolars()
+        retina.create_ganglion_cells()
 
-        ret, gc = self._initialize_build()
+        retina.connect_cones_to_bipolars()
+        retina.connect_bipolars_to_ganglion_cells()
 
-        # -- First, place the ganglion cell midpoints (units mm)
-        # Run GC and cone density fit to data, get func_params.
-        # GC data from Perry_1984_Neurosci, cone data from Packer_1989_JCompNeurol
-        ret = self._read_and_fit_cell_density_data(ret, gc)
+        retina.save()
 
-        # Place ganglion cells and cones to desired retina.
-        ret, gc = self._place_units(ret, gc)
-        gc.n_units = len(gc.df)
+    # def build(self):
+    #     """
+    #     Builds the receptive field mosaic. This is the main method to call.
+    #     """
+    #     if self._build_exists():
+    #         return
+    #     breakpoint()
 
-        # -- Second, endow units with spatial receptive fields
-        ret, gc = self._create_spatial_rfs(ret, gc)
-        # self.viz.show_cones_linked_to_gc(gc_list=[100])
-        ret = self._link_cones_to_bipolars(ret, gc)
-        ret = self._link_bipolar_units_to_gcs(ret, gc)
+    #     ret, gc = self._initialize_build()
 
-        ret = self._link_cone_noise_units_to_gcs(ret, gc)
+    #     # -- First, place the ganglion cell midpoints (units mm)
+    #     # Run GC and cone density fit to data, get func_params.
+    #     # GC data from Perry_1984_Neurosci, cone data from Packer_1989_JCompNeurol
+    #     ret = self._read_and_fit_cell_density_data(ret, gc)
 
-        ret = self._fit_cone_noise_vs_freq(ret)
-        ret = self._fit_bipolar_rectification_index(ret)
+    #     # Place ganglion cells and cones to desired retina.
+    #     ret, gc = self._place_units(ret, gc)
+    #     gc.n_units = len(gc.df)
 
-        # -- Third, endow units with temporal receptive fields
-        gc = self._create_temporal_rfs(gc)
+    #     # -- Second, endow units with spatial receptive fields
+    #     ret, gc = self._create_spatial_rfs(ret, gc)
+    #     # self.viz.show_cones_linked_to_gc(gc_list=[100])
+    #     ret = self._link_cones_to_bipolars(ret, gc)
+    #     ret = self._link_bipolar_units_to_gcs(ret, gc)
 
-        # -- Fourth, endow units with tonic drive
-        gc = self._create_tonic_drive(gc)
+    #     ret = self._link_cone_noise_units_to_gcs(ret, gc)
 
-        print(f"Built RGC mosaic with {gc.n_units} units")
+    #     ret = self._fit_cone_noise_vs_freq(ret)
+    #     ret = self._fit_bipolar_rectification_index(ret)
 
-        # Save the receptive field images, associated metadata and cone noise data
-        self.save_gc_data(gc)
-        self.save_ret_data(ret)
+    #     # -- Third, endow units with temporal receptive fields
+    #     gc = self._create_temporal_rfs(gc)
 
-        # Save the receptive field mosaic
-        self.save_gc_df2csv(gc)
+    #     # -- Fourth, endow units with tonic drive
+    #     gc = self._create_tonic_drive(gc)
 
-    def _build_exists(self):
+    #     print(f"Built RGC mosaic with {gc.n_units} units")
+
+    #     # Save the receptive field images, associated metadata and cone noise data
+    #     self.save_gc_data(gc)
+    #     self.save_ret_data(ret)
+
+    #     # Save the receptive field mosaic
+    #     self.save_gc_df2csv(gc)
+
+    def _build_exists(self, my_retina):
         """
         Check if the build exists by checking if the hash exists in project directories.
         """
 
-        my_retina = self.context.my_retina
         string_keys = [k for k, i in my_retina.items() if isinstance(i, str)]
         my_retina_hash = my_retina["my_retina_hash"]
         requested_file_name_keys = [

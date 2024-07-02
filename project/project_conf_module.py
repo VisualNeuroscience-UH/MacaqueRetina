@@ -213,7 +213,7 @@ my_retina = {
     "dd_regr_model": "quadratic",  # linear, quadratic, cubic, loglog. For midget < 20 deg, use quadratic; for parasol use loglog
     "ecc_limit_for_dd_fit": 20,  # 20,  # degrees, math.inf for no limit
     "stimulus_center": 5.0 + 0j,  # degrees, this is stimulus_position (0, 0)
-    "temporal_model": "dynamic",  # fixed, dynamic, subunit
+    "temporal_model": "fixed",  # fixed, dynamic, subunit
     "center_mask_threshold": 0.1,  # 0.1,  Limits rf center extent to values above this proportion of the peak values
     "spatial_model": "FIT",  # "FIT" or "VAE" for variational autoencoder
     "DoG_model": "ellipse_fixed",  # 'ellipse_independent', 'ellipse_fixed' or 'circular'
@@ -573,9 +573,6 @@ bipolar2gc_dict = {
 }
 
 my_retina_append = {
-    "mosaic_file": gc_type + "_" + response_type + "_mosaic.csv",
-    "spatial_rfs_file": gc_type + "_" + response_type + "_spatial_rfs.npz",
-    "ret_file": gc_type + "_" + response_type + "_ret.npz",
     "proportion_of_parasol_gc_type": proportion_of_parasol_gc_type,
     "proportion_of_midget_gc_type": proportion_of_midget_gc_type,
     "proportion_of_ON_response_type": proportion_of_ON_response_type,
@@ -785,7 +782,7 @@ if __name__ == "__main__":
     Build and test your retina here, one gc type at a time. 
     """
 
-    PM.construct_retina.build()  # Main method for building the retina
+    PM.construct_retina.builder_director()  # Main method for building the retina
 
     # The following visualizations are
     #  dependent on the ConstructRetina instance.
