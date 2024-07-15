@@ -3453,7 +3453,7 @@ class ConstructRetina(RetinaMath, Printable):
         """
         if self._build_exists():
             return
-        breakpoint()
+        # breakpoint()
 
         ret, gc = self._initialize_build()
 
