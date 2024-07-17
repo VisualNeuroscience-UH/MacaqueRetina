@@ -204,33 +204,11 @@ class Retina(Printable):
         else:
             raise ValueError("Unknown ganglion cell type, aborting")
 
-    def create_cones(self):
-        """
-        Select and run cone creation strategy based on the temporal model.
-        """
-        if self.temporal_model == "fixed":
-            cone_strategy = ConeStrategyFixed()
-        elif self.temporal_model == "dynamic":
-            cone_strategy = ConeStrategyDynamic()
-        elif self.temporal_model == "subunit":
-            cone_strategy = ConeStrategySubunit()
 
-        cone_strategy.create_cones()
-        breakpoint()
-
-
-class GanglionCellBuilderBase(ABC):
+class GanglionCellBase(ABC):
     """
     Abstract base class for building ganglion cells.
-
-    Attributes
-    ----------
-    ret : Retina
-        Retina data.
     """
-
-    def __init__(self, ret):
-        self.ret = ret
 
     @abstractmethod
     def create_ganglion_cells(self):
@@ -240,13 +218,10 @@ class GanglionCellBuilderBase(ABC):
         pass
 
 
-class GanglionCellBuilderParasol(GanglionCellBuilderBase):
+class GanglionCellParasol(GanglionCellBase):
     """
     A class to build parasol ganglion cells.
     """
-
-    def __init__(self, ret):
-        super().__init__(ret)
 
     def create_ganglion_cells(self):
         """
@@ -255,13 +230,10 @@ class GanglionCellBuilderParasol(GanglionCellBuilderBase):
         pass
 
 
-class GanglionCellBuilderMidget(GanglionCellBuilderBase):
+class GanglionCellMidget(GanglionCellBase):
     """
     A class to build midget ganglion cells.
     """
-
-    def __init__(self, ret):
-        super().__init__(ret)
 
     def create_ganglion_cells(self):
         """
@@ -273,33 +245,20 @@ class GanglionCellBuilderMidget(GanglionCellBuilderBase):
 class ResponseBuilderBase(ABC):
     """
     Abstract base class for building responses.
-
-    Attributes
-    ----------
-    gc : GanglionCellData
-        Ganglion cell data.
-    ret : Retina
-        Retina data.
     """
 
-    def __init__(self, ret):
-        self.ret = ret
-
     @abstractmethod
-    def create_responses(self):
+    def create_responses(self, ret):
         """
         Create responses.
         """
         pass
 
 
-class ResponseBuilderON(ResponseBuilderBase):
+class ResponseON(ResponseBuilderBase):
     """
     A class to build ON
     """
-
-    def __init__(self, ret):
-        super().__init__(ret)
 
     def create_responses(self):
         """
@@ -308,13 +267,10 @@ class ResponseBuilderON(ResponseBuilderBase):
         pass
 
 
-class ResponseBuilderOFF(ResponseBuilderBase):
+class ResponseOFF(ResponseBuilderBase):
     """
     A class to build OFF
     """
-
-    def __init__(self, ret):
-        super().__init__(ret)
 
     def create_responses(self):
         """
@@ -335,9 +291,6 @@ class SpatialModelBuilderBase(ABC):
         Retina data.
     """
 
-    def __init__(self, ret):
-        self.ret = ret
-
     @abstractmethod
     def create_spatial_rfs(self):
         """
@@ -347,13 +300,10 @@ class SpatialModelBuilderBase(ABC):
         pass
 
 
-class SpatialModelBuilderFIT(SpatialModelBuilderBase):
+class SpatialModelFIT(SpatialModelBuilderBase):
     """
     A class to build spatial receptive fields using the FIT model.
     """
-
-    def __init__(self, ret):
-        super().__init__(ret)
 
     def create_spatial_rfs(self):
         """
@@ -362,13 +312,10 @@ class SpatialModelBuilderFIT(SpatialModelBuilderBase):
         pass
 
 
-class SpatialModelBuilderVAE(SpatialModelBuilderBase):
+class SpatialModelVAE(SpatialModelBuilderBase):
     """
     A class to build spatial receptive fields using the VAE model.
     """
-
-    def __init__(self, ret):
-        super().__init__(ret)
 
     def create_spatial_rfs(self):
         """
@@ -377,7 +324,7 @@ class SpatialModelBuilderVAE(SpatialModelBuilderBase):
         pass
 
 
-class DoGModelBuilderBase(ABC):
+class DoGModelBase(ABC):
     """
     Abstract base class for building Difference of Gaussian (DoG) models.
 
@@ -389,8 +336,7 @@ class DoGModelBuilderBase(ABC):
         Retina data.
     """
 
-    def __init__(self, ret, fit):
-        self.ret = ret
+    def __init__(self, fit):
         self.fit = fit
 
     # @abstractmethod
@@ -408,43 +354,43 @@ class DoGModelBuilderBase(ABC):
         ) = self.fit.get_experimental_fits(DoG_model)
 
 
-class DoGModelBuilderEllipseFixed(DoGModelBuilderBase):
+class DoGModelEllipseFixed(DoGModelBase):
     """
     A class to build Difference of Gaussian (DoG) models with fixed ellipses.
     """
 
-    def __init__(self, ret, fit):
-        super().__init__(ret, fit)
+    def __init__(self, fit):
+        super().__init__(fit)
 
     def get_experimental_fits(self):
         self._get_experimental_fits("ellipse_fixed")
 
 
-class DoGModelBuilderEllipseIndependent(DoGModelBuilderBase):
+class DoGModelEllipseIndependent(DoGModelBase):
     """
     A class to build Difference of Gaussian (DoG) models with independent ellipses.
     """
 
-    def __init__(self, ret, fit):
-        super().__init__(ret, fit)
+    def __init__(self, fit):
+        super().__init__(fit)
 
     def get_experimental_fits(self):
         self._get_experimental_fits("ellipse_independent")
 
 
-class DoGModelBuilderCircular(DoGModelBuilderBase):
+class DoGModelCircular(DoGModelBase):
     """
     A class to build Difference of Gaussian (DoG) models with circular shapes.
     """
 
-    def __init__(self, ret, fit):
-        super().__init__(ret, fit)
+    def __init__(self, fit):
+        super().__init__(fit)
 
     def get_experimental_fits(self):
         self._get_experimental_fits("circular")
 
 
-class TemporalModelBuilderBase(ABC):
+class TemporalModelBase(ABC):
     """
     Abstract base class for building temporal models.
 
@@ -456,9 +402,6 @@ class TemporalModelBuilderBase(ABC):
         Retina data.
     """
 
-    def __init__(self, ret):
-        self.ret = ret
-
     @abstractmethod
     def create_temporal_models(self):
         """
@@ -467,13 +410,10 @@ class TemporalModelBuilderBase(ABC):
         pass
 
 
-class TemporalModelBuilderFixed(TemporalModelBuilderBase):
+class TemporalModelFixed(TemporalModelBase):
     """
     A class to build fixed temporal models.
     """
-
-    def __init__(self, ret):
-        super().__init__(ret)
 
     def create_temporal_models(self):
         """
@@ -482,13 +422,10 @@ class TemporalModelBuilderFixed(TemporalModelBuilderBase):
         pass
 
 
-class TemporalModelBuilderDynamic(TemporalModelBuilderBase):
+class TemporalModelDynamic(TemporalModelBase):
     """
     A class to build dynamic temporal models.
     """
-
-    def __init__(self, ret):
-        super().__init__(ret)
 
     def create_temporal_models(self):
         """
@@ -497,13 +434,10 @@ class TemporalModelBuilderDynamic(TemporalModelBuilderBase):
         pass
 
 
-class TemporalModelBuilderSubunit(TemporalModelBuilderBase):
+class TemporalModelSubunit(TemporalModelBase):
     """
     A class to build subunit temporal models.
     """
-
-    def __init__(self, ret):
-        super().__init__(ret)
 
     def create_temporal_models(self):
         """
@@ -658,6 +592,137 @@ class GanglionCellData(Printable):
             "tonic_drive",
         ]
         self.df = pd.DataFrame(columns=columns)
+
+
+class RetinaBuildInterface(ABC):
+    """
+    Abstract base class for building the retina.
+
+    Logic here as abstract methods and properties.
+
+    """
+
+    @abstractmethod
+    def construct_retina(self):
+        """
+        Construct the retina.
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def retina(self):
+        """
+        Return the retina product.
+        """
+        pass
+
+    @retina.setter
+    @abstractmethod
+    def retina(self, value):
+        pass
+
+
+class ConcreteRetinaBuilder(RetinaBuildInterface):
+    """
+    Compilation of the retina components into concrete builder instance.
+    """
+
+    def __init__(self, retina, fit):
+
+        (
+            self.ganglion_cell,
+            self.response,
+            self.spatial_model,
+            self.temporal_model,
+            self.DoG_model,
+        ) = self._get_concrete_components(retina, fit)
+
+        self._retina = retina
+
+    @property
+    def retina(self):
+        return self._retina
+
+    @retina.setter
+    def retina(self, value):
+        self._retina = value
+
+    def construct_retina(self):
+        self.builder.create_ganglion_cells()
+        self.builder.create_responses()
+        self.builder.create_spatial_rfs()
+        self.builder.create_temporal_models()
+
+    def _get_concrete_components(self, retina, fit):
+        """
+        Compile builder from gc type, response type,
+        spatial model, temporal model and DoG model.
+
+        Parameters
+        ----------
+        retina: Retina object
+        """
+
+        match retina.gc_type:
+            case "parasol":
+                ganglion_cell = GanglionCellParasol()
+            case "midget":
+                ganglion_cell = GanglionCellMidget()
+
+        match retina.response_type:
+            case "on":
+                response = ResponseON()
+            case "off":
+                response = ResponseOFF()
+
+        match retina.spatial_model:
+            case "FIT":
+                spatial_model = SpatialModelFIT()
+            case "VAE":
+                spatial_model = SpatialModelVAE()
+
+        match retina.temporal_model:
+            case "fixed":
+                temporal_model = TemporalModelFixed()
+            case "dynamic":
+                temporal_model = TemporalModelDynamic()
+            case "subunit":
+                temporal_model = TemporalModelSubunit()
+
+        match retina.DoG_model:
+            case "circular":
+                DoG_model = DoGModelCircular(fit)
+            case "ellipse_independent":
+                DoG_model = DoGModelEllipseIndependent(fit)
+            case "ellipse_fixed":
+                DoG_model = DoGModelEllipseFixed(fit)
+
+        return ganglion_cell, response, spatial_model, temporal_model, DoG_model
+
+
+class RetinaBuildDirector:
+    """
+    A class to direct the construction of the retina.
+
+    Fixed build mechanisms for parts of the retina.
+    """
+
+    def __init__(self, builder):
+
+        self.builder = builder
+
+    def construct_retina(self):
+        """
+        Construct the retina.
+        """
+
+        breakpoint()
+
+        self.builder.create_ganglion_cells()
+        self.builder.create_responses()
+        self.builder.create_spatial_rfs()
+        self.builder.create_temporal_models()
 
 
 class ConstructRetina(RetinaMath, Printable):
@@ -3724,50 +3789,20 @@ class ConstructRetina(RetinaMath, Printable):
 
         return gc
 
-    def _get_concrete_builders(self, retina, fit):
+    def _compile_concrete_builder(self, components):
         """
-        Get the concrete builders for gc type, response type,
-        spatial model, temporal model and DoG model.
+        Compile the concrete builder from the components.
 
         Parameters
         ----------
-        retina: Retina object
+        components: list
+            List of components to compile the concrete builder from.
         """
-        builders = []
+        concrete_builder = ConcreteBuilder()
+        for component in components:
+            concrete_builder.add_component(component)
 
-        match retina.gc_type:
-            case "parasol":
-                self.ganglion_cell_builder = GanglionCellBuilderParasol(retina)
-            case "midget":
-                self.ganglion_cell_builder = GanglionCellBuilderMidget(retina)
-
-        match retina.response_type:
-            case "on":
-                self.response_builder = ResponseBuilderON(retina)
-            case "off":
-                self.response_builder = ResponseBuilderOFF(retina)
-
-        match retina.spatial_model:
-            case "FIT":
-                self.spatial_model = SpatialModelBuilderFIT(retina)
-            case "VAE":
-                self.spatial_model = SpatialModelBuilderVAE(retina)
-
-        match retina.temporal_model:
-            case "fixed":
-                self.temporal_model = TemporalModelBuilderFixed(retina)
-            case "dynamic":
-                self.temporal_model = TemporalModelBuilderDynamic(retina)
-            case "subunit":
-                self.temporal_model = TemporalModelBuilderSubunit(retina)
-
-        match retina.DoG_model:
-            case "circular":
-                self.DoG_model = DoGModelBuilderCircular(retina, fit)
-            case "ellipse_independent":
-                self.DoG_model = DoGModelBuilderEllipseIndependent(retina, fit)
-            case "ellipse_fixed":
-                self.DoG_model = DoGModelBuilderEllipseFixed(retina, fit)
+        return concrete_builder
 
     def _get_initial_fit_to_experimental_data(self, my_retina):
         """ """
@@ -3788,7 +3823,7 @@ class ConstructRetina(RetinaMath, Printable):
             self.exp_sur_radius_mm,
         ) = self.fit.get_experimental_fits(DoG_model)
 
-    def builder_director(self):
+    def builder_client(self):
         """
         Builds the retina. This is the main method to call. For each call, the
         a new retina is built with the parameters in my_retina dictionary. After
@@ -3805,22 +3840,21 @@ class ConstructRetina(RetinaMath, Printable):
         #     return
 
         retina = Retina(my_retina)
-        self._get_concrete_builders(retina, self.fit)
+        concrete_builder = ConcreteRetinaBuilder(retina, self.fit)
+        director = RetinaBuildDirector(concrete_builder)
+        director.construct_retina()
+
+        breakpoint()
         # self._get_initial_fit_to_experimental_data(my_retina)
         retina = self._read_and_fit_cell_density_data(retina)
 
         self.DoG_model.get_experimental_fits()
-        breakpoint()
         # TÄHÄN JÄIT: HELVETILLINEN MÄÄRÄ BOILERPLATEA. SAAKOHAN TÄMÄN ENÄÄ PURETTUA?
         # BUILDER ON VARMAAN OIKEA DESIGN PATTERN, MUTTA JAKO IF LAUSEKKEIDEN PERUSTEELLA TUNTUU VÄÄRÄLTÄ
+        #
+        # HYVÄÄ: SEPARATION OF CONCERNS;
 
         retina = self.spatial_model(retina)
-        # self.create_cones()
-        # self.create_bipolars()
-        # self.create_ganglion_cells()
-
-        # self.connect_cones_to_bipolars()
-        # self.connect_bipolars_to_ganglion_cells()
 
         self.save()
 

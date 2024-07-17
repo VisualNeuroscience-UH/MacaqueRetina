@@ -782,7 +782,7 @@ if __name__ == "__main__":
     Build and test your retina here, one gc type at a time. 
     """
 
-    PM.construct_retina.builder_director()  # Main method for building the retina
+    PM.construct_retina.builder_client()  # Main method for building the retina
 
     # The following visualizations are
     #  dependent on the ConstructRetina instance.
