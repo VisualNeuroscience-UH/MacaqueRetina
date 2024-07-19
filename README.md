@@ -50,13 +50,16 @@ Example: install Pytorch in windows WSL2 with cuda 12.1
 
 - `[your system specific Pytorch installation command]`
 
-### Install other dependencies
+### Install MacaqueRetina
+Navigate to the local MacaqueRetina git repo root
+`pip install -e .`
 
-In terminal run:
+### Optional: Install CxSystem2
+If you want to run downstream simulations with CxSystem2, in terminal run:
 
-- `install_linux.sh`
+- `install_cxsystem.sh`
   - Resides in the same directory as this file
-  - You may need to append execute to the access rights by command `chmod ug+x install_linux.sh`
+  - You may need to append execute to the access rights by command `chmod ug+x install_cxsystem.sh`
 
 ## How to run
 
