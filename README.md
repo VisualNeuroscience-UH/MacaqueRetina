@@ -38,6 +38,7 @@ Run the following commands to create and activate virtual environment.
 
 `python3.11 -m venv [your path]/ret_pt`
   - Make a new virtual environment named *ret_pt*
+
 `source [your root]/ret_pt/bin/activate`
   - Activate the virtual environment
 
@@ -48,6 +49,7 @@ Get your system- and cuda/cpu-specific [installation command for Pytorch](https:
 After activating the new environment, install Pytorch with your personal command.  
 
 Example: install Pytorch in windows WSL2 with cuda 12.1  
+
 `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121`
 
 `[your system specific Pytorch installation command]`
@@ -62,7 +64,9 @@ If you want to run downstream simulations with CxSystem2, in terminal run:
 
 `install_cxsystem.sh`
   - Resides in the same directory as this file
-  - You may need to append execute to the access rights by command `chmod ug+x install_cxsystem.sh`
+  - You may need to append execute to the access rights by command 
+  
+  `chmod ug+x install_cxsystem.sh`
 
 ## How to run
 
@@ -78,6 +82,7 @@ The main files are in the project directory.
   - provides a facade for the rest of the code
 
 After modifying the conf file, run always with the same command, e.g. from git repository root:  
+
 `python project/project_manager_module.py`
 
 ## How to cite this project
