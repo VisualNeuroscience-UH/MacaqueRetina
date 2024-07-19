@@ -19,19 +19,11 @@ The python environment had issues in pure Windows, thus it is only supported und
 
 - Install [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) (Windows subsystem for Linux) to your Windows system.
 
-You can configure WSL2 by running the following commands in windows powershell
-
-- `echo "[wsl2]" > ~/.wslconfig`
-  - Writes the WSL2 configuration file to the user's home directory in Windows. Settings apply across all Linux distros running on WSL 2
-  
-- `echo "memory=26GB" >> ~/.wslconfig`
-  - Limits VM memory to use no more than 26 GB, this can be set as whole numbers using GB or MB
-
-- `echo "processors=12" >> ~/.wslconfig`
-  - Sets the VM to use 12 virtual processors  
-
-- `echo "swap=16GB" >> ~/.wslconfig`
-  - Sets amount of swap storage space to 16GB  
+Put .wslconfig named file to your home directory in Windows to adjust memory etc. Example lines:
+`[wsl2]`
+`memory=20GB`
+`processors=8`
+`swap=8GB`
 
 **Make sure to apply WSL2 config changes by restarting WSL2 or your machine**.  
 More examples and backgorund on WSL2 in [Microsoft pages](https://learn.microsoft.com/en-us/windows/wsl/wsl-config)
@@ -56,7 +48,7 @@ After activating the new environment, install Pytorch with your personal command
 Example: install Pytorch in windows WSL2 with cuda 12.1  
 `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121`
 
-- `[your system specific Pytorch installation command}`
+- `[your system specific Pytorch installation command]`
 
 ### Install other dependencies
 

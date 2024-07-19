@@ -1,18 +1,13 @@
 # Builtins
-import pdb
 from pathlib import Path
-from typing import Type
-from copy import deepcopy
 import hashlib
 import json
 import datetime
 
 import numpy as np
 
-from context.context_base_module import ContextBase
 
-
-class Context(ContextBase):
+class Context:
     """
     Set context (paths, filenames, etc) for the project.
     Each module orders self.context.property name from context by calling set_context()

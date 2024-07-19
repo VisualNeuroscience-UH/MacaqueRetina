@@ -16,6 +16,8 @@ pip install torchsummary
 pip install pyshortcuts
 pip install Shapely
 
+# Optional dependencies
+
 # Clone cxsystem2 repo and install
 cd .. 
 git clone https://github.com/VisualNeuroscience-UH/CxSystem2.git

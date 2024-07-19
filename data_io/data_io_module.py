@@ -10,9 +10,6 @@ import os
 import zlib
 import pickle
 import logging
-import pdb
-from copy import deepcopy
-import sys
 import types
 
 # io tools from common packages
@@ -21,26 +18,30 @@ import scipy.sparse as scprs
 import pandas as pd
 import h5py
 import cv2
-from PIL import Image
 
+# Local
+try:
+    from cxsystem2.core.tools import write_to_file
 
-# from cv2 import VideoWriter, VideoWriter_fourcc
+    # used in project_utilities_module.py
+    from cxsystem2.core.tools import load_from_file
 
-# io tools from cxsystem
-from cxsystem2.core.tools import write_to_file, load_from_file
+    cxsystem_exists = True
+except ImportError:
+    print("cxsystem2 not installed, continuing without...")
+    cxsystem_exists = False
 
 # This package
-from data_io.data_io_base_module import DataIOBase
 from context.context_module import Context
 
 
-class DataIO(DataIOBase):
+class DataIO:
     def __init__(self, context) -> None:
         self.context = context.set_context()
 
-        # Attach cxsystem2 methods
-        self.write_to_file = write_to_file
-        self.load_from_file = load_from_file
+        if cxsystem_exists:
+            # Attach cxsystem2 methods
+            self.write_to_file = write_to_file
 
         # Attach other methods/packages
         self.savemat = sio.savemat
@@ -866,7 +867,7 @@ class DataIO(DataIOBase):
 
         filename_full = save_path.with_suffix(".gz")
 
-        write_to_file(filename_full, data_to_save)
+        self.write_to_file(filename_full, data_to_save)
 
     def _save_spikes_csv(self, simulated_spiketrains, n_cells, filename=None):
         """
@@ -935,15 +936,17 @@ class DataIO(DataIOBase):
 
     def save_retina_output(self, vs, rf, filename):
 
-        self._save_spikes_for_cxsystem(
-            vs.spikearrays,
-            vs.n_units_or_trials,
-            vs.w_coord,
-            vs.z_coord,
-            filename=filename,
-            analog_signal=vs.interpolated_rates_array,
-            dt=vs.simulation_dt,
-        )
+        if cxsystem_exists:
+            self._save_spikes_for_cxsystem(
+                vs.spikearrays,
+                vs.n_units_or_trials,
+                vs.w_coord,
+                vs.z_coord,
+                filename=filename,
+                analog_signal=vs.interpolated_rates_array,
+                dt=vs.simulation_dt,
+            )
+
         self._save_spikes_csv(
             vs.all_spiketrains, vs.n_units_or_trials, filename=filename
         )

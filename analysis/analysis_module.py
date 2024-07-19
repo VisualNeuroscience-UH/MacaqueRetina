@@ -10,8 +10,7 @@ ISI analysis: : Uzzell_2004_JNeurophysiol
 
 # Numerical
 import numpy as np
-from scipy.fft import fft
-from scipy.signal import coherence, csd, correlate, welch
+from scipy.signal import correlate
 from scipy.stats import pearsonr
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -19,19 +18,12 @@ import matplotlib.pyplot as plt
 # Comput Neurosci
 import brian2.units as b2u
 
-# Local
-from cxsystem2.core.tools import write_to_file, load_from_file
-from analysis.analysis_base_module import AnalysisBase
-
 # Builtin
-import pdb
-import os
 from pathlib import Path
-import time
 import ast
 
 
-class Analysis(AnalysisBase):
+class Analysis:
     def __init__(self, context, data_io, **kwargs) -> None:
         self._context = context.set_context()
         self._data_io = data_io

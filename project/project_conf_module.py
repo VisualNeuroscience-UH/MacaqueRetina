@@ -18,6 +18,14 @@ from project.project_manager_module import ProjectManager
 
 warnings.simplefilter("ignore")
 
+"""
+# TODO: Stodden_2016_Science: Software metadata should
+include, at a minimum, the title, authors,
+version, language, license, Uniform Resource
+Identifier/DOI, software description (including
+purpose, inputs, outputs, dependencies),
+and execution requirements.
+"""
 
 """
 This is code for building macaque retinal filters corresponding to midget and parasol unit responses
@@ -717,6 +725,13 @@ if __name__ == "__main__":
         apricot_metadata=apricot_metadata,
         numpy_seed=numpy_seed,
     )
+
+    # TÄHÄN JÄIT:
+    # - Vakioi generaattoripotentiaali eri temporal mallien välillä käyttäen temporal chirp ärsykettä
+    # - gen => fr transformaatio, Turner malli?
+    # - SUBUNIT MALLIN VALIDOINTI vs Turner 2018
+
+    # -BENARDETE INPUT [-1,1], VICTOR [0,1], CHICHI [-2,2], TURNER [-5, 5] & CDF NONLIN
 
     ###########################################
     ##   Luminance and Photoisomerizations   ##
