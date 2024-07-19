@@ -718,18 +718,6 @@ if __name__ == "__main__":
         numpy_seed=numpy_seed,
     )
 
-    #################################
-    ###    Check cone response    ###
-    #################################
-
-    """
-    For artificial stimuli, we want to measure the true transfer function of the retina.
-    E.g. the Chichilnisky model receptive fields were measured from isolated retinas,
-    where images were focused on photoreceptors. The natural_stimuli_cone_filter method 
-    accounts for the blur by the eye and the nonlinear cone response for natural images 
-    and videos.
-    """
-
     ###########################################
     ##   Luminance and Photoisomerizations   ##
     ###########################################
@@ -787,9 +775,9 @@ if __name__ == "__main__":
     # PM.viz.show_cones_linked_to_gc(n_samples=4, savefigname=None)
     # PM.viz.show_DoG_img_grid(gc_list=[10, 17, 46], savefigname=None)
     # PM.viz.show_DoG_img_grid(n_samples=8)
-    # PM.viz.show_cell_density_vs_ecc(unit_type="cone", savefigname=None)  # gc or cone
-    # PM.viz.show_cell_density_vs_ecc(unit_type="gc", savefigname=None)  # gc or cone
-    # PM.viz.show_cell_density_vs_ecc(unit_type="bipolar", savefigname=None)  # gc or cone
+    # PM.viz.show_cell_density_vs_ecc(unit_type="cone", savefigname=None)
+    # PM.viz.show_cell_density_vs_ecc(unit_type="gc", savefigname=None)
+    # PM.viz.show_cell_density_vs_ecc(unit_type="bipolar", savefigname=None)
     # PM.viz.show_connection_histograms(savefigname=None)
     # PM.viz.show_fan_in_out_distributions(savefigname=None)
 
