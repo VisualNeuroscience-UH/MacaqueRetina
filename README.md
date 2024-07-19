@@ -54,9 +54,9 @@ Example: install Pytorch in windows WSL2 with cuda 12.1
 
 In terminal run:
 
-- `install_ret_pt_linux.sh`
+- `install_linux.sh`
   - Resides in the same directory as this file
-  - You may need to append execute to the access rights by command `chmod ug+x install_ret_pt_linux.sh`
+  - You may need to append execute to the access rights by command `chmod ug+x install_linux.sh`
 
 ## How to run
 
