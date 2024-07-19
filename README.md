@@ -64,7 +64,8 @@ If you want to run downstream simulations with CxSystem2, in terminal run:
 
 `install_cxsystem.sh`
   - Resides in the same directory as this file
-  - You may need to append execute to the access rights by command 
+
+You may need to append execute to the access rights by command 
   
   `chmod ug+x install_cxsystem.sh`
 
@@ -77,6 +78,7 @@ The main files are in the project directory.
 - project/project_conf_module.py
   - Primary interface to work with MacaqueRetina
   - You need to modify this file for your system and work each time you run the software
+  - Before first run, update the model_root_path and git_repo_root_path to match your system
 
 - project/project_manager_module.py
   - provides a facade for the rest of the code

@@ -119,7 +119,7 @@ _um : micrometer
 Main paths
 """
 model_root_path = "/opt3/Laskenta/Models"
-git_repo_root = Path(r"/opt2/Git_Repos/MacaqueRetina")
+git_repo_root_path = Path(r"/opt2/Git_Repos/MacaqueRetina")
 ray_root_path = None  # if None, ray_results are saved to model_root_path/project/experiment/output_folder/ray_results
 
 """
@@ -337,7 +337,7 @@ apricot_metadata = {
     "data_spatialfilter_width": 13,
     "data_fps": 30,
     "data_temporalfilter_samples": 15,
-    "apricot_data_folder": git_repo_root.joinpath(r"retina/apricot_data"),
+    "apricot_data_folder": git_repo_root_path.joinpath(r"retina/apricot_data"),
 }
 
 # Proportion from all ganglion cells. Density of all ganglion cells is given later as a function of ecc from literature.
@@ -586,7 +586,7 @@ my_retina_append = {
     "bipolar2gc_dict": bipolar2gc_dict,
 }
 
-literature_data_folder = git_repo_root.joinpath(r"retina/literature_data")
+literature_data_folder = git_repo_root_path.joinpath(r"retina/literature_data")
 
 # Define digitized literature data files for gc density and dendritic diameters.
 # Dendritic diameter is the diameter of the circle that has the
@@ -755,7 +755,7 @@ if __name__ == "__main__":
     # from project.project_utilities_module import DataSampler
 
     # filename = "Turner_2018_eLife_Fig5C_ON.jpg"
-    # filename_full = git_repo_root.joinpath(r"retina/literature_data", filename)
+    # filename_full = git_repo_root_path.joinpath(r"retina/literature_data", filename)
     # # # Fig lowest and highest tick values in the image, use these as calibration points
     # min_X, max_X, min_Y, max_Y = (-5, 5, 0, 1)
     # ds = DataSampler(filename_full, min_X, max_X, min_Y, max_Y, logX=False, logY=False)
