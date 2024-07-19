@@ -81,6 +81,7 @@ The main files are in the project directory.
     - Comment in or out lines under `if __name__ == "main":` and run this file to operate the
     system during development
   - Before first run, update the model_root_path and git_repo_root_path to match your system
+  - Take a moment to read the comments before starting
 
 - project/project_manager_module.py
   - provides a facade for the rest of the code
