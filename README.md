@@ -78,6 +78,8 @@ The main files are in the project directory.
 - project/project_conf_module.py
   - Primary interface to work with MacaqueRetina
   - You need to modify this file for your system and work each time you run the software
+    - Comment in or out lines under `if __name__ == "main":` and run this file to operate the
+    system during development
   - Before first run, update the model_root_path and git_repo_root_path to match your system
 
 - project/project_manager_module.py
