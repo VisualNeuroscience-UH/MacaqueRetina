@@ -20,10 +20,12 @@ The python environment had issues in pure Windows, thus it is only supported und
 - Install [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) (Windows subsystem for Linux) to your Windows system.
 
 Put .wslconfig named file to your home directory in Windows to adjust memory etc. Example lines:
-`[wsl2]`
-`memory=20GB`
-`processors=8`
-`swap=8GB`
+```
+[wsl2]
+memory=20GB
+processors=8
+swap=8GB
+```
 
 **Make sure to apply WSL2 config changes by restarting WSL2 or your machine**.  
 More examples and backgorund on WSL2 in [Microsoft pages](https://learn.microsoft.com/en-us/windows/wsl/wsl-config)
