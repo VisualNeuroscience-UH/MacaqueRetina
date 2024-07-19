@@ -1,5 +1,4 @@
 # Local
-from project.project_base_module import ProjectBase
 from project.project_utilities_module import ProjectUtilities
 from context.context_module import Context
 from data_io.data_io_module import DataIO
@@ -41,7 +40,7 @@ class ProjectData:
         self.fit = {}
 
 
-class ProjectManager(ProjectBase, ProjectUtilities):
+class ProjectManager(ProjectUtilities):
     def __init__(self, **all_properties):
         """
         Main project manager.
