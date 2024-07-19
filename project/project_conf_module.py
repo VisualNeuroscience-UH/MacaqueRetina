@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import time
 import warnings
-import math
 
 # Comput Neurosci
 import brian2.units as b2u
@@ -109,16 +108,7 @@ _um : micrometer
 """
 
 """
-# TODO: Stodden_2016_Science: Software metadata should
-include, at a minimum, the title, authors,
-version, language, license, Uniform Resource
-Identifier/DOI, software description (including
-purpose, inputs, outputs, dependencies),
-and execution requirements.
-"""
-
-"""
-Main paths in different operating systems
+Main paths
 """
 model_root_path = "/opt3/Laskenta/Models"
 git_repo_root = Path(r"/opt2/Git_Repos/MacaqueRetina")
@@ -131,9 +121,9 @@ project = "Retina"
 
 
 """
-Current experiment. Use distinct folders fo distinct stimuli.
+Current experiment. Use distinct folders for distinct stimuli.
 """
-experiment = "strategy"
+experiment = "demo"
 
 
 """
@@ -277,7 +267,7 @@ Note that in experiments (below), tuple values are captured for varying each tup
 """
 
 my_stimulus_options = {
-    # Shared btw stimulus and simulate_retina
+    "pattern": "temporal_square_pattern",  # One of the StimulusPatterns
     "image_width": 240,  # 752 for nature1.avi
     "image_height": 240,  # 432 for nature1.avi
     "pix_per_deg": 60,
@@ -286,11 +276,6 @@ my_stimulus_options = {
     "duration_seconds": 1,  # actual frames = floor(duration_seconds * fps)
     "baseline_start_seconds": 0.5,  # Total duration is duration + both baselines
     "baseline_end_seconds": 0.5,
-    # "pattern": "sine_grating",  # One of the StimulusPatterns
-    "pattern": "temporal_square_pattern",  # One of the StimulusPatterns
-    # "pattern": "temporal_sine_pattern",  # One of the StimulusPatterns
-    # "pattern": "temporal_chirp_pattern",  # One of the StimulusPatterns
-    # "pattern": "contrast_chirp_pattern",  # One of the StimulusPatterns
     "stimulus_form": "rectangular",
     "size_inner": 0.1,  # deg, applies to annulus only
     "size_outer": 1,  # deg, applies to annulus only
@@ -306,9 +291,8 @@ my_stimulus_options = {
     "contrast": 0.99,  # mean +- contrast * mean
     "mean": 128,  # Consider this as cd/m2
     # intensity (min, max) overrides contrast and mean unless the line is commented out
-    # "intensity": (0, 100),
-    "intensity": (0, 255),
-    "background": 128,  # "mean", "intensity_min", "intensity_max" or value.
+    # "intensity": (0, 255),
+    "background": "mean",  # "mean", "intensity_min", "intensity_max" or value.
     "ND_filter": 0.0,  # 0.0, log10 neutral density filter factor, can be negative
 }
 
@@ -927,18 +911,9 @@ if __name__ == "__main__":
     #################################################################
     #################################################################
 
-    # TODO Texture experiment from Schwartz_2012_NatNeurosci
-
     ################################
     ### Build and run Experiment ###
     ################################
-
-    # TÄHÄN JÄIT:
-    # - Vakioi generaattoripotentiaali eri temporal mallien välillä käyttäen temporal chirp ärsykettä
-    # - gen => fr transformaatio, Turner malli?
-    # - SUBUNIT MALLIN VALIDOINTI vs Turner 2018
-
-    # -BENARDETE INPUT [-1,1], VICTOR [0,1], CHICHI [-2,2], TURNER [-5, 5] & CDF NONLIN
 
     # Retina needs to be built for this to work.
     # my_stimulus_options above defines the stimulus. From that dictionary,
