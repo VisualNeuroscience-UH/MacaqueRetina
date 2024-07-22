@@ -4,7 +4,7 @@ import re
 
 # Function to read the version from __init__.py
 def get_version():
-    with open("project/__init__.py", "r") as fh:
+    with open("./__init__.py", "r") as fh:
         for line in fh:
             match = re.match(r"^__version__ = ['\"]([^'\"]*)['\"]", line)
             if match:

@@ -730,6 +730,7 @@ if __name__ == "__main__":
     # - Vakioi generaattoripotentiaali eri temporal mallien välillä käyttäen temporal chirp ärsykettä
     # - gen => fr transformaatio, Turner malli?
     # - SUBUNIT MALLIN VALIDOINTI vs Turner 2018
+    # - katso responssien järkevyys ja tee tarvittavat korjaavat toimenpiteet. Nyt esim off responsseissa on komponentteja.
 
     # -BENARDETE INPUT [-1,1], VICTOR [0,1], CHICHI [-2,2], TURNER [-5, 5] & CDF NONLIN
 

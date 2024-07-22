@@ -34,10 +34,10 @@ Next, follow the installation in linux, when you have the WSL2 up and you are in
 
 ## Install with Linux
 
-Run the following commands to create and activate virtual environment.
+Run the following commands to create and activate virtual environment. You need python3 in your system path.
 
-`python3.11 -m venv [your path]/ret_pt`
-  - Make a new virtual environment named *ret_pt*
+`python3 -m venv [your path]/ret_pt`
+  - Make a new virtual environment named *ret_pt*, for retina and pytorch. Feel free to select own environment name.
 
 `source [your root]/ret_pt/bin/activate`
   - Activate the virtual environment
