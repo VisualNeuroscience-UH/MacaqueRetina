@@ -6,9 +6,8 @@ import matplotlib.path as mplPath
 import scipy.stats as stats
 import scipy.optimize as opt
 from scipy import ndimage
-from scipy.spatial import Voronoi, voronoi_plot_2d, distance
+from scipy.spatial import Voronoi
 from scipy.interpolate import griddata
-from scipy.integrate import dblquad
 import pandas as pd
 import torch
 import torch.nn.functional as F
