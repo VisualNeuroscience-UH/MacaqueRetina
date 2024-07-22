@@ -10,8 +10,6 @@ from scipy.spatial import Voronoi
 from scipy.interpolate import griddata
 import pandas as pd
 import torch
-import torch.nn.functional as F
-from scipy.interpolate import interp1d
 
 # Image analysis
 import matplotlib.pyplot as plt
