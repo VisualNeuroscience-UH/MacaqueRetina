@@ -170,15 +170,14 @@ device = "cpu"  # "cpu" or "cuda"
 ### Housekeeping ###. Do not comment out.
 """
 current_file_path = Path(__file__).resolve()
-git_repo_root_path = current_file_path.parent
-
+git_repo_root_path = current_file_path.parent.parent
 model_root_path = Path(model_root_path)
 # Test if the paths exist, fallback to current working directory if not
 if not model_root_path.exists():
     model_root_path = Path.cwd()
 
     print(
-        f"\n \033[91m Model root path {model_root_path} does not exist. Using current working directory. \033[0m\n"
+        f"\033[91m \nModel root path {model_root_path} does not exist. \nUpdate project/project_conf_module.py model_root_path. \nUsing current working directory. \033[0m\n"
     )
 path = Path.joinpath(model_root_path, Path(project), experiment)
 
