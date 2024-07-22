@@ -1,6 +1,5 @@
 # Numerical
 import numpy as np
-import numpy.ma as ma
 import matplotlib.path as mplPath
 
 
@@ -13,30 +12,15 @@ from scipy.integrate import dblquad
 import pandas as pd
 import torch
 import torch.nn.functional as F
-
-# import torch.autograd.profiler as profiler
-
-# from torch.utils.data import DataLoader
-
-# from scipy.signal import convolve
 from scipy.interpolate import interp1d
 
 # Image analysis
-# from skimage import measure
-# from skimage.transform import resize
 import matplotlib.pyplot as plt
 from shapely.geometry import Polygon as ShapelyPolygon
-
-# Data IO
-# import cv2
-# from PIL import Image
 
 # Viz
 from tqdm import tqdm
 
-# Comput Neurosci
-# import brian2 as b2
-# import brian2.units as b2u
 
 # Local
 from retina.retina_math_module import RetinaMath
@@ -46,10 +30,8 @@ from project.project_utilities_module import Printable
 
 # Builtin
 from pathlib import Path
-import pdb
 from copy import deepcopy
 import math
-import sys
 from dataclasses import dataclass
 
 
