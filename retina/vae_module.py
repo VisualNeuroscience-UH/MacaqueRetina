@@ -1426,24 +1426,12 @@ class RetinaVAE(RetinaMath):
     def _set_ray_folder(self, context):
         """Set the folder where ray tune results are saved"""
 
-        if context.ray_root_path is not None:
-            # Rebuild the path to ray_results
-            ray_dir = (
-                context.ray_root_path
-                / Path(context.project)
-                / Path(context.experiment)
-                / Path(context.output_folder.name)
-                / "ray_results"
-            )
-
+        if isinstance(context.input_folder, Path) or isinstance(
+            context.input_folder, str
+        ):
+            ray_dir = context.input_folder / "ray_results"
         else:
-            # If output_folder is Path instance or string, use it as models_folder
-            if isinstance(context.input_folder, Path) or isinstance(
-                context.input_folder, str
-            ):
-                ray_dir = context.input_folder / "ray_results"
-            else:
-                ray_dir = context.output_folder / "ray_results"
+            ray_dir = context.output_folder / "ray_results"
         Path(ray_dir).mkdir(parents=True, exist_ok=True)
 
         return ray_dir

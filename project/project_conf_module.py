@@ -118,9 +118,8 @@ _um : micrometer
 """
 Main paths
 """
+# Update this to your model root path
 model_root_path = "/opt3/Laskenta/Models"
-git_repo_root_path = Path(r"/opt2/Git_Repos/MacaqueRetina")
-ray_root_path = None  # if None, ray_results are saved to model_root_path/project/experiment/output_folder/ray_results
 
 """
 Project name
@@ -170,7 +169,17 @@ device = "cpu"  # "cpu" or "cuda"
 """
 ### Housekeeping ###. Do not comment out.
 """
+current_file_path = Path(__file__).resolve()
+git_repo_root_path = current_file_path.parent
+
 model_root_path = Path(model_root_path)
+# Test if the paths exist, fallback to current working directory if not
+if not model_root_path.exists():
+    model_root_path = Path.cwd()
+
+    print(
+        f"\n \033[91m Model root path {model_root_path} does not exist. Using current working directory. \033[0m\n"
+    )
 path = Path.joinpath(model_root_path, Path(project), experiment)
 
 # When training or tuning generative VAE model, multiple hyperparameters are set at the RetinaVAE class.
@@ -714,7 +723,6 @@ if __name__ == "__main__":
         stimulus_folder=stimulus_folder,
         project=project,
         experiment=experiment,
-        ray_root_path=ray_root_path,
         device=device,
         my_retina=my_retina,
         my_retina_append=my_retina_append,
