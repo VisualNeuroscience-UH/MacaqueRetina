@@ -33,7 +33,6 @@ More examples and backgorund on WSL2 in [Microsoft pages](https://learn.microsof
 Next, follow the installation in linux, when you have the WSL2 up and you are in linux system.
 
 ## Install with Linux
-
 Run the following commands to create and activate virtual environment. You need python3 in your system path.
 
 `python3 -m venv [your path]/ret_pt`
@@ -42,9 +41,15 @@ Run the following commands to create and activate virtual environment. You need 
 `source [your root]/ret_pt/bin/activate`
   - Activate the virtual environment
 
-### Install pytorch
+### Install MacaqueRetina
+Navigate to the local MacaqueRetina git repo root and run: 
 
+`pip install -e .`
+
+### Optional: Install pytorch separately
 Pytorch is integrated in MacaqueRetina, because it enables GPU acceleration when CUDA device is available.  
+In case you run into issues with pytorch installation the the `pip install -e .` command above and you have NVIDIA GPU and CUDA, try the following before installing the rest of the system.
+
 Get your system- and cuda/cpu-specific [installation command for Pytorch](https://pytorch.org/get-started/locally/).  
 After activating the new environment, install Pytorch with your personal command.  
 
@@ -53,11 +58,6 @@ Example: install Pytorch in windows WSL2 with cuda 12.1
 `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121`
 
 `[your system specific Pytorch installation command]`
-
-### Install MacaqueRetina
-Navigate to the local MacaqueRetina git repo root and run: 
-
-`pip install -e .`
 
 ### Optional: Install CxSystem2
 If you want to run downstream simulations with CxSystem2, in terminal run:
